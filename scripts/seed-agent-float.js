@@ -6,35 +6,108 @@
  *   node scripts/seed-agent-float.js <phone(+252…) | uid> <amountUSD>
  *   node scripts/seed-agent-float.js +252634445566 500
  *
- * Credits the wallet and writes a matching `transactions` ledger record from
- * the platform account, so the seeded float shows up in transaction history.
+ * Ledger-aware: posts a journal entry (debit float:agents, credit the agent's
+ * wallet) and updates the wallet + ledger_balances projections atomically, so
+ * the invariant check explains the seeded value. Also writes a `transactions`
+ * record so the float shows up in the agent's history.
  *
- * Auth: reuses your Firebase CLI login (~/.config/configstore/firebase-tools.json).
- * Set GOOGLE_APPLICATION_CREDENTIALS to a service-account key to override.
+ * Auth: exchanges your Firebase CLI login (~/.config/configstore/firebase-tools.json)
+ * for an OAuth access token and talks to the Firestore REST API directly —
+ * the admin SDK refuses refresh-token credentials for Firestore.
  */
 
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
-
-// firebase-admin lives in functions/node_modules
-const admin = require(path.join(__dirname, "../functions/node_modules/firebase-admin"));
+const crypto = require("crypto");
 
 const PROJECT_ID = "quickpay-485417";
-const PLATFORM_ACCOUNT_ID = "platform";
+const DB = `projects/${PROJECT_ID}/databases/(default)`;
+const BASE = `https://firestore.googleapis.com/v1/${DB}/documents`;
 
-function credentialFromFirebaseCli() {
+const FLOAT_AGENTS = "float:agents";
+
+async function getAccessToken() {
   const cfgPath = path.join(os.homedir(), ".config/configstore/firebase-tools.json");
-  if (!fs.existsSync(cfgPath)) return null;
+  if (!fs.existsSync(cfgPath)) {
+    throw new Error("No Firebase CLI login found. Run `firebase login` first.");
+  }
   const tokens = JSON.parse(fs.readFileSync(cfgPath, "utf8")).tokens;
-  if (!tokens || !tokens.refresh_token) return null;
-  return admin.credential.refreshToken({
-    type: "authorized_user",
-    // Public OAuth client baked into firebase-tools
-    client_id: "563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com",
-    client_secret: "j9iVZfS8kkCEFUPaAeJV0sAi",
-    refresh_token: tokens.refresh_token,
+  if (!tokens || !tokens.refresh_token) {
+    throw new Error("No refresh token in Firebase CLI config. Run `firebase login`.");
+  }
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      // Public OAuth client baked into firebase-tools
+      client_id: "563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com",
+      client_secret: "j9iVZfS8kkCEFUPaAeJV0sAi",
+      refresh_token: tokens.refresh_token,
+    }),
   });
+  if (!res.ok) throw new Error(`Token exchange failed: ${res.status} ${await res.text()}`);
+  return (await res.json()).access_token;
+}
+
+async function api(token, method, url, body) {
+  const res = await fetch(url, {
+    method,
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const text = await res.text();
+  return { status: res.status, json: text ? JSON.parse(text) : null };
+}
+
+function toValue(v) {
+  if (typeof v === "number" && Number.isInteger(v)) return { integerValue: String(v) };
+  if (typeof v === "string") return { stringValue: v };
+  if (v instanceof Date) return { timestampValue: v.toISOString() };
+  if (Array.isArray(v)) return { arrayValue: { values: v.map(toValue) } };
+  if (v && typeof v === "object") {
+    const fields = {};
+    for (const [k, val] of Object.entries(v)) fields[k] = toValue(val);
+    return { mapValue: { fields } };
+  }
+  throw new Error(`Unsupported value: ${v}`);
+}
+
+function toFields(obj) {
+  const fields = {};
+  for (const [k, v] of Object.entries(obj)) fields[k] = toValue(v);
+  return fields;
+}
+
+async function findUserByPhone(token, phone) {
+  const { status, json } = await api(token, "POST", `${BASE}:runQuery`, {
+    structuredQuery: {
+      from: [{ collectionId: "users" }],
+      where: {
+        fieldFilter: {
+          field: { fieldPath: "phoneNumber" },
+          op: "EQUAL",
+          value: { stringValue: phone },
+        },
+      },
+      limit: 1,
+    },
+  });
+  if (status !== 200) throw new Error(`User query failed: ${status} ${JSON.stringify(json)}`);
+  const hit = (json || []).find((r) => r.document);
+  return hit ? hit.document : null;
+}
+
+async function getDoc(token, docPath) {
+  const { status, json } = await api(token, "GET", `${BASE}/${docPath}`);
+  if (status === 404) return null;
+  if (status !== 200) throw new Error(`Fetching ${docPath} failed: ${status}`);
+  return json;
+}
+
+function str(doc, field) {
+  return doc?.fields?.[field]?.stringValue;
 }
 
 async function main() {
@@ -46,75 +119,122 @@ async function main() {
   }
   const amountCents = Math.round(amountDollars * 100);
 
-  const credential = process.env.GOOGLE_APPLICATION_CREDENTIALS
-    ? admin.credential.applicationDefault()
-    : credentialFromFirebaseCli();
-  if (!credential) {
-    console.error("No credentials. Run `firebase login` or set GOOGLE_APPLICATION_CREDENTIALS.");
-    process.exit(1);
-  }
-  admin.initializeApp({ credential, projectId: PROJECT_ID });
-  const db = admin.firestore();
+  const token = await getAccessToken();
 
   // Resolve uid from phone number if needed
   let uid = target;
+  let userDoc;
   if (target.startsWith("+")) {
-    const snap = await db.collection("users").where("phoneNumber", "==", target).limit(1).get();
-    if (snap.empty) {
+    userDoc = await findUserByPhone(token, target);
+    if (!userDoc) {
       console.error(`No user found with phone ${target}`);
       process.exit(1);
     }
-    uid = snap.docs[0].id;
+    uid = userDoc.name.split("/").pop();
+  } else {
+    userDoc = await getDoc(token, `users/${uid}`);
+    if (!userDoc) {
+      console.error(`No user doc for uid ${uid}`);
+      process.exit(1);
+    }
   }
+  console.log(
+    `Seeding float for: ${str(userDoc, "fullName")} (${str(userDoc, "phoneNumber")}) — ${str(userDoc, "accountType")}`
+  );
 
-  const userDoc = await db.collection("users").doc(uid).get();
-  if (!userDoc.exists) {
-    console.error(`No user doc for uid ${uid}`);
+  const walletDoc = await getDoc(token, `wallets/${uid}`);
+  if (!walletDoc) {
+    console.error(`No wallet doc for uid ${uid} — has the user finished signup?`);
     process.exit(1);
   }
-  const user = userDoc.data();
-  console.log(`Seeding float for: ${user.fullName} (${user.phoneNumber}) — ${user.accountType}`);
 
-  const now = admin.firestore.Timestamp.now();
-  const txId = db.collection("transactions").doc().id;
+  const now = new Date();
+  const nonce = crypto.randomBytes(4).toString("hex");
+  const entryId = `seedfloat_${uid.slice(0, 8)}_${nonce}`;
+  const transactionId = `${entryId}_tx`;
+  const account = `user:${uid}`;
 
-  const newBalance = await db.runTransaction(async (tx) => {
-    const walletRef = db.collection("wallets").doc(uid);
-    const walletSnap = await tx.get(walletRef);
-    if (!walletSnap.exists) {
-      throw new Error(`Wallet not found for ${uid} — has the user finished signup?`);
-    }
-    const wallet = walletSnap.data();
-
-    tx.update(walletRef, {
-      balance: wallet.balance + amountCents,
-      totalReceived: wallet.totalReceived + amountCents,
-      lastTransactionAt: now,
-      updatedAt: now,
-    });
-
-    tx.set(db.collection("transactions").doc(txId), {
-      type: "topup",
-      fromUserId: PLATFORM_ACCOUNT_ID,
-      toUserId: uid,
-      participants: [PLATFORM_ACCOUNT_ID, uid],
-      amount: amountCents,
-      currency: wallet.currency || "USD",
-      status: "completed",
-      description: "Agent float purchase (seeded)",
-      reference: txId,
-      createdAt: now,
-      completedAt: now,
-    });
-
-    return wallet.balance + amountCents;
+  // One atomic commit: journal entry (create), wallet + float projections
+  // (increments), and a transactions record for the agent's history.
+  const { status, json } = await api(token, "POST", `${BASE}:commit`, {
+    writes: [
+      {
+        update: {
+          name: `${DB}/documents/journal_entries/${entryId}`,
+          fields: toFields({
+            type: "adjustment",
+            currency: "USD",
+            lines: [
+              { account: FLOAT_AGENTS, debit: amountCents, credit: 0 },
+              { account, debit: 0, credit: amountCents },
+            ],
+            refs: { transactionId },
+            description: "Agent float purchase (seeded for testing)",
+            postedBy: "system",
+            postedAt: now,
+          }),
+        },
+        currentDocument: { exists: false },
+      },
+      {
+        transform: {
+          document: `${DB}/documents/wallets/${uid}`,
+          fieldTransforms: [
+            { fieldPath: "balance", increment: { integerValue: String(amountCents) } },
+            { fieldPath: "totalReceived", increment: { integerValue: String(amountCents) } },
+          ],
+        },
+      },
+      {
+        update: {
+          name: `${DB}/documents/wallets/${uid}`,
+          fields: toFields({ updatedAt: now, lastTransactionAt: now }),
+        },
+        updateMask: { fieldPaths: ["updatedAt", "lastTransactionAt"] },
+      },
+      {
+        update: {
+          name: `${DB}/documents/ledger_balances/${FLOAT_AGENTS}`,
+          fields: toFields({ account: FLOAT_AGENTS, currency: "USD", updatedAt: now }),
+        },
+        updateMask: { fieldPaths: ["account", "currency", "updatedAt"] },
+      },
+      {
+        transform: {
+          document: `${DB}/documents/ledger_balances/${FLOAT_AGENTS}`,
+          fieldTransforms: [
+            { fieldPath: "balance", increment: { integerValue: String(-amountCents) } },
+          ],
+        },
+      },
+      {
+        update: {
+          name: `${DB}/documents/transactions/${transactionId}`,
+          fields: toFields({
+            type: "topup",
+            fromUserId: "platform",
+            toUserId: uid,
+            participants: ["platform", uid],
+            amount: amountCents,
+            currency: "USD",
+            status: "completed",
+            description: "Float purchase",
+            journalEntryId: entryId,
+            createdAt: now,
+            completedAt: now,
+          }),
+        },
+        currentDocument: { exists: false },
+      },
+    ],
   });
+  if (status !== 200) throw new Error(`Commit failed: ${status} ${JSON.stringify(json)}`);
 
-  console.log(`✓ Credited $${amountDollars.toFixed(2)} float. New balance: $${(newBalance / 100).toFixed(2)}`);
-  console.log(`  Ledger transaction: ${txId}`);
+  console.log(`\nSeeded $${amountDollars.toFixed(2)} float → ${uid}`);
+  console.log(`Journal entry: ${entryId}`);
 }
 
 main().catch((err) => {
-  console.error("Failed:", err.message || err);
+  console.error(err);
   process.exit(1);
 });
