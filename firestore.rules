@@ -1,0 +1,142 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    // Users collection. Docs are created by Cloud Functions (setupPin) and all
+    // privileged fields (accountType, kycStatus, pinHash, limits, lockout
+    // counters) are function-managed — clients may only touch profile fields.
+    match /users/{userId} {
+      allow read: if isAuthenticated() && isOwner(userId);
+      allow create: if false; // Created by setupPin Cloud Function only
+      allow update: if isAuthenticated() && isOwner(userId) &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['fullName', 'email', 'dateOfBirth', 'gender',
+                                   'address', 'preferredLanguage',
+                                   'notificationPreferences', 'lastLoginAt',
+                                   'updatedAt']);
+      allow delete: if false; // Never allow user deletion from client
+      
+      // KYC subcollection
+      match /kyc/{document=**} {
+        allow read: if isAuthenticated() && isOwner(userId);
+        allow write: if isAuthenticated() && isOwner(userId);
+      }
+      
+      // FCM push notification tokens
+      match /fcmTokens/{tokenId} {
+        allow read, write: if isAuthenticated() && isOwner(userId);
+      }
+    }
+    
+    // Wallets collection - read-only from client, updated via Cloud Functions
+    match /wallets/{userId} {
+      allow read: if isAuthenticated() && isOwner(userId);
+      allow write: if false; // Only Cloud Functions can modify wallets
+    }
+    
+    // Transactions collection - read-only for involved parties
+    match /transactions/{transactionId} {
+      allow read: if isAuthenticated() && 
+                     (isOwner(resource.data.fromUserId) || 
+                      isOwner(resource.data.toUserId));
+      allow write: if false; // Only Cloud Functions can create transactions
+    }
+    
+    // QR codes collection - merchants can read their own QR codes
+    match /qrCodes/{qrCodeId} {
+      allow read: if isAuthenticated() && 
+                     (isOwner(resource.data.merchantId) || 
+                      resource.data.status == 'active'); // Customers can read active QR codes
+      allow write: if false; // Only Cloud Functions can manage QR codes
+    }
+    
+    // Top-ups collection - users can read their own top-up requests
+    match /topups/{topupId} {
+      allow read: if isAuthenticated() && isOwner(resource.data.userId);
+      allow write: if false; // Only Cloud Functions can process top-ups
+    }
+    
+    // Manual top-ups collection - agents and users can read their own records
+    match /manualTopups/{topupId} {
+      allow read: if isAuthenticated() &&
+                     (isOwner(resource.data.userId) ||
+                      isOwner(resource.data.agentId));
+      allow write: if false; // Only Cloud Functions can process manual top-ups
+    }
+
+    // Agent top-up requests (customer-initiated cash-in). Customer reads their
+    // own request live to detect confirmation; the confirming agent can read it.
+    match /agentTopupRequests/{requestId} {
+      allow read: if isAuthenticated() &&
+                     (isOwner(resource.data.customerId) ||
+                      isOwner(resource.data.agentId));
+      allow write: if false; // Only Cloud Functions can create/confirm top-ups
+    }
+    
+    // Settlements collection - merchants can read their own settlement requests
+    match /settlements/{settlementId} {
+      allow read: if isAuthenticated() && isOwner(resource.data.merchantId);
+      allow write: if false; // Only Cloud Functions can process settlements
+    }
+    
+    // Merchant profiles
+    match /merchantProfiles/{userId} {
+      allow read: if isAuthenticated() && isOwner(userId);
+      allow write: if isAuthenticated() && isOwner(userId);
+    }
+    
+    // Notifications - users can read and mark as read their own notifications
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && isOwner(resource.data.userId);
+      allow create: if false; // Only Cloud Functions can create notifications
+      allow update: if isAuthenticated() && isOwner(resource.data.userId);
+      allow delete: if false;
+    }
+    
+    // Customer tokens - owner can read; any authenticated user can read active tokens (merchants scan them)
+    match /customerTokens/{tokenId} {
+      allow read: if isAuthenticated() &&
+                     (isOwner(resource.data.customerId) ||
+                      resource.data.status == 'active');
+      allow write: if false; // Only Cloud Functions can manage tokens
+    }
+    
+    // Remittances - readable by sender or recipient
+    match /remittances/{remittanceId} {
+      allow read: if isAuthenticated() &&
+                     (isOwner(resource.data.senderId) ||
+                      isOwner(resource.data.recipientId));
+      allow write: if false;
+    }
+    
+    // Payment requests - readable by merchant or customer involved
+    match /paymentRequests/{requestId} {
+      allow read: if isAuthenticated() &&
+                     (isOwner(resource.data.merchantId) ||
+                      isOwner(resource.data.customerId));
+      allow write: if false; // Only Cloud Functions can manage payment requests
+    }
+    
+    // Ledger — accounting source of truth, server-only (see LEDGER_ARCHITECTURE.md)
+    match /journal_entries/{entryId} {
+      allow read, write: if false;
+    }
+    match /ledger_balances/{account} {
+      allow read, write: if false;
+    }
+
+    // Default deny all other access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

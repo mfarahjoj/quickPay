@@ -1,0 +1,6 @@
+{
+  "projects": {
+    "default": "quickpay-485417",
+    "staging": "quickpay-staging"
+  }
+}

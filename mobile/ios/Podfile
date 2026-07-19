@@ -1,0 +1,89 @@
+# Resolve react_native_pods.rb with node to allow for hoisting
+require Pod::Executable.execute_command('node', ['-p',
+  'require.resolve(
+    "react-native/scripts/react_native_pods.rb",
+    {paths: [process.argv[1]]},
+  )', __dir__]).strip
+
+platform :ios, '15.1'
+prepare_react_native_project!
+
+# Disable prebuilt React Native core to fix @react-native-firebase static
+# linking issues on RN 0.84+. The prebuilt binary uses dynamic linking which
+# conflicts with Firebase's static framework requirements, causing
+# RCT_EXPORT_METHOD macro expansion failures.
+# See: https://github.com/invertase/react-native-firebase/issues/8883
+pre_install do |installer|
+  ENV['RCT_USE_PREBUILT_RNCORE'] = '0'
+  ENV['RCT_USE_RN_DEP'] = '0'
+end
+
+# Tell react-native-firebase to configure its podspecs for static framework
+# linking. This must be set before use_native_modules! so that the RNFB
+# podspecs can see the flag when they are evaluated.
+$RNFirebaseAsStaticFramework = true
+
+# Use static frameworks — required for Firebase Swift pods so that
+# -Swift.h bridging headers are generated inside .framework bundles where
+# consuming targets can find them.
+use_frameworks! :linkage => :static
+
+target 'QuickPay' do
+  config = use_native_modules!
+
+  use_react_native!(
+    :path => config[:reactNativePath],
+    :app_path => "#{Pod::Config.instance.installation_root}/.."
+  )
+
+  # Ensure AsyncStorage native module is linked for iOS startup flags/hooks.
+  pod 'RNCAsyncStorage', :path => '../node_modules/@react-native-async-storage/async-storage'
+
+  target 'QuickPayTests' do
+    inherit! :complete
+  end
+
+  post_install do |installer|
+    react_native_post_install(
+      installer,
+      config[:reactNativePath],
+      :mac_catalyst_enabled => false
+    )
+
+    # Fix hermes dSYM not included in archives (React Native 0.73.x)
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |config|
+        config.build_settings['DEBUG_INFORMATION_FORMAT'] = 'dwarf-with-dsym'
+        # Allow react-native-firebase pods to #import non-modular React-Core
+        # headers (RCTConvert.h, RCTBridgeModule.h, etc.) while building as
+        # static frameworks under use_frameworks!
+        config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+        # Raise stale pod deployment targets to avoid Xcode warnings/errors on newer SDKs.
+        if config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'].to_f < 12.0
+          config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '12.0'
+        end
+      end
+    end
+
+    # Xcode 26 stricter module enforcement: disable module checks for RNFB pods
+    # that use legacy <React/RCTBridgeModule.h> angle-bracket imports.
+    installer.pods_project.targets.each do |target|
+      if target.name.start_with?('RNFB', 'RNFBApp', 'RNFBFunctions')
+        target.build_configurations.each do |config|
+          config.build_settings['CLANG_ENABLE_MODULES'] = 'NO'
+        end
+      end
+    end
+
+    # Apply the same flag to the app target so AppDelegate.mm can include
+    # <Firebase.h> without a non-modular header error.
+    installer.aggregate_targets.each do |aggregate_target|
+      aggregate_target.user_project.targets.each do |target|
+        target.build_configurations.each do |config|
+          config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+        end
+      end
+      aggregate_target.user_project.save
+    end
+  end
+end

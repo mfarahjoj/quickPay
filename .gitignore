@@ -1,0 +1,100 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Firebase
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# Cloud Functions
+functions/lib/
+
+# React Native
+mobile/.expo/
+mobile/dist/
+mobile/npm-debug.*
+mobile/*.jks
+mobile/*.p8
+mobile/*.p12
+mobile/*.key
+mobile/*.mobileprovision
+mobile/*.orig.*
+mobile/web-build/
+
+merchant-app/.expo/
+merchant-app/dist/
+merchant-app/npm-debug.*
+merchant-app/*.jks
+merchant-app/*.p8
+merchant-app/*.p12
+merchant-app/*.key
+merchant-app/*.mobileprovision
+merchant-app/*.orig.*
+merchant-app/web-build/
+
+# macOS
+.DS_Store
+
+# iOS
+mobile/ios/Pods/
+mobile/ios/build/
+merchant-app/ios/Pods/
+merchant-app/ios/build/
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+xcuserdata
+*.xccheckout
+*.moved-aside
+DerivedData
+*.hmap
+*.ipa
+*.xcuserstate
+project.xcworkspace
+
+# Android
+mobile/android/build/
+mobile/android/app/build/
+mobile/android/.gradle/
+mobile/android/local.properties
+mobile/android/app/google-services.json
+
+merchant-app/android/build/
+merchant-app/android/app/build/
+merchant-app/android/.gradle/
+merchant-app/android/local.properties
+merchant-app/android/app/google-services.json
+
+*.iml
+*.apk
+
+# Environment
+.env
+.env.local
+.env.*.local
+.stripe_sandbox
+mobile/ios/.xcode.env.local
+merchant-app/ios/.xcode.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
+coverage/
+
+# Misc
+*.log
+.cache/

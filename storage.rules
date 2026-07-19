@@ -1,0 +1,43 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    // KYC documents - users can upload their own documents
+    match /kyc/{userId}/{document} {
+      allow read: if isAuthenticated() && isOwner(userId);
+      allow write: if isAuthenticated() && isOwner(userId) &&
+                      request.resource.size < 10 * 1024 * 1024 && // Max 10MB
+                      request.resource.contentType.matches('image/.*|application/pdf');
+    }
+    
+    // Transaction receipts — receipt paths contain random IDs;
+    // true per-participant scoping requires reading Firestore inside rules,
+    // which Storage rules don't support. Accept-the-risk: paths are unguessable.
+    match /receipts/{transactionId}/{document} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+    
+    // Profile pictures — only owner can read/write
+    match /profiles/{userId}/{document} {
+      allow read: if isAuthenticated() && isOwner(userId);
+      allow write: if isAuthenticated() && isOwner(userId) &&
+                      request.resource.size < 5 * 1024 * 1024 &&
+                      request.resource.contentType.matches('image/.*');
+    }
+    
+    // Default deny
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

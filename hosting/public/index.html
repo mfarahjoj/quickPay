@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QuickPay — Send Money to Hargeisa</title>
+  <script src="https://js.stripe.com/v3/"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #000;
+      --surface: rgba(255,255,255,0.06);
+      --border: rgba(255,255,255,0.1);
+      --accent: #1a56ff;
+      --accent-soft: rgba(26,86,255,0.18);
+      --text: #fff;
+      --text-dim: rgba(255,255,255,0.55);
+      --text-faint: rgba(255,255,255,0.3);
+      --green: #30d158;
+      --red: #ff453a;
+      --r: 16px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px 64px;
+    }
+
+    .logo {
+      margin-top: 32px;
+      margin-bottom: 40px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .logo-mark {
+      width: 42px; height: 42px;
+      background: var(--accent);
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; font-weight: 800; color: #fff;
+    }
+    .logo-name {
+      font-size: 22px; font-weight: 800; letter-spacing: -0.5px;
+    }
+
+    .card {
+      width: 100%; max-width: 460px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 28px 24px;
+    }
+
+    h1 { font-size: 26px; font-weight: 800; letter-spacing: -0.8px; margin-bottom: 8px; }
+    .subtitle { font-size: 15px; color: var(--text-dim); line-height: 22px; margin-bottom: 28px; }
+
+    .field { margin-bottom: 18px; }
+    label { display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.7px;
+      text-transform: uppercase; color: var(--text-faint); margin-bottom: 8px; }
+    input[type="tel"], input[type="text"], input[type="number"] {
+      width: 100%;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      color: var(--text);
+      font-size: 16px;
+      padding: 14px 16px;
+      outline: none;
+      transition: border-color 0.15s;
+      -webkit-appearance: none;
+    }
+    input:focus { border-color: var(--accent); }
+    input::placeholder { color: rgba(255,255,255,0.2); }
+
+    .amount-wrap { position: relative; }
+    .amount-wrap .currency {
+      position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
+      font-size: 16px; color: var(--text-dim); pointer-events: none;
+    }
+    .amount-wrap input { padding-left: 36px; }
+
+    .lookup-row {
+      display: flex; align-items: center; gap: 10px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 14px 16px;
+      min-height: 52px;
+    }
+    .lookup-dot {
+      width: 8px; height: 8px; border-radius: 4px;
+      background: var(--text-faint); flex-shrink: 0;
+    }
+    .lookup-dot.found { background: var(--green); }
+    .lookup-dot.error { background: var(--red); }
+    .lookup-text { font-size: 14px; color: var(--text-dim); }
+    .lookup-text.found { color: var(--text); }
+    .lookup-text.error { color: var(--red); }
+
+    .divider { height: 1px; background: var(--border); margin: 24px 0; }
+
+    #stripe-element {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 14px 16px;
+      min-height: 52px;
+    }
+
+    #pay-btn {
+      width: 100%; height: 58px; border-radius: 9999px;
+      background: #fff; color: #000;
+      font-size: 17px; font-weight: 700; letter-spacing: -0.3px;
+      border: none; cursor: pointer; margin-top: 20px;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    #pay-btn:hover:not(:disabled) { opacity: 0.9; }
+    #pay-btn:active:not(:disabled) { transform: scale(0.98); }
+    #pay-btn:disabled { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.25); cursor: default; }
+
+    #error-msg { margin-top: 12px; font-size: 14px; color: var(--red); text-align: center; min-height: 20px; }
+
+    /* Success screen */
+    #success-screen {
+      display: none;
+      flex-direction: column; align-items: center;
+      width: 100%; max-width: 460px;
+    }
+    .check-circle {
+      width: 80px; height: 80px; border-radius: 40px;
+      background: rgba(48,209,88,0.18);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 36px; margin-bottom: 24px;
+    }
+    #success-screen h2 { font-size: 28px; font-weight: 800; letter-spacing: -0.8px; margin-bottom: 10px; text-align: center; }
+    #success-screen p { font-size: 16px; color: var(--text-dim); text-align: center; line-height: 24px; margin-bottom: 32px; }
+    .success-detail {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 20px;
+    }
+    .success-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; }
+    .success-row:not(:last-child) { border-bottom: 1px solid var(--border); }
+    .success-label { font-size: 14px; color: var(--text-faint); }
+    .success-value { font-size: 14px; font-weight: 600; color: var(--text); }
+
+    .trust-row {
+      display: flex; align-items: center; justify-content: center;
+      gap: 6px; margin-top: 20px;
+    }
+    .trust-row span { font-size: 12px; color: var(--text-faint); }
+
+    /* Loading spinner */
+    .spinner {
+      width: 20px; height: 20px;
+      border: 2px solid rgba(0,0,0,0.2);
+      border-top-color: #000;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: inline-block; vertical-align: middle; margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="logo">
+    <div class="logo-mark">Q</div>
+    <span class="logo-name">QuickPay</span>
+  </div>
+
+  <!-- Form card -->
+  <div class="card" id="form-card">
+    <h1>Send money to Hargeisa</h1>
+    <p class="subtitle">
+      No account needed. Enter the recipient's QuickPay phone number, pay by card — they receive it instantly.
+    </p>
+
+    <!-- Step 1: Recipient + amount -->
+    <div id="step1">
+      <div class="field">
+        <label>Recipient phone number</label>
+        <input type="tel" id="phone" placeholder="+252 63 000 0000" autocomplete="tel" />
+      </div>
+
+      <div class="field">
+        <label>Recipient</label>
+        <div class="lookup-row" id="lookup-row">
+          <div class="lookup-dot" id="lookup-dot"></div>
+          <span class="lookup-text" id="lookup-text">Enter a phone number above</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Amount (USD)</label>
+        <div class="amount-wrap">
+          <span class="currency">$</span>
+          <input type="number" id="amount" placeholder="10.00" min="1" max="5000" step="0.01" />
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Your name (optional)</label>
+        <input type="text" id="sender-name" placeholder="So they know it's from you" autocomplete="name" />
+      </div>
+
+      <button id="continue-btn" disabled onclick="goToPayment()" style="
+        width:100%; height:52px; border-radius:9999px;
+        background:#fff; color:#000; font-size:16px; font-weight:700;
+        border:none; cursor:pointer; margin-top:8px; opacity:0.35;
+        transition: opacity 0.15s;
+      ">Continue to Payment →</button>
+    </div>
+
+    <!-- Step 2: Stripe card -->
+    <div id="step2" style="display:none">
+      <div style="margin-bottom:20px; padding:14px 16px; background:rgba(48,209,88,0.08); border:1px solid rgba(48,209,88,0.2); border-radius:var(--r);">
+        <div style="font-size:13px; color:rgba(255,255,255,0.5); margin-bottom:4px;">Sending</div>
+        <div style="font-size:22px; font-weight:800; letter-spacing:-0.5px;" id="summary-amount"></div>
+        <div style="font-size:14px; color:rgba(255,255,255,0.55); margin-top:2px;" id="summary-to"></div>
+      </div>
+
+      <label style="display:block; font-size:11px; font-weight:700; letter-spacing:0.7px; text-transform:uppercase; color:var(--text-faint); margin-bottom:8px;">Card details</label>
+      <div id="stripe-element"></div>
+
+      <button id="pay-btn" disabled>Pay</button>
+      <div id="error-msg"></div>
+
+      <div class="trust-row">
+        <span>🔒</span>
+        <span>Secured by Stripe · No card data touches QuickPay servers</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Success screen -->
+  <div id="success-screen">
+    <div class="check-circle">✓</div>
+    <h2>Money sent!</h2>
+    <p id="success-subtitle">The recipient's QuickPay wallet has been credited.</p>
+    <div class="success-detail">
+      <div class="success-row"><span class="success-label">Recipient</span><span class="success-value" id="s-recipient"></span></div>
+      <div class="success-row"><span class="success-label">Amount</span><span class="success-value" id="s-amount"></span></div>
+      <div class="success-row"><span class="success-label">Status</span><span class="success-value" style="color:var(--green)">Credited ✓</span></div>
+    </div>
+    <p style="margin-top:24px; font-size:14px; color:var(--text-faint); text-align:center;">
+      They'll receive a notification on their QuickPay app.
+    </p>
+  </div>
+
+  <script>
+    // ─── Config ────────────────────────────────────────────────────
+    const FUNCTIONS_BASE = 'https://us-central1-quickpay-485417.cloudfunctions.net';
+    const STRIPE_PK = 'pk_test_placeholder'; // Replace with real Stripe publishable key
+
+    // ─── Globals ───────────────────────────────────────────────────
+    const stripe = Stripe(STRIPE_PK);
+    let elements, paymentElement;
+    let recipientName = '';
+    let webTopupId = '';
+    let pendingAmount = 0;
+
+    // ─── Phone lookup with debounce ────────────────────────────────
+    let lookupTimer;
+    document.getElementById('phone').addEventListener('input', function() {
+      clearTimeout(lookupTimer);
+      const phone = this.value.trim();
+      setLookup('idle', 'Enter a phone number above');
+      updateContinueBtn();
+      if (phone.replace(/\D/g,'').length >= 9) {
+        setLookup('loading', 'Looking up…');
+        lookupTimer = setTimeout(() => lookupPhone(phone), 600);
+      }
+    });
+
+    document.getElementById('amount').addEventListener('input', updateContinueBtn);
+
+    function setLookup(state, text) {
+      const dot = document.getElementById('lookup-dot');
+      const label = document.getElementById('lookup-text');
+      dot.className = 'lookup-dot' + (state === 'found' ? ' found' : state === 'error' ? ' error' : '');
+      label.className = 'lookup-text' + (state === 'found' ? ' found' : state === 'error' ? ' error' : '');
+      label.textContent = text;
+    }
+
+    async function lookupPhone(phone) {
+      try {
+        const res = await fetch(`${FUNCTIONS_BASE}/createWebTopup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ recipientPhone: phone, lookupOnly: true }),
+        });
+        const data = await res.json();
+        if (res.status === 404 || (data && data.error && data.error.includes('No QuickPay'))) {
+          setLookup('error', 'No QuickPay account found for that number');
+          recipientName = '';
+        } else if (data.recipientName) {
+          setLookup('found', data.recipientName);
+          recipientName = data.recipientName;
+        } else {
+          setLookup('idle', 'Enter a phone number above');
+          recipientName = '';
+        }
+      } catch {
+        setLookup('idle', 'Could not connect — check your internet');
+        recipientName = '';
+      }
+      updateContinueBtn();
+    }
+
+    function updateContinueBtn() {
+      const btn = document.getElementById('continue-btn');
+      const hasRecipient = recipientName.length > 0;
+      const amount = parseFloat(document.getElementById('amount').value);
+      const ok = hasRecipient && amount >= 1 && amount <= 5000;
+      btn.disabled = !ok;
+      btn.style.opacity = ok ? '1' : '0.35';
+      btn.style.cursor = ok ? 'pointer' : 'default';
+    }
+
+    // ─── Step 1 → Step 2 ──────────────────────────────────────────
+    async function goToPayment() {
+      const phone = document.getElementById('phone').value.trim();
+      const amountDollars = parseFloat(document.getElementById('amount').value);
+      const senderName = document.getElementById('sender-name').value.trim();
+      const amountCents = Math.round(amountDollars * 100);
+      pendingAmount = amountCents;
+
+      const btn = document.getElementById('continue-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Creating payment…';
+
+      try {
+        const res = await fetch(`${FUNCTIONS_BASE}/createWebTopup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            recipientPhone: phone,
+            amountUsd: amountCents,
+            senderName: senderName || undefined,
+          }),
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Failed to create payment');
+
+        webTopupId = data.webTopupId;
+        recipientName = data.recipientName;
+
+        document.getElementById('summary-amount').textContent = `$${amountDollars.toFixed(2)} USD`;
+        document.getElementById('summary-to').textContent = `to ${recipientName}`;
+
+        document.getElementById('step1').style.display = 'none';
+        document.getElementById('step2').style.display = 'block';
+
+        await mountStripe(data.clientSecret);
+      } catch (e) {
+        document.getElementById('error-msg').textContent = e.message;
+        btn.disabled = false;
+        btn.innerHTML = 'Continue to Payment →';
+      }
+    }
+
+    // ─── Stripe ───────────────────────────────────────────────────
+    async function mountStripe(clientSecret) {
+      const appearance = {
+        theme: 'night',
+        variables: {
+          colorPrimary: '#1a56ff',
+          colorBackground: 'rgba(255,255,255,0.05)',
+          colorText: '#ffffff',
+          colorDanger: '#ff453a',
+          fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+          borderRadius: '16px',
+        },
+      };
+      elements = stripe.elements({ clientSecret, appearance });
+      paymentElement = elements.create('payment');
+      paymentElement.mount('#stripe-element');
+      paymentElement.on('ready', () => {
+        document.getElementById('pay-btn').disabled = false;
+        document.getElementById('pay-btn').textContent = `Pay $${(pendingAmount/100).toFixed(2)}`;
+      });
+    }
+
+    document.getElementById('pay-btn').addEventListener('click', async () => {
+      const btn = document.getElementById('pay-btn');
+      const errEl = document.getElementById('error-msg');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Processing…';
+      errEl.textContent = '';
+
+      const { error } = await stripe.confirmPayment({
+        elements,
+        confirmParams: { return_url: window.location.href + '?paid=1' },
+        redirect: 'if_required',
+      });
+
+      if (error) {
+        errEl.textContent = error.message;
+        btn.disabled = false;
+        btn.textContent = `Pay $${(pendingAmount/100).toFixed(2)}`;
+        return;
+      }
+
+      showSuccess();
+    });
+
+    function showSuccess() {
+      document.getElementById('form-card').style.display = 'none';
+      const s = document.getElementById('success-screen');
+      s.style.display = 'flex';
+      document.getElementById('s-recipient').textContent = recipientName;
+      document.getElementById('s-amount').textContent = `$${(pendingAmount/100).toFixed(2)} USD`;
+    }
+
+    // ─── Handle Stripe redirect return ────────────────────────────
+    if (new URLSearchParams(window.location.search).get('paid') === '1') {
+      // After 3D Secure redirect — show success immediately
+      // The webhook will have already fired and credited the wallet
+      showSuccess();
+    }
+  </script>
+</body>
+</html>

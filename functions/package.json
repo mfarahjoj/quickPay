@@ -1,0 +1,41 @@
+{
+  "name": "quickpay-functions",
+  "version": "1.0.0",
+  "description": "Cloud Functions for QuickPay digital wallet system",
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "shell": "npm run build && firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log",
+    "test": "jest"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "dependencies": {
+    "axios": "^1.6.5",
+    "bcrypt": "^5.1.1",
+    "crypto": "^1.0.1",
+    "firebase-admin": "^12.0.0",
+    "firebase-functions": "^7.0.6",
+    "stripe": "^14.11.0"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
+    "@types/jest": "^29.5.11",
+    "@types/node": "^20.11.5",
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "@typescript-eslint/parser": "^6.19.0",
+    "eslint": "^8.56.0",
+    "eslint-config-google": "^0.14.0",
+    "eslint-plugin-import": "^2.29.1",
+    "firebase-functions-test": "^3.1.1",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.4.6",
+    "typescript": "^5.3.3"
+  },
+  "private": true
+}

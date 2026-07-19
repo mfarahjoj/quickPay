@@ -1,0 +1,10 @@
+{
+  "name": "quickpay-icon-generator",
+  "version": "1.0.0",
+  "scripts": {
+    "generate": "node generate-icons.js"
+  },
+  "dependencies": {
+    "sharp": "^0.33.1"
+  }
+}
