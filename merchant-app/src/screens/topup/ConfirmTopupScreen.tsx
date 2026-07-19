@@ -8,6 +8,8 @@ import {
   ActivityIndicator,
   Vibration,
   NativeModules,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Camera, useCameraDevice, useCodeScanner } from 'react-native-vision-camera';
@@ -249,7 +251,7 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
           </View>
           <View style={styles.sideOverlay} />
         </View>
-        <View style={styles.statusArea}>
+        <View style={styles.bottomOverlay}>
           <View style={styles.hintBox}>
             <Text style={styles.hintText}>
               {scanError || 'Scan the customer’s top-up QR'}
@@ -266,30 +268,36 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
         <View style={styles.topBarSpacer} />
       </View>
 
-      <View style={styles.manualSection}>
-        <View style={styles.orRow}>
-          <View style={styles.orLine} />
-          <Text style={styles.orText}>OR ENTER CODE</Text>
-          <View style={styles.orLine} />
-        </View>
-        <GlassCard style={styles.inputCard}>
-          <TextInput
-            style={styles.otpInput}
-            value={manual}
-            onChangeText={(t) => { setManual(t.replace(/\D/g, '').slice(0, 6)); setScanError(null); }}
-            keyboardType="number-pad"
-            maxLength={6}
-            placeholder="— — — — — —"
-            placeholderTextColor="rgba(255,255,255,0.2)"
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.manualWrap}
+        pointerEvents="box-none"
+      >
+        <View style={styles.manualSection}>
+          <View style={styles.orRow}>
+            <View style={styles.orLine} />
+            <Text style={styles.orText}>OR ENTER CODE</Text>
+            <View style={styles.orLine} />
+          </View>
+          <GlassCard style={styles.inputCard}>
+            <TextInput
+              style={styles.otpInput}
+              value={manual}
+              onChangeText={(t) => { setManual(t.replace(/\D/g, '').slice(0, 6)); setScanError(null); }}
+              keyboardType="number-pad"
+              maxLength={6}
+              placeholder="— — — — — —"
+              placeholderTextColor="rgba(255,255,255,0.2)"
+            />
+          </GlassCard>
+          <PillButton
+            label="Confirm & Credit"
+            onPress={handleManual}
+            disabled={extractCode(manual) === null}
+            style={styles.verifyBtn}
           />
-        </GlassCard>
-        <PillButton
-          label="Confirm & Credit"
-          onPress={handleManual}
-          disabled={extractCode(manual) === null}
-          style={styles.verifyBtn}
-        />
-      </View>
+        </View>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -297,7 +305,15 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#000' },
   overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  // Top gets less flex than bottom so the scan window sits in the visible
+  // space between the top bar and the manual-entry panel, not behind it.
   topOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)' },
+  bottomOverlay: {
+    flex: 1.7,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    paddingTop: 20,
+  },
   middleRow: { flexDirection: 'row' },
   sideOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)' },
   scanWindow: { width: 268, height: 268, justifyContent: 'center', alignItems: 'center' },
@@ -307,7 +323,6 @@ const styles = StyleSheet.create({
   tr: { top: 0, right: 0, borderTopWidth: 3, borderRightWidth: 3, borderTopRightRadius: 12 },
   bl: { bottom: 0, left: 0, borderBottomWidth: 3, borderLeftWidth: 3, borderBottomLeftRadius: 12 },
   br: { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 12 },
-  statusArea: { alignItems: 'center', paddingTop: 20 },
   hintBox: {
     backgroundColor: 'rgba(0,0,0,0.5)',
     paddingHorizontal: 20,
@@ -332,9 +347,11 @@ const styles = StyleSheet.create({
   backArrow: { fontSize: 24, color: '#fff', lineHeight: 28 },
   topBarTitle: { flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '700', color: '#fff', letterSpacing: -0.3 },
   topBarSpacer: { width: 36 },
-  manualSection: {
+  manualWrap: {
     position: 'absolute',
     bottom: 0, left: 0, right: 0,
+  },
+  manualSection: {
     backgroundColor: 'rgba(0,0,0,0.85)',
     paddingHorizontal: 20,
     paddingTop: 16,

@@ -9,6 +9,8 @@ import {
   ActivityIndicator,
   Vibration,
   NativeModules,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -180,7 +182,7 @@ export default function ScanCustomerScreen() {
           <View style={styles.sideOverlay} />
         </View>
 
-        <View style={styles.statusArea}>
+        <View style={styles.bottomOverlay}>
           {scanError ? (
             <TouchableOpacity
               style={styles.errorBox}
@@ -224,6 +226,11 @@ export default function ScanCustomerScreen() {
       </View>
 
       {/* Manual entry */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.manualWrap}
+        pointerEvents="box-none"
+      >
       <View style={styles.manualSection}>
         <View style={styles.orRow}>
           <View style={styles.orLine} />
@@ -253,6 +260,7 @@ export default function ScanCustomerScreen() {
           style={styles.verifyBtn}
         />
       </View>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -260,7 +268,15 @@ export default function ScanCustomerScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#000' },
   overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  // Top gets less flex than bottom so the scan window sits in the visible
+  // space between the top bar and the manual-entry panel, not behind it.
   topOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)' },
+  bottomOverlay: {
+    flex: 1.7,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    paddingTop: 20,
+  },
   middleRow: { flexDirection: 'row' },
   sideOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)' },
   scanWindow: {
@@ -276,7 +292,6 @@ const styles = StyleSheet.create({
   tr: { top: 0, right: 0, borderTopWidth: 3, borderRightWidth: 3, borderTopRightRadius: 12 },
   bl: { bottom: 0, left: 0, borderBottomWidth: 3, borderLeftWidth: 3, borderBottomLeftRadius: 12 },
   br: { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 12 },
-  statusArea: { alignItems: 'center', paddingTop: 20 },
   hintBox: {
     flexDirection: 'row',
     gap: 8,
@@ -317,9 +332,11 @@ const styles = StyleSheet.create({
   },
   torchBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
   torchIcon: { fontSize: 22 },
-  manualSection: {
+  manualWrap: {
     position: 'absolute',
     bottom: 0, left: 0, right: 0,
+  },
+  manualSection: {
     backgroundColor: 'rgba(0,0,0,0.85)',
     paddingHorizontal: 20,
     paddingTop: 16,
