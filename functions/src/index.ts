@@ -66,3 +66,6 @@ export { createRemittance } from "./remittance/createRemittance";
 export { completeRemittance } from "./remittance/completeRemittance";
 export { createWebTopup } from "./remittance/createWebTopup";
 export { stripeWebhook } from "./remittance/stripeWebhook";
+
+// Ledger integrity (LEDGER_ARCHITECTURE.md §3.5)
+export { ledgerInvariantCheck } from "./ledger/invariantCheck";

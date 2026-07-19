@@ -7,41 +7,89 @@
  * Existing wallet docs already hold correct balances, so this script writes the
  * journal entries and the `ledger_balances` projections for float/platform
  * accounts WITHOUT touching wallet docs. Idempotent: entry IDs are
- * deterministic (`opening_{uid}`) and already-posted entries are skipped.
+ * deterministic (`opening_{uid}`), creates fail on existing docs, and
+ * already-posted entries are skipped.
  *
  * Usage:
  *   node scripts/migrate-opening-balances.js          # dry run (default)
  *   node scripts/migrate-opening-balances.js --apply  # write for real
  *
- * Auth: reuses your Firebase CLI login (~/.config/configstore/firebase-tools.json).
- * Set GOOGLE_APPLICATION_CREDENTIALS to a service-account key to override.
+ * Auth: exchanges your Firebase CLI login (~/.config/configstore/firebase-tools.json)
+ * for an OAuth access token and talks to the Firestore REST API directly —
+ * the admin SDK refuses refresh-token credentials for Firestore.
  */
 
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
 
-// firebase-admin lives in functions/node_modules
-const admin = require(path.join(__dirname, "../functions/node_modules/firebase-admin"));
-
 const PROJECT_ID = "quickpay-485417";
+const BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
 const PLATFORM_WALLET_DOC = "platform";
 
 const FLOAT_AGENTS = "float:agents";
 const PLATFORM_FEES = "platform:fees";
 
-function credentialFromFirebaseCli() {
+async function getAccessToken() {
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    throw new Error(
+      "GOOGLE_APPLICATION_CREDENTIALS is set — use the admin SDK variant instead, or unset it."
+    );
+  }
   const cfgPath = path.join(os.homedir(), ".config/configstore/firebase-tools.json");
-  if (!fs.existsSync(cfgPath)) return null;
+  if (!fs.existsSync(cfgPath)) {
+    throw new Error("No Firebase CLI login found. Run `firebase login` first.");
+  }
   const tokens = JSON.parse(fs.readFileSync(cfgPath, "utf8")).tokens;
-  if (!tokens || !tokens.refresh_token) return null;
-  return admin.credential.refreshToken({
-    type: "authorized_user",
-    // Public OAuth client baked into firebase-tools
-    client_id: "563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com",
-    client_secret: "j9iVZfS8kkCEFUPaAeJV0sAi",
-    refresh_token: tokens.refresh_token,
+  if (!tokens || !tokens.refresh_token) {
+    throw new Error("No refresh token in Firebase CLI config. Run `firebase login`.");
+  }
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      // Public OAuth client baked into firebase-tools
+      client_id: "563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com",
+      client_secret: "j9iVZfS8kkCEFUPaAeJV0sAi",
+      refresh_token: tokens.refresh_token,
+    }),
   });
+  if (!res.ok) throw new Error(`Token exchange failed: ${res.status} ${await res.text()}`);
+  return (await res.json()).access_token;
+}
+
+async function api(token, method, url, body) {
+  const res = await fetch(url, {
+    method,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const text = await res.text();
+  return { status: res.status, json: text ? JSON.parse(text) : null };
+}
+
+/** Convert a plain JS value to a Firestore REST typed value. */
+function toValue(v) {
+  if (typeof v === "number" && Number.isInteger(v)) return { integerValue: String(v) };
+  if (typeof v === "string") return { stringValue: v };
+  if (v instanceof Date) return { timestampValue: v.toISOString() };
+  if (Array.isArray(v)) return { arrayValue: { values: v.map(toValue) } };
+  if (v && typeof v === "object") {
+    const fields = {};
+    for (const [k, val] of Object.entries(v)) fields[k] = toValue(val);
+    return { mapValue: { fields } };
+  }
+  throw new Error(`Unsupported value: ${v}`);
+}
+
+function toFields(obj) {
+  const fields = {};
+  for (const [k, v] of Object.entries(obj)) fields[k] = toValue(v);
+  return fields;
 }
 
 /** Lines for one opening entry: value appears in the wallet, backed by agent float. */
@@ -59,40 +107,106 @@ function openingLines(account, cents) {
   ];
 }
 
+async function listWallets(token) {
+  const wallets = [];
+  let pageToken;
+  do {
+    const url = `${BASE}/wallets?pageSize=300${pageToken ? `&pageToken=${pageToken}` : ""}`;
+    const { status, json } = await api(token, "GET", url);
+    if (status !== 200) throw new Error(`Listing wallets failed: ${status} ${JSON.stringify(json)}`);
+    for (const doc of json.documents ?? []) {
+      const id = doc.name.split("/").pop();
+      const balanceField = doc.fields?.balance;
+      if (balanceField && balanceField.integerValue === undefined && balanceField.doubleValue === undefined) {
+        throw new Error(`wallets/${id} balance has unexpected type: ${JSON.stringify(balanceField)}`);
+      }
+      const balance = balanceField
+        ? parseInt(balanceField.integerValue ?? balanceField.doubleValue ?? "0", 10)
+        : 0;
+      wallets.push({ id, balance });
+    }
+    pageToken = json.nextPageToken;
+  } while (pageToken);
+  return wallets;
+}
+
+async function entryExists(token, entryId) {
+  const { status } = await api(token, "GET", `${BASE}/journal_entries/${entryId}`);
+  if (status === 200) return true;
+  if (status === 404) return false;
+  throw new Error(`Checking ${entryId} failed with HTTP ${status}`);
+}
+
+async function createEntry(token, entryId, entryDoc) {
+  // createDocument fails with 409 if the document already exists.
+  const { status, json } = await api(
+    token,
+    "POST",
+    `${BASE}/journal_entries?documentId=${entryId}`,
+    { fields: toFields(entryDoc) }
+  );
+  if (status === 409) return "exists";
+  if (status !== 200) throw new Error(`Creating ${entryId} failed: ${status} ${JSON.stringify(json)}`);
+  return "created";
+}
+
+async function incrementLedgerBalance(token, account, delta, nowIso) {
+  const docPath = `projects/${PROJECT_ID}/databases/(default)/documents/ledger_balances/${encodeURIComponent(account)}`;
+  const { status, json } = await api(
+    token,
+    "POST",
+    `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents:commit`,
+    {
+      writes: [
+        {
+          update: {
+            name: docPath,
+            fields: toFields({ account, currency: "USD", updatedAt: new Date(nowIso) }),
+          },
+          updateMask: { fieldPaths: ["account", "currency", "updatedAt"] },
+        },
+        {
+          transform: {
+            document: docPath,
+            fieldTransforms: [
+              { fieldPath: "balance", increment: { integerValue: String(delta) } },
+            ],
+          },
+        },
+      ],
+    }
+  );
+  if (status !== 200)
+    throw new Error(`Incrementing ${account} failed: ${status} ${JSON.stringify(json)}`);
+}
+
 async function main() {
   const apply = process.argv.includes("--apply");
+  const token = await getAccessToken();
 
-  const credential = process.env.GOOGLE_APPLICATION_CREDENTIALS
-    ? admin.credential.applicationDefault()
-    : credentialFromFirebaseCli();
-  if (!credential) {
-    console.error("No credentials. Run `firebase login` or set GOOGLE_APPLICATION_CREDENTIALS.");
-    process.exit(1);
-  }
-  admin.initializeApp({ credential, projectId: PROJECT_ID });
-  const db = admin.firestore();
-
-  const wallets = await db.collection("wallets").get();
-  console.log(`${wallets.size} wallet docs found. Mode: ${apply ? "APPLY" : "dry run"}\n`);
+  const wallets = await listWallets(token);
+  console.log(`${wallets.length} wallet docs found. Mode: ${apply ? "APPLY" : "dry run"}\n`);
 
   let floatAgentsDelta = 0; // credit-positive, so holding value goes negative
   let posted = 0;
   let skipped = 0;
+  const nowIso = new Date().toISOString();
 
-  for (const doc of wallets.docs) {
-    const balance = doc.data().balance ?? 0;
+  for (const { id, balance } of wallets) {
     if (!Number.isInteger(balance)) {
-      console.error(`  !! wallets/${doc.id} has non-integer balance ${balance} — fix first`);
+      console.error(`  !! wallets/${id} has non-integer balance ${balance} — fix first`);
       process.exit(1);
     }
-    if (balance === 0) continue;
+    if (balance === 0) {
+      if (!apply) console.log(`  wallets/${id}: 0.00 USD — nothing to post`);
+      continue;
+    }
 
-    const isPlatform = doc.id === PLATFORM_WALLET_DOC;
-    const account = isPlatform ? PLATFORM_FEES : `user:${doc.id}`;
-    const entryId = isPlatform ? "opening_platform" : `opening_${doc.id}`;
-    const entryRef = db.collection("journal_entries").doc(entryId);
+    const isPlatform = id === PLATFORM_WALLET_DOC;
+    const account = isPlatform ? PLATFORM_FEES : `user:${id}`;
+    const entryId = isPlatform ? "opening_platform" : `opening_${id}`;
 
-    if ((await entryRef.get()).exists) {
+    if (await entryExists(token, entryId)) {
       console.log(`  skip ${entryId} (already posted)`);
       skipped++;
       continue;
@@ -102,26 +216,22 @@ async function main() {
     console.log(`  ${entryId}: ${account} ${(balance / 100).toFixed(2)} USD`);
 
     if (apply) {
-      const now = admin.firestore.Timestamp.now();
-      await entryRef.create({
+      const result = await createEntry(token, entryId, {
         type: "opening_balance",
         currency: "USD",
         lines,
         refs: {},
         description: "Ledger migration: opening balance from pre-ledger wallet",
         postedBy: "system",
-        postedAt: now,
+        postedAt: new Date(nowIso),
       });
+      if (result === "exists") {
+        console.log(`  race: ${entryId} appeared mid-run — skipping projections for it`);
+        skipped++;
+        continue;
+      }
       if (isPlatform) {
-        await db.collection("ledger_balances").doc(PLATFORM_FEES).set(
-          {
-            account: PLATFORM_FEES,
-            balance: admin.firestore.FieldValue.increment(balance),
-            currency: "USD",
-            updatedAt: now,
-          },
-          { merge: true }
-        );
+        await incrementLedgerBalance(token, PLATFORM_FEES, balance, nowIso);
       }
     }
     floatAgentsDelta -= balance;
@@ -129,15 +239,7 @@ async function main() {
   }
 
   if (apply && floatAgentsDelta !== 0) {
-    await db.collection("ledger_balances").doc(FLOAT_AGENTS).set(
-      {
-        account: FLOAT_AGENTS,
-        balance: admin.firestore.FieldValue.increment(floatAgentsDelta),
-        currency: "USD",
-        updatedAt: admin.firestore.Timestamp.now(),
-      },
-      { merge: true }
-    );
+    await incrementLedgerBalance(token, FLOAT_AGENTS, floatAgentsDelta, nowIso);
   }
 
   console.log(`\n${posted} entries ${apply ? "posted" : "would be posted"}, ${skipped} skipped.`);
