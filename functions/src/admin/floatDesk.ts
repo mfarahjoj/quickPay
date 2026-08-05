@@ -1,11 +1,11 @@
 /**
  * Float desk — issuing and withdrawing agent float.
  *
- * This replaces `scripts/seed-agent-float.js`, which posted real journal
- * entries using whoever ran it and their personal Firebase CLI credentials:
- * no record of who issued float, no second pair of eyes, no receipt for the
- * agent, and it always booked the value to `float:agents` no matter how the
- * agent actually paid.
+ * This replaced the since-retired `scripts/seed-agent-float.js`, which posted
+ * real journal entries using whoever ran it and their personal Firebase CLI
+ * credentials: no record of who issued float, no second pair of eyes, no
+ * receipt for the agent, and it always booked the value to `float:agents` no
+ * matter how the agent actually paid.
  *
  * Here, requesting and approving are separate calls. Above the configured
  * threshold the approver must be a different admin, so no one person can move

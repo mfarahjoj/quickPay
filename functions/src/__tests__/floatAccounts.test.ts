@@ -12,8 +12,8 @@ import {
 import { DEFAULT_RATES } from "../config/rates";
 
 /**
- * The float desk exists because seed-agent-float.js always booked value to
- * float:agents no matter how the agent paid, which made the books
+ * The float desk exists because the retired seed-agent-float.js always booked
+ * value to float:agents no matter how the agent paid, which made the books
  * unreconcilable against a real bank or Zaad statement. These assertions pin
  * the mapping that fixes it.
  */

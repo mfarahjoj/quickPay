@@ -1,7 +1,7 @@
 # Admin Console v1 — Plan
 
-**Status**: Proposed — not started
-**Date**: 2026-08-04
+**Status**: Built (phases A–G) — not deployed, not verified against real data
+**Date**: 2026-08-04, built 2026-08-05
 **Goal**: Make the Hargeisa pilot operable by humans without laptop scripts or hand-edited Firestore documents. Four capabilities: role approval, KYC review, float issuance, user lookup & freeze.
 
 ---
@@ -138,17 +138,29 @@ The admin picks the route, and it is recorded with an external reference (Zaad t
 
 Sequenced so that the highest-risk holes close first and nothing waits on the UI.
 
-| Phase | Work | Closes |
-|---|---|---|
-| **A. Backend foundation** | `requireAdmin` guard, custom-claims script, `admin_audit` writes, rules for new collections | — |
-| **B. Freeze enforcement** | `accountStatus` + `requireActiveAccount` at every money call site + tests | Compromised accounts can't be stopped |
-| **C. Role gate** | `setupPin` hardening, `roleRequests`, `reviewRoleRequest`, migration script, `lookupUserByPhone` fix | Anyone can become an agent |
-| **D. Console shell** | Vite app, Google auth, second Hosting site, user lookup + freeze UI | Support has no tooling |
-| **E. KYC queue** | Collection-group index, signed URLs, `reviewKyc`, queue UI | KYC submissions rot |
-| **F. Float desk** | Issuance/withdrawal callables, maker-checker, float UI | Float sold by laptop script |
-| **G. Retire the script** | Delete `seed-agent-float.js` or restrict it to emulator use | Personal credentials moving real money |
+| Phase | Work | Closes | Status |
+|---|---|---|---|
+| **A. Backend foundation** | `requireAdmin` guard, custom-claims script, `admin_audit` writes, rules for new collections | — | Done |
+| **B. Freeze enforcement** | `accountStatus` + `requireActiveAccount` at every money call site + tests | Compromised accounts can't be stopped | Done |
+| **C. Role gate** | `setupPin` hardening, `roleRequests`, `reviewRoleRequest`, migration script, `lookupUserByPhone` fix | Anyone can become an agent | Done |
+| **D. Console shell** | Vite app, Google auth, second Hosting site, user lookup + freeze UI | Support has no tooling | Done |
+| **E. KYC queue** | Collection-group index, signed URLs, `reviewKyc`, queue UI | KYC submissions rot | Done |
+| **F. Float desk** | Issuance/withdrawal callables, maker-checker, float UI | Float sold by laptop script | Done |
+| **G. Retire the script** | Delete `seed-agent-float.js` or restrict it to emulator use | Personal credentials moving real money | Done — deleted |
 
 Phases A–C are backend-only and deliver most of the safety benefit before a single screen exists. If the pilot date compresses, they are the part that cannot be cut.
+
+**Deviation worth recording (phase B).** This plan called for `requireActiveAccount` at every money call site and named "one missed call site" as the top risk. What shipped mirrors the frozen flag onto the wallet document, which `prepareJournalEntry` already reads, so the ledger itself refuses to debit a frozen account at no extra read cost and with no way for a forgotten call site to bypass it. The callable-level checks remain, but as user experience rather than as the guarantee.
+
+**Still open after v1** — daily aggregate limits (`getAccountLimits` advertises caps that nothing enforces, so verifying KYC raises a per-transaction cap into that gap); external reconciliation against bank/Stripe; dispute and case management; treasury float rebalancing. None was in v1 scope; the first is the natural next piece.
+
+## 5a. Before the console can be used
+
+1. Register a **Web** app in the Firebase console and fill `admin/.env.local` (see `admin/README.md`). The build refuses to run without it — Vite inlines the config, and without it the whole app is dead-code-eliminated into a "Not configured" stub.
+2. Register the admin origin under **App Check** (reCAPTCHA Enterprise); the admin callables run with `enforceAppCheck`.
+3. `firebase hosting:sites:create zapp-admin`, apply both hosting targets, grant yourself a role with `scripts/set-admin-claim.js`, then deploy rules, indexes and functions.
+
+KYC signed URLs additionally need the functions service account to hold **Service Account Token Creator**; the console surfaces that per image rather than failing silently.
 
 ## 6. Risks
 

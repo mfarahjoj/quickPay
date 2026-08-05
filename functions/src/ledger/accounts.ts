@@ -33,9 +33,10 @@ export function mobileMoneyFloat(method: "zaad" | "edahab"): string {
  * How an agent actually paid for float, and therefore which asset account the
  * value landed in.
  *
- * This distinction is the whole point of the float desk: `seed-agent-float.js`
- * always debited `float:agents` regardless of how the money arrived, so the
- * books could not be reconciled against a real bank or Zaad statement.
+ * This distinction is the whole point of the float desk: the retired
+ * `seed-agent-float.js` script always debited `float:agents` regardless of how
+ * the money arrived, so the books could not be reconciled against a real bank
+ * or Zaad statement.
  */
 export type FloatRoute = "cash" | "zaad" | "edahab" | "bank";
 

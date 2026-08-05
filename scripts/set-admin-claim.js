@@ -14,7 +14,7 @@
  * credentials rather than a phished console session.
  *
  * Auth: exchanges your Firebase CLI login for an OAuth access token and calls
- * the Identity Toolkit REST API (same approach as seed-agent-float.js).
+ * the Identity Toolkit REST API (same approach as audit-privileged-accounts.js).
  */
 
 const path = require("path");

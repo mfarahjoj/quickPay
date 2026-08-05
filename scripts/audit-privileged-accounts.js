@@ -17,7 +17,8 @@
  * demotes to customer.
  *
  * Auth: exchanges your Firebase CLI login for an OAuth access token and uses
- * the Firestore REST API (same approach as seed-agent-float.js).
+ * the Firestore REST API directly — the admin SDK refuses refresh-token
+ * credentials for Firestore.
  */
 
 const path = require("path");
