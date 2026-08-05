@@ -77,6 +77,15 @@ export interface User {
    * admin console; those fall back to `isActive` (see resolveAccountStatus).
    */
   accountStatus?: AccountStatus;
+  /**
+   * Mirror of the user's latest role application, so the apps can react on
+   * their existing user-doc listener (roleRequests itself is server-only).
+   * Written only by ensureRoleRequest and adminReviewRoleRequest.
+   */
+  roleRequestStatus?: RoleRequestStatus;
+  roleRequestedRole?: PrivilegedRole;
+  /** Reviewer's reason, surfaced to the applicant on rejection. */
+  roleRequestReason?: string;
   /** Why the account was frozen — shown to support, not to the user. */
   frozenReason?: string;
   /** uid of the admin who last changed accountStatus. */

@@ -140,6 +140,14 @@ export const adminReviewRoleRequest = https.onCall(
         reason,
       });
 
+      // Mirror the verdict onto the user doc so the apps' existing live
+      // listener reacts immediately (see ensureRoleRequest).
+      tx.update(userRef, {
+        roleRequestStatus: status,
+        roleRequestReason: decision === "reject" ? reason : admin.firestore.FieldValue.delete(),
+        updatedAt: now,
+      });
+
       if (decision === "approve") {
         tx.update(userRef, {
           accountType: roleRequest.requestedRole,

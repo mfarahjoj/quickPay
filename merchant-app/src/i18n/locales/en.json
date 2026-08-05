@@ -323,5 +323,13 @@
   "auth.onboarding.role.retail.short": "Get paid via QR code or wallet scan",
   "auth.onboarding.role.bothBadge": "Full service",
   "auth.onboarding.role.bothHint": "You can do both — top ups and payments",
-  "dashboard.quickActions.confirmTopUp": "Confirm Top-Up"
+  "dashboard.quickActions.confirmTopUp": "Confirm Top-Up",
+  "auth.onboarding.review.pendingTitle": "Application under review",
+  "auth.onboarding.review.pendingBody": "Your account is with our team for approval. We check every merchant and agent before they can take payments.",
+  "auth.onboarding.review.pendingHint": "This usually takes less than a working day. We'll let you know as soon as it's done — you can close the app.",
+  "auth.onboarding.review.rejectedTitle": "Application not approved",
+  "auth.onboarding.review.rejectedBody": "We couldn't approve your application to take payments on Zapp Pay.",
+  "auth.onboarding.review.reasonLabel": "Reason",
+  "auth.onboarding.review.appliedFor": "Applied as",
+  "auth.onboarding.review.applyAgain": "Apply again"
 }

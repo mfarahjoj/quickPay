@@ -6,6 +6,8 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../hooks/useAuth';
 import { useMerchantOnboardingGate } from '../hooks/useMerchantOnboardingGate';
 import MerchantOnboardingNavigator from './MerchantOnboardingNavigator';
+import RoleReviewPendingScreen from '../screens/auth/RoleReviewPendingScreen';
+import { signOut } from '../services/auth.service';
 import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import { colors } from '../theme';
 import {
@@ -243,7 +245,17 @@ function MainStackNavigator() {
 
 export default function AppNavigator() {
   const { user } = useAuth();
-  const { loading, needsOnboarding } = useMerchantOnboardingGate();
+  const { loading, state, requestedRole, rejectionReason } = useMerchantOnboardingGate();
+
+  // A rejected applicant who chooses to try again is sent back through
+  // onboarding. Local because there is nothing to persist: submitting writes a
+  // fresh pending request, and that is what the gate reacts to.
+  const [reapplying, setReapplying] = React.useState(false);
+  React.useEffect(() => {
+    if (state !== 'rejected') {
+      setReapplying(false);
+    }
+  }, [state]);
 
   // Avoid mounting NavigationContainer during bootstrap — swapping root stack
   // screens while auth/onboarding state resolves crashes react-native-screens on iOS.
@@ -251,12 +263,33 @@ export default function AppNavigator() {
     return <BootstrapLoading />;
   }
 
-  if (user && needsOnboarding) {
+  if (user && (state === 'onboarding' || (state === 'rejected' && reapplying))) {
     return (
       <NavigationContainer>
         <MerchantOnboardingNavigator />
       </NavigationContainer>
     );
+  }
+
+  // Waiting on (or refused by) admin review. No navigator: the gate listens to
+  // the user document, so an approval swaps this for the app by itself.
+  if (user && (state === 'pending' || state === 'rejected')) {
+    return (
+      <RoleReviewPendingScreen
+        variant={state}
+        requestedRole={requestedRole}
+        rejectionReason={rejectionReason}
+        onApplyAgain={() => setReapplying(true)}
+      />
+    );
+  }
+
+  // Approved agent who still owes us area/opening hours. This ran during
+  // onboarding before approval existed; setupAgentProfile requires the agent
+  // role, so it can only run once the role has actually been granted.
+  if (user && state === 'agentProfile') {
+    const AgentProfileSetupScreen = require('../screens/auth/AgentProfileSetupScreen').default;
+    return <AgentProfileSetupScreen navigation={{ goBack: signOut }} />;
   }
 
   return (

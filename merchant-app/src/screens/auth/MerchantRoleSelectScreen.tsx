@@ -144,11 +144,20 @@ export default function MerchantRoleSelectScreen({
     try {
       setLoading(true);
       const accountType = resolveAccountType(selected);
-      await completeMerchantSetup({
+      const result = await completeMerchantSetup({
         fullName: name,
         accountType,
         ...(pinFromRoute ? { pin: pinFromRoute } : {}),
       });
+
+      // Pending review is the normal path now. Don't advance to agent profile
+      // setup: that calls setupAgentProfile, which requires the agent role the
+      // applicant does not have yet. The onboarding gate sees the pending
+      // request and swaps in the review screen, so there is nothing to do here.
+      if (result.roleRequestPending) {
+        return;
+      }
+
       if (accountType === 'topup_agent' || accountType === 'agent_merchant') {
         navigation.navigate('AgentProfileSetup');
       } else {

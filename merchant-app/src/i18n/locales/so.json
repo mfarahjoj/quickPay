@@ -321,5 +321,15 @@
   "transactions.receipt.party": "Dhinaca kale",
   "transactions.report.title": "Soo sheeg dhibaato",
   "transactions.report.message": "La xidhiidh taageerada oo sheeg macaamilka {{id}}.",
-  "dashboard.quickActions.confirmTopUp": "Xaqiiji Shubka"
+  "dashboard.quickActions.confirmTopUp": "Xaqiiji Shubka",
+  "auth.onboarding.review.pendingTitle": "Codsigaaga waa la eegayaa",
+  "auth.onboarding.review.pendingBody": "Kooxdayadu waxay eegayaan akoonkaaga. Ganacsade kasta iyo wakiil kasta waan hubinnaa ka hor inta uusan lacag qaadan.",
+  "auth.onboarding.review.pendingHint": "Badanaa waxay qaadataa wax ka yar hal maalin shaqo. Waan ku ogeysiin doonnaa markay dhammaato — abka waad xidhi kartaa.",
+  "auth.onboarding.review.rejectedTitle": "Codsiga lama aqbalin",
+  "auth.onboarding.review.rejectedBody": "Ma aannu aqbali karin codsigaaga ah inaad lacag ku qaadato Zapp Pay.",
+  "auth.onboarding.review.reasonLabel": "Sababta",
+  "auth.onboarding.review.appliedFor": "Waxaad u codsatay",
+  "auth.onboarding.review.applyAgain": "Mar kale codso",
+  "scan.permissionTitle": "Waxaa loo baahan yahay kamaradda",
+  "scan.permissionMessage": "U ogolow kamaradda si aad u sawirto koodhka QR ee macmiilka."
 }

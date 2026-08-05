@@ -70,15 +70,28 @@ export function onAuthStateChanged(
   return auth().onAuthStateChanged(callback);
 }
 
+export interface MerchantSetupResult {
+  /**
+   * True when the requested role is waiting on admin review. Privileged roles
+   * are granted by an admin, never chosen by the client, so this is the normal
+   * outcome of onboarding rather than an error.
+   */
+  roleRequestPending: boolean;
+  roleRequestId?: string;
+}
+
 /**
- * Finish merchant onboarding: sets accountType to merchant or topup_agent and ensures merchant profile.
- * Omit `pin` when the user already has a PIN (e.g. existing QuickPay customer opening the merchant app).
+ * Submit merchant onboarding: sets the PIN and applies for the chosen role.
+ *
+ * Omit `pin` when the user already has one (e.g. an existing Zapp Pay customer
+ * opening the merchant app). The role itself is NOT granted here — the caller
+ * should expect `roleRequestPending` and let the onboarding gate take over.
  */
 export async function completeMerchantSetup(data: {
   fullName: string;
   pin?: string;
   accountType: 'merchant' | 'topup_agent' | 'agent_merchant';
-}): Promise<void> {
+}): Promise<MerchantSetupResult> {
   try {
     const fn = functions().httpsCallable('setupPin');
     const payload: {
@@ -93,10 +106,18 @@ export async function completeMerchantSetup(data: {
       payload.pin = data.pin;
     }
     const result = await fn(payload);
-    const responseData = result.data as { success: boolean; error?: string };
+    const responseData = result.data as {
+      success: boolean;
+      error?: string;
+      data?: { roleRequestPending?: boolean; roleRequestId?: string };
+    };
     if (!responseData.success) {
       throw new Error(responseData.error || 'Failed to complete registration');
     }
+    return {
+      roleRequestPending: responseData.data?.roleRequestPending === true,
+      roleRequestId: responseData.data?.roleRequestId,
+    };
   } catch (error: any) {
     logger.error('completeMerchantSetup error:', error);
     throw new Error(error.message || 'Failed to complete registration');

@@ -59,11 +59,12 @@ export async function ensureRoleRequest(
     }
   }
 
+  const now = admin.firestore.Timestamp.now();
   const payload: Record<string, unknown> = {
     userId,
     requestedRole: role,
     status: "pending",
-    createdAt: admin.firestore.Timestamp.now(),
+    createdAt: now,
     // A re-application must clear the previous verdict, or the console would
     // show a pending row still carrying the old reviewer and reason.
     reviewedBy: admin.firestore.FieldValue.delete(),
@@ -75,7 +76,24 @@ export async function ensureRoleRequest(
   if (details.area) payload.area = sanitizeString(details.area);
   if (details.note) payload.note = sanitizeString(details.note);
 
-  await ref.set(payload, { merge: true });
+  // Mirror the status onto the user doc in the same batch. `roleRequests` is
+  // server-only, but the apps already hold a live listener on their own user
+  // document — mirroring lets them show "pending review" and flip to the main
+  // app the instant an admin approves, with no polling and no extra callable.
+  // Clients cannot write these fields: the rules allowlist excludes them.
+  const batch = db.batch();
+  batch.set(ref, payload, { merge: true });
+  batch.set(
+    db.collection("users").doc(userId),
+    {
+      roleRequestStatus: "pending",
+      roleRequestedRole: role,
+      roleRequestReason: admin.firestore.FieldValue.delete(),
+      updatedAt: now,
+    },
+    { merge: true }
+  );
+  await batch.commit();
 
   return { requestId, status: "pending", created: true };
 }

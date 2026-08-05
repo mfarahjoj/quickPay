@@ -321,5 +321,15 @@
   "transactions.receipt.party": "الطرف الآخر",
   "transactions.report.title": "الإبلاغ عن مشكلة",
   "transactions.report.message": "تواصل مع الدعم واذكر المعاملة {{id}}.",
-  "dashboard.quickActions.confirmTopUp": "تأكيد الشحن"
+  "dashboard.quickActions.confirmTopUp": "تأكيد الشحن",
+  "auth.onboarding.review.pendingTitle": "طلبك قيد المراجعة",
+  "auth.onboarding.review.pendingBody": "حسابك قيد الموافقة لدى فريقنا. نتحقق من كل تاجر ووكيل قبل السماح له باستقبال المدفوعات.",
+  "auth.onboarding.review.pendingHint": "عادةً ما يستغرق ذلك أقل من يوم عمل. سنخبرك فور الانتهاء — يمكنك إغلاق التطبيق.",
+  "auth.onboarding.review.rejectedTitle": "لم تتم الموافقة على الطلب",
+  "auth.onboarding.review.rejectedBody": "لم نتمكن من الموافقة على طلبك لاستقبال المدفوعات عبر Zapp Pay.",
+  "auth.onboarding.review.reasonLabel": "السبب",
+  "auth.onboarding.review.appliedFor": "تقدمت بصفة",
+  "auth.onboarding.review.applyAgain": "قدّم مرة أخرى",
+  "scan.permissionTitle": "مطلوب الوصول إلى الكاميرا",
+  "scan.permissionMessage": "اسمح بالوصول إلى الكاميرا لمسح رمز QR الخاص بالعميل."
 }
