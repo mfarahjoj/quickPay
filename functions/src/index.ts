@@ -82,6 +82,13 @@ export {
   adminListRoleRequests,
   adminReviewRoleRequest,
 } from "./admin/reviewRoleRequest";
+export {
+  adminSearchUsers,
+  adminGetUser,
+  adminClearLockouts,
+  adminRevokeUserDevices,
+  adminGetLedgerHealth,
+} from "./admin/lookupUser";
 
 // Role applications (privileged roles are granted by admins, not chosen)
 export { requestRole, getMyRoleRequests } from "./merchants/requestRole";

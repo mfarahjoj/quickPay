@@ -15,6 +15,12 @@
       "autoPort": false
     },
     {
+      "name": "zapp-admin",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "admin"],
+      "port": 5174
+    },
+    {
       "name": "fpl-scout",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--prefix", "/Users/mahamedfarah/fpl-scout"],
