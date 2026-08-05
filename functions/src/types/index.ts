@@ -84,6 +84,31 @@ export interface User {
   frozenAt?: FirebaseFirestore.Timestamp | null;
 }
 
+// Role request types — privileged roles are granted by admins, never
+// self-selected. See ADMIN_CONSOLE_PLAN.md §4.1.
+export type PrivilegedRole = "merchant" | "topup_agent" | "agent_merchant";
+export type RoleRequestStatus = "pending" | "approved" | "rejected";
+
+export interface RoleRequest {
+  userId: string;
+  requestedRole: PrivilegedRole;
+  /** What the applicant told us, for the reviewer to sanity-check. */
+  businessName?: string;
+  area?: string;
+  note?: string;
+  status: RoleRequestStatus;
+  createdAt: FirebaseFirestore.Timestamp;
+  reviewedBy?: string;
+  reviewedAt?: FirebaseFirestore.Timestamp;
+  /** Reviewer's justification; on rejection this is shown to the applicant. */
+  reason?: string;
+  /**
+   * Set on requests created by the migration audit for accounts that already
+   * held a privileged role before the approval gate existed.
+   */
+  backfilled?: boolean;
+}
+
 // KYC document types
 export interface KycDocument {
   idType: "national_id" | "passport" | "drivers_license";
@@ -224,7 +249,9 @@ export interface Notification {
     | "payment_sent"
     | "topup_completed"
     | "settlement_completed"
-    | "refund_issued";
+    | "refund_issued"
+    | "role_approved"
+    | "role_rejected";
   title: string;
   body: string;
   data?: Record<string, string>;

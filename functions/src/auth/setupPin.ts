@@ -5,13 +5,26 @@ import { hashPin } from "../utils/encryption";
 import { validatePin, requireAuth, hasStoredPinHash } from "../utils/validation";
 import { ApiResponse } from "../types";
 import { prepareJournalEntry, userAccount, PLATFORM_PROMO } from "../ledger";
+import { isPrivilegedRole } from "../utils/roles";
+import { ensureRoleRequest } from "../merchants/requestRole";
 
 interface SetupPinRequest {
   /** Required when the user does not yet have a PIN on their profile */
   pin?: string;
   fullName: string;
+  /**
+   * The role the applicant *wants*. Privileged values file a role request for
+   * admin review; they never grant the role directly.
+   */
   accountType?: "customer" | "merchant" | "topup_agent" | "agent_merchant";
   referralCode?: string;
+}
+
+interface SetupPinResponse {
+  alreadyHasPin?: boolean;
+  /** True when a privileged role was requested and awaits admin review. */
+  roleRequestPending?: boolean;
+  roleRequestId?: string;
 }
 
 async function creditReferralBonus(
@@ -111,37 +124,21 @@ async function creditReferralBonus(
   console.log(`Referral bonus credited: referrer=${referrerId} newUser=${newUserId}`);
 }
 
-async function ensureMerchantProfile(
-  db: admin.firestore.Firestore,
-  userId: string,
-  businessName: string
-): Promise<void> {
-  const merchantProfileRef = db.collection("merchantProfiles").doc(userId);
-  const existing = await merchantProfileRef.get();
-  if (existing.exists) {
-    await merchantProfileRef.set(
-      { businessName: businessName.trim() },
-      { merge: true }
-    );
-    return;
-  }
-  await merchantProfileRef.set({
-    businessName: businessName.trim(),
-    businessType: "",
-    businessAddress: "",
-    settlementPreference: "zaad",
-    minimumSettlementAmount: 1000,
-  });
-}
-
 /**
  * Callable function to set up user PIN and complete profile.
- * If the user already has a PIN, `pin` may be omitted; `fullName` is still required,
- * and `accountType` may be set to `merchant` or `topup_agent` for merchant onboarding.
+ *
+ * If the user already has a PIN, `pin` may be omitted; `fullName` is still
+ * required.
+ *
+ * `accountType` is a *request*, not an instruction: privileged roles are
+ * granted only by an admin (ADMIN_CONSOLE_PLAN.md §4.1). Every account is
+ * created as `customer`; asking for merchant/agent files a `roleRequests`
+ * entry and the response carries `roleRequestPending` so the client can show
+ * a review-pending state instead of appearing to succeed.
  */
 export const setupPin = https.onCall(
   async (request: https.CallableRequest<SetupPinRequest>):
-  Promise<ApiResponse<{ alreadyHasPin?: boolean }>> => {
+  Promise<ApiResponse<SetupPinResponse>> => {
     requireAuth(request);
     const userId = request.auth!.uid;
 
@@ -162,18 +159,16 @@ export const setupPin = https.onCall(
       const hasExistingPin = hasStoredPinHash(userData?.pinHash);
 
       if (hasExistingPin) {
-        const updates: Record<string, unknown> = {
+        await userRef.update({
           fullName: fullName.trim(),
           updatedAt: admin.firestore.Timestamp.now(),
-        };
-        if (accountType === "merchant" || accountType === "topup_agent" || accountType === "agent_merchant") {
-          updates.accountType = accountType;
-        }
-        await userRef.update(updates);
+        });
 
-        if (accountType === "merchant" || accountType === "topup_agent" || accountType === "agent_merchant") {
-          await ensureMerchantProfile(db, userId, fullName.trim());
-        }
+        const pendingRole = isPrivilegedRole(accountType)
+          ? await ensureRoleRequest(db, userId, accountType, {
+              businessName: fullName.trim(),
+            })
+          : undefined;
 
         // A PIN was submitted but one already exists — we deliberately do NOT
         // overwrite it (PIN changes require the current PIN via changePin, or
@@ -182,7 +177,15 @@ export const setupPin = https.onCall(
         return {
           success: true,
           message: "Profile updated",
-          data: { alreadyHasPin: true },
+          data: {
+            alreadyHasPin: true,
+            ...(pendingRole
+              ? {
+                  roleRequestPending: pendingRole.status === "pending",
+                  roleRequestId: pendingRole.requestId,
+                }
+              : {}),
+          },
         };
       }
 
@@ -194,18 +197,21 @@ export const setupPin = https.onCall(
       }
 
       const pinHash = await hashPin(pin);
-      const resolvedType = accountType || "customer";
 
       await userRef.set(
         {
           pinHash,
           fullName: fullName.trim(),
-          accountType: resolvedType,
           phoneNumber: request.auth!.token.phone_number || "",
           updatedAt: admin.firestore.Timestamp.now(),
           ...(userDoc.exists
             ? {}
             : {
+                // Only ever set at creation, and never the requested role:
+                // privileged roles need admin approval. Setting it here
+                // unconditionally would downgrade an already-approved
+                // merchant who reaches this path without a stored PIN.
+                accountType: "customer",
                 kycStatus: "pending",
                 preferredLanguage: "en",
                 notificationPreferences: {
@@ -239,9 +245,11 @@ export const setupPin = https.onCall(
         }
       }
 
-      if (resolvedType === "merchant" || resolvedType === "topup_agent" || resolvedType === "agent_merchant") {
-        await ensureMerchantProfile(db, userId, fullName.trim());
-      }
+      const pendingRole = isPrivilegedRole(accountType)
+        ? await ensureRoleRequest(db, userId, accountType, {
+            businessName: fullName.trim(),
+          })
+        : undefined;
 
       if (referralCode && typeof referralCode === "string" && !userDoc.exists) {
         creditReferralBonus(db, userId, referralCode.trim().toUpperCase(), fullName.trim())
@@ -251,6 +259,12 @@ export const setupPin = https.onCall(
       return {
         success: true,
         message: "PIN set up successfully",
+        data: pendingRole
+          ? {
+              roleRequestPending: pendingRole.status === "pending",
+              roleRequestId: pendingRole.requestId,
+            }
+          : {},
       };
     } catch (error: any) {
       if (error instanceof https.HttpsError) throw error;

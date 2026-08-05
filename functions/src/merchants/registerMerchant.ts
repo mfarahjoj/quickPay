@@ -1,6 +1,8 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { requireAuth, sanitizeString } from "../utils/validation";
+import { isMerchantRole } from "../utils/roles";
+import { ensureRoleRequest } from "./requestRole";
 import { ApiResponse, MerchantProfile } from "../types";
 
 interface RegisterMerchantRequest {
@@ -49,15 +51,26 @@ export const registerMerchant = https.onCall(
       const userRef = db.collection("users").doc(userId);
       const userDoc = await userRef.get();
 
-      if (userDoc.exists && userDoc.data()?.accountType === "merchant") {
+      if (!userDoc.exists) {
+        throw new https.HttpsError(
+          "failed-precondition",
+          "Complete your profile before registering a business"
+        );
+      }
+
+      if (isMerchantRole(userDoc.data()?.accountType)) {
         throw new https.HttpsError(
           "already-exists",
           "Already registered as merchant"
         );
       }
 
+      // Business details only — the `merchant` role itself is granted by an
+      // admin reviewing the role request below, never by this call. Writing
+      // the profile here is not an escalation (clients may already write
+      // their own merchantProfiles doc) and gives the reviewer something to
+      // check against.
       await userRef.update({
-        accountType: "merchant",
         merchantCategoryCode: merchantCategoryCode || "",
         updatedAt: admin.firestore.Timestamp.now(),
       });
@@ -77,10 +90,18 @@ export const registerMerchant = https.onCall(
         .doc(userId)
         .set(merchantProfile);
 
+      const roleRequest = await ensureRoleRequest(db, userId, "merchant", {
+        businessName,
+        note: businessType,
+      });
+
       return {
         success: true,
         data: merchantProfile,
-        message: "Merchant registration successful",
+        message:
+          roleRequest.status === "approved"
+            ? "Merchant registration updated"
+            : "Registration submitted — pending review",
       };
     } catch (error: any) {
       if (error instanceof https.HttpsError) throw error;

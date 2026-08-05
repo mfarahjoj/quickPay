@@ -1,6 +1,7 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { requireAuth } from "../utils/validation";
+import { canLookupUsers } from "../utils/roles";
 import { ApiResponse } from "../types";
 
 interface LookupUserRequest {
@@ -45,10 +46,9 @@ export const lookupUserByPhone = https.onCall(
       }
 
       const agentData = agentDoc.data();
-      if (
-        agentData?.accountType !== "topup_agent" &&
-        agentData?.accountType !== "merchant"
-      ) {
+      // Previously spelled out inline and missing `agent_merchant`, which
+      // locked agent-merchants out of the first step of the top-up flow.
+      if (!canLookupUsers(agentData?.accountType)) {
         throw new https.HttpsError(
           "permission-denied",
           "Not authorized to lookup users"

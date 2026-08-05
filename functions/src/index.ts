@@ -78,3 +78,10 @@ export { ledgerInvariantCheck } from "./ledger/invariantCheck";
 // Admin console (see ADMIN_CONSOLE_PLAN.md). Every callable here is gated by
 // custom claims in admin/guard.ts and writes to the admin_audit log.
 export { adminSetAccountStatus } from "./admin/setAccountStatus";
+export {
+  adminListRoleRequests,
+  adminReviewRoleRequest,
+} from "./admin/reviewRoleRequest";
+
+// Role applications (privileged roles are granted by admins, not chosen)
+export { requestRole, getMyRoleRequests } from "./merchants/requestRole";
