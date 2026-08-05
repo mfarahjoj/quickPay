@@ -118,6 +118,46 @@ export interface RoleRequest {
   backfilled?: boolean;
 }
 
+// Float desk types — see ADMIN_CONSOLE_PLAN.md §4.3.
+export type FloatDirection = "issue" | "withdraw";
+export type FloatIssuanceStatus = "pending" | "approved" | "rejected";
+
+/**
+ * How the agent settled with us, which decides the asset account the value
+ * landed in. Mirrors FloatRoute in ledger/accounts.ts — declared here rather
+ * than imported so the type module stays independent of the ledger module.
+ */
+export type FloatRouteName = "cash" | "zaad" | "edahab" | "bank";
+
+/**
+ * One request to issue float to (or withdraw it from) an agent.
+ *
+ * Requesting and approving are separate steps: above the configured threshold
+ * the approver must be a different admin, so no single person can move value
+ * into an agent wallet on their own.
+ */
+export interface FloatIssuance {
+  agentId: string;
+  agentName?: string;
+  direction: FloatDirection;
+  amountCents: number;
+  route: FloatRouteName;
+  /** Zaad transaction id, deposit slip number, receipt number. */
+  externalReference?: string;
+  status: FloatIssuanceStatus;
+  requestedBy: string;
+  requestedByEmail: string;
+  requestReason: string;
+  /** Fixed when the request is raised, so a later rate change cannot weaken it. */
+  requiresSecondApprover: boolean;
+  createdAt: FirebaseFirestore.Timestamp;
+  decidedBy?: string;
+  decidedAt?: FirebaseFirestore.Timestamp;
+  decisionReason?: string;
+  journalEntryId?: string;
+  transactionId?: string;
+}
+
 // KYC document types
 export interface KycDocument {
   idType: "national_id" | "passport" | "drivers_license";
@@ -260,7 +300,9 @@ export interface Notification {
     | "settlement_completed"
     | "refund_issued"
     | "role_approved"
-    | "role_rejected";
+    | "role_rejected"
+    | "float_issued"
+    | "float_withdrawn";
   title: string;
   body: string;
   data?: Record<string, string>;

@@ -89,6 +89,13 @@ export {
   adminRevokeUserDevices,
   adminGetLedgerHealth,
 } from "./admin/lookupUser";
+export {
+  adminRequestFloat,
+  adminApproveFloat,
+  adminRejectFloat,
+  adminListFloatIssuances,
+  adminListAgentFloat,
+} from "./admin/floatDesk";
 
 // Role applications (privileged roles are granted by admins, not chosen)
 export { requestRole, getMyRoleRequests } from "./merchants/requestRole";

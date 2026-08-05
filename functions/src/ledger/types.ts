@@ -19,6 +19,10 @@ export type JournalEntryType =
   | "remittance"
   | "referral_bonus"
   | "payroll"
+  /** Agent buys float: real value reaches a float account, agent is credited. */
+  | "float_issue"
+  /** Agent returns float for cash: agent is debited, float account credited. */
+  | "float_withdraw"
   | "opening_balance"
   | "adjustment";
 

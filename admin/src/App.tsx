@@ -11,9 +11,10 @@ import {
 import { UserSearch } from "./components/UserSearch";
 import { UserDetail } from "./components/UserDetail";
 import { RoleQueue } from "./components/RoleQueue";
+import { FloatDesk } from "./components/FloatDesk";
 import { LedgerBanner } from "./components/LedgerBanner";
 
-type Tab = "users" | "roles";
+type Tab = "users" | "roles" | "float";
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -101,6 +102,8 @@ export default function App() {
 
   const canReviewRoles =
     claims.adminRoles.includes("compliance") || claims.adminRoles.includes("super");
+  const canRunFloatDesk =
+    claims.adminRoles.includes("ops") || claims.adminRoles.includes("super");
 
   return (
     <div className="app">
@@ -132,6 +135,14 @@ export default function App() {
             Role applications
           </button>
         )}
+        {canRunFloatDesk && (
+          <button
+            className={tab === "float" ? "active" : ""}
+            onClick={() => setTab("float")}
+          >
+            Float desk
+          </button>
+        )}
       </nav>
 
       <main className="main">
@@ -151,6 +162,8 @@ export default function App() {
         )}
 
         {tab === "roles" && canReviewRoles && <RoleQueue />}
+
+        {tab === "float" && canRunFloatDesk && <FloatDesk adminUid={user.uid} />}
       </main>
     </div>
   );

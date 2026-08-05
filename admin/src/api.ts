@@ -73,6 +73,34 @@ export interface RoleRequestRow {
   currentAccountType?: string;
 }
 
+export type FloatRoute = "cash" | "zaad" | "edahab" | "bank";
+export type FloatDirection = "issue" | "withdraw";
+
+export interface AgentPosition {
+  agentId: string;
+  fullName?: string;
+  phoneNumber?: string;
+  accountType?: string;
+  accountStatus: string;
+  balanceCents: number;
+}
+
+export interface FloatIssuanceRow {
+  issuanceId: string;
+  agentId: string;
+  agentName?: string;
+  direction: FloatDirection;
+  amountCents: number;
+  route: FloatRoute;
+  externalReference?: string;
+  status: string;
+  requestedBy: string;
+  requestedByEmail: string;
+  requestReason: string;
+  requiresSecondApprover: boolean;
+  createdAt?: { _seconds?: number; seconds?: number };
+}
+
 export interface LedgerHealth {
   lastRun: {
     ranAt?: { _seconds?: number; seconds?: number };
@@ -123,4 +151,36 @@ export const api = {
     ),
 
   ledgerHealth: () => call<void, LedgerHealth>("adminGetLedgerHealth"),
+
+  listAgentFloat: () => call<void, AgentPosition[]>("adminListAgentFloat"),
+
+  listFloatIssuances: (status = "pending") =>
+    call<{ status: string }, FloatIssuanceRow[]>("adminListFloatIssuances", {
+      status,
+    }),
+
+  requestFloat: (payload: {
+    agentId: string;
+    direction: FloatDirection;
+    amountCents: number;
+    route: FloatRoute;
+    externalReference?: string;
+    reason: string;
+  }) =>
+    call<typeof payload, { issuanceId: string; requiresSecondApprover: boolean }>(
+      "adminRequestFloat",
+      payload
+    ),
+
+  approveFloat: (issuanceId: string, reason: string) =>
+    call<{ issuanceId: string; reason: string }, unknown>("adminApproveFloat", {
+      issuanceId,
+      reason,
+    }),
+
+  rejectFloat: (issuanceId: string, reason: string) =>
+    call<{ issuanceId: string; reason: string }, unknown>("adminRejectFloat", {
+      issuanceId,
+      reason,
+    }),
 };

@@ -149,6 +149,13 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Float issuance requests. Approving one posts a journal entry that
+    // credits an agent wallet, so a client that could write here could mint
+    // float. Server-only, like the ledger itself.
+    match /floatIssuances/{issuanceId} {
+      allow read, write: if false;
+    }
+
     // Trusted-device login credentials — server-only. These hold the bcrypt
     // hash of a device secret that can be exchanged (with the PIN) for a
     // session, so no client may read or write them under any circumstance.

@@ -15,11 +15,19 @@ export interface Rates {
   paymentFeeRate: number;
   /** Fraction of a top-up paid to the agent as commission. */
   topupCommissionRate: number;
+  /**
+   * Float issuance at or above this many cents needs a second admin to
+   * approve it. Below it, one ops admin may approve their own request —
+   * still audited. Tunable without a redeploy because the right threshold
+   * depends on how much float agents actually buy.
+   */
+  floatApprovalThresholdCents: number;
 }
 
 export const DEFAULT_RATES: Rates = {
   paymentFeeRate: 0.01,
   topupCommissionRate: 0.02,
+  floatApprovalThresholdCents: 50000, // $500
 };
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
@@ -28,6 +36,18 @@ let cached: { rates: Rates; expiresAt: number } | null = null;
 function coerceRate(value: unknown, fallback: number): number {
   // Reject anything that isn't a sane fraction in [0, 1).
   if (typeof value === "number" && Number.isFinite(value) && value >= 0 && value < 1) {
+    return value;
+  }
+  return fallback;
+}
+
+/**
+ * Coerce a whole-cents threshold. Unlike a rate this is not bounded above,
+ * but it must be a non-negative integer — a fractional or negative threshold
+ * would silently disable maker-checker.
+ */
+function coerceCents(value: unknown, fallback: number): number {
+  if (typeof value === "number" && Number.isInteger(value) && value >= 0) {
     return value;
   }
   return fallback;
@@ -51,6 +71,10 @@ export async function getRates(): Promise<Rates> {
       topupCommissionRate: coerceRate(
         data.topupCommissionRate,
         DEFAULT_RATES.topupCommissionRate
+      ),
+      floatApprovalThresholdCents: coerceCents(
+        data.floatApprovalThresholdCents,
+        DEFAULT_RATES.floatApprovalThresholdCents
       ),
     };
     cached = { rates, expiresAt: now + CACHE_TTL_MS };

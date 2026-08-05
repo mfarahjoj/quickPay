@@ -29,6 +29,37 @@ export function mobileMoneyFloat(method: "zaad" | "edahab"): string {
   return method === "zaad" ? FLOAT_ZAAD : FLOAT_EDAHAB;
 }
 
+/**
+ * How an agent actually paid for float, and therefore which asset account the
+ * value landed in.
+ *
+ * This distinction is the whole point of the float desk: `seed-agent-float.js`
+ * always debited `float:agents` regardless of how the money arrived, so the
+ * books could not be reconciled against a real bank or Zaad statement.
+ */
+export type FloatRoute = "cash" | "zaad" | "edahab" | "bank";
+
+export const FLOAT_ROUTES: readonly FloatRoute[] = ["cash", "zaad", "edahab", "bank"];
+
+export function isFloatRoute(value: unknown): value is FloatRoute {
+  return (
+    typeof value === "string" && (FLOAT_ROUTES as readonly string[]).includes(value)
+  );
+}
+
+export function floatAccountForRoute(route: FloatRoute): string {
+  switch (route) {
+    case "zaad":
+      return FLOAT_ZAAD;
+    case "edahab":
+      return FLOAT_EDAHAB;
+    case "bank":
+      return FLOAT_BANK;
+    case "cash":
+      return FLOAT_AGENTS;
+  }
+}
+
 /** Pass-through leg for no-custody settlements on external rails. */
 export const EXTERNAL_CLEARING = "external:clearing";
 
