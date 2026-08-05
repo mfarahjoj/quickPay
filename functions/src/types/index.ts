@@ -165,9 +165,23 @@ export interface KycDocument {
   frontPhotoUrl: string;
   backPhotoUrl?: string;
   selfieUrl: string;
+  /**
+   * Bucket-relative object paths, resolved at submission time.
+   *
+   * The URL fields are `getDownloadURL()` links: permanent and
+   * unauthenticated. Reviewers get short-lived signed URLs minted from these
+   * paths instead, so a leaked console response does not expose someone's
+   * passport photo indefinitely. Absent on submissions predating this.
+   */
+  frontPhotoPath?: string;
+  backPhotoPath?: string;
+  selfiePath?: string;
   status: KycStatus;
+  /** Denormalised so the review queue can filter without reading the parent. */
+  userId?: string;
   submittedAt: FirebaseFirestore.Timestamp;
   reviewedAt?: FirebaseFirestore.Timestamp;
+  reviewedBy?: string;
   rejectionReason?: string;
 }
 
@@ -302,7 +316,9 @@ export interface Notification {
     | "role_approved"
     | "role_rejected"
     | "float_issued"
-    | "float_withdrawn";
+    | "float_withdrawn"
+    | "kyc_approved"
+    | "kyc_rejected";
   title: string;
   body: string;
   data?: Record<string, string>;

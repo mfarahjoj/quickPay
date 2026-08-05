@@ -96,6 +96,11 @@ export {
   adminListFloatIssuances,
   adminListAgentFloat,
 } from "./admin/floatDesk";
+export {
+  adminListKycQueue,
+  adminGetKycSubmission,
+  adminReviewKyc,
+} from "./admin/kycReview";
 
 // Role applications (privileged roles are granted by admins, not chosen)
 export { requestRole, getMyRoleRequests } from "./merchants/requestRole";

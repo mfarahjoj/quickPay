@@ -1,6 +1,7 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { requireAuth, sanitizeString } from "../utils/validation";
+import { parseStorageRef } from "../utils/storagePaths";
 import { ApiResponse, KycDocument } from "../types";
 
 interface SubmitKYCRequest {
@@ -60,13 +61,24 @@ export const submitKYC = https.onCall(
         );
       }
 
+      // Resolve object paths now, while we know which upload they came from.
+      // Reviewers get signed URLs minted from these rather than the permanent
+      // download links (see utils/storagePaths.ts).
+      const frontPath = parseStorageRef(frontPhotoUrl)?.path;
+      const backPath = backPhotoUrl ? parseStorageRef(backPhotoUrl)?.path : undefined;
+      const selfiePath = parseStorageRef(selfieUrl)?.path;
+
       const kycDoc: KycDocument = {
         idType,
         idNumber: sanitizeString(idNumber),
         frontPhotoUrl,
         backPhotoUrl: backPhotoUrl || undefined,
         selfieUrl,
+        ...(frontPath ? { frontPhotoPath: frontPath } : {}),
+        ...(backPath ? { backPhotoPath: backPath } : {}),
+        ...(selfiePath ? { selfiePath } : {}),
         status: "submitted",
+        userId,
         submittedAt: admin.firestore.Timestamp.now(),
       };
 

@@ -12,9 +12,10 @@ import { UserSearch } from "./components/UserSearch";
 import { UserDetail } from "./components/UserDetail";
 import { RoleQueue } from "./components/RoleQueue";
 import { FloatDesk } from "./components/FloatDesk";
+import { KycQueue } from "./components/KycQueue";
 import { LedgerBanner } from "./components/LedgerBanner";
 
-type Tab = "users" | "roles" | "float";
+type Tab = "users" | "roles" | "kyc" | "float";
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -135,6 +136,14 @@ export default function App() {
             Role applications
           </button>
         )}
+        {canReviewRoles && (
+          <button
+            className={tab === "kyc" ? "active" : ""}
+            onClick={() => setTab("kyc")}
+          >
+            KYC review
+          </button>
+        )}
         {canRunFloatDesk && (
           <button
             className={tab === "float" ? "active" : ""}
@@ -162,6 +171,8 @@ export default function App() {
         )}
 
         {tab === "roles" && canReviewRoles && <RoleQueue />}
+
+        {tab === "kyc" && canReviewRoles && <KycQueue />}
 
         {tab === "float" && canRunFloatDesk && <FloatDesk adminUid={user.uid} />}
       </main>

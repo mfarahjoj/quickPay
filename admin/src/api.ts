@@ -73,6 +73,42 @@ export interface RoleRequestRow {
   currentAccountType?: string;
 }
 
+export interface KycQueueRow {
+  userId: string;
+  idType?: string;
+  status?: string;
+  submittedAt?: { _seconds?: number; seconds?: number };
+  applicantName?: string;
+  applicantPhone?: string;
+  accountType?: string;
+}
+
+export interface KycImage {
+  label: "front" | "back" | "selfie";
+  url?: string;
+  error?: string;
+}
+
+export interface KycSubmission {
+  userId: string;
+  idType?: string;
+  idNumber?: string;
+  status?: string;
+  submittedAt?: { _seconds?: number; seconds?: number };
+  reviewedAt?: { _seconds?: number; seconds?: number } | null;
+  rejectionReason?: string | null;
+  images: KycImage[];
+  applicant: {
+    fullName?: string;
+    phoneNumber?: string;
+    accountType?: string;
+    accountStatus?: string;
+    kycStatus?: string;
+    dateOfBirth?: string | null;
+  };
+  wallet: { balance?: number; currency?: string } | null;
+}
+
 export type FloatRoute = "cash" | "zaad" | "edahab" | "bank";
 export type FloatDirection = "issue" | "withdraw";
 
@@ -151,6 +187,18 @@ export const api = {
     ),
 
   ledgerHealth: () => call<void, LedgerHealth>("adminGetLedgerHealth"),
+
+  listKycQueue: (status = "submitted") =>
+    call<{ status: string }, KycQueueRow[]>("adminListKycQueue", { status }),
+
+  getKycSubmission: (userId: string) =>
+    call<{ userId: string }, KycSubmission>("adminGetKycSubmission", { userId }),
+
+  reviewKyc: (userId: string, decision: "approve" | "reject", reason: string) =>
+    call<{ userId: string; decision: string; reason: string }, unknown>(
+      "adminReviewKyc",
+      { userId, decision, reason }
+    ),
 
   listAgentFloat: () => call<void, AgentPosition[]>("adminListAgentFloat"),
 

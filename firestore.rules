@@ -25,10 +25,12 @@ service cloud.firestore {
                                    'updatedAt']);
       allow delete: if false; // Never allow user deletion from client
       
-      // KYC subcollection
+      // KYC subcollection. Read-only for the owner: submitKYC is the only
+      // writer, and a client that could write here could stamp its own
+      // submission `verified` or edit it after review.
       match /kyc/{document=**} {
         allow read: if isAuthenticated() && isOwner(userId);
-        allow write: if isAuthenticated() && isOwner(userId);
+        allow write: if false;
       }
       
       // FCM push notification tokens
