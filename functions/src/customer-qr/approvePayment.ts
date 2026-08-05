@@ -1,6 +1,7 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { requireAuth } from "../utils/validation";
+import { requireActiveAccount } from "../utils/accountStatus";
 import { verifyUserPin } from "../auth/validatePin";
 import { enforceVelocity } from "../utils/velocity";
 import {
@@ -55,6 +56,8 @@ export const approvePaymentRequest = https.onCall(
     if (!pinValid) {
       throw new https.HttpsError("permission-denied", "Invalid PIN");
     }
+
+    await requireActiveAccount(customerId);
 
     await enforceVelocity(customerId);
 

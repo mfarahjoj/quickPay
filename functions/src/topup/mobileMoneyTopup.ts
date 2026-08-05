@@ -1,5 +1,6 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
+import { requireActiveAccount } from "../utils/accountStatus";
 import { requireAuth, validateAmount } from "../utils/validation";
 import { verifyUserPin } from "../auth/validatePin";
 import { generateSecureId } from "../utils/encryption";
@@ -72,6 +73,8 @@ export const topupFromMobileMoney = https.onCall(
       if (!pinValid) {
         throw new https.HttpsError("permission-denied", "Invalid PIN");
       }
+
+      await requireActiveAccount(userId);
 
       const db = admin.firestore();
       const reference = generateSecureId(16);
@@ -221,6 +224,8 @@ export const cashOutToMobileMoney = https.onCall(
       if (!pinValid) {
         throw new https.HttpsError("permission-denied", "Invalid PIN");
       }
+
+      await requireActiveAccount(userId);
 
       const db = admin.firestore();
       const reference = generateSecureId(16);

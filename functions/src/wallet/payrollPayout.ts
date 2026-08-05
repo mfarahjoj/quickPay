@@ -1,5 +1,6 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
+import { assertAccountActive } from "../utils/accountStatus";
 import { requireAuth } from "../utils/validation";
 import { verifyUserPin } from "../auth/validatePin";
 import { notifyPaymentReceived } from "../utils/notifications";
@@ -82,6 +83,7 @@ export const payrollPayout = https.onCall(
     if (accountType !== "merchant" && accountType !== "agent_merchant") {
       throw new https.HttpsError("permission-denied", "Only merchants can run payroll");
     }
+    assertAccountActive(merchant);
 
     // Validate all amounts
     for (const emp of employees) {

@@ -10,6 +10,11 @@ export { setupPin } from "./auth/setupPin";
 export { validateUserPin } from "./auth/validatePin";
 export { changePin } from "./auth/changePin";
 export { resetPin } from "./auth/resetPin";
+export {
+  registerTrustedDevice,
+  loginWithPin,
+  revokeTrustedDevices,
+} from "./auth/trustedDevice";
 export { updateProfile } from "./auth/updateProfile";
 export { submitKYC } from "./auth/submitKYC";
 export { requestAccountDeletion } from "./auth/deleteAccount";
@@ -69,3 +74,7 @@ export { stripeWebhook } from "./remittance/stripeWebhook";
 
 // Ledger integrity (LEDGER_ARCHITECTURE.md §3.5)
 export { ledgerInvariantCheck } from "./ledger/invariantCheck";
+
+// Admin console (see ADMIN_CONSOLE_PLAN.md). Every callable here is gated by
+// custom claims in admin/guard.ts and writes to the admin_audit log.
+export { adminSetAccountStatus } from "./admin/setAccountStatus";

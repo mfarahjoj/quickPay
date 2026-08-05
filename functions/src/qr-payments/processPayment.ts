@@ -1,6 +1,10 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { requireAuth, validateTransactionLimit } from "../utils/validation";
+import {
+  assertAccountActive,
+  requireActiveAccount,
+} from "../utils/accountStatus";
 import { verifyUserPin } from "../auth/validatePin";
 import { enforceVelocity } from "../utils/velocity";
 import {
@@ -68,9 +72,14 @@ export const processPayment = https.onCall(
         throw new https.HttpsError("permission-denied", "Cannot pay yourself");
       }
 
+      // A frozen merchant must not keep taking payments while under review.
+      await requireActiveAccount(qrPreData.merchantId, "counterparty");
+
       // Get customer KYC status for transaction limits
       const customerDoc = await db.collection("users").doc(customerId).get();
       const customerData = customerDoc.data() as User;
+
+      assertAccountActive(customerData);
 
       const limitCheck = validateTransactionLimit(
         qrPreData.amount,

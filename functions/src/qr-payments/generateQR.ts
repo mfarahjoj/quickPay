@@ -1,5 +1,6 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
+import { assertAccountActive } from "../utils/accountStatus";
 import { requireAuth, validateAmount, validateCurrency } from "../utils/validation";
 import { generateQRData, generateSecureId } from "../utils/encryption";
 import { generateEmvQRPayload } from "../utils/emvqr";
@@ -57,6 +58,8 @@ export const generateQRCode = https.onCall(
           "Only merchant accounts can generate QR codes"
         );
       }
+      // Stop a frozen merchant issuing new payment codes to collect against.
+      assertAccountActive(userData);
 
       // Generate QR code ID
       const qrCodeId = generateSecureId(16);

@@ -1,6 +1,7 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { requireAuth, validateTransactionLimit } from "../utils/validation";
+import { assertAccountActive } from "../utils/accountStatus";
 import { verifyUserPin } from "../auth/validatePin";
 import { enforceVelocity } from "../utils/velocity";
 import {
@@ -91,12 +92,7 @@ export const sendP2P = https.onCall(
       const recipientId = recipientDoc.id;
       const recipientData = recipientDoc.data() as User;
 
-      if (!recipientData.isActive) {
-        throw new https.HttpsError(
-          "failed-precondition",
-          "Recipient account is not active"
-        );
-      }
+      assertAccountActive(recipientData, "counterparty");
 
       if (recipientId === senderId) {
         throw new https.HttpsError(
@@ -108,6 +104,8 @@ export const sendP2P = https.onCall(
       // Get sender KYC status for transaction limits
       const senderDoc = await db.collection("users").doc(senderId).get();
       const senderData = senderDoc.data() as User;
+
+      assertAccountActive(senderData);
 
       const limitCheck = validateTransactionLimit(amount, senderData.kycStatus);
       if (!limitCheck.valid) {

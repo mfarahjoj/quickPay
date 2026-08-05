@@ -1,6 +1,7 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { requireAuth } from "../utils/validation";
+import { requireActiveAccount } from "../utils/accountStatus";
 import { verifyUserPin } from "../auth/validatePin";
 import { notifyUser } from "../utils/notifications";
 import { ApiResponse, Transaction } from "../types";
@@ -84,6 +85,8 @@ export const refundPayment = https.onCall(
       if (!pinValid) {
         throw new https.HttpsError("permission-denied", "Invalid PIN");
       }
+
+      await requireActiveAccount(merchantId);
 
       const customerId = original.fromUserId;
       const gross = original.amount;

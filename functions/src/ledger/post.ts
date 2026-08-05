@@ -35,6 +35,30 @@ export class InsufficientBalanceError extends Error {
   }
 }
 
+/**
+ * Thrown when an entry would debit a frozen wallet.
+ *
+ * This is the un-bypassable half of freeze enforcement: callables check
+ * account status up front for a friendly error, but a call site that forgets
+ * still cannot move value out of a frozen account, because every debit passes
+ * through here.
+ *
+ * Credits are deliberately allowed. Freezing exists to stop value *leaving* a
+ * compromised or suspicious account; blocking incoming legs too would strand
+ * in-flight reversals — a cash-out hold returned after expiry, or a merchant
+ * refunding a customer who was frozen in the meantime — with no way to settle
+ * them short of unfreezing. Business rules about who may *receive* belong in
+ * the callables, where the context to explain the rejection exists.
+ */
+export class FrozenAccountError extends Error {
+  readonly account: string;
+  constructor(account: string) {
+    super("Account is frozen");
+    this.name = "FrozenAccountError";
+    this.account = account;
+  }
+}
+
 /** Thrown when a `user:{uid}` line references a missing wallet doc. */
 export class WalletNotFoundError extends Error {
   readonly account: string;
@@ -92,6 +116,12 @@ export async function prepareJournalEntry(
       throw new WalletNotFoundError(d.account);
     }
     const wallet = snap.data() as Wallet;
+
+    // Frozen accounts may still receive (see FrozenAccountError) but never spend.
+    if (d.debits > 0 && wallet.frozen === true) {
+      throw new FrozenAccountError(d.account);
+    }
+
     const newBalance = wallet.balance + d.delta;
     if (newBalance < 0 && enforcesNonNegative(d.account)) {
       throw new InsufficientBalanceError(d.account);

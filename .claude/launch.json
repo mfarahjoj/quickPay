@@ -8,6 +8,13 @@
       "port": 5050
     },
     {
+      "name": "zapp-hosting",
+      "runtimeExecutable": "firebase",
+      "runtimeArgs": ["serve", "--only", "hosting", "--port", "5055"],
+      "port": 5055,
+      "autoPort": false
+    },
+    {
       "name": "fpl-scout",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--prefix", "/Users/mahamedfarah/fpl-scout"],

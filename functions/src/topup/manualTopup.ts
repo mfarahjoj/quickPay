@@ -2,6 +2,7 @@ import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { verifyUserPin } from "../auth/validatePin";
 import { validateAmount, requireAuth, dollarsToCents } from "../utils/validation";
+import { assertAccountActive } from "../utils/accountStatus";
 import { notifyTopupCompleted } from "../utils/notifications";
 import { ApiResponse, Wallet, Transaction } from "../types";
 import { getRates, computeCommission } from "../config/rates";
@@ -90,6 +91,8 @@ export const manualTopup = https.onCall(
           "Only authorized agents can perform manual top-ups"
         );
       }
+      // The agent's own float funds this credit, so a frozen agent cannot issue.
+      assertAccountActive(agentData);
 
       // Verify agent's PIN
       const pinValid = await verifyUserPin(agentId, agentPin);

@@ -134,6 +134,28 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Admin audit log — append-only record of every console action.
+    // Server-only in both directions: admins read it through a callable, so a
+    // compromised console session cannot enumerate or alter the trail that
+    // would expose what it did.
+    match /admin_audit/{entryId} {
+      allow read, write: if false;
+    }
+
+    // Role upgrade requests (customer -> merchant/agent). Created and reviewed
+    // by Cloud Functions only; a client that could write these would be back
+    // to self-selecting privileged roles.
+    match /roleRequests/{requestId} {
+      allow read, write: if false;
+    }
+
+    // Trusted-device login credentials — server-only. These hold the bcrypt
+    // hash of a device secret that can be exchanged (with the PIN) for a
+    // session, so no client may read or write them under any circumstance.
+    match /trustedDevices/{deviceId} {
+      allow read, write: if false;
+    }
+
     // Default deny all other access
     match /{document=**} {
       allow read, write: if false;

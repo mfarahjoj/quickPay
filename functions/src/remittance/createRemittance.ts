@@ -1,5 +1,6 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
+import { requireActiveAccount } from "../utils/accountStatus";
 import { requireAuth, validateAmount } from "../utils/validation";
 import { createPaymentIntent } from "../integrations/stripe.service";
 import { generateSecureId } from "../utils/encryption";
@@ -53,6 +54,8 @@ export const createRemittance = https.onCall(
 
     try {
       const db = admin.firestore();
+
+      await requireActiveAccount(senderId);
 
       const recipientQuery = await db
         .collection("users")

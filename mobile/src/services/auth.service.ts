@@ -1,6 +1,13 @@
+import { Platform } from 'react-native';
 import { auth, functions } from './firebase.config';
 import { clearReceiveTokenCache } from './customerToken.service';
 import { unregisterPushNotifications } from './notification.service';
+import {
+  clearDeviceCredential,
+  getDeviceCredential,
+  hasDeviceCredential,
+  storeDeviceCredential,
+} from './device.service';
 import { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logger } from '../utils/logger';
@@ -86,6 +93,25 @@ export class PinLockoutError extends Error {
 }
 
 /**
+ * Thrown by loginWithPin when this device has no usable trusted-device
+ * credential. Callers should fall back to the phone + OTP flow.
+ */
+export class DeviceNotTrustedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DeviceNotTrustedError';
+  }
+}
+
+/** Thrown by loginWithPin when the device is trusted but the PIN was wrong. */
+export class IncorrectPinError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'IncorrectPinError';
+  }
+}
+
+/**
  * Validate user PIN
  */
 export async function validatePin(pin: string): Promise<boolean> {
@@ -123,6 +149,103 @@ export async function resetPin(newPin: string): Promise<void> {
   } catch (error: any) {
     logger.error('Reset PIN error:', error);
     throw new Error(error.message || 'Failed to reset PIN');
+  }
+}
+
+/**
+ * Mint and store this device's trusted-device credential, so the next sign-in
+ * here can use the PIN instead of an SMS code. Safe to call repeatedly — it
+ * no-ops once a credential exists. Never throws: failing to trust a device is
+ * a downgrade to SMS login, not an error worth blocking entry over.
+ */
+export async function registerTrustedDevice(): Promise<void> {
+  try {
+    if (await hasDeviceCredential()) return;
+
+    const fn = functions().httpsCallable('registerTrustedDevice');
+    const result = await fn({ platform: Platform.OS });
+
+    const responseData = result.data as {
+      success: boolean;
+      data?: { deviceId?: string; deviceSecret?: string };
+    };
+    const { deviceId, deviceSecret } = responseData.data ?? {};
+    if (!responseData.success || !deviceId || !deviceSecret) {
+      logger.warn('Trusted-device registration returned no credential');
+      return;
+    }
+
+    await storeDeviceCredential({ deviceId, deviceSecret });
+  } catch (error) {
+    logger.warn('Trusted-device registration failed:', error);
+  }
+}
+
+/**
+ * Sign in with the PIN alone, using this device's stored credential in place
+ * of an SMS code. Only works on a device that previously verified by SMS.
+ *
+ * Throws PinLockoutError while the shared PIN lockout is active, and
+ * DeviceNotTrustedError when the credential is missing or rejected — callers
+ * should fall back to the phone + OTP flow on the latter.
+ */
+export async function loginWithPin(pin: string): Promise<void> {
+  const cred = await getDeviceCredential();
+  if (!cred) {
+    throw new DeviceNotTrustedError('This device is not set up for PIN login.');
+  }
+
+  try {
+    const fn = functions().httpsCallable('loginWithPin');
+    const result = await fn({
+      deviceId: cred.deviceId,
+      deviceSecret: cred.deviceSecret,
+      pin,
+    });
+
+    const responseData = result.data as {
+      success: boolean;
+      data?: { token?: string };
+      error?: string;
+    };
+    const token = responseData.data?.token;
+    if (!responseData.success || !token) {
+      throw new Error(responseData.error || 'Failed to sign in');
+    }
+
+    await auth().signInWithCustomToken(token);
+  } catch (error: any) {
+    if (error instanceof DeviceNotTrustedError) throw error;
+
+    if (error?.code === 'functions/resource-exhausted') {
+      throw new PinLockoutError(error.message, error?.details?.secondsLeft);
+    }
+    // The server can't tell us apart from an unknown device on purpose, so a
+    // rejection here means: stop trusting this credential, use SMS instead.
+    if (error?.code === 'functions/permission-denied') {
+      await clearDeviceCredential();
+      throw new DeviceNotTrustedError(
+        'This device is no longer recognised. Sign in with a code instead.'
+      );
+    }
+    if (error?.code === 'functions/unauthenticated') {
+      throw new IncorrectPinError('Incorrect PIN.');
+    }
+    logger.error('PIN login error:', error);
+    throw new Error(error?.message || 'Failed to sign in');
+  }
+}
+
+/**
+ * Forget every trusted device on the account (lost or stolen phone). Every
+ * device then has to verify by SMS again.
+ */
+export async function revokeTrustedDevices(): Promise<void> {
+  try {
+    const fn = functions().httpsCallable('revokeTrustedDevices');
+    await fn({});
+  } finally {
+    await clearDeviceCredential();
   }
 }
 

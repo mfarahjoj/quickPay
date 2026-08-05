@@ -20,6 +20,14 @@ import { colors, typography, spacing } from '../../theme';
 
 interface Props {
   navigation: any;
+  /**
+   * Which button on the welcome screen got the user here. Sign-up and log-in
+   * are the same phone + OTP flow underneath — new vs returning is resolved
+   * after auth by the PIN gates — so this only changes the framing.
+   */
+  intent?: 'signup' | 'login';
+  /** Returns to the welcome screen so a mis-tap isn't a dead end. */
+  onBack?: () => void;
 }
 
 interface Country {
@@ -69,8 +77,9 @@ function BoltMark({ size = 20 }: { size?: number }) {
   );
 }
 
-export default function LoginScreen({ navigation }: Props) {
+export default function LoginScreen({ navigation, intent = 'signup', onBack }: Props) {
   const { t } = useTranslation();
+  const returning = intent === 'login';
   const [selectedCountry, setSelectedCountry] = useState<Country>(COUNTRIES[0]);
   const [localNumber, setLocalNumber] = useState('');
   const [loading, setLoading] = useState(false);
@@ -167,7 +176,7 @@ export default function LoginScreen({ navigation }: Props) {
   const glowOpacity = glow.interpolate({ inputRange: [0, 1], outputRange: [1, 0.75] });
 
   return (
-    <AuthLayout contentStyle={styles.content}>
+    <AuthLayout contentStyle={styles.content} onBack={onBack}>
       {/* Ambient aura */}
       <Animated.View pointerEvents="none" style={[styles.auraOuter, { opacity: glowOpacity, transform: [{ scale: glowScale }] }]} />
       <Animated.View pointerEvents="none" style={[styles.auraInner, { opacity: glowOpacity, transform: [{ scale: glowScale }] }]} />
@@ -190,8 +199,12 @@ export default function LoginScreen({ navigation }: Props) {
       </View>
 
       <Animated.View style={riseStyle}>
-        <Text style={styles.headerTitle}>{t('auth.login.title')}</Text>
-        <Text style={styles.headerSubtitle}>{t('auth.login.subtitle')}</Text>
+        <Text style={styles.headerTitle}>
+          {returning ? t('auth.login.titleReturning') : t('auth.login.title')}
+        </Text>
+        <Text style={styles.headerSubtitle}>
+          {returning ? t('auth.login.subtitleReturning') : t('auth.login.subtitle')}
+        </Text>
       </Animated.View>
 
       <Animated.View style={[styles.inputRow, riseStyle]}>

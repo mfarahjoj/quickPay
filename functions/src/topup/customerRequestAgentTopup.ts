@@ -6,6 +6,7 @@ import {
   validateAmount,
   validateTransactionLimit,
 } from "../utils/validation";
+import { assertAccountActive } from "../utils/accountStatus";
 import { ApiResponse, Wallet, AgentTopupRequest, User } from "../types";
 
 const TOPUP_EXPIRY_MINUTES = 30;
@@ -72,6 +73,7 @@ export const customerRequestAgentTopup = https.onCall(
       throw new https.HttpsError("not-found", "User not found");
     }
     const userData = userDoc.data() as User;
+    assertAccountActive(userData);
     const limitCheck = validateTransactionLimit(amount, userData.kycStatus);
     if (!limitCheck.valid) {
       throw new https.HttpsError("failed-precondition", limitCheck.reason!);

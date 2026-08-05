@@ -1,6 +1,7 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { requireAuth } from "../utils/validation";
+import { assertAccountActive } from "../utils/accountStatus";
 import { sendPushNotification } from "../utils/notifications";
 import { ApiResponse, CashOutRequest, Transaction, User } from "../types";
 import { getRates, computeCommission } from "../config/rates";
@@ -51,6 +52,7 @@ export const agentConfirmCashOut = https.onCall(
     ) {
       throw new https.HttpsError("permission-denied", "Only agents can confirm cash-outs");
     }
+    assertAccountActive(agentData);
 
     // Find the pending cash-out with this OTP
     const snapshot = await db
@@ -95,6 +97,10 @@ export const agentConfirmCashOut = https.onCall(
 
     // Fetch customer name for response
     const customerDoc = await db.collection("users").doc(cashOut.customerId).get();
+    // The customer's funds already sit in the cash-out hold, so the ledger
+    // debit here is against that hold, not their wallet — a freeze applied
+    // after the request was raised would otherwise let the payout through.
+    assertAccountActive(customerDoc.data(), "counterparty");
     const customerName = customerDoc.data()?.fullName || "Customer";
 
     const { topupCommissionRate } = await getRates();

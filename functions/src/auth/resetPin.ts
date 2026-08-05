@@ -8,9 +8,10 @@ interface ResetPinRequest {
   newPin: string;
 }
 
-// The caller must have completed phone verification this recently. The client
-// re-runs OTP (reauthenticateWithCredential) right before calling, which
-// refreshes auth_time — possession of the phone number is the reset factor.
+// The caller must have completed phone verification this recently, on a
+// session that was actually established by phone. The client re-runs OTP
+// (reauthenticateWithCredential) right before calling, which refreshes
+// auth_time — possession of the phone number is the reset factor.
 const MAX_AUTH_AGE_SECONDS = 5 * 60;
 
 /**
@@ -34,9 +35,18 @@ export const resetPin = https.onCall(
       );
     }
 
+    // Recency alone is NOT enough: a trusted-device PIN login signs in with a
+    // custom token, which also mints a fresh auth_time despite involving no
+    // phone verification at all. Requiring the phone provider keeps "forgot my
+    // PIN" behind an actual OTP, which is the whole point of this endpoint.
+    const signInProvider = request.auth!.token.firebase?.sign_in_provider;
     const authTime = request.auth!.token.auth_time;
     const nowSeconds = Math.floor(Date.now() / 1000);
-    if (!authTime || nowSeconds - authTime > MAX_AUTH_AGE_SECONDS) {
+    if (
+      signInProvider !== "phone" ||
+      !authTime ||
+      nowSeconds - authTime > MAX_AUTH_AGE_SECONDS
+    ) {
       throw new https.HttpsError(
         "failed-precondition",
         "Recent phone verification required. Please verify your phone number again."

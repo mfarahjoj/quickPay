@@ -85,15 +85,20 @@ export default function PaymentConfirmScreen({ navigation, route }: Props) {
     }
   };
 
-  const handleConfirm = async () => {
-    if (pin.length !== 6) {
+  // `submittedPin` comes from PinInput's onComplete — the `pin` state is still
+  // one digit behind in that same event, so it must not be read there.
+  const handleConfirm = async (submittedPin?: string) => {
+    if (processing) return;
+    const pinToUse = submittedPin ?? pin;
+    if (pinToUse.length !== 6) {
       setError(t('qr.confirm.enterPinError'));
       return;
     }
-    await processWithPin(pin);
+    await processWithPin(pinToUse);
   };
 
   const handleBiometricPay = async () => {
+    if (processing) return;
     const storedPin = await getPinFromKeychain(
       t('common.confirmPaymentAmount', { amount: `${CURRENCY_SYMBOL}${amount.toFixed(2)}` })
     );
@@ -156,7 +161,7 @@ export default function PaymentConfirmScreen({ navigation, route }: Props) {
 
         <TouchableOpacity
           style={[styles.confirmButton, processing && styles.buttonDisabled]}
-          onPress={handleConfirm}
+          onPress={() => handleConfirm()}
           disabled={processing}
           activeOpacity={0.8}
         >

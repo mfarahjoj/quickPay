@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useCallback, useRef, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -633,13 +633,16 @@ const s3 = StyleSheet.create({
 
 // ─── Slide data ────────────────────────────────────────────────
 
+// `dwell` is how long a slide holds before the next one dissolves in. Each is
+// tuned to its own illustration's loop so the little story finishes on screen
+// rather than getting cut off mid-scan.
 const SLIDES = [
   {
     key: 'speed',
     headlinePlain: 'Money at the\nspeed of ',
     headlineAccent: 'Zapp.',
     sub: 'Pay anyone in Hargeisa before they finish saying mahadsanid.',
-    cta: 'Feel the speed',
+    dwell: 5200,
     Illo: Slide1Illo,
   },
   {
@@ -647,7 +650,7 @@ const SLIDES = [
     headlinePlain: 'Show your QR.\n',
     headlineAccent: 'They scan.',
     sub: 'Any merchant, any phone — paid in seconds.',
-    cta: 'Continue',
+    dwell: SCAN_LOOP + 700,
     Illo: Slide2Illo,
   },
   {
@@ -655,43 +658,106 @@ const SLIDES = [
     headlinePlain: 'Only you can\n',
     headlineAccent: 'say yes.',
     sub: 'Every charge pings your phone and waits for your PIN. No PIN, no payment.',
-    cta: 'Get started',
+    dwell: PIN_LOOP + 1100,
     Illo: Slide3Illo,
   },
 ];
+
+type Slide = (typeof SLIDES)[number];
+
+// Cross-fade, not a page turn — the slides should read as one continuous
+// backdrop behind the buttons rather than a carousel you're expected to work.
+const FADE_MS = 720;
+const DRIFT = 20;
+
+function SlidePanel({ slide }: { slide: Slide }) {
+  const Illo = slide.Illo;
+  return (
+    <View style={ob.panel}>
+      <View style={ob.illo}>
+        <Illo />
+      </View>
+      <View style={ob.txt}>
+        <Text style={ob.headline}>
+          {slide.headlinePlain}
+          <Text style={ob.headlineAccent}>{slide.headlineAccent}</Text>
+        </Text>
+        <Text style={ob.sub}>{slide.sub}</Text>
+      </View>
+    </View>
+  );
+}
 
 // ─── Main component ────────────────────────────────────────────
 
 interface Props {
   onGetStarted: () => void;
-  onLogin?: () => void;
+  onLogin: () => void;
 }
 
+// A layer is one panel on screen. `seq` is its React key: the outgoing panel
+// keeps the seq it was mounted with so it never remounts mid-dissolve, while
+// the incoming one always gets a fresh seq so its animation restarts from the
+// top each time it comes round.
+type Layer = { idx: number; seq: number; dir: 1 | -1 };
+
 export default function OnboardingScreen({ onGetStarted, onLogin }: Props) {
-  const [current, setCurrent] = useState(0);
-  const slideX = useRef(new Animated.Value(0)).current;
+  const [front, setFront] = useState<Layer>({ idx: 0, seq: 0, dir: 1 });
+  const [back, setBack] = useState<Layer | null>(null);
+  const mix = useRef(new Animated.Value(1)).current;
   const fadeIn = useRef(new Animated.Value(0)).current;
   const rise = useRef(new Animated.Value(0)).current;
+  const frontRef = useRef(front);
+  const seqRef = useRef(0);
 
   useEffect(() => {
     Animated.timing(fadeIn, { toValue: 1, duration: 500, useNativeDriver: true }).start();
     Animated.spring(rise, { toValue: 1, tension: 60, friction: 12, useNativeDriver: true }).start();
   }, [fadeIn, rise]);
 
-  const goTo = (idx: number) => {
-    if (idx < 0 || idx >= SLIDES.length || idx === current) return;
-    slideX.setValue((idx > current ? 1 : -1) * SW);
-    Animated.spring(slideX, { toValue: 0, tension: 140, friction: 18, useNativeDriver: true }).start();
-    setCurrent(idx);
-  };
+  const goTo = useCallback(
+    (idx: number, dir: 1 | -1) => {
+      const cur = frontRef.current;
+      if (idx === cur.idx) return;
+      seqRef.current += 1;
+      const next: Layer = { idx, seq: seqRef.current, dir };
+      // Updated before the state commit so a double-fire in the same tick is a
+      // no-op rather than a second dissolve.
+      frontRef.current = next;
+      setBack(cur);
+      setFront(next);
+      mix.setValue(0);
+      Animated.timing(mix, {
+        toValue: 1,
+        duration: FADE_MS,
+        easing: Easing.inOut(Easing.cubic),
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (finished) setBack(null);
+      });
+    },
+    [mix],
+  );
 
-  const slide = SLIDES[current];
-  const Illo = slide.Illo;
-  const isLast = current === SLIDES.length - 1;
+  const step = useCallback(
+    (dir: 1 | -1) => {
+      const cur = frontRef.current.idx;
+      goTo((cur + dir + SLIDES.length) % SLIDES.length, dir);
+    },
+    [goTo],
+  );
 
-  // Horizontal swipe: left → next slide, right → previous. Runs on the JS
-  // thread so it can call goTo/setState directly; only activates on a clear
-  // horizontal drag so taps and vertical gestures still pass through.
+  // Auto-play. Keyed on `front`, so a manual swipe restarts the dwell for free
+  // instead of advancing again a moment later under the user's thumb.
+  useEffect(() => {
+    const timer = setTimeout(() => step(1), SLIDES[front.idx].dwell);
+    return () => clearTimeout(timer);
+  }, [front, step]);
+
+  // Horizontal swipe: left → next slide, right → previous, wrapping at both
+  // ends. Runs on the JS thread so it can call step/setState directly; only
+  // activates on a clear horizontal drag so taps and vertical gestures still
+  // pass through.
   const swipe = Gesture.Pan()
     .runOnJS(true)
     .activeOffsetX([-18, 18])
@@ -700,8 +766,7 @@ export default function OnboardingScreen({ onGetStarted, onLogin }: Props) {
       const passedDistance = Math.abs(e.translationX) > SW * 0.22;
       const passedVelocity = Math.abs(e.velocityX) > 500;
       if (!passedDistance && !passedVelocity) return;
-      if (e.translationX < 0) goTo(current + 1);
-      else goTo(current - 1);
+      step(e.translationX < 0 ? 1 : -1);
     });
 
   const riseStyle = {
@@ -709,12 +774,26 @@ export default function OnboardingScreen({ onGetStarted, onLogin }: Props) {
     transform: [{ translateY: rise.interpolate({ inputRange: [0, 1], outputRange: [22, 0] }) }],
   };
 
+  const frontStyle = {
+    opacity: mix,
+    transform: [
+      { translateX: mix.interpolate({ inputRange: [0, 1], outputRange: [front.dir * DRIFT, 0] }) },
+    ],
+  };
+
+  const backStyle = {
+    opacity: mix.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
+    transform: [
+      { translateX: mix.interpolate({ inputRange: [0, 1], outputRange: [0, front.dir * -DRIFT] }) },
+    ],
+  };
+
   return (
     <SafeAreaView style={ob.root}>
       <StatusBar barStyle="light-content" backgroundColor={CANVAS} />
       <Animated.View style={[ob.inner, { opacity: fadeIn }]}>
 
-        {/* Wordmark + skip */}
+        {/* Wordmark */}
         <View style={ob.topRow}>
           <View style={ob.wordmark}>
             <BoltIcon size={20} color={CORAL} />
@@ -724,56 +803,32 @@ export default function OnboardingScreen({ onGetStarted, onLogin }: Props) {
               <Text style={ob.brandLight}>Pay</Text>
             </Text>
           </View>
-          {!isLast && (
-            <TouchableOpacity onPress={onGetStarted} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Text style={ob.skip}>Skip</Text>
-            </TouchableOpacity>
-          )}
         </View>
 
-        {/* Swipeable slide content (illustration + text) */}
+        {/* Auto-playing backdrop: illustration + headline dissolve together */}
         <GestureDetector gesture={swipe}>
-          <View style={ob.swipeArea}>
-            {/* Illustration */}
-            <Animated.View style={[ob.illo, { transform: [{ translateX: slideX }] }]}>
-              <Illo key={slide.key} />
-            </Animated.View>
-
-            {/* Text */}
-            <Animated.View style={[ob.txt, riseStyle, { transform: [{ translateX: slideX }] }]}>
-              <Text style={ob.headline}>
-                {slide.headlinePlain}
-                <Text style={ob.headlineAccent}>{slide.headlineAccent}</Text>
-              </Text>
-              <Text style={ob.sub}>{slide.sub}</Text>
+          <View style={ob.stage}>
+            {back && (
+              <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, backStyle]}>
+                <SlidePanel key={back.seq} slide={SLIDES[back.idx]} />
+              </Animated.View>
+            )}
+            <Animated.View style={[StyleSheet.absoluteFill, frontStyle]}>
+              <SlidePanel key={front.seq} slide={SLIDES[front.idx]} />
             </Animated.View>
           </View>
         </GestureDetector>
 
-        {/* Bottom */}
+        {/* Fixed entry points — never tied to which slide is showing */}
         <Animated.View style={[ob.btm, riseStyle]}>
-          <View style={ob.dots}>
-            {SLIDES.map((_, i) => (
-              <TouchableOpacity key={i} onPress={() => goTo(i)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <View style={[ob.dot, i === current && ob.dotActive]} />
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <TouchableOpacity
-            style={ob.nextBtn}
-            onPress={isLast ? onGetStarted : () => goTo(current + 1)}
-            activeOpacity={0.85}
-          >
-            <Text style={ob.nextText}>{slide.cta}</Text>
-            {slide.cta !== 'Continue' && <BoltIcon size={18} color="#FFFFFF" />}
+          <TouchableOpacity style={ob.primaryBtn} onPress={onGetStarted} activeOpacity={0.85}>
+            <Text style={ob.primaryText}>Get started</Text>
+            <BoltIcon size={18} color="#FFFFFF" />
           </TouchableOpacity>
 
-          {isLast && onLogin && (
-            <TouchableOpacity onPress={onLogin} style={ob.secondaryBtn}>
-              <Text style={ob.secondaryText}>I already have an account</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity style={ob.secondaryBtn} onPress={onLogin} activeOpacity={0.7}>
+            <Text style={ob.secondaryText}>Log in</Text>
+          </TouchableOpacity>
         </Animated.View>
       </Animated.View>
     </SafeAreaView>
@@ -794,8 +849,8 @@ const ob = StyleSheet.create({
   brand: { fontSize: 16, letterSpacing: -0.3 },
   brandBold: { fontWeight: '700', color: TEXT },
   brandLight: { fontWeight: '400', color: CORAL },
-  skip: { fontSize: 13, color: FAINT, fontWeight: '500' },
-  swipeArea: { flex: 1 },
+  stage: { flex: 1 },
+  panel: { flex: 1 },
   illo: { flex: 1, minHeight: 280 },
   txt: { paddingHorizontal: 26, flexShrink: 0 },
   headline: {
@@ -813,11 +868,8 @@ const ob = StyleSheet.create({
     lineHeight: 21,
     marginTop: 12,
   },
-  btm: { flexShrink: 0, paddingHorizontal: 24, paddingTop: 22, paddingBottom: 14 },
-  dots: { flexDirection: 'row', gap: 6, justifyContent: 'center', marginBottom: 18 },
-  dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.2)' },
-  dotActive: { width: 18, backgroundColor: CORAL },
-  nextBtn: {
+  btm: { flexShrink: 0, paddingHorizontal: 24, paddingTop: 26, paddingBottom: 14 },
+  primaryBtn: {
     width: '100%',
     height: 56,
     borderRadius: 28,
@@ -827,7 +879,16 @@ const ob = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
   },
-  nextText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700', letterSpacing: -0.2 },
-  secondaryBtn: { paddingVertical: 12, alignItems: 'center' },
-  secondaryText: { color: DIM, fontSize: 14, fontWeight: '500' },
+  primaryText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700', letterSpacing: -0.2 },
+  secondaryBtn: {
+    width: '100%',
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+  },
+  secondaryText: { color: TEXT, fontSize: 16, fontWeight: '600', letterSpacing: -0.2 },
 });

@@ -111,6 +111,7 @@ export default function ApprovePaymentScreen() {
   };
 
   const handleApprove = async (submittedPin: string) => {
+    if (loading) return;
     try {
       setLoading(true);
       await approvePayment(requestId, submittedPin);

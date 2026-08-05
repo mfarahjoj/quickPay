@@ -1,6 +1,7 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { requireAuth } from "../utils/validation";
+import { assertAccountActive } from "../utils/accountStatus";
 import { notifyUser } from "../utils/notifications";
 import {
   assertNotOtpLocked,
@@ -65,6 +66,8 @@ export const agentConfirmTopup = https.onCall(
         "Only agents can confirm top-ups"
       );
     }
+    // The agent's own float funds this credit, so a frozen agent cannot issue.
+    assertAccountActive(agentData);
 
     // Rate-limit code guesses so the 6-digit space can't be brute-forced.
     assertNotOtpLocked(agentData);

@@ -2,6 +2,15 @@
 export type KycStatus = "pending" | "submitted" | "verified" | "rejected";
 export type PreferredLanguage = "en" | "so" | "ar";
 
+/**
+ * Operational state of an account, set by admins.
+ *
+ * `frozen` is reversible and blocks money movement; `closed` is the terminal
+ * state used by account deletion. Absent on legacy docs — see
+ * `resolveAccountStatus()` in utils/accountStatus.ts for how that is read.
+ */
+export type AccountStatus = "active" | "frozen" | "closed";
+
 export interface UserAddress {
   city?: string;
   district?: string;
@@ -63,6 +72,16 @@ export interface User {
   createdAt: FirebaseFirestore.Timestamp;
   updatedAt?: FirebaseFirestore.Timestamp;
   isActive: boolean;
+  /**
+   * Admin-controlled account state. Absent on accounts created before the
+   * admin console; those fall back to `isActive` (see resolveAccountStatus).
+   */
+  accountStatus?: AccountStatus;
+  /** Why the account was frozen — shown to support, not to the user. */
+  frozenReason?: string;
+  /** uid of the admin who last changed accountStatus. */
+  frozenBy?: string;
+  frozenAt?: FirebaseFirestore.Timestamp | null;
 }
 
 // KYC document types
@@ -86,6 +105,15 @@ export interface Wallet {
   totalSent: number;
   lastTransactionAt: FirebaseFirestore.Timestamp | null;
   updatedAt: FirebaseFirestore.Timestamp;
+  /**
+   * Mirror of `users.accountStatus !== "active"`, written atomically with it.
+   *
+   * It lives here so `prepareJournalEntry` — which already reads every
+   * affected wallet — can refuse to debit a frozen account without a second
+   * read per money movement. The user doc stays the source of truth; this is
+   * a projection, like `balance`.
+   */
+  frozen?: boolean;
 }
 
 // Transaction types

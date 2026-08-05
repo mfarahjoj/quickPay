@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -8,14 +8,16 @@ import { usePinSetupDone } from '../hooks/usePinSetupDone';
 import { useBiometricSetupDone } from '../hooks/useBiometricSetupDone';
 import { usePinVerifiedThisInstall } from '../hooks/usePinVerifiedThisInstall';
 import { useAppLock } from '../hooks/useAppLock';
+import { hasDeviceCredential } from '../services/device.service';
+import { registerTrustedDevice } from '../services/auth.service';
 import { View, StyleSheet, ActivityIndicator } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '../theme';
 import OnboardingScreen from '../screens/onboarding/OnboardingScreen';
 import { Springs } from '../constants/springs';
 import { HomeTabIcon, PayTabIcon, HistoryTabIcon, ProfileTabIcon } from '../components/icons/TabIcons';
 import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import AppLockScreen from '../screens/auth/AppLockScreen';
+import PinLoginScreen from '../screens/auth/PinLoginScreen';
 import SetupPinScreen from '../screens/auth/SetupPinScreen';
 import BiometricSetupScreen from '../screens/auth/BiometricSetupScreen';
 import WelcomeBackScreen from '../screens/auth/WelcomeBackScreen';
@@ -23,6 +25,10 @@ import WelcomeBackScreen from '../screens/auth/WelcomeBackScreen';
 export const navigationRef = createNavigationContainerRef<MainStackParamList>();
 
 // ─── Param list types ────────────────────────────────────────
+
+// 'login' prefers PIN-only sign-in when this device is trusted; 'login-sms' is
+// the same intent after the user has explicitly asked for a code instead.
+export type AuthIntent = 'signup' | 'login' | 'login-sms';
 
 type AuthStackParamList = {
   Login: undefined;
@@ -94,13 +100,27 @@ const Tab = createBottomTabNavigator();
 
 // ─── Auth navigator (Login + OTP only) ──────────────────────
 
-function AuthStackNavigator() {
+function AuthStackNavigator({
+  intent,
+  onExit,
+}: {
+  intent: AuthIntent;
+  onExit: () => void;
+}) {
+  // Rendered as a child function rather than via getComponent so the welcome
+  // screen's choice (sign up vs log in) can reach LoginScreen. Memoised so the
+  // navigator doesn't remount the screen on every parent render.
+  const renderLogin = useCallback(
+    (props: any) => {
+      const LoginScreen = require('../screens/auth/LoginScreen').default;
+      return <LoginScreen {...props} intent={intent} onBack={onExit} />;
+    },
+    [intent, onExit],
+  );
+
   return (
     <AuthStack.Navigator screenOptions={{ headerShown: false }}>
-      <AuthStack.Screen
-        name="Login"
-        getComponent={() => require('../screens/auth/LoginScreen').default}
-      />
+      <AuthStack.Screen name="Login">{renderLogin}</AuthStack.Screen>
       <AuthStack.Screen
         name="OTP"
         getComponent={() => require('../screens/auth/OTPScreen').default}
@@ -369,8 +389,6 @@ function BootstrapLoading() {
   );
 }
 
-const ONBOARDING_KEY = '@quickpay/onboarding_v1';
-
 export default function AppNavigator() {
   const { user, loading: authLoading } = useAuth();
   const { done: pinSetupDone, markDone: markPinSetupDone } = usePinSetupDone();
@@ -378,22 +396,63 @@ export default function AppNavigator() {
   const { done: pinVerified, refresh: refreshPinVerified, markDone: markPinVerified } =
     usePinVerifiedThisInstall();
   const { locked, unlock } = useAppLock();
-  const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
+
+  // The welcome screen is the logged-out home, not a one-time tour: this is
+  // session state, so signing out lands you back on it with both entry points
+  // available. Null means "hasn't chosen yet".
+  const [authIntent, setAuthIntent] = useState<AuthIntent | null>(null);
+
+  // Only fires when `user` actually flips, so it clears the intent on sign-in
+  // and sign-out without wiping it while the user is mid-way through the auth
+  // stack (where `user` is still null).
+  useEffect(() => {
+    if (!user) setAuthIntent(null);
+  }, [user]);
+
+  const clearAuthIntent = useCallback(() => setAuthIntent(null), []);
+
+  // Whether this device holds a trusted-device credential, which is what makes
+  // PIN-only sign-in possible. Re-checked whenever auth flips, since a fresh
+  // sign-in mints one.
+  const [deviceTrusted, setDeviceTrusted] = useState<boolean | null>(null);
 
   useEffect(() => {
-    AsyncStorage.getItem(ONBOARDING_KEY).then((val) => {
-      setOnboardingDone(val === 'true');
-    });
-  }, []);
+    let cancelled = false;
+    hasDeviceCredential()
+      .then((trusted) => !cancelled && setDeviceTrusted(trusted))
+      .catch(() => !cancelled && setDeviceTrusted(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
-  const handleOnboardingDone = async () => {
-    await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
-    setOnboardingDone(true);
-  };
+  // Trust this device once the account is fully authenticated with a confirmed
+  // PIN, so the next sign-in here can skip SMS. Idempotent and never throws.
+  useEffect(() => {
+    if (user && pinSetupDone === true && pinVerified === true) {
+      registerTrustedDevice()
+        .then(() => setDeviceTrusted(true))
+        .catch(() => {});
+    }
+  }, [user, pinSetupDone, pinVerified]);
+
+  // Memoised: React Navigation keys a screen's component off the identity of
+  // its render function, so an inline arrow here would remount the whole auth
+  // stack — and discard a half-typed phone number — on any parent re-render.
+  const renderAuthStack = useCallback(
+    () => (
+      <AuthStackNavigator
+        intent={authIntent === 'signup' ? 'signup' : 'login'}
+        onExit={clearAuthIntent}
+      />
+    ),
+    [authIntent, clearAuthIntent],
+  );
 
   const isLoading =
     authLoading ||
-    onboardingDone === null ||
+    // Only blocks the PIN-vs-SMS decision, never the welcome screen itself.
+    (!user && authIntent === 'login' && deviceTrusted === null) ||
     (user != null &&
       (pinSetupDone === null || biometricSetupDone === null || pinVerified === null));
 
@@ -403,11 +462,22 @@ export default function AppNavigator() {
     return <BootstrapLoading />;
   }
 
-  if (!user && !onboardingDone) {
+  if (!user && authIntent === null) {
     return (
       <OnboardingScreen
-        onGetStarted={handleOnboardingDone}
-        onLogin={handleOnboardingDone}
+        onGetStarted={() => setAuthIntent('signup')}
+        onLogin={() => setAuthIntent('login')}
+      />
+    );
+  }
+
+  // Returning user on a device that has already verified by SMS: the PIN alone
+  // signs them back in. "Use a code instead" drops to the phone + OTP flow.
+  if (!user && authIntent === 'login' && deviceTrusted === true) {
+    return (
+      <PinLoginScreen
+        onUseCode={() => setAuthIntent('login-sms')}
+        onBack={clearAuthIntent}
       />
     );
   }
@@ -466,7 +536,7 @@ export default function AppNavigator() {
         {user ? (
           <RootStack.Screen name="Main" component={MainStackNavigator} />
         ) : (
-          <RootStack.Screen name="Auth" component={AuthStackNavigator} />
+          <RootStack.Screen name="Auth">{renderAuthStack}</RootStack.Screen>
         )}
       </RootStack.Navigator>
     </NavigationContainer>

@@ -62,7 +62,7 @@ export default function MobileMoneyScreen() {
   };
 
   const handleSubmit = async () => {
-    if (pin.length < 6 || !provider) return;
+    if (pin.length < 6 || !provider || processing) return;
     try {
       setStep('processing');
       setProcessing(true);

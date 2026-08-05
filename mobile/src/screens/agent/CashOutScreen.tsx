@@ -13,14 +13,11 @@ import Animated, {
   withTiming,
   withSequence,
   withDelay,
-  cancelAnimation,
-  withRepeat,
-  Easing,
 } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { functions } from '../../services/firebase.config';
 import { triggerHaptic } from '../../services/haptics.service';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { colors } from '../../theme';
 import { CURRENCY_SYMBOL } from '../../config/constants';
 import { Springs } from '../../constants/springs';
 import { SuccessCheckIcon } from '../../components/icons/AuthIcons';
@@ -31,6 +28,31 @@ type Step = 'amount' | 'pin' | 'processing' | 'success' | 'error';
 const ACCENT = '#FF8A7A';
 const INCOMING = '#34C77B';
 const KEYPAD = ['1','2','3','4','5','6','7','8','9','.','0','⌫'];
+
+// Dots must own their animation hooks: calling useAnimatedStyle inside the
+// pin-step JSX changes the hook count between renders and crashes React.
+function CashOutPinDot({ filled }: { filled: boolean }) {
+  const scale = useSharedValue(1);
+
+  useEffect(() => {
+    if (filled) {
+      scale.value = withSequence(
+        withSpring(1.3, Springs.celebration),
+        withSpring(1, Springs.feedback),
+      );
+    } else {
+      scale.value = withTiming(1, { duration: 80 });
+    }
+  }, [filled, scale]);
+
+  const dotStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  return (
+    <Animated.View style={[styles.pinDot, filled && styles.pinDotFilled, dotStyle]} />
+  );
+}
 
 export default function CashOutScreen() {
   const navigation = useNavigation();
@@ -47,8 +69,6 @@ export default function CashOutScreen() {
   // OTP digit reveal
   const otpOpacity = useSharedValue(0);
   const otpScale = useSharedValue(0.8);
-  // Pin dots
-  const pinDots = Array.from({ length: 6 }, () => useSharedValue(0));
   // Countdown pulse
   const timerGlow = useSharedValue(0);
 
@@ -70,7 +90,7 @@ export default function CashOutScreen() {
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [expiresAt]);
+  }, [expiresAt, timerGlow]);
 
   const appendDigit = (key: string) => {
     triggerHaptic('light');
@@ -80,12 +100,7 @@ export default function CashOutScreen() {
         return;
       }
       if (pin.length < 6 && /\d/.test(key)) {
-        const next = pin + key;
-        setPin(next);
-        pinDots[next.length - 1].value = withSequence(
-          withSpring(1.3, Springs.celebration),
-          withSpring(1, Springs.feedback),
-        );
+        setPin(pin + key);
       }
       return;
     }
@@ -113,7 +128,10 @@ export default function CashOutScreen() {
     try {
       const fn = functions().httpsCallable('customerCashOut');
       const result = await fn({ amount: Math.round(amount * 100), pin });
-      const data = (result.data as any).data;
+      const data = (result.data as any)?.data;
+      if (!data?.otpCode || !data?.expiresAt) {
+        throw new Error((result.data as any)?.error || 'Cash-out failed');
+      }
       setOtpCode(data.otpCode);
       setExpiresAt(new Date(data.expiresAt));
       setTimeLeft(Math.floor((new Date(data.expiresAt).getTime() - Date.now()) / 1000));
@@ -124,11 +142,11 @@ export default function CashOutScreen() {
       setErrorMsg(e.message || 'Something went wrong');
       setStep('error');
     }
-  }, [pin, amount]);
+  }, [pin, amount, otpOpacity, otpScale]);
 
   useEffect(() => {
     if (pin.length === 6) handleSubmit();
-  }, [pin]);
+  }, [pin, handleSubmit]);
 
   const formatTime = (s: number) =>
     `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
@@ -240,18 +258,9 @@ export default function CashOutScreen() {
           <Text style={styles.pinAmountLabel}>Withdrawing</Text>
           <Text style={styles.pinAmount}>{CURRENCY_SYMBOL}{amount.toFixed(2)}</Text>
           <View style={styles.pinDots}>
-            {Array.from({ length: 6 }).map((_, i) => {
-              const filled = i < pin.length;
-              const dotStyle = useAnimatedStyle(() => ({
-                transform: [{ scale: filled ? pinDots[i].value || 1 : 1 }],
-              }));
-              return (
-                <Animated.View
-                  key={i}
-                  style={[styles.pinDot, filled && styles.pinDotFilled, dotStyle]}
-                />
-              );
-            })}
+            {Array.from({ length: 6 }).map((_, i) => (
+              <CashOutPinDot key={i} filled={i < pin.length} />
+            ))}
           </View>
         </View>
         <View style={styles.keypad}>

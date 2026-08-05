@@ -1,5 +1,6 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
+import { assertAccountActive } from "../utils/accountStatus";
 import {
   requireAuth,
   validateAmount,
@@ -42,6 +43,8 @@ export const createPaymentRequest = https.onCall(
         "Only merchants can create payment requests"
       );
     }
+    // Stop a frozen merchant raising new charges against customers.
+    assertAccountActive(merchant);
 
     const { tokenId, amount, currency, reference } = request.data;
 

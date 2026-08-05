@@ -9,6 +9,7 @@ export {
   prepareJournalEntry,
   InsufficientBalanceError,
   WalletNotFoundError,
+  FrozenAccountError,
   JOURNAL_COLLECTION,
   LEDGER_BALANCES_COLLECTION,
 } from "./post";

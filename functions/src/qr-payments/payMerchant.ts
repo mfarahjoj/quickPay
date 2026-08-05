@@ -1,6 +1,7 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { requireAuth, validateAmount, validateCurrency, validateTransactionLimit } from "../utils/validation";
+import { assertAccountActive } from "../utils/accountStatus";
 import { verifyUserPin } from "../auth/validatePin";
 import { enforceVelocity } from "../utils/velocity";
 import {
@@ -89,10 +90,12 @@ export const payMerchant = https.onCall(
           "Recipient is not a merchant account"
         );
       }
+      assertAccountActive(merchantData, "counterparty");
 
       // Check customer transaction limits
       const customerDoc = await db.collection("users").doc(customerId).get();
       const customerData = customerDoc.data() as User;
+      assertAccountActive(customerData);
       const limitCheck = validateTransactionLimit(amount, customerData.kycStatus);
       if (!limitCheck.valid) {
         throw new https.HttpsError(
