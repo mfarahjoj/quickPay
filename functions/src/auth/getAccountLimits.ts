@@ -1,10 +1,13 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
-import { requireAuth, centsToDollars } from "../utils/validation";
+import { requireAuth } from "../utils/validation";
+import { limitsFor } from "../config/limits";
+import { describeLimits, getSpendUsage } from "../utils/limits";
 import { ApiResponse } from "../types";
 
 interface AccountLimitsResponse {
   kycStatus: string;
+  tier: string;
   dailyLimit: number;
   monthlyLimit: number;
   dailyUsed: number;
@@ -14,16 +17,14 @@ interface AccountLimitsResponse {
   perTransactionLimit: number;
 }
 
-const LIMITS_BY_KYC: Record<
-  string,
-  { daily: number; monthly: number; perTransaction: number }
-> = {
-  pending: { daily: 50000, monthly: 500000, perTransaction: 10000 },
-  submitted: { daily: 50000, monthly: 500000, perTransaction: 10000 },
-  verified: { daily: 500000, monthly: 5000000, perTransaction: 100000 },
-  rejected: { daily: 20000, monthly: 200000, perTransaction: 5000 },
-};
-
+/**
+ * What this account may spend, and what it has spent.
+ *
+ * Reads the same `config/limits` table and the same spend definition that
+ * `enforceTransactionLimits` applies, so the figures shown to a customer
+ * cannot drift from the ones enforced — they previously did, with a rejected
+ * account told $50 and allowed $100.
+ */
 export const getAccountLimits = https.onCall(
   async (
     request: https.CallableRequest
@@ -39,65 +40,21 @@ export const getAccountLimits = https.onCall(
         throw new https.HttpsError("not-found", "User not found");
       }
 
-      const kycStatus = userDoc.data()?.kycStatus ?? "pending";
-      const limits = LIMITS_BY_KYC[kycStatus] ?? LIMITS_BY_KYC.pending;
+      const userData = userDoc.data() ?? {};
+      const kycStatus = userData.kycStatus ?? "pending";
 
-      const now = new Date();
-      const startOfDay = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate()
-      );
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-      const dailyQuery = await db
-        .collection("transactions")
-        .where("fromUserId", "==", userId)
-        .where("status", "==", "completed")
-        .where(
-          "createdAt",
-          ">=",
-          admin.firestore.Timestamp.fromDate(startOfDay)
-        )
-        .get();
-
-      const monthlyQuery = await db
-        .collection("transactions")
-        .where("fromUserId", "==", userId)
-        .where("status", "==", "completed")
-        .where(
-          "createdAt",
-          ">=",
-          admin.firestore.Timestamp.fromDate(startOfMonth)
-        )
-        .get();
-
-      let dailyUsed = 0;
-      dailyQuery.forEach((doc) => {
-        dailyUsed += doc.data().amount ?? 0;
-      });
-
-      let monthlyUsed = 0;
-      monthlyQuery.forEach((doc) => {
-        monthlyUsed += doc.data().amount ?? 0;
-      });
+      const [{ tier, limits }, usage] = await Promise.all([
+        limitsFor(kycStatus, userData.accountType),
+        getSpendUsage(userId),
+      ]);
 
       return {
         success: true,
         data: {
           kycStatus,
-          dailyLimit: centsToDollars(limits.daily),
-          monthlyLimit: centsToDollars(limits.monthly),
-          dailyUsed: centsToDollars(dailyUsed),
-          monthlyUsed: centsToDollars(monthlyUsed),
-          dailyRemaining: centsToDollars(
-            Math.max(0, limits.daily - dailyUsed)
-          ),
-          monthlyRemaining: centsToDollars(
-            Math.max(0, limits.monthly - monthlyUsed)
-          ),
-          perTransactionLimit: centsToDollars(limits.perTransaction),
-        },
+          tier,
+          ...describeLimits(limits, usage),
+        } as AccountLimitsResponse,
       };
     } catch (error: any) {
       if (error instanceof https.HttpsError) throw error;

@@ -1,6 +1,10 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { assertAccountActive } from "../utils/accountStatus";
+import {
+  enforceAggregateLimits,
+  enforcePerTransactionLimit,
+} from "../utils/limits";
 import { requireAuth } from "../utils/validation";
 import { verifyUserPin } from "../auth/validatePin";
 import { notifyPaymentReceived } from "../utils/notifications";
@@ -93,9 +97,14 @@ export const payrollPayout = https.onCall(
           `Invalid amount for ${emp.phone}: must be a positive integer in cents`
         );
       }
+      await enforcePerTransactionLimit(emp.amount, merchant);
     }
 
     const totalAmount = employees.reduce((sum, e) => sum + e.amount, 0);
+
+    // The daily and monthly caps apply to the run as a whole, checked once —
+    // per-employee aggregation queries would be hundreds of reads per payroll.
+    await enforceAggregateLimits(merchantId, totalAmount, merchant);
 
     // Check merchant balance covers the full payroll
     const merchantWalletRef = db.collection("wallets").doc(merchantId);

@@ -1,6 +1,7 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { requireActiveAccount } from "../utils/accountStatus";
+import { enforceTransactionLimits } from "../utils/limits";
 import { requireAuth, validateAmount } from "../utils/validation";
 import { verifyUserPin } from "../auth/validatePin";
 import { generateSecureId } from "../utils/encryption";
@@ -225,7 +226,10 @@ export const cashOutToMobileMoney = https.onCall(
         throw new https.HttpsError("permission-denied", "Invalid PIN");
       }
 
-      await requireActiveAccount(userId);
+      const userData = await requireActiveAccount(userId);
+
+      // Cash-out sends value out of the wallet, so the spend caps apply.
+      await enforceTransactionLimits(userId, amount, userData);
 
       const db = admin.firestore();
       const reference = generateSecureId(16);

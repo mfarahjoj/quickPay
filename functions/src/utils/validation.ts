@@ -99,32 +99,6 @@ export function centsToDollars(cents: number): number {
   return cents / 100;
 }
 
-/**
- * Validate transaction limits based on KYC status
- */
-export function validateTransactionLimit(
-  amount: number,
-  kycStatus: string
-): { valid: boolean; reason?: string } {
-  const amountInDollars = centsToDollars(amount);
-
-  if (kycStatus === "pending" || kycStatus === "rejected") {
-    if (amountInDollars > 100) {
-      return {
-        valid: false,
-        reason: "Unverified accounts limited to $100 per transaction",
-      };
-    }
-  }
-
-  if (kycStatus === "verified") {
-    if (amountInDollars > 1000) {
-      return {
-        valid: false,
-        reason: "Verified accounts limited to $1000 per transaction",
-      };
-    }
-  }
-
-  return { valid: true };
-}
+// validateTransactionLimit lived here with its own hardcoded thresholds, which
+// disagreed with the table getAccountLimits showed customers. Limits now come
+// from config/limits via utils/limits.ts — one table, advertised and enforced.

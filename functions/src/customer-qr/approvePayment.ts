@@ -2,6 +2,7 @@ import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { requireAuth } from "../utils/validation";
 import { requireActiveAccount } from "../utils/accountStatus";
+import { enforceTransactionLimits } from "../utils/limits";
 import { verifyUserPin } from "../auth/validatePin";
 import { enforceVelocity } from "../utils/velocity";
 import {
@@ -57,9 +58,23 @@ export const approvePaymentRequest = https.onCall(
       throw new https.HttpsError("permission-denied", "Invalid PIN");
     }
 
-    await requireActiveAccount(customerId);
+    const customerData = await requireActiveAccount(customerId);
 
     await enforceVelocity(customerId);
+
+    // Limits are checked against the requested amount before posting. The
+    // transaction below re-reads the request as the authoritative copy.
+    const requestPreCheck = await db
+      .collection("paymentRequests")
+      .doc(requestId)
+      .get();
+    if (requestPreCheck.exists) {
+      await enforceTransactionLimits(
+        customerId,
+        (requestPreCheck.data()?.amount as number) ?? 0,
+        customerData
+      );
+    }
 
     const { paymentFeeRate } = await getRates();
 

@@ -1,11 +1,11 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { assertAccountActive } from "../utils/accountStatus";
+import { enforcePerTransactionLimit } from "../utils/limits";
 import {
   requireAuth,
   validateAmount,
   validateCurrency,
-  validateTransactionLimit,
 } from "../utils/validation";
 import { sendPushNotification } from "../utils/notifications";
 import {
@@ -90,13 +90,9 @@ export const createPaymentRequest = https.onCall(
       .doc(token.customerId)
       .get();
     const customer = customerDoc.data() as User;
-    const limitCheck = validateTransactionLimit(amount, customer.kycStatus);
-    if (!limitCheck.valid) {
-      throw new https.HttpsError(
-        "permission-denied",
-        limitCheck.reason || "Transaction exceeds limit"
-      );
-    }
+    // Only the per-transaction cap: the customer has not spent anything yet,
+    // and their daily total is checked when they approve.
+    await enforcePerTransactionLimit(amount, customer);
 
     const now = admin.firestore.Timestamp.now();
 

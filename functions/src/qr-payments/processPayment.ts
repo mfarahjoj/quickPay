@@ -1,6 +1,7 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
-import { requireAuth, validateTransactionLimit } from "../utils/validation";
+import { requireAuth } from "../utils/validation";
+import { enforceTransactionLimits } from "../utils/limits";
 import {
   assertAccountActive,
   requireActiveAccount,
@@ -81,16 +82,7 @@ export const processPayment = https.onCall(
 
       assertAccountActive(customerData);
 
-      const limitCheck = validateTransactionLimit(
-        qrPreData.amount,
-        customerData.kycStatus
-      );
-      if (!limitCheck.valid) {
-        throw new https.HttpsError(
-          "permission-denied",
-          limitCheck.reason || "Transaction amount exceeds limit"
-        );
-      }
+      await enforceTransactionLimits(customerId, qrPreData.amount, customerData);
 
       const { paymentFeeRate } = await getRates();
 

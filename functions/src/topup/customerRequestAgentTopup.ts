@@ -1,12 +1,9 @@
 import * as crypto from "crypto";
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
-import {
-  requireAuth,
-  validateAmount,
-  validateTransactionLimit,
-} from "../utils/validation";
+import { requireAuth, validateAmount } from "../utils/validation";
 import { assertAccountActive } from "../utils/accountStatus";
+import { enforcePerTransactionLimit } from "../utils/limits";
 import { ApiResponse, Wallet, AgentTopupRequest, User } from "../types";
 
 const TOPUP_EXPIRY_MINUTES = 30;
@@ -74,10 +71,9 @@ export const customerRequestAgentTopup = https.onCall(
     }
     const userData = userDoc.data() as User;
     assertAccountActive(userData);
-    const limitCheck = validateTransactionLimit(amount, userData.kycStatus);
-    if (!limitCheck.valid) {
-      throw new https.HttpsError("failed-precondition", limitCheck.reason!);
-    }
+    // Cash-in is inbound, so the daily spend aggregate does not apply — only
+    // the per-transaction ceiling.
+    await enforcePerTransactionLimit(amount, userData);
 
     // Velocity: cap how many requests a customer can create per hour/day.
     const nowMs = Date.now();

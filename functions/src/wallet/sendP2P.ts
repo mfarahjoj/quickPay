@@ -1,6 +1,7 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
-import { requireAuth, validateTransactionLimit } from "../utils/validation";
+import { requireAuth } from "../utils/validation";
+import { enforceTransactionLimits } from "../utils/limits";
 import { assertAccountActive } from "../utils/accountStatus";
 import { verifyUserPin } from "../auth/validatePin";
 import { enforceVelocity } from "../utils/velocity";
@@ -107,13 +108,7 @@ export const sendP2P = https.onCall(
 
       assertAccountActive(senderData);
 
-      const limitCheck = validateTransactionLimit(amount, senderData.kycStatus);
-      if (!limitCheck.valid) {
-        throw new https.HttpsError(
-          "permission-denied",
-          limitCheck.reason || "Transaction amount exceeds limit"
-        );
-      }
+      await enforceTransactionLimits(senderId, amount, senderData);
 
       const transactionId = db.collection("transactions").doc().id;
 
