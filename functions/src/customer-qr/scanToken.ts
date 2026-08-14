@@ -2,6 +2,7 @@ import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { requireAuth } from "../utils/validation";
 import { decrypt } from "../utils/encryption";
+import { ENCRYPTION_KEY } from "../config/secrets";
 import { ApiResponse, CustomerToken, User } from "../types";
 
 interface ScanTokenRequest {
@@ -16,6 +17,7 @@ interface ScanTokenResponse {
 }
 
 export const scanCustomerToken = https.onCall(
+  { enforceAppCheck: true, secrets: [ENCRYPTION_KEY] },
   async (
     request: https.CallableRequest<ScanTokenRequest>
   ): Promise<ApiResponse<ScanTokenResponse>> => {
@@ -30,7 +32,10 @@ export const scanCustomerToken = https.onCall(
     }
 
     const merchant = merchantDoc.data() as User;
-    if (merchant.accountType !== "merchant") {
+    if (
+      merchant.accountType !== "merchant" &&
+      merchant.accountType !== "agent_merchant"
+    ) {
       throw new https.HttpsError(
         "permission-denied",
         "Only merchants can scan customer tokens"

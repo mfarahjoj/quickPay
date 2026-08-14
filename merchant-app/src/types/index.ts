@@ -88,6 +88,28 @@ export interface QRCodeData {
   qrCodeId: string;
   qrData: string;
   expiresAt: Date;
+  /** Platform fee the merchant absorbs on this sale, in cents. */
+  feeCents: number;
+  /** What actually lands in the merchant wallet, in cents. */
+  netCents: number;
+  merchantName: string;
+}
+
+export interface MerchantStickerData {
+  qrData: string;
+  merchantName: string;
+  merchantId: string;
+  businessAddress: string;
+}
+
+/** Settlement details denormalized onto the qrCodes doc by processPayment. */
+export interface QRSettlement {
+  paidByName?: string;
+  paidAmount?: number;
+  feeCents?: number;
+  netCents?: number;
+  transactionId?: string;
+  reference?: string;
 }
 
 export interface PaymentResult {

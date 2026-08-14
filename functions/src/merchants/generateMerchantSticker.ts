@@ -1,6 +1,7 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { requireAuth } from "../utils/validation";
+import { assertAccountActive } from "../utils/accountStatus";
 import { ApiResponse, MerchantProfile } from "../types";
 
 interface StickerRequest {
@@ -16,6 +17,7 @@ interface StickerResponse {
 }
 
 export const generateMerchantSticker = https.onCall(
+  { enforceAppCheck: true },
   async (
     request: https.CallableRequest<StickerRequest>
   ): Promise<ApiResponse<StickerResponse>> => {
@@ -25,34 +27,43 @@ export const generateMerchantSticker = https.onCall(
     try {
       const db = admin.firestore();
 
-      const userDoc = await db.collection("users").doc(userId).get();
-      if (!userDoc.exists || userDoc.data()?.accountType !== "merchant") {
+      const [userDoc, profileDoc] = await Promise.all([
+        db.collection("users").doc(userId).get(),
+        db.collection("merchantProfiles").doc(userId).get(),
+      ]);
+
+      const userData = userDoc.data();
+      // agent_merchant runs a shop too — locking it out here left dual-role
+      // pilot accounts with no counter code at all.
+      if (
+        !userDoc.exists ||
+        (userData?.accountType !== "merchant" &&
+          userData?.accountType !== "agent_merchant")
+      ) {
         throw new https.HttpsError(
           "permission-denied",
           "Only merchants can generate stickers"
         );
       }
 
-      const profileDoc = await db
-        .collection("merchantProfiles")
-        .doc(userId)
-        .get();
+      assertAccountActive(userData);
 
-      if (!profileDoc.exists) {
-        throw new https.HttpsError(
-          "not-found",
-          "Merchant profile not found"
-        );
-      }
+      const profile = profileDoc.exists
+        ? (profileDoc.data() as MerchantProfile)
+        : null;
+      // A missing profile doc shouldn't cost a merchant their counter code —
+      // fall back to the account name rather than failing the sale.
+      const merchantName =
+        profile?.businessName || userData?.fullName || "Zapp Pay Merchant";
+      const businessAddress = profile?.businessAddress || "Hargeisa";
 
-      const profile = profileDoc.data() as MerchantProfile;
       const { includeAmount, amount } = request.data;
 
       const qrPayload: Record<string, any> = {
         type: "quickpay_merchant",
         merchantId: userId,
-        merchantName: profile.businessName,
-        address: profile.businessAddress,
+        merchantName,
+        address: businessAddress,
       };
 
       if (includeAmount && amount && amount > 0) {
@@ -65,9 +76,9 @@ export const generateMerchantSticker = https.onCall(
         success: true,
         data: {
           qrData,
-          merchantName: profile.businessName,
+          merchantName,
           merchantId: userId,
-          businessAddress: profile.businessAddress,
+          businessAddress,
         },
       };
     } catch (error: any) {

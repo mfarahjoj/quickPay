@@ -2,6 +2,7 @@ import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { requireAuth } from "../utils/validation";
 import { encrypt, generateSecureId } from "../utils/encryption";
+import { ENCRYPTION_KEY } from "../config/secrets";
 import { ApiResponse, CustomerToken, User } from "../types";
 
 const TOKEN_TTL_MS = 2 * 60 * 1000; // 2 minutes
@@ -13,7 +14,7 @@ interface GenerateTokenResponse {
 }
 
 export const generateCustomerToken = https.onCall(
-  { enforceAppCheck: true },
+  { enforceAppCheck: true, secrets: [ENCRYPTION_KEY] },
   async (
     request: https.CallableRequest
   ): Promise<ApiResponse<GenerateTokenResponse>> => {

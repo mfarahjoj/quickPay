@@ -249,9 +249,23 @@ export interface QRCode {
   status: QRCodeStatus;
   expiresAt: FirebaseFirestore.Timestamp;
   createdAt: FirebaseFirestore.Timestamp;
+  /** EMV/SOMQR payload rendered by the merchant app. */
+  emvQrData?: string;
   reference?: string;
   usedBy?: string;
   usedAt?: FirebaseFirestore.Timestamp;
+  cancelledAt?: FirebaseFirestore.Timestamp;
+  /**
+   * Settlement details written by processPayment in the same transaction as
+   * the journal entry. The merchant app watches this doc to confirm the sale
+   * on-screen, so these must land atomically with the money movement — never
+   * as a follow-up write that could fail on its own.
+   */
+  paidByName?: string;
+  paidAmount?: number; // Gross, in cents
+  feeCents?: number;
+  netCents?: number;
+  transactionId?: string;
 }
 
 // Top-up types
@@ -405,6 +419,11 @@ export interface GenerateQRResponse {
   qrData: string;
   emvQrData: string;
   expiresAt: Date;
+  /** Platform fee the merchant absorbs on this sale, in cents. */
+  feeCents: number;
+  /** What actually lands in the merchant wallet, in cents. */
+  netCents: number;
+  merchantName: string;
 }
 
 // Cash-out via agent types

@@ -153,10 +153,18 @@ export const processPayment = https.onCall(
 
         pending.write(transaction);
 
+        // Settlement details ride along with the status flip so the merchant's
+        // receive screen can confirm the sale from this one doc — atomically
+        // with the journal entry, not as a best-effort follow-up write.
         transaction.update(qrCodeRef, {
           status: "used",
           usedBy: customerId,
           usedAt: now,
+          paidByName: customerData?.fullName || "Customer",
+          paidAmount: qrAmount,
+          feeCents,
+          netCents,
+          transactionId,
         });
 
         const txRecord: Transaction = {

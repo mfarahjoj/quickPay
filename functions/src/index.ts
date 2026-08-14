@@ -30,6 +30,7 @@ export { payrollPayout } from "./wallet/payrollPayout";
 // QR Payment functions
 export { generateQRCode } from "./qr-payments/generateQR";
 export { validateQRCode } from "./qr-payments/validateQR";
+export { cancelQRCode } from "./qr-payments/cancelQR";
 export { processPayment } from "./qr-payments/processPayment";
 export { payMerchant } from "./qr-payments/payMerchant";
 export { refundPayment } from "./qr-payments/refundPayment";
