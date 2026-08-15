@@ -23,6 +23,7 @@ interface CreatePaymentRequestInput {
 }
 
 export const createPaymentRequest = https.onCall(
+  { enforceAppCheck: true },
   async (
     request: https.CallableRequest<CreatePaymentRequestInput>
   ): Promise<ApiResponse<{ requestId: string }>> => {
@@ -37,7 +38,13 @@ export const createPaymentRequest = https.onCall(
     }
 
     const merchant = merchantDoc.data() as User;
-    if (merchant.accountType !== "merchant") {
+    // Must match scanCustomerToken: an agent_merchant that can scan a customer
+    // token but cannot then raise the charge is stranded halfway through the
+    // flow, which is worse than being refused at the scan.
+    if (
+      merchant.accountType !== "merchant" &&
+      merchant.accountType !== "agent_merchant"
+    ) {
       throw new https.HttpsError(
         "permission-denied",
         "Only merchants can create payment requests"
