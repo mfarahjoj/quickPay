@@ -24,6 +24,16 @@ first. Verified open as of 2026-08-05.
 
 ## Queue
 
+- [x] **0. Node 20 → Node 22 runtime.** *(code done 2026-08-15, deploy pending)*
+  Node 20 is decommissioned **2026-10-30**, after which no function deploys at
+  all — this gates every other item below it. `engines.node` is now `22` and
+  `firebase-functions` is on 7.3.2; build and all 143 tests pass. Applying it
+  means redeploying **every** function, including money paths, so it needs
+  per-target authorization and is best done as one deliberate pass rather than
+  drifting in behind an unrelated change.
+  `firebase-admin` is still on 12.7.0 (latest is 14.x) — deliberately left
+  alone; a two-major jump on the money path deserves its own change.
+
 - [ ] **1. Ledger reconciliation + alerting.**
   `ledgerInvariantCheck` proves the journal is internally consistent and writes
   `ledger_checkpoints` / `ledger_alerts`, but drift only reaches a log. Add:
@@ -45,14 +55,22 @@ first. Verified open as of 2026-08-05.
   callable deliberately left out.
   *Done when:* consumption is on for high-value callables and the reason for
   each exclusion is written down.
+  *2026-08-15:* still open — this is replay protection, which is separate from
+  plain enforcement. Enforcement itself was extended that day to
+  `generateQRCode`, `generateMerchantSticker`, `scanCustomerToken` and
+  `createPaymentRequest`, which had none; every money-path callable now at
+  least enforces.
 
-- [ ] **3. Tighten the `customerTokens` read rule.**
-  `firestore.rules` lets *any* authenticated user read *any* token whose status
-  is `active`, so the collection can be enumerated for live tokens. Scope reads
-  to the owner and the scanning merchant, or move reads behind a callable.
-  Check `scanCustomerToken` and the merchant scan screen before changing it.
-  *Done when:* a signed-in stranger cannot read someone else's active token and
-  the merchant scan flow still works.
+- [x] **3. Tighten the `customerTokens` read rule.** *(code done 2026-08-15, deploy pending)*
+  Scoped to the owner: `allow read: if isAuthenticated() && isOwner(resource.data.customerId)`.
+  The `status == 'active'` clause was satisfiable by a *query*, not just a
+  document get, so any signed-in user could list every live token and harvest
+  the `customerId` behind each. Nothing broke by removing it — neither app
+  reads `customerTokens` from the client at all (verified: the only client
+  collection reads are `fcmTokens`, `merchantProfiles`, `notifications`,
+  `paymentRequests`, `users`, `wallets`); the whole flow goes through
+  `generateCustomerToken` / `scanCustomerToken` / `createPaymentRequest` on the
+  Admin SDK. Rules compile clean; **not yet deployed**.
 
 - [ ] **4. Refund happy-path test.**
   `refundPayment` has no test covering a successful refund — only rejection
@@ -69,7 +87,20 @@ first. Verified open as of 2026-08-05.
   *Done when:* card-funded value cannot be cashed out immediately, and the
   customer is told why in all three locales.
 
-- [ ] **6. Backup and restore runbook.**
+- [ ] **6. Callable error-rate alerting.**
+  Added 2026-08-15 after `generateQRCode` was found failing on *100% of calls*
+  in prod — `ENCRYPTION_KEY` was never set on the project, so merchant receive
+  was down, not degraded. Nothing surfaced it; it was found only because a
+  human tried the feature by hand. Item 1 covers ledger drift, which is a
+  different signal: this is "a callable is throwing on every invocation."
+  Cheap version: a log-based metric on `severity=ERROR` per function with an
+  alert policy on sustained non-zero error rate for the money-path callables.
+  Also worth auditing for the same class of bug — config read at runtime with
+  no deploy-time check that it exists.
+  *Done when:* a callable failing every call raises an alert that reaches a
+  person without anyone having to try the feature.
+
+- [ ] **7. Backup and restore runbook.**
   Firestore PITR and scheduled exports are not configured, and there is no
   written restore procedure. Write the runbook and whatever scripted pieces are
   possible from the repo; flag clearly which steps need console access.
@@ -95,4 +126,12 @@ Listed so nothing tries to fake progress on them:
 - **Android build.** Somaliland is Android-dominant; iOS-first serves the
   diaspora sender, not the Hargeisa receiver.
 - **Staging Firebase project.** Money-path changes currently have nowhere to run
-  before prod.
+  before prod. *Promoted 2026-08-15:* the `ENCRYPTION_KEY` outage is exactly the
+  class this catches — a config value present nowhere, invisible until a real
+  user hits the feature. It sat broken in prod undetected.
+
+- **Test build 8 of the merchant app.** Uploaded 2026-08-15 with the reworked
+  receive screen (live confirmation, counter code, hardening). The UI shipped
+  without anyone driving it — the simulator session was signed out and signing
+  in needs a phone number and OTP. Worth walking amount → QR → pay → paid state
+  and checking the gross/fee/net split before pilot merchants see it.

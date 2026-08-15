@@ -106,9 +106,12 @@ service cloud.firestore {
     
     // Customer tokens - owner can read; any authenticated user can read active tokens (merchants scan them)
     match /customerTokens/{tokenId} {
-      allow read: if isAuthenticated() &&
-                     (isOwner(resource.data.customerId) ||
-                      resource.data.status == 'active');
+      // Owner only. The old `status == 'active'` clause was satisfiable by a
+      // query, so any signed-in user could list every live token and harvest
+      // the customerId behind each one. Merchants never read these directly —
+      // scanCustomerToken and createPaymentRequest go through the Admin SDK —
+      // so scoping to the owner costs no flow.
+      allow read: if isAuthenticated() && isOwner(resource.data.customerId);
       allow write: if false; // Only Cloud Functions can manage tokens
     }
     
