@@ -4,7 +4,7 @@
  */
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
-import { verifyWebhook } from "../integrations/stripe.service";
+import { verifyWebhook, STRIPE_SANDBOX } from "../integrations/stripe.service";
 import { notifyPaymentReceived } from "../utils/notifications";
 import { Transaction } from "../types";
 import { prepareJournalEntry, userAccount, FLOAT_BANK } from "../ledger";
@@ -14,6 +14,19 @@ const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || "";
 export const stripeWebhook = https.onRequest(async (req, res) => {
   if (req.method !== "POST") {
     res.status(405).send("Method not allowed");
+    return;
+  }
+
+  // This endpoint is public and unauthenticated, and everything past this
+  // point credits a wallet against float:bank. In sandbox, verifyWebhook
+  // returns the request body without checking any signature — so anyone who
+  // can reach the URL could mint balance. Refuse to credit unless Stripe is
+  // genuinely configured; there is no legitimate sandbox traffic here.
+  if (STRIPE_SANDBOX || !STRIPE_WEBHOOK_SECRET) {
+    console.error(
+      "stripeWebhook invoked while Stripe is in sandbox or unconfigured — refusing to credit"
+    );
+    res.status(503).send("Stripe not configured");
     return;
   }
 

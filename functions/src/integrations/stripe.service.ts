@@ -8,7 +8,12 @@
 
 import { generateSecureId } from "../utils/encryption";
 
-const STRIPE_SANDBOX = (process.env.STRIPE_SANDBOX ?? "true") === "true";
+/**
+ * Exported so value-crediting callers can refuse to act on sandbox output.
+ * In sandbox, verifyWebhook returns the request body unverified — useful for
+ * local testing, catastrophic for anything that then posts a journal entry.
+ */
+export const STRIPE_SANDBOX = (process.env.STRIPE_SANDBOX ?? "true") === "true";
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "";
 
 export interface StripePaymentIntentRequest {

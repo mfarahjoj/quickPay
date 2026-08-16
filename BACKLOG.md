@@ -24,7 +24,7 @@ first. Verified open as of 2026-08-05.
 
 ## Queue
 
-- [x] **0. Node 20 → Node 22 runtime.** *(code done 2026-08-15, deploy pending)*
+- [x] **0. Node 20 → Node 22 runtime.** *(deployed 2026-08-15 — all 65 functions on nodejs22)*
   Node 20 is decommissioned **2026-10-30**, after which no function deploys at
   all — this gates every other item below it. `engines.node` is now `22` and
   `firebase-functions` is on 7.3.2; build and all 143 tests pass. Applying it
@@ -33,6 +33,9 @@ first. Verified open as of 2026-08-05.
   drifting in behind an unrelated change.
   `firebase-admin` is still on 12.7.0 (latest is 14.x) — deliberately left
   alone; a two-major jump on the money path deserves its own change.
+  Deployed 2026-08-15: all 65 functions redeployed on `nodejs22`, no failures,
+  and both CLI warnings (runtime deprecation, outdated firebase-functions)
+  are gone.
 
 - [ ] **1. Ledger reconciliation + alerting.**
   `ledgerInvariantCheck` proves the journal is internally consistent and writes
@@ -61,7 +64,7 @@ first. Verified open as of 2026-08-05.
   `createPaymentRequest`, which had none; every money-path callable now at
   least enforces.
 
-- [x] **3. Tighten the `customerTokens` read rule.** *(code done 2026-08-15, deploy pending)*
+- [x] **3. Tighten the `customerTokens` read rule.** *(deployed 2026-08-15)*
   Scoped to the owner: `allow read: if isAuthenticated() && isOwner(resource.data.customerId)`.
   The `status == 'active'` clause was satisfiable by a *query*, not just a
   document get, so any signed-in user could list every live token and harvest
@@ -70,7 +73,24 @@ first. Verified open as of 2026-08-05.
   collection reads are `fcmTokens`, `merchantProfiles`, `notifications`,
   `paymentRequests`, `users`, `wallets`); the whole flow goes through
   `generateCustomerToken` / `scanCustomerToken` / `createPaymentRequest` on the
-  Admin SDK. Rules compile clean; **not yet deployed**.
+  Admin SDK.
+
+- [ ] **3b. Audit every sandbox stub that gates value.** *(guard shipped, audit open)*
+  Found 2026-08-15 while sweeping `process.env` before the Node 22 redeploy.
+  `stripeWebhook` is a public unauthenticated endpoint that credits a wallet
+  against `float:bank`, and `verifyWebhook` returns the request body *without
+  checking any signature* when `STRIPE_SANDBOX` is on — which it is by default
+  whenever the env var is unset, i.e. in prod. Combined with `createWebTopup`
+  (also public, CORS-only, returns a `clientSecret` the paymentIntentId is
+  derivable from), an unauthenticated caller could create a pending top-up up
+  to $5,000 and then confirm it themselves. Unbacked value, money rule 3.
+  Guard added: `stripeWebhook` now returns 503 unless Stripe is genuinely
+  configured, with a test pinning it.
+  *Still open:* the same question for `zaad.service` and `edahab.service` —
+  both fake success and both sit behind `*_SANDBOX ?? "true"`. Check every
+  path where a stub's return value leads to a journal entry.
+  *Done when:* no sandbox stub can cause a credit, and each is covered by a
+  test that fails if the guard is removed.
 
 - [ ] **4. Refund happy-path test.**
   `refundPayment` has no test covering a successful refund — only rejection
