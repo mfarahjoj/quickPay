@@ -2,6 +2,12 @@ import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { requireAuth } from "../utils/validation";
 import { assertAccountActive } from "../utils/accountStatus";
+import { verifyUserPin } from "../auth/validatePin";
+import {
+  assertNotOtpLocked,
+  recordOtpFailure,
+  clearOtpFailures,
+} from "../utils/otpGuard";
 import { sendPushNotification } from "../utils/notifications";
 import { ApiResponse, CashOutRequest, Transaction, User } from "../types";
 import { getRates, computeCommission } from "../config/rates";
@@ -15,6 +21,7 @@ import {
 
 interface AgentConfirmCashOutRequest {
   otpCode: string;
+  agentPin: string;
 }
 
 interface AgentConfirmCashOutResponse {
@@ -32,10 +39,14 @@ export const agentConfirmCashOut = https.onCall(
     requireAuth(request);
     const agentId = request.auth!.uid;
 
-    const { otpCode } = request.data;
+    const { otpCode, agentPin } = request.data;
 
     if (!otpCode || otpCode.length !== 6) {
       throw new https.HttpsError("invalid-argument", "6-digit OTP code required");
+    }
+
+    if (!agentPin) {
+      throw new https.HttpsError("invalid-argument", "Agent PIN is required");
     }
 
     const db = admin.firestore();
@@ -54,6 +65,20 @@ export const agentConfirmCashOut = https.onCall(
     }
     assertAccountActive(agentData);
 
+    // Confirming a cash-out moves the customer's held value into this agent's
+    // float, so the agent is claiming money — the same PIN rule as the top-up
+    // side, for the same reason.
+    const pinValid = await verifyUserPin(agentId, agentPin);
+    if (!pinValid) {
+      throw new https.HttpsError("permission-denied", "Invalid PIN");
+    }
+
+    // The top-up side has rate-limited code guesses since the OTP hardening
+    // work; this side never did. Six digits with unlimited attempts is a few
+    // thousand calls away from claiming a stranger's cash-out, and the customer
+    // would be left holding neither the cash nor the balance.
+    assertNotOtpLocked(agentData);
+
     // Find the pending cash-out with this OTP
     const snapshot = await db
       .collection("cashOutRequests")
@@ -63,11 +88,13 @@ export const agentConfirmCashOut = https.onCall(
       .get();
 
     if (snapshot.empty) {
+      await recordOtpFailure(agentId, agentData);
       throw new https.HttpsError(
         "not-found",
         "Invalid or expired code. Ask the customer to generate a new one."
       );
     }
+    await clearOtpFailures(agentId, agentData);
 
     const cashOutDoc = snapshot.docs[0];
     const cashOut = cashOutDoc.data() as CashOutRequest;

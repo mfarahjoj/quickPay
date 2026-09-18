@@ -285,6 +285,8 @@
   "topup.alerts.limitExceededTitle": "Limit Exceeded",
   "topup.alerts.limitExceededMessage": "Maximum top-up amount is {{amount}}",
   "topup.alerts.topupFailedMessage": "Top-up failed",
+  "topup.confirm.pinTitle": "Enter your PIN",
+  "topup.confirm.pinSubtitle": "This top-up is funded from your float.",
   "qr.receive.title": "Receive Payment",
   "qr.receive.subtitle": "Enter amount to generate QR code",
   "qr.receive.amountLabel": "Payment Amount",
@@ -368,5 +370,7 @@
   "auth.onboarding.review.rejectedBody": "We couldn't approve your application to take payments on Zapp Pay.",
   "auth.onboarding.review.reasonLabel": "Reason",
   "auth.onboarding.review.appliedFor": "Applied as",
-  "auth.onboarding.review.applyAgain": "Apply again"
+  "auth.onboarding.review.applyAgain": "Apply again",
+  "cashout.confirm.pinTitle": "Enter your PIN",
+  "cashout.confirm.pinSubtitle": "Confirm before handing over the cash."
 }

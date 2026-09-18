@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useFocusEffect } from '@react-navigation/native';
 import { Camera, useCameraDevice, useCodeScanner } from 'react-native-vision-camera';
 import { functions } from '../../services/firebase.config';
@@ -18,6 +19,7 @@ import {
   DarkScreen,
   GlassCard,
   PillButton,
+  PinInput,
   ACCENT,
   TEXT_DIM,
   TEXT_FAINT,
@@ -28,7 +30,7 @@ import { SuccessCheckIcon, CloseIcon, ScanIcon } from '../../components/icons/Au
 const CAMERA_NATIVE_AVAILABLE =
   !!NativeModules.VisionCameraProxy || !!NativeModules.CameraDevicesManager;
 
-type Step = 'capture' | 'processing' | 'success' | 'error';
+type Step = 'capture' | 'pin' | 'processing' | 'success' | 'error';
 
 interface Props {
   navigation: any;
@@ -103,6 +105,7 @@ function CameraLayer({ isActive, onScan, onPermission }: CameraLayerProps) {
 }
 
 export default function ConfirmTopupScreen({ navigation }: Props) {
+  const { t } = useTranslation();
   const [step, setStep] = useState<Step>('capture');
   const [manual, setManual] = useState('');
   const [result, setResult] = useState<Result | null>(null);
@@ -111,6 +114,10 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
     CAMERA_NATIVE_AVAILABLE ? null : false,
   );
   const [scanError, setScanError] = useState<string | null>(null);
+  // The code identifies the customer's request; the PIN proves the person
+  // holding the phone is the agent whose float is about to be spent.
+  const [pendingCode, setPendingCode] = useState('');
+  const [pin, setPin] = useState('');
   const isProcessing = useRef(false);
 
   useFocusEffect(
@@ -120,21 +127,28 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
     }, []),
   );
 
-  const confirm = useCallback(async (code: string) => {
+  const confirm = useCallback(async (code: string, agentPin: string) => {
     if (isProcessing.current) return;
     isProcessing.current = true;
     setStep('processing');
     try {
       const fn = functions().httpsCallable('agentConfirmTopup');
-      const res = await fn({ otpCode: code });
+      const res = await fn({ otpCode: code, agentPin });
       setResult((res.data as any).data);
       setStep('success');
     } catch (e: any) {
       setErrorMsg(e.message || 'Failed to confirm top-up');
       setStep('error');
     } finally {
+      setPin('');
       isProcessing.current = false;
     }
+  }, []);
+
+  const askForPin = useCallback((code: string) => {
+    setPendingCode(code);
+    setPin('');
+    setStep('pin');
   }, []);
 
   const handleScan = useCallback(
@@ -146,9 +160,9 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
         return;
       }
       Vibration.vibrate(80);
-      confirm(code);
+      askForPin(code);
     },
-    [confirm],
+    [askForPin],
   );
 
   const handleManual = () => {
@@ -157,7 +171,7 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
       setScanError('Enter the 6-digit code from the customer');
       return;
     }
-    confirm(code);
+    askForPin(code);
   };
 
   if (step === 'success' && result) {
@@ -202,6 +216,34 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
               setErrorMsg('');
               setScanError(null);
               isProcessing.current = false;
+            }}
+          />
+        </View>
+      </DarkScreen>
+    );
+  }
+
+  if (step === 'pin') {
+    return (
+      <DarkScreen edges={[]} contentStyle={styles.resultWrap}>
+        <Text style={styles.resultTitle}>{t('topup.confirm.pinTitle')}</Text>
+        <Text style={styles.resultSub}>{t('topup.confirm.pinSubtitle')}</Text>
+        <PinInput
+          value={pin}
+          onChange={setPin}
+          onComplete={(entered) => confirm(pendingCode, entered)}
+          style={styles.pinInput}
+        />
+        <View style={styles.resultBtn}>
+          <PillButton
+            label={t('common.cancel')}
+            variant="glass"
+            onPress={() => {
+              setPin('');
+              setPendingCode('');
+              setScanError(null);
+              isProcessing.current = false;
+              setStep('capture');
             }}
           />
         </View>
@@ -383,5 +425,6 @@ const styles = StyleSheet.create({
   commissionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: TEXT_FAINT },
   commissionValue: { fontSize: 26, fontWeight: '800', color: '#34C77B', marginTop: 4 },
   resultBtn: { alignSelf: 'stretch', marginTop: 28 },
+  pinInput: { marginTop: 28 },
   processingText: { fontSize: 16, color: TEXT_DIM, marginTop: 20 },
 });

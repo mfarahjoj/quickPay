@@ -234,6 +234,8 @@
   "topup.alerts.limitExceededTitle": "تم تجاوز الحد",
   "topup.alerts.limitExceededMessage": "الحد الأقصى لمبلغ الشحن هو {{amount}}",
   "topup.alerts.topupFailedMessage": "فشل الشحن",
+  "topup.confirm.pinTitle": "أدخل رمزك السري",
+  "topup.confirm.pinSubtitle": "تُموَّل هذه التعبئة من رصيدك التشغيلي.",
   "qr.receive.title": "استلام الدفع",
   "qr.receive.subtitle": "أدخل المبلغ لإنشاء رمز QR",
   "qr.receive.amountLabel": "مبلغ الدفع",
@@ -368,5 +370,7 @@
   "auth.onboarding.review.appliedFor": "تقدمت بصفة",
   "auth.onboarding.review.applyAgain": "قدّم مرة أخرى",
   "scan.permissionTitle": "مطلوب الوصول إلى الكاميرا",
-  "scan.permissionMessage": "اسمح بالوصول إلى الكاميرا لمسح رمز QR الخاص بالعميل."
+  "scan.permissionMessage": "اسمح بالوصول إلى الكاميرا لمسح رمز QR الخاص بالعميل.",
+  "cashout.confirm.pinTitle": "أدخل رمزك السري",
+  "cashout.confirm.pinSubtitle": "أكّد قبل تسليم النقد."
 }

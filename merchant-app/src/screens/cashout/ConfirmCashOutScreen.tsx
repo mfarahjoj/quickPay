@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   View,
   Text,
@@ -13,39 +14,51 @@ import {
   DarkScreen,
   GlassCard,
   PillButton,
+  PinInput,
   ACCENT,
   TEXT_DIM,
   TEXT_FAINT,
 } from '../../components';
 import { SuccessCheckIcon, CloseIcon } from '../../components/icons/AuthIcons';
 
-type Step = 'enter' | 'processing' | 'success' | 'error';
+type Step = 'enter' | 'pin' | 'processing' | 'success' | 'error';
 
 interface Props {
   navigation: any;
 }
 
 export default function ConfirmCashOutScreen({ navigation }: Props) {
+  const { t } = useTranslation();
   const [step, setStep] = useState<Step>('enter');
   const [otp, setOtp] = useState('');
+  // Confirming pays the customer cash and moves their held balance into this
+  // agent's float, so the agent authorises it with their PIN.
+  const [pin, setPin] = useState('');
   const [result, setResult] = useState<{ amount: number; customerName: string; commission: number } | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const handleConfirm = async () => {
+  const handleConfirm = () => {
     if (otp.length !== 6) {
       Alert.alert('Invalid Code', 'Please enter the 6-digit code from the customer.');
       return;
     }
+    setPin('');
+    setStep('pin');
+  };
+
+  const submit = async (agentPin: string) => {
     setStep('processing');
     try {
       const fn = functions().httpsCallable('agentConfirmCashOut');
-      const res = await fn({ otpCode: otp });
+      const res = await fn({ otpCode: otp, agentPin });
       const data = (res.data as any).data;
       setResult(data);
       setStep('success');
     } catch (e: any) {
       setErrorMsg(e.message || 'Failed to confirm cash-out');
       setStep('error');
+    } finally {
+      setPin('');
     }
   };
 
@@ -99,6 +112,31 @@ export default function ConfirmCashOutScreen({ navigation }: Props) {
       <DarkScreen edges={[]} contentStyle={styles.resultWrap}>
         <ActivityIndicator size="large" color={ACCENT} />
         <Text style={styles.processingText}>Verifying code…</Text>
+      </DarkScreen>
+    );
+  }
+
+  if (step === 'pin') {
+    return (
+      <DarkScreen edges={[]} contentStyle={styles.resultWrap}>
+        <Text style={styles.resultTitle}>{t('cashout.confirm.pinTitle')}</Text>
+        <Text style={styles.resultSub}>{t('cashout.confirm.pinSubtitle')}</Text>
+        <PinInput
+          value={pin}
+          onChange={setPin}
+          onComplete={submit}
+          style={styles.pinInput}
+        />
+        <View style={styles.resultBtn}>
+          <PillButton
+            label={t('common.cancel')}
+            variant="glass"
+            onPress={() => {
+              setPin('');
+              setStep('enter');
+            }}
+          />
+        </View>
       </DarkScreen>
     );
   }
@@ -200,5 +238,6 @@ const styles = StyleSheet.create({
   commissionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: TEXT_FAINT },
   commissionValue: { fontSize: 28, fontWeight: '800', color: '#34C77B', marginTop: 4 },
   resultBtn: { alignSelf: 'stretch', marginTop: 28 },
+  pinInput: { marginTop: 28 },
   processingText: { fontSize: 16, color: TEXT_DIM, marginTop: 20 },
 });

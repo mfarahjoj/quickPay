@@ -2,6 +2,7 @@ import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { requireAuth } from "../utils/validation";
 import { assertAccountActive } from "../utils/accountStatus";
+import { verifyUserPin } from "../auth/validatePin";
 import { notifyUser } from "../utils/notifications";
 import {
   assertNotOtpLocked,
@@ -19,6 +20,7 @@ import {
 
 interface AgentConfirmTopupRequest {
   otpCode: string;
+  agentPin: string;
 }
 
 interface AgentConfirmTopupResponse {
@@ -42,10 +44,14 @@ export const agentConfirmTopup = https.onCall(
     requireAuth(request);
     const agentId = request.auth!.uid;
 
-    const { otpCode } = request.data;
+    const { otpCode, agentPin } = request.data;
 
     if (!otpCode || otpCode.length !== 6) {
       throw new https.HttpsError("invalid-argument", "6-digit code required");
+    }
+
+    if (!agentPin) {
+      throw new https.HttpsError("invalid-argument", "Agent PIN is required");
     }
 
     const db = admin.firestore();
@@ -68,6 +74,16 @@ export const agentConfirmTopup = https.onCall(
     }
     // The agent's own float funds this credit, so a frozen agent cannot issue.
     assertAccountActive(agentData);
+
+    // The agent's float is debited here, which makes this a user-initiated
+    // debit and puts it under the same PIN rule as manualTopup. Without it,
+    // anyone holding an unlocked agent phone — a staff member, a thief — could
+    // hand a colluding customer float the agent has already paid for, and the
+    // customer's OTP is no obstacle when the two are working together.
+    const pinValid = await verifyUserPin(agentId, agentPin);
+    if (!pinValid) {
+      throw new https.HttpsError("permission-denied", "Invalid PIN");
+    }
 
     // Rate-limit code guesses so the 6-digit space can't be brute-forced.
     assertNotOtpLocked(agentData);

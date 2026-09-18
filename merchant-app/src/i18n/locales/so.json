@@ -234,6 +234,8 @@
   "topup.alerts.limitExceededTitle": "Xadka waa la dhaafay",
   "topup.alerts.limitExceededMessage": "Qadarka ugu badan ee ku-shubista waa {{amount}}",
   "topup.alerts.topupFailedMessage": "Ku-shubistu way fashilantay",
+  "topup.confirm.pinTitle": "Geli PIN-kaaga",
+  "topup.confirm.pinSubtitle": "Buuxintan waxaa laga jaraya lacagtaada float-ka ah.",
   "qr.receive.title": "Hel Lacag Bixinta",
   "qr.receive.subtitle": "Geli qadarka si aad u sameyso koodhka QR",
   "qr.receive.amountLabel": "Qadarka Lacag Bixinta",
@@ -368,5 +370,7 @@
   "auth.onboarding.review.appliedFor": "Waxaad u codsatay",
   "auth.onboarding.review.applyAgain": "Mar kale codso",
   "scan.permissionTitle": "Waxaa loo baahan yahay kamaradda",
-  "scan.permissionMessage": "U ogolow kamaradda si aad u sawirto koodhka QR ee macmiilka."
+  "scan.permissionMessage": "U ogolow kamaradda si aad u sawirto koodhka QR ee macmiilka.",
+  "cashout.confirm.pinTitle": "Geli PIN-kaaga",
+  "cashout.confirm.pinSubtitle": "Xaqiiji ka hor inta aadan lacagta caddaanka ah dhiibin."
 }
