@@ -30,6 +30,7 @@ import {
   TEXT_FAINT,
 } from '../../components';
 import { SuccessCheckIcon } from '../../components/icons/AuthIcons';
+import CounterIncomingFeed from './CounterIncomingFeed';
 
 type Mode = 'charge' | 'counter';
 type Phase = 'entry' | 'showing' | 'paid' | 'expired';
@@ -393,6 +394,7 @@ export default function GenerateQRScreen() {
                 <PillButton label={t('qr.counter.share')} onPress={handleShareSticker} />
                 <Text style={styles.infoText}>{t('qr.counter.hint')}</Text>
               </View>
+              <CounterIncomingFeed />
             </>
           ) : (
             <Text style={styles.infoText}>
