@@ -54,7 +54,6 @@ type MainStackParamList = {
     merchantId?: string;
   };
   ManualTopup: undefined;
-  MobileMoney: undefined;
   TopUpMethod: undefined;
   AgentTopup: undefined;
   AgentLocator: undefined;
@@ -71,7 +70,11 @@ type MainStackParamList = {
     createdAt?: string;
     reference?: string;
   };
-  SendRemittance: undefined;
+  // `MobileMoney` and `SendRemittance` are intentionally unregistered: both
+  // screens call callables that were deleted from prod on 2026-09-18 because
+  // the Zaad/eDahab and Stripe stubs turned fake success into real balance.
+  // The screens stay in the repo for when real rails exist; until then there
+  // must be no route that reaches them.
   MerchantOnboarding: undefined;
   MerchantQR: undefined;
   MerchantScan: undefined;
@@ -266,11 +269,6 @@ function MainStackNavigator() {
         options={{ title: t('nav.screen.topUp') }}
       />
       <MainStack.Screen
-        name="MobileMoney"
-        getComponent={() => require('../screens/topup/MobileMoneyScreen').default}
-        options={{ title: t('nav.screen.mobileMoney') }}
-      />
-      <MainStack.Screen
         name="TopUpMethod"
         getComponent={() => require('../screens/topup/TopUpMethodScreen').default}
         options={{ headerShown: false }}
@@ -334,11 +332,6 @@ function MainStackNavigator() {
         name="EnterAmount"
         getComponent={() => require('../screens/qr/EnterAmountScreen').default}
         options={{ title: t('nav.screen.payMerchant'), headerShown: false }}
-      />
-      <MainStack.Screen
-        name="SendRemittance"
-        getComponent={() => require('../screens/remittance/SendRemittanceScreen').default}
-        options={{ title: t('nav.screen.sendRemittance') }}
       />
       <MainStack.Screen
         name="EditProfile"
