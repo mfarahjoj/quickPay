@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { BiometryTypes } from 'react-native-biometrics';
 import LinearGradient from 'react-native-linear-gradient';
 import { payMerchant } from '../../services/merchant.service';
+import { newIdempotencyKey } from '../../utils/idempotency';
 import {
   isBiometricEnabled,
   getPinFromKeychain,
@@ -54,6 +55,12 @@ export default function EnterAmountScreen({ navigation, route }: Props) {
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometryType, setBiometryType] = useState<string | undefined>();
 
+  // One key per payment attempt, held across retries so the server can tell a
+  // retry from a second payment. It is minted when the customer commits to an
+  // amount and cleared when they go back to change it, which is the only point
+  // where they mean to start a different payment.
+  const idempotencyKey = useRef<string | null>(null);
+
   const biometricLabel = useMemo(
     () => t(getBiometricLabelKey(biometryType)),
     [biometryType, t],
@@ -77,6 +84,7 @@ export default function EnterAmountScreen({ navigation, route }: Props) {
       return;
     }
     setError(null);
+    idempotencyKey.current = newIdempotencyKey();
     setStep('confirm');
   };
 
@@ -84,7 +92,13 @@ export default function EnterAmountScreen({ navigation, route }: Props) {
     try {
       setProcessing(true);
       setError(null);
-      const result = await payMerchant(merchantId, parsedAmount, currency, pinToUse);
+      const result = await payMerchant(
+        merchantId,
+        parsedAmount,
+        currency,
+        pinToUse,
+        idempotencyKey.current ?? undefined,
+      );
 
       navigation.replace('PaymentSuccess', {
         transactionId: result.transactionId,
@@ -182,7 +196,15 @@ export default function EnterAmountScreen({ navigation, route }: Props) {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <Header title={t('qr.enterAmount.confirmTitle')} onBack={() => setStep('amount')} />
+      <Header
+        title={t('qr.enterAmount.confirmTitle')}
+        onBack={() => {
+          // Going back means a different payment, so the next attempt must not
+          // reuse this key and be answered with this payment's receipt.
+          idempotencyKey.current = null;
+          setStep('amount');
+        }}
+      />
 
       <View style={styles.content}>
         <Text style={styles.payToLabel}>{t('qr.enterAmount.payTo')}</Text>
