@@ -45,7 +45,18 @@ export { customerRequestAgentTopup } from "./topup/customerRequestAgentTopup";
 export { agentConfirmTopup } from "./topup/agentConfirmTopup";
 
 // Mobile money top-up & cash-out (Zaad/eDahab)
-export { topupFromMobileMoney, cashOutToMobileMoney } from "./topup/mobileMoneyTopup";
+//
+// `topupFromMobileMoney` / `cashOutToMobileMoney` are NOT exported, and were
+// deleted from prod on 2026-09-18. `functions/src/integrations/` are sandbox
+// stubs that fake success, and `*_SANDBOX` defaults to "true" whenever the env
+// var is unset — which it is, since this repo ships no `.env`. The top-up
+// callable turned that fake success straight into a wallet credit against
+// float:zaad, so any signed-in user could mint balance up to their per-tx cap
+// and cash it out at an agent (money rule 3). The cash-out callable is the
+// mirror image: it debits a real wallet and pays out nothing.
+//
+// Do not re-export either until the stubs refuse to run in prod and a real
+// Telesom/Somtel rail is connected — see BACKLOG.md item 3b.
 export { mobileMoneyWebhook } from "./topup/mobileMoneyWebhook";
 
 // User lookup (for agents)
@@ -68,8 +79,17 @@ export { setupAgentProfile } from "./merchants/setupAgentProfile";
 export { getReferralStats } from "./referral/getReferralStats";
 
 // Remittance functions (diaspora)
-export { createRemittance } from "./remittance/createRemittance";
-export { completeRemittance } from "./remittance/completeRemittance";
+//
+// `createRemittance` / `completeRemittance` are NOT exported, and were deleted
+// from prod on 2026-09-18. `completeRemittance` took the paymentIntentId from
+// the client and never checked it against the remittance's own
+// stripePaymentIntentId or amount, so with the Stripe stub answering
+// "succeeded" for any id (stripe.service.ts), a sender could credit any
+// recipient without paying. Even against live Stripe, one real intent could be
+// replayed against a larger remittance.
+//
+// Re-export only when the credit comes from the verified webhook and is matched
+// to the stored intent id and amount.
 export { createWebTopup } from "./remittance/createWebTopup";
 export { stripeWebhook } from "./remittance/stripeWebhook";
 

@@ -91,6 +91,20 @@ first. Verified open as of 2026-08-05.
   path where a stub's return value leads to a journal entry.
   *Done when:* no sandbox stub can cause a credit, and each is covered by a
   test that fails if the guard is removed.
+  *2026-09-18, found during the two-week GTM readiness review:* the audit this
+  item asked for turned up two more paths, both of which were live in prod and
+  reachable from the customer app's top-up and remittance screens:
+  `topupFromMobileMoney` (no App Check; Zaad/eDahab stub "success" →
+  `float:{provider}` debit, user credit) and `completeRemittance` (no App
+  Check; takes `paymentIntentId` from the client and never matches it against
+  the remittance's stored intent or amount, while the Stripe stub answers
+  "succeeded" for any id). `cashOutToMobileMoney` is the mirror: real wallet
+  debit, no payout. All four were **deleted from prod** on Mahamed's explicit
+  authorization and their exports removed from `index.ts` so a full redeploy
+  cannot resurrect them; `mobileMoneyWebhook` stays, since it rejects anything
+  unsigned. Not yet done: checking prod `journal_entries` for existing
+  `mmtopup_` / `remit_` ids (needs console access), and the guard-plus-test
+  this item actually asks for.
 
 - [ ] **4. Refund happy-path test.**
   `refundPayment` has no test covering a successful refund — only rejection
