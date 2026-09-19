@@ -26,6 +26,22 @@ async function call<TReq, TRes>(name: string, payload?: TReq): Promise<TRes> {
   return body.data as TRes;
 }
 
+export interface PayoutRow {
+  id: string;
+  merchantId: string;
+  merchantName?: string;
+  businessName?: string;
+  amountCents: number;
+  route: "cash" | "zaad" | "edahab" | "bank";
+  destinationName: string;
+  destinationRef: string;
+  note?: string;
+  status: "requested" | "paid" | "rejected";
+  requiresSeniorApproval: boolean;
+  externalReference?: string;
+  createdAt?: { _seconds?: number; seconds?: number };
+}
+
 export interface UserSummary {
   userId: string;
   fullName?: string;
@@ -229,6 +245,23 @@ export const api = {
   rejectFloat: (issuanceId: string, reason: string) =>
     call<{ issuanceId: string; reason: string }, unknown>("adminRejectFloat", {
       issuanceId,
+      reason,
+    }),
+
+  listPayouts: (status: PayoutRow["status"] = "requested") =>
+    call<{ status: string }, { payouts: PayoutRow[] }>("adminListPayouts", {
+      status,
+    }).then((body) => body.payouts),
+
+  settlePayout: (payoutId: string, externalReference: string, reason: string) =>
+    call<
+      { payoutId: string; externalReference: string; reason: string },
+      unknown
+    >("adminSettlePayout", { payoutId, externalReference, reason }),
+
+  rejectPayout: (payoutId: string, reason: string) =>
+    call<{ payoutId: string; reason: string }, unknown>("adminRejectPayout", {
+      payoutId,
       reason,
     }),
 };

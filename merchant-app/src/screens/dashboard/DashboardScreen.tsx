@@ -105,6 +105,7 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
       { key: 'qr', label: t('dashboard.quickActions.generateQR'), Icon: QrIcon, route: 'GenerateQR' },
       { key: 'scan', label: t('dashboard.quickActions.scanAndCharge'), Icon: ScanIcon, route: 'ScanCharge' },
       { key: 'payroll', label: 'Payroll', Icon: HistoryIcon, route: 'Payroll' },
+      { key: 'payout', label: t('dashboard.quickActions.getPaid'), Icon: TopUpIcon, route: 'Payout' },
     ] : []),
     ...(isAgentRole ? [
       { key: 'topup', label: t('dashboard.quickActions.topUpCustomer'), Icon: TopUpIcon, route: 'TopupCustomer' },

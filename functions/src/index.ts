@@ -123,5 +123,13 @@ export {
   adminReviewKyc,
 } from "./admin/kycReview";
 
+// Merchant settlement: the merchant asks, ops sends the transfer and records it
+export { requestPayout } from "./payouts/requestPayout";
+export {
+  adminListPayouts,
+  adminSettlePayout,
+  adminRejectPayout,
+} from "./admin/payoutDesk";
+
 // Role applications (privileged roles are granted by admins, not chosen)
 export { requestRole, getMyRoleRequests } from "./merchants/requestRole";

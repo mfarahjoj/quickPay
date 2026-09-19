@@ -1,10 +1,14 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 interface Props {
   title: string;
   description: string;
   confirmLabel: string;
   danger?: boolean;
+  /** Extra fields an action needs alongside its reason, e.g. a bank reference. */
+  children?: ReactNode;
+  /** Set when those extra fields are not filled in yet. */
+  confirmDisabled?: boolean;
   onConfirm: (reason: string) => Promise<void>;
   onCancel: () => void;
 }
@@ -22,6 +26,8 @@ export function ReasonPrompt({
   description,
   confirmLabel,
   danger,
+  children,
+  confirmDisabled,
   onConfirm,
   onCancel,
 }: Props) {
@@ -51,6 +57,8 @@ export function ReasonPrompt({
 
         {error && <div className="banner error">{error}</div>}
 
+        {children}
+
         <label className="stack">
           <span className="muted">Reason (recorded in the audit log)</span>
           <textarea
@@ -74,7 +82,7 @@ export function ReasonPrompt({
           <button
             className={danger ? "danger" : "primary"}
             onClick={submit}
-            disabled={tooShort || busy}
+            disabled={tooShort || busy || confirmDisabled}
           >
             {busy ? "Working…" : confirmLabel}
           </button>

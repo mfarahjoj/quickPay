@@ -158,6 +158,44 @@ export interface FloatIssuance {
   transactionId?: string;
 }
 
+/**
+ * A merchant asking to be paid their takings.
+ *
+ * The rail is deliberately just a label plus a destination string: Zapp sends
+ * the money by bank transfer, Zaad or cash depending on the merchant, and the
+ * ledger only cares which float account the value leaves from. `externalRef`
+ * is what makes the payout reconcilable against a statement later.
+ */
+export type PayoutStatus = "requested" | "paid" | "rejected";
+
+export interface PayoutRequest {
+  merchantId: string;
+  merchantName?: string;
+  businessName?: string;
+  amountCents: number;
+  /** Which float account the money will leave from when it is sent. */
+  route: FloatRouteName;
+  /** Account name as the merchant gave it — what ops types into the bank. */
+  destinationName: string;
+  /** Account number, IBAN or mobile-money phone number. */
+  destinationRef: string;
+  note?: string;
+  status: PayoutStatus;
+  /** Set when a second approver is needed because of the amount. */
+  requiresSeniorApproval: boolean;
+  createdAt: FirebaseFirestore.Timestamp;
+  /** Journal entry for the hold taken when the merchant asked. */
+  holdEntryId: string;
+  decidedBy?: string;
+  decidedByEmail?: string;
+  decidedAt?: FirebaseFirestore.Timestamp;
+  decisionReason?: string;
+  /** Bank reference, Zaad transaction id or receipt number. */
+  externalReference?: string;
+  settlementEntryId?: string;
+  transactionId?: string;
+}
+
 // KYC document types
 export interface KycDocument {
   idType: "national_id" | "passport" | "drivers_license";
@@ -331,6 +369,8 @@ export interface Notification {
     | "role_rejected"
     | "float_issued"
     | "float_withdrawn"
+    | "payout_sent"
+    | "payout_rejected"
     | "kyc_approved"
     | "kyc_rejected";
   title: string;

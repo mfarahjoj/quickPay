@@ -23,6 +23,12 @@ export type JournalEntryType =
   | "float_issue"
   /** Agent returns float for cash: agent is debited, float account credited. */
   | "float_withdraw"
+  /** Merchant asks for a payout: their wallet is debited into settlement hold. */
+  | "payout_hold"
+  /** Ops has sent the transfer: hold is debited, the float account credited. */
+  | "payout_settled"
+  /** Payout refused or withdrawn: the hold returns to the merchant. */
+  | "payout_cancelled"
   | "opening_balance"
   | "adjustment";
 
@@ -42,6 +48,8 @@ export interface JournalRefs {
   topupId?: string;
   remittanceId?: string;
   refundOfEntryId?: string;
+  /** Merchant settlement request behind a payout_* entry. */
+  payoutId?: string;
 }
 
 export interface JournalEntryInput {

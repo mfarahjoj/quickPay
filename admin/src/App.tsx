@@ -13,9 +13,10 @@ import { UserDetail } from "./components/UserDetail";
 import { RoleQueue } from "./components/RoleQueue";
 import { FloatDesk } from "./components/FloatDesk";
 import { KycQueue } from "./components/KycQueue";
+import { PayoutDesk } from "./components/PayoutDesk";
 import { LedgerBanner } from "./components/LedgerBanner";
 
-type Tab = "users" | "roles" | "kyc" | "float";
+type Tab = "users" | "roles" | "kyc" | "float" | "payouts";
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -152,6 +153,14 @@ export default function App() {
             Float desk
           </button>
         )}
+        {canRunFloatDesk && (
+          <button
+            className={tab === "payouts" ? "active" : ""}
+            onClick={() => setTab("payouts")}
+          >
+            Merchant payouts
+          </button>
+        )}
       </nav>
 
       <main className="main">
@@ -175,6 +184,8 @@ export default function App() {
         {tab === "kyc" && canReviewRoles && <KycQueue />}
 
         {tab === "float" && canRunFloatDesk && <FloatDesk adminUid={user.uid} />}
+
+        {tab === "payouts" && canRunFloatDesk && <PayoutDesk />}
       </main>
     </div>
   );

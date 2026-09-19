@@ -44,6 +44,7 @@ type MerchantStackParamList = {
   ConfirmTopup: undefined;
   AgentProfileEdit: undefined;
   Payroll: undefined;
+  Payout: undefined;
 };
 
 type TabParamList = {
@@ -234,6 +235,11 @@ function MainStackNavigator() {
           return <AgentProfileSetupScreen {...props} isSettings />;
         }}
       </MainStack.Screen>
+      <MainStack.Screen
+        name="Payout"
+        getComponent={() => require('../screens/payouts/PayoutScreen').default}
+        options={{ headerShown: false }}
+      />
       <MainStack.Screen
         name="Payroll"
         getComponent={() => require('../screens/payroll/PayrollScreen').default}

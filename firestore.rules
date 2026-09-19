@@ -161,6 +161,15 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Merchant payout requests. The merchant may watch their own — the app
+    // shows "requested" turning into "sent" — but every write goes through
+    // requestPayout / the payout desk, which post the matching ledger entry in
+    // the same transaction. A client write here would move money on its own.
+    match /payoutRequests/{payoutId} {
+      allow read: if isAuthenticated() && isOwner(resource.data.merchantId);
+      allow write: if false;
+    }
+
     // Trusted-device login credentials — server-only. These hold the bcrypt
     // hash of a device secret that can be exchanged (with the PIN) for a
     // session, so no client may read or write them under any circumstance.

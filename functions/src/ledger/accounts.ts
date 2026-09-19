@@ -71,6 +71,16 @@ export const EXTERNAL_CLEARING = "external:clearing";
  */
 export const CASHOUT_HOLD = "platform:cashout_hold";
 
+/**
+ * Takings a merchant has asked to be paid out, held from the moment they ask
+ * until ops has actually sent the transfer. Holding at request time — rather
+ * than debiting when the transfer goes out — stops a merchant spending money
+ * that is already on its way to their bank, which would leave ops paying out
+ * value the wallet no longer has. Must trend to zero: a balance sitting here
+ * is money owed to merchants that nobody has sent yet.
+ */
+export const SETTLEMENT_HOLD = "platform:settlement_hold";
+
 /** Ledger account for a user/merchant/agent wallet. */
 export function userAccount(uid: string): string {
   return `user:${uid}`;
