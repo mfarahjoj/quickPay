@@ -144,9 +144,9 @@ first. Verified open as of 2026-08-05.
 - [ ] **8. Localise the merchant app's remaining server errors.**
   Added 2026-09-26. The agent confirm, payout and payroll screens now map
   failures through `pinActionErrorKey` in `merchant-app/src/utils/errors.ts`,
-  but manual top-up (`TopupCustomerScreen`), refund (`TransactionDetailScreen`),
-  charge (`ChargeScreen`), scan (`ScanCustomerScreen`) and login/OTP still show
-  `e.message` first — English server text, including "Invalid agent PIN" and
+  (and, since 2026-09-26, charge), but manual top-up (`TopupCustomerScreen`),
+  refund (`TransactionDetailScreen`), scan (`ScanCustomerScreen`) and login/OTP
+  still show `e.message` first — English server text, including "Invalid agent PIN" and
   "Invalid PIN" on the two PIN-gated ones.
   *Done when:* none of those screens can show a raw server message, and a wrong
   PIN on top-up or refund goes back to the keypad instead of failing the flow.
@@ -174,19 +174,26 @@ Listed so nothing tries to fake progress on them:
   class this catches — a config value present nowhere, invisible until a real
   user hits the feature. It sat broken in prod undetected.
 
-- **Test merchant build 9 and customer build 57.** Uploaded 2026-09-26, with the
-  payout, agent-PIN and retry-safe `payMerchant` backend deployed the same day
-  (plus the `payoutRequests` rule and indexes). Both apps were only booted on a
-  simulator to the signed-out welcome screen, in all three languages for the
-  merchant app; nothing behind sign-in has been driven, since that needs a
-  phone number and OTP. Worth walking, on device:
+- **Test merchant build 10 and customer build 58.** Uploaded 2026-09-26 (after
+  9 and 57 the same day), with every backend change they need deployed first:
+  payouts, agent PIN, retry-safe `payMerchant`, and the charge safety work
+  (90-second window, `cancelPaymentRequest`, one charge per scan). Both apps
+  were only booted on a simulator to the signed-out welcome screen; nothing
+  behind sign-in has been driven, since that needs a phone number and OTP.
+  Worth walking, on two devices:
+  charge — scan a customer and let it run out (Expired at 90s); charge again
+  and Cancel (the customer's approve screen should flip to "Request
+  cancelled"); charge and back out mid-wait (should ask "Cancel this
+  charge?"); charge and approve;
   merchant — Get paid (request → the admin payout desk → "Sent" with the
-  reference), confirm top-up and cash-out with a deliberately wrong PIN first
-  (should return to the keypad with the code kept), a two-person payroll,
-  counter-code feed, and the receive flow build 8 never had walked;
+  reference), confirm top-up and cash-out with a wrong PIN first (back to the
+  keypad with the code kept), a two-person payroll, the counter-code feed, the
+  receive flow, and back/swipe on every screen;
   customer — sign out and log back in with the PIN (needs the grant below),
-  and a sticker payment. Merchant build 8 can no longer confirm agent top-ups
-  or cash-outs: the backend now requires the PIN it never sends.
+  and a sticker payment.
+  Merchant build 8 can no longer confirm agent top-ups or cash-outs (the
+  backend requires the PIN it never sends), and merchant 9 keeps spinning
+  when a charge expires, since only build 10 counts down.
 - **Let the functions mint sign-in tokens.** `loginWithPin` (trusted-device PIN
   login, first shipped in customer build 57) calls `createCustomToken`, which
   signs through IAM as `76440907220-compute@developer.gserviceaccount.com`. That
