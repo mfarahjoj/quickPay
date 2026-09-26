@@ -7,7 +7,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useMerchantOnboardingGate } from '../hooks/useMerchantOnboardingGate';
 import MerchantOnboardingNavigator from './MerchantOnboardingNavigator';
 import RoleReviewPendingScreen from '../screens/auth/RoleReviewPendingScreen';
-import { signOut } from '../services/auth.service';
+import { confirmSignOut } from '../utils/confirmSignOut';
 import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import { colors } from '../theme';
 import {
@@ -186,6 +186,9 @@ function MainStackNavigator() {
         headerTitleStyle: { fontWeight: '700', color: '#FFFFFF' },
         headerTintColor: '#FFFFFF',
         headerShadowVisible: false,
+        // The label would be the previous route's title, and MainTabs has
+        // none, so iOS showed the internal name "MainTabs" in every language.
+        headerBackTitleVisible: false,
       }}
     >
       <MainStack.Screen
@@ -250,6 +253,7 @@ function MainStackNavigator() {
 }
 
 export default function AppNavigator() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const { loading, state, requestedRole, rejectionReason } = useMerchantOnboardingGate();
 
@@ -295,7 +299,7 @@ export default function AppNavigator() {
   // role, so it can only run once the role has actually been granted.
   if (user && state === 'agentProfile') {
     const AgentProfileSetupScreen = require('../screens/auth/AgentProfileSetupScreen').default;
-    return <AgentProfileSetupScreen navigation={{ goBack: signOut }} />;
+    return <AgentProfileSetupScreen navigation={{ goBack: () => confirmSignOut(t) }} />;
   }
 
   return (

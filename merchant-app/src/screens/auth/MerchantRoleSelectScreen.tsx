@@ -14,7 +14,8 @@ import { RouteProp } from '@react-navigation/native';
 import { SetupSuccessScreen, useToast } from '../../components/auth';
 import { Input } from '../../components/Input';
 import { HandshakeIcon, StoreIcon } from '../../components/icons/AuthIcons';
-import { completeMerchantSetup, signOut } from '../../services/auth.service';
+import { completeMerchantSetup } from '../../services/auth.service';
+import { confirmSignOut } from '../../utils/confirmSignOut';
 import type { MerchantOnboardingParamList } from '../../navigation/MerchantOnboardingNavigator';
 
 type Nav = StackNavigationProp<MerchantOnboardingParamList, 'MerchantRoleSelect'>;
@@ -189,7 +190,7 @@ export default function MerchantRoleSelectScreen({
         {/* Back */}
         <TouchableOpacity
           style={styles.backBtn}
-          onPress={pinFromRoute ? () => navigation.goBack() : signOut}
+          onPress={pinFromRoute ? () => navigation.goBack() : () => confirmSignOut(t)}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Text style={styles.backChevron}>‹</Text>

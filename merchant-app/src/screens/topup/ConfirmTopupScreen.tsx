@@ -26,6 +26,7 @@ import {
 } from '../../components';
 import { SuccessCheckIcon, CloseIcon, ScanIcon } from '../../components/icons/AuthIcons';
 import { formatCents } from '../../utils/money';
+import { useExitGuard } from '../../hooks/useExitGuard';
 import { isWrongPin, pinActionErrorKey } from '../../utils/errors';
 
 // VisionCamera v3 crashes at module level on the simulator — guard before hooks.
@@ -162,6 +163,22 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
     setStep('pin');
   }, []);
 
+  const cancelPin = () => {
+    setPin('');
+    setPinError('');
+    setPendingCode('');
+    setScanError(null);
+    isProcessing.current = false;
+    setStep('capture');
+  };
+
+  // Confirming spends the agent's float: while that runs nothing leaves, and
+  // back from the PIN step returns to the scanner instead of closing.
+  useExitGuard(navigation, {
+    blocked: step === 'processing',
+    onExit: step === 'pin' ? cancelPin : undefined,
+  });
+
   const handleScan = useCallback(
     (value: string) => {
       if (isProcessing.current) return;
@@ -231,6 +248,12 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
               isProcessing.current = false;
             }}
           />
+          <PillButton
+            label={t('common.close')}
+            variant="glass"
+            onPress={() => navigation.goBack()}
+            style={styles.secondBtn}
+          />
         </View>
       </DarkScreen>
     );
@@ -252,18 +275,7 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
         />
         {pinError ? <Text style={styles.pinError}>{pinError}</Text> : null}
         <View style={styles.resultBtn}>
-          <PillButton
-            label={t('common.cancel')}
-            variant="glass"
-            onPress={() => {
-              setPin('');
-              setPinError('');
-              setPendingCode('');
-              setScanError(null);
-              isProcessing.current = false;
-              setStep('capture');
-            }}
-          />
+          <PillButton label={t('common.cancel')} variant="glass" onPress={cancelPin} />
         </View>
       </DarkScreen>
     );
@@ -443,6 +455,7 @@ const styles = StyleSheet.create({
   commissionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: TEXT_FAINT },
   commissionValue: { fontSize: 26, fontWeight: '800', color: '#34C77B', marginTop: 4 },
   resultBtn: { alignSelf: 'stretch', marginTop: 28 },
+  secondBtn: { marginTop: 12 },
   pinInput: { marginTop: 28 },
   pinError: { fontSize: 14, color: '#FF6961', textAlign: 'center', marginTop: 16 },
   processingText: { fontSize: 16, color: TEXT_DIM, marginTop: 20 },

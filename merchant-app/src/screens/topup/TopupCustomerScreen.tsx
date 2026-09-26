@@ -11,6 +11,7 @@ import {
   FlatList,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { useExitGuard } from '../../hooks/useExitGuard';
 import { PinInput, DarkScreen, GlassCard, PillButton, ACCENT, TEXT_DIM, TEXT_FAINT } from '../../components';
 import { SuccessCheckIcon, CloseIcon, TopUpIcon } from '../../components/icons/AuthIcons';
 import { lookupCustomer, topupCustomer } from '../../services/topup.service';
@@ -144,6 +145,25 @@ export default function TopupCustomerScreen({ navigation }: { navigation: any })
   };
 
   const handleDone = () => navigation.goBack();
+
+  // Back goes one step back, the same way the in-page "← Back" does, instead
+  // of dropping the whole top-up; and nothing leaves while the agent's float
+  // is being spent, so the result is always seen.
+  useExitGuard(navigation, {
+    blocked: submitting,
+    onExit:
+      step === 'pin'
+        ? () => {
+            setPin('');
+            setStep('amount');
+          }
+        : step === 'amount'
+          ? () => {
+              setCustomer(null);
+              setStep('lookup');
+            }
+          : undefined,
+  });
 
   const handleRetry = () => {
     setPin('');

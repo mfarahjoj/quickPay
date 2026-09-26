@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { useNavigation } from '@react-navigation/native';
 import {
   DarkScreen,
   ScreenHeader,
@@ -19,6 +20,7 @@ import {
   PayoutRoute,
 } from '../../services/payout.service';
 import { useWallet } from '../../hooks/useWallet';
+import { useExitGuard } from '../../hooks/useExitGuard';
 import { toCents, formatCents, sanitizeAmountInput } from '../../utils/money';
 import { isWrongPin, pinActionErrorKey } from '../../utils/errors';
 
@@ -40,6 +42,7 @@ function payoutErrorKey(error: any): string {
 
 export default function PayoutScreen() {
   const { t } = useTranslation();
+  const navigation = useNavigation<any>();
   const { wallet } = useWallet();
 
   const [step, setStep] = useState<Step>('form');
@@ -78,6 +81,20 @@ export default function PayoutScreen() {
     !overBalance &&
     destinationName.trim().length >= 2 &&
     destinationRef.trim().length >= 3;
+
+  // Back from the PIN step returns to the form; while the request is in
+  // flight nothing leaves, so the merchant sees whether it went through.
+  useExitGuard(navigation, {
+    blocked: submitting,
+    onExit:
+      step === 'pin'
+        ? () => {
+            setPin('');
+            setPinError(null);
+            setStep('form');
+          }
+        : undefined,
+  });
 
   const pending = useMemo(
     () => payouts.filter((p) => p.status === 'requested'),
@@ -159,7 +176,11 @@ export default function PayoutScreen() {
 
   return (
     <DarkScreen scroll keyboard>
-      <ScreenHeader title={t('payout.title')} subtitle={t('payout.subtitle')} />
+      <ScreenHeader
+        title={t('payout.title')}
+        subtitle={t('payout.subtitle')}
+        onBack={() => navigation.goBack()}
+      />
 
       <View style={styles.body}>
         <Text style={styles.label}>{t('payout.amountLabel')}</Text>

@@ -22,6 +22,7 @@ import {
 import { SuccessCheckIcon, CloseIcon } from '../../components/icons/AuthIcons';
 import { formatCents } from '../../utils/money';
 import { isWrongPin, pinActionErrorKey } from '../../utils/errors';
+import { useExitGuard } from '../../hooks/useExitGuard';
 
 type Step = 'enter' | 'pin' | 'processing' | 'success' | 'error';
 
@@ -39,6 +40,19 @@ export default function ConfirmCashOutScreen({ navigation }: Props) {
   const [result, setResult] = useState<{ amount: number; customerName: string; commission: number } | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [pinError, setPinError] = useState('');
+
+  const cancelPin = () => {
+    setPin('');
+    setPinError('');
+    setStep('enter');
+  };
+
+  // Confirming moves the customer's held money into the agent's float: while
+  // that runs nothing leaves, and back from the PIN step returns to the code.
+  useExitGuard(navigation, {
+    blocked: step === 'processing',
+    onExit: step === 'pin' ? cancelPin : undefined,
+  });
 
   const handleConfirm = () => {
     if (otp.length !== 6) {
@@ -109,6 +123,12 @@ export default function ConfirmCashOutScreen({ navigation }: Props) {
             variant="glass"
             onPress={() => { setStep('enter'); setOtp(''); setErrorMsg(''); }}
           />
+          <PillButton
+            label={t('common.close')}
+            variant="glass"
+            onPress={() => navigation.goBack()}
+            style={styles.secondBtn}
+          />
         </View>
       </DarkScreen>
     );
@@ -139,15 +159,7 @@ export default function ConfirmCashOutScreen({ navigation }: Props) {
         />
         {pinError ? <Text style={styles.pinError}>{pinError}</Text> : null}
         <View style={styles.resultBtn}>
-          <PillButton
-            label={t('common.cancel')}
-            variant="glass"
-            onPress={() => {
-              setPin('');
-              setPinError('');
-              setStep('enter');
-            }}
-          />
+          <PillButton label={t('common.cancel')} variant="glass" onPress={cancelPin} />
         </View>
       </DarkScreen>
     );
@@ -250,6 +262,7 @@ const styles = StyleSheet.create({
   commissionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: TEXT_FAINT },
   commissionValue: { fontSize: 28, fontWeight: '800', color: '#34C77B', marginTop: 4 },
   resultBtn: { alignSelf: 'stretch', marginTop: 28 },
+  secondBtn: { marginTop: 12 },
   pinInput: { marginTop: 28 },
   pinError: { fontSize: 14, color: '#FF6961', textAlign: 'center', marginTop: 16 },
   processingText: { fontSize: 16, color: TEXT_DIM, marginTop: 20 },

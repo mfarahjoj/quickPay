@@ -16,7 +16,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RouteProp } from '@react-navigation/native';
 import { CodeInput, isWeakPin } from '../../components/auth';
 import { Input } from '../../components/Input';
-import { signOut } from '../../services/auth.service';
+import { confirmSignOut } from '../../utils/confirmSignOut';
 import type { MerchantOnboardingParamList } from '../../navigation/MerchantOnboardingNavigator';
 
 type Nav = StackNavigationProp<MerchantOnboardingParamList, 'MerchantBasics'>;
@@ -116,7 +116,7 @@ export default function MerchantBasicsScreen({
           <View style={styles.topBar}>
             <TouchableOpacity
               style={styles.backBtn}
-              onPress={signOut}
+              onPress={() => confirmSignOut(t)}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <Text style={styles.backChevron}>‹</Text>

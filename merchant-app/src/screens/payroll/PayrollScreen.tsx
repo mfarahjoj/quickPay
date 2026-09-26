@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { functions } from '../../services/firebase.config';
 import { GlassCard, PillButton, ACCENT, TEXT_DIM, TEXT_FAINT } from '../../components';
 import { pinActionErrorKey } from '../../utils/errors';
+import { useExitGuard } from '../../hooks/useExitGuard';
 
 type Step = 'build' | 'review' | 'pin' | 'processing' | 'result';
 
@@ -103,6 +104,21 @@ export default function PayrollScreen({ navigation }: Props) {
 
   const goPin = () => setStep('pin');
 
+  // The swipe and Android's back key follow the header chevron: one step back,
+  // never a lost employee list, and nothing leaves while payments are sent.
+  useExitGuard(navigation, {
+    blocked: step === 'processing',
+    onExit:
+      step === 'review'
+        ? () => setStep('build')
+        : step === 'pin'
+          ? () => {
+              setPin('');
+              setStep('review');
+            }
+          : undefined,
+  });
+
   // Takes the PIN as an argument: the keypad submits on the sixth digit from
   // inside the same render that set it, where `pin` still holds five.
   const handleRunPayroll = async (enteredPin: string = pin) => {
@@ -144,7 +160,7 @@ export default function PayrollScreen({ navigation }: Props) {
           onPress={() => {
             if (step === 'build') navigation.goBack();
             else if (step === 'review') setStep('build');
-            else if (step === 'pin') setStep('review');
+            else if (step === 'pin') { setPin(''); setStep('review'); }
             else if (step === 'result') navigation.goBack();
           }}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
