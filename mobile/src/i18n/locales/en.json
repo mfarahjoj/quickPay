@@ -984,5 +984,13 @@
   "topup.agent.toppedUp": "Topped up!",
   "topup.agent.confirmationId": "Confirmation ID",
   "topup.agent.failedTitle": "Top-up failed",
-  "topup.agent.expiredMessage": "This code expired before it was confirmed. Please try again."
+  "topup.agent.expiredMessage": "This code expired before it was confirmed. Please try again.",
+  "payments.approve.expiresIn": "Expires in {{time}}",
+  "payments.approve.expiredNow": "This request has expired.",
+  "payments.approve.cancelledTitle": "Request cancelled",
+  "payments.approve.cancelledMessage": "{{merchant}} cancelled this request. You haven't paid anything.",
+  "payments.approve.expiredTitle": "Request expired",
+  "payments.approve.expiredMessage": "This request ran out of time. You haven't paid anything.",
+  "payments.approve.alreadyPaid": "You've already paid this request.",
+  "payments.approve.amountChanged": "The amount doesn't match what you were shown. Ask the shop to send a new request."
 }

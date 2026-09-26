@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { PinInput } from '../../components/PinInput';
 import { approvePayment, rejectPayment } from '../../services/customerToken.service';
+import { firestore } from '../../services/firebase.config';
 import { triggerHaptic } from '../../services/haptics.service';
 import { colors, typography, spacing, borderRadius } from '../../theme';
 import { CURRENCY_SYMBOL } from '../../config/constants';
@@ -38,7 +39,15 @@ type ApprovePaymentParams = {
 };
 
 type Step = 'review' | 'pin' | 'result';
-type ResultKind = 'approved' | 'declined' | 'error';
+type ResultKind = 'approved' | 'declined' | 'error' | 'closed';
+
+/** Requests raised before `expiresAt` was stored were payable for five minutes. */
+const LEGACY_TTL_MS = 5 * 60 * 1000;
+/** Grace for a phone clock running slightly ahead of the server's. */
+const CLOCK_GRACE_MS = 3000;
+
+const formatClock = (seconds: number) =>
+  `${Math.floor(seconds / 60)}:${(seconds % 60).toString().padStart(2, '0')}`;
 
 export default function ApprovePaymentScreen() {
   const { t } = useTranslation();
@@ -53,6 +62,18 @@ export default function ApprovePaymentScreen() {
   const [resultKind, setResultKind] = useState<ResultKind>('approved');
   const [resultMessage, setResultMessage] = useState('');
   const [transactionAmount, setTransactionAmount] = useState('');
+  const [closedTitle, setClosedTitle] = useState('');
+
+  // The charge as the server has it. The screen opens with what the push or
+  // the list carried, then follows the live request: the shop can cancel, the
+  // window can run out, and the customer pays exactly the amount shown here.
+  const [liveAmount, setLiveAmount] = useState<number | null>(null);
+  const [expiresAtMs, setExpiresAtMs] = useState<number | null>(null);
+  // Ticks every second while the request is open, so the countdown and the
+  // lock at zero both re-render (a repeated 0 alone would not).
+  const [now, setNow] = useState(() => Date.now());
+  const approving = useRef(false);
+  const resultShown = useRef(false);
 
   // Result animation
   const resultRingScale = useSharedValue(0.8);
@@ -89,7 +110,74 @@ export default function ApprovePaymentScreen() {
     resultBtnOp.value = withDelay(600, withTiming(1, { duration: 200 }));
   }, [step, resultRingScale, resultRingOpacity, resultTitleOp, resultTitleY, resultAmountOp, resultDetailsOp, resultBtnOp]);
 
-  const amountFormatted = (amount / 100).toFixed(2);
+  const shownAmount = liveAmount ?? amount;
+  const amountFormatted = (shownAmount / 100).toFixed(2);
+
+  const showResult = (kind: ResultKind, message: string, title = '') => {
+    resultShown.current = true;
+    setResultKind(kind);
+    setResultMessage(message);
+    setClosedTitle(title);
+    setStep('result');
+  };
+
+  const showClosed = (why: 'cancelled' | 'expired') =>
+    showResult(
+      'closed',
+      why === 'cancelled'
+        ? t('payments.approve.cancelledMessage', { merchant: merchantName })
+        : t('payments.approve.expiredMessage'),
+      why === 'cancelled' ? t('payments.approve.cancelledTitle') : t('payments.approve.expiredTitle'),
+    );
+
+  useEffect(() => {
+    return firestore()
+      .collection('paymentRequests')
+      .doc(requestId)
+      .onSnapshot(
+        (doc) => {
+          const d = doc.data();
+          if (!d) return;
+          if (typeof d.amount === 'number') setLiveAmount(d.amount);
+          setExpiresAtMs(
+            d.expiresAt?.toMillis?.() ??
+              (d.createdAt?.toMillis?.() ?? Date.now()) + LEGACY_TTL_MS,
+          );
+          // This screen's own approval decides its result; a result already
+          // on screen is not replaced.
+          if (approving.current || resultShown.current) return;
+          if (d.status === 'cancelled') showClosed('cancelled');
+          else if (d.status === 'expired') showClosed('expired');
+          else if (d.status === 'approved') {
+            setTransactionAmount(`${CURRENCY_SYMBOL}${(d.amount / 100).toFixed(2)}`);
+            showResult('approved', t('payments.approve.alreadyPaid'));
+          } else if (d.status === 'rejected') {
+            showResult('declined', t('payments.approve.declinedMessage'));
+          }
+        },
+        () => undefined,
+      );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestId]);
+
+  const lapsed = expiresAtMs !== null && now > expiresAtMs + CLOCK_GRACE_MS;
+  const secondsLeft =
+    expiresAtMs === null ? null : Math.max(0, Math.ceil((expiresAtMs - now) / 1000));
+
+  useEffect(() => {
+    if (expiresAtMs === null || step === 'result' || lapsed) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [expiresAtMs, step, lapsed]);
+
+  const countdown =
+    secondsLeft === null ? null : (
+      <Text style={[styles.countdown, lapsed && styles.countdownLapsed]}>
+        {lapsed
+          ? t('payments.approve.expiredNow')
+          : t('payments.approve.expiresIn', { time: formatClock(secondsLeft) })}
+      </Text>
+    );
   const requestDate = createdAt ? new Date(createdAt) : new Date();
   const formattedDate = requestDate.toLocaleDateString('en-US', {
     year: 'numeric',
@@ -112,9 +200,10 @@ export default function ApprovePaymentScreen() {
 
   const handleApprove = async (submittedPin: string) => {
     if (loading) return;
+    approving.current = true;
     try {
       setLoading(true);
-      await approvePayment(requestId, submittedPin);
+      await approvePayment(requestId, submittedPin, shownAmount);
       triggerHaptic('success');
       setTransactionAmount(`${CURRENCY_SYMBOL}${amountFormatted}`);
       setResultKind('approved');
@@ -127,11 +216,27 @@ export default function ApprovePaymentScreen() {
       setStep('result');
     } catch (e: any) {
       triggerHaptic('medium');
-      const msg = e.message?.replace(/^\[.*?\]\s*/, '') || t('common.failedApprovePayment');
-      setResultKind('error');
-      setResultMessage(msg);
-      setStep('result');
+      const message: string = typeof e?.message === 'string' ? e.message : '';
+      if (/already cancelled/i.test(message)) {
+        showClosed('cancelled');
+      } else if (/expired/i.test(message)) {
+        showClosed('expired');
+      } else if (/already rejected/i.test(message)) {
+        showResult('declined', t('payments.approve.declinedMessage'));
+      } else if (/does not match/i.test(message)) {
+        showResult('error', t('payments.approve.amountChanged'));
+      } else if (e?.code === 'functions/permission-denied' && /invalid pin/i.test(message)) {
+        showResult('error', t('auth.pinLogin.invalidPin'));
+      } else if (e?.code === 'functions/resource-exhausted' && e?.details?.secondsLeft) {
+        showResult('error', t('pin.lockedOut', { seconds: e.details.secondsLeft }));
+      } else {
+        showResult(
+          'error',
+          message.replace(/^\[.*?\]\s*/, '') || t('common.failedApprovePayment'),
+        );
+      }
     } finally {
+      approving.current = false;
       setLoading(false);
     }
   };
@@ -146,10 +251,17 @@ export default function ApprovePaymentScreen() {
       setStep('result');
     } catch (e: any) {
       triggerHaptic('medium');
-      const msg = e.message?.replace(/^\[.*?\]\s*/, '') || t('common.failedDeclinePayment');
-      setResultKind('error');
-      setResultMessage(msg);
-      setStep('result');
+      const message: string = typeof e?.message === 'string' ? e.message : '';
+      if (/already cancelled/i.test(message)) {
+        showClosed('cancelled');
+      } else if (/expired/i.test(message)) {
+        showClosed('expired');
+      } else {
+        showResult(
+          'error',
+          message.replace(/^\[.*?\]\s*/, '') || t('common.failedDeclinePayment'),
+        );
+      }
     } finally {
       setRejecting(false);
     }
@@ -160,6 +272,8 @@ export default function ApprovePaymentScreen() {
   };
 
   const handleRetryPin = () => {
+    // Back to a live request: let the listener report a cancel or expiry again.
+    resultShown.current = false;
     setPin('');
     setStep('pin');
   };
@@ -190,6 +304,7 @@ export default function ApprovePaymentScreen() {
             {CURRENCY_SYMBOL}{amountFormatted}
           </Text>
           <Text style={styles.amountCardCurrency}>{currency}</Text>
+          {countdown}
         </View>
 
         <View style={styles.detailsCard}>
@@ -236,8 +351,9 @@ export default function ApprovePaymentScreen() {
         </View>
 
         <TouchableOpacity
-          style={styles.acceptButton}
+          style={[styles.acceptButton, lapsed && styles.acceptButtonDisabled]}
           onPress={handleAccept}
+          disabled={lapsed}
           activeOpacity={0.8}
           accessibilityLabel={`Accept and pay ${amountFormatted} ${currency} to ${merchantName}`}
           accessibilityRole="button"
@@ -274,6 +390,7 @@ export default function ApprovePaymentScreen() {
               merchant: merchantName,
             })}
           </Text>
+          {countdown}
         </View>
 
         <Text style={styles.pinLabel}>{t('payments.approve.enterPin')}</Text>
@@ -306,6 +423,7 @@ export default function ApprovePaymentScreen() {
 
   const isSuccess = resultKind === 'approved';
   const isDeclined = resultKind === 'declined';
+  const isClosed = resultKind === 'closed';
   const ringColor = isSuccess ? colors.dark.incoming : isDeclined ? colors.dark.error : colors.dark.warning;
 
   return (
@@ -326,7 +444,9 @@ export default function ApprovePaymentScreen() {
             ? t('payments.approve.success')
             : isDeclined
               ? t('payments.approve.declined')
-              : t('payments.approve.failed')}
+              : isClosed
+                ? closedTitle
+                : t('payments.approve.failed')}
         </Text>
       </Animated.View>
 
@@ -441,6 +561,16 @@ const styles = StyleSheet.create({
     color: colors.dark.accentText,
     marginTop: spacing.xs,
   },
+  countdown: {
+    ...typography.caption,
+    color: colors.dark.textDim,
+    marginTop: spacing.sm,
+    textAlign: 'center',
+    fontVariant: ['tabular-nums'],
+  },
+  countdownLapsed: {
+    color: colors.dark.error,
+  },
 
   detailsCard: {
     backgroundColor: colors.dark.glass,
@@ -486,6 +616,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     alignItems: 'center',
     marginBottom: spacing.sm,
+  },
+  acceptButtonDisabled: {
+    opacity: 0.4,
   },
   acceptButtonText: {
     ...typography.h3,

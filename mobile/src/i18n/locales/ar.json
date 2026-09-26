@@ -984,5 +984,13 @@
   "topup.agent.toppedUp": "تم الشحن!",
   "topup.agent.confirmationId": "رقم التأكيد",
   "topup.agent.failedTitle": "فشل الشحن",
-  "topup.agent.expiredMessage": "انتهت صلاحية هذا الرمز قبل تأكيده. يرجى المحاولة مرة أخرى."
+  "topup.agent.expiredMessage": "انتهت صلاحية هذا الرمز قبل تأكيده. يرجى المحاولة مرة أخرى.",
+  "payments.approve.expiresIn": "ينتهي خلال {{time}}",
+  "payments.approve.expiredNow": "انتهت صلاحية هذا الطلب.",
+  "payments.approve.cancelledTitle": "تم إلغاء الطلب",
+  "payments.approve.cancelledMessage": "ألغى {{merchant}} هذا الطلب. لم تدفع أي مبلغ.",
+  "payments.approve.expiredTitle": "انتهت صلاحية الطلب",
+  "payments.approve.expiredMessage": "انتهى وقت هذا الطلب. لم تدفع أي مبلغ.",
+  "payments.approve.alreadyPaid": "لقد دفعت هذا الطلب بالفعل.",
+  "payments.approve.amountChanged": "المبلغ لا يطابق ما عُرض عليك. اطلب من المتجر إرسال طلب جديد."
 }

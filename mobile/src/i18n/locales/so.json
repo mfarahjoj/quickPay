@@ -984,5 +984,13 @@
   "topup.agent.toppedUp": "Waa la buuxiyay!",
   "topup.agent.confirmationId": "Aqoonsiga Xaqiijinta",
   "topup.agent.failedTitle": "Shubku wuu fashilmay",
-  "topup.agent.expiredMessage": "Koodkani wuu dhacay ka hor inta aan la xaqiijin. Fadlan isku day mar kale."
+  "topup.agent.expiredMessage": "Koodkani wuu dhacay ka hor inta aan la xaqiijin. Fadlan isku day mar kale.",
+  "payments.approve.expiresIn": "Wuxuu dhacayaa {{time}}",
+  "payments.approve.expiredNow": "Codsigan wuu dhacay.",
+  "payments.approve.cancelledTitle": "Codsiga waa la joojiyay",
+  "payments.approve.cancelledMessage": "{{merchant}} ayaa joojiyay codsigan. Wax lacag ah ma aadan bixin.",
+  "payments.approve.expiredTitle": "Codsigu wuu dhacay",
+  "payments.approve.expiredMessage": "Waqtigii codsigan wuu dhammaaday. Wax lacag ah ma aadan bixin.",
+  "payments.approve.alreadyPaid": "Codsigan hore ayaad u bixisay.",
+  "payments.approve.amountChanged": "Qadarku kuma eka kii lagu tusay. Dukaanka ka codso inuu kuu soo diro codsi cusub."
 }

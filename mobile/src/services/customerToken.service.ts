@@ -192,12 +192,21 @@ export async function createPaymentRequest(
   return data.data;
 }
 
+/**
+ * Approve a shop's charge. `expectedAmount` is the amount the customer was
+ * shown; the server refuses if the charge says anything else.
+ */
 export async function approvePayment(
   requestId: string,
-  pin: string
+  pin: string,
+  expectedAmount?: number
 ): Promise<{ transactionId: string; amount: number }> {
   const fn = functions().httpsCallable('approvePaymentRequest');
-  const result = await fn({ requestId, pin });
+  const result = await fn({
+    requestId,
+    pin,
+    ...(expectedAmount !== undefined ? { expectedAmount } : {}),
+  });
   const data = result.data as {
     success: boolean;
     error?: string;
