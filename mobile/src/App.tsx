@@ -57,7 +57,9 @@ function AppContent() {
         apple: __DEV__
           ? { provider: 'debug', debugToken: '283DB4D1-8021-4A99-AF78-64C1125D0A13' }
           : { provider: 'appAttestWithDeviceCheckFallback' },
-        android: { provider: __DEV__ ? 'debug' : 'playIntegrity' },
+        android: __DEV__
+          ? { provider: 'debug', debugToken: 'D43FA50C-9835-4CC6-AAB7-B7CF0E2C2784' }
+          : { provider: 'playIntegrity' },
       });
       firebase.appCheck().initializeAppCheck({ provider, isTokenAutoRefreshEnabled: true });
     } catch {
