@@ -20,6 +20,8 @@ import {
   TEXT_FAINT,
 } from '../../components';
 import { SuccessCheckIcon, CloseIcon } from '../../components/icons/AuthIcons';
+import { formatCents } from '../../utils/money';
+import { isWrongPin, pinActionErrorKey } from '../../utils/errors';
 
 type Step = 'enter' | 'pin' | 'processing' | 'success' | 'error';
 
@@ -36,13 +38,15 @@ export default function ConfirmCashOutScreen({ navigation }: Props) {
   const [pin, setPin] = useState('');
   const [result, setResult] = useState<{ amount: number; customerName: string; commission: number } | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
+  const [pinError, setPinError] = useState('');
 
   const handleConfirm = () => {
     if (otp.length !== 6) {
-      Alert.alert('Invalid Code', 'Please enter the 6-digit code from the customer.');
+      Alert.alert(t('cashout.confirm.invalidCodeTitle'), t('agent.enterCustomerCode'));
       return;
     }
     setPin('');
+    setPinError('');
     setStep('pin');
   };
 
@@ -55,8 +59,15 @@ export default function ConfirmCashOutScreen({ navigation }: Props) {
       setResult(data);
       setStep('success');
     } catch (e: any) {
-      setErrorMsg(e.message || 'Failed to confirm cash-out');
-      setStep('error');
+      // The PIN is checked before the code is looked up, so a wrong PIN costs
+      // no code guess: keep the code and ask for the PIN again.
+      if (isWrongPin(e)) {
+        setPinError(t('errors.wrongPin'));
+        setStep('pin');
+      } else {
+        setErrorMsg(t(pinActionErrorKey(e)));
+        setStep('error');
+      }
     } finally {
       setPin('');
     }
@@ -66,23 +77,19 @@ export default function ConfirmCashOutScreen({ navigation }: Props) {
     return (
       <DarkScreen edges={[]} contentStyle={styles.resultWrap}>
         <SuccessCheckIcon size={72} />
-        <Text style={styles.resultTitle}>Cash Out Confirmed</Text>
-        <Text style={styles.resultAmount}>
-          ${(result.amount / 100).toFixed(2)}
-        </Text>
+        <Text style={styles.resultTitle}>{t('cashout.confirm.successTitle')}</Text>
+        <Text style={styles.resultAmount}>{formatCents(result.amount)}</Text>
         <Text style={styles.resultSub}>
-          Paid to {result.customerName}
+          {t('cashout.confirm.paidTo', { name: result.customerName })}
         </Text>
         {result.commission > 0 && (
           <GlassCard style={styles.commissionCard}>
-            <Text style={styles.commissionLabel}>YOUR COMMISSION</Text>
-            <Text style={styles.commissionValue}>
-              +${(result.commission / 100).toFixed(2)}
-            </Text>
+            <Text style={styles.commissionLabel}>{t('agent.yourCommission')}</Text>
+            <Text style={styles.commissionValue}>+{formatCents(result.commission)}</Text>
           </GlassCard>
         )}
         <View style={styles.resultBtn}>
-          <PillButton label="Done" onPress={() => navigation.goBack()} />
+          <PillButton label={t('common.done')} onPress={() => navigation.goBack()} />
         </View>
       </DarkScreen>
     );
@@ -94,11 +101,11 @@ export default function ConfirmCashOutScreen({ navigation }: Props) {
         <View style={styles.failIcon}>
           <CloseIcon size={32} color="#FF6961" />
         </View>
-        <Text style={styles.resultTitle}>Code Not Found</Text>
+        <Text style={styles.resultTitle}>{t('agent.couldNotConfirm')}</Text>
         <Text style={styles.resultSub}>{errorMsg}</Text>
         <View style={styles.resultBtn}>
           <PillButton
-            label="Try Again"
+            label={t('common.tryAgain')}
             variant="glass"
             onPress={() => { setStep('enter'); setOtp(''); setErrorMsg(''); }}
           />
@@ -111,7 +118,7 @@ export default function ConfirmCashOutScreen({ navigation }: Props) {
     return (
       <DarkScreen edges={[]} contentStyle={styles.resultWrap}>
         <ActivityIndicator size="large" color={ACCENT} />
-        <Text style={styles.processingText}>Verifying code…</Text>
+        <Text style={styles.processingText}>{t('cashout.confirm.processing')}</Text>
       </DarkScreen>
     );
   }
@@ -123,16 +130,21 @@ export default function ConfirmCashOutScreen({ navigation }: Props) {
         <Text style={styles.resultSub}>{t('cashout.confirm.pinSubtitle')}</Text>
         <PinInput
           value={pin}
-          onChange={setPin}
+          onChange={(value) => {
+            setPin(value);
+            if (pinError) setPinError('');
+          }}
           onComplete={submit}
           style={styles.pinInput}
         />
+        {pinError ? <Text style={styles.pinError}>{pinError}</Text> : null}
         <View style={styles.resultBtn}>
           <PillButton
             label={t('common.cancel')}
             variant="glass"
             onPress={() => {
               setPin('');
+              setPinError('');
               setStep('enter');
             }}
           />
@@ -148,18 +160,18 @@ export default function ConfirmCashOutScreen({ navigation }: Props) {
           <Text style={styles.backArrow}>‹</Text>
         </TouchableOpacity>
         <View>
-          <Text style={styles.title}>Confirm Cash Out</Text>
-          <Text style={styles.subtitle}>Enter the 6-digit code from the customer</Text>
+          <Text style={styles.title}>{t('cashout.confirm.title')}</Text>
+          <Text style={styles.subtitle}>{t('agent.enterCustomerCode')}</Text>
         </View>
       </View>
 
       <View style={styles.body}>
-        <Text style={styles.label}>CUSTOMER CODE</Text>
+        <Text style={styles.label}>{t('cashout.confirm.codeLabel')}</Text>
         <GlassCard style={styles.otpCard}>
           <TextInput
             style={styles.otpInput}
             value={otp}
-            onChangeText={(t) => setOtp(t.replace(/\D/g, '').slice(0, 6))}
+            onChangeText={(v) => setOtp(v.replace(/\D/g, '').slice(0, 6))}
             keyboardType="number-pad"
             maxLength={6}
             placeholder="— — — — — —"
@@ -169,17 +181,17 @@ export default function ConfirmCashOutScreen({ navigation }: Props) {
         </GlassCard>
 
         <GlassCard style={styles.infoCard}>
-          <Text style={styles.infoTitle}>How to complete a cash-out</Text>
-          <Text style={styles.infoStep}>1. Customer shows you a 6-digit code from their app</Text>
-          <Text style={styles.infoStep}>2. Enter the code above and tap Confirm</Text>
-          <Text style={styles.infoStep}>3. Hand the customer their cash</Text>
-          <Text style={styles.infoStep}>4. You earn a commission automatically</Text>
+          <Text style={styles.infoTitle}>{t('cashout.confirm.howTitle')}</Text>
+          <Text style={styles.infoStep}>{t('cashout.confirm.how1')}</Text>
+          <Text style={styles.infoStep}>{t('cashout.confirm.how2')}</Text>
+          <Text style={styles.infoStep}>{t('cashout.confirm.how3')}</Text>
+          <Text style={styles.infoStep}>{t('cashout.confirm.how4')}</Text>
         </GlassCard>
       </View>
 
       <View style={styles.footer}>
         <PillButton
-          label="Confirm & Pay Cash"
+          label={t('cashout.confirm.submit')}
           onPress={handleConfirm}
           disabled={otp.length !== 6}
         />
@@ -239,5 +251,6 @@ const styles = StyleSheet.create({
   commissionValue: { fontSize: 28, fontWeight: '800', color: '#34C77B', marginTop: 4 },
   resultBtn: { alignSelf: 'stretch', marginTop: 28 },
   pinInput: { marginTop: 28 },
+  pinError: { fontSize: 14, color: '#FF6961', textAlign: 'center', marginTop: 16 },
   processingText: { fontSize: 16, color: TEXT_DIM, marginTop: 20 },
 });

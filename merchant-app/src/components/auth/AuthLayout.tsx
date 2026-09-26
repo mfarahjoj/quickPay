@@ -10,6 +10,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { ChevronLeftIcon } from '../icons/AuthIcons';
 import { StepProgress } from './StepProgress';
 import { colors, spacing } from '../../theme';
@@ -35,6 +36,7 @@ export function AuthLayout({
   topRight,
   variant = 'light',
 }: AuthLayoutProps) {
+  const { t } = useTranslation();
   const dark = variant === 'dark';
   const body = (
     <>
@@ -43,7 +45,7 @@ export function AuthLayout({
           <TouchableOpacity
             style={[styles.backBtn, dark && styles.backBtnDark]}
             onPress={onBack}
-            accessibilityLabel="Back"
+            accessibilityLabel={t('common.back')}
           >
             <ChevronLeftIcon color={dark ? colors.hero.text : colors.text.primary} />
           </TouchableOpacity>

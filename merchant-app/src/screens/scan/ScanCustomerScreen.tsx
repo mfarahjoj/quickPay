@@ -189,24 +189,22 @@ export default function ScanCustomerScreen() {
               onPress={() => { setScanError(null); setIsScanning(true); isProcessing.current = false; }}
             >
               <Text style={styles.errorText}>{scanError}</Text>
-              <Text style={styles.tapRetry}>Tap to retry</Text>
+              <Text style={styles.tapRetry}>{t('scan.tapRetry')}</Text>
             </TouchableOpacity>
           ) : loading ? (
             <View style={styles.hintBox}>
               <ActivityIndicator color="#fff" size="small" />
-              <Text style={styles.hintText}>Verifying customer…</Text>
+              <Text style={styles.hintText}>{t('scan.verifying')}</Text>
             </View>
           ) : hasPermission === false ? (
             <View style={styles.hintBox}>
               <Text style={styles.hintText}>
-                {CAMERA_NATIVE_AVAILABLE
-                  ? 'Camera permission denied. Use manual entry below.'
-                  : 'Camera not available on simulator. Use manual entry below.'}
+                {CAMERA_NATIVE_AVAILABLE ? t('scan.cameraDenied') : t('scan.cameraUnavailable')}
               </Text>
             </View>
           ) : (
             <View style={styles.hintBox}>
-              <Text style={styles.hintText}>{t('scan.title', 'Point at customer QR code')}</Text>
+              <Text style={styles.hintText}>{t('scan.cameraHint')}</Text>
             </View>
           )}
         </View>

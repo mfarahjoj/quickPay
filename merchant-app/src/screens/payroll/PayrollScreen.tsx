@@ -11,8 +11,10 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { functions } from '../../services/firebase.config';
-import { DarkScreen, GlassCard, PillButton, ACCENT, TEXT_DIM, TEXT_FAINT } from '../../components';
+import { GlassCard, PillButton, ACCENT, TEXT_DIM, TEXT_FAINT } from '../../components';
+import { pinActionErrorKey } from '../../utils/errors';
 
 type Step = 'build' | 'review' | 'pin' | 'processing' | 'result';
 
@@ -46,11 +48,19 @@ function newEmployee(): Employee {
   return { id: Math.random().toString(36).slice(2), name: '', phone: '', amount: '' };
 }
 
+/** Per-employee failures come back as English server text; show ours instead. */
+function reasonKey(reason: string): string {
+  if (/no quickpay account/i.test(reason)) return 'payroll.reason.noAccount';
+  if (/insufficient|balance/i.test(reason)) return 'errors.insufficientBalance';
+  return 'payroll.reason.failed';
+}
+
 interface Props {
   navigation: any;
 }
 
 export default function PayrollScreen({ navigation }: Props) {
+  const { t } = useTranslation();
   const [step, setStep] = useState<Step>('build');
   const [employees, setEmployees] = useState<Employee[]>([newEmployee()]);
   const [label, setLabel] = useState('');
@@ -85,7 +95,7 @@ export default function PayrollScreen({ navigation }: Props) {
   // ─── Navigation between steps ──────────────────────────
   const goReview = () => {
     if (validEmployees.length === 0) {
-      Alert.alert('No valid entries', 'Add at least one employee with a phone number and amount.');
+      Alert.alert(t('payroll.noValidTitle'), t('payroll.noValidMessage'));
       return;
     }
     setStep('review');
@@ -93,8 +103,10 @@ export default function PayrollScreen({ navigation }: Props) {
 
   const goPin = () => setStep('pin');
 
-  const handleRunPayroll = async () => {
-    if (pin.length < 4) return;
+  // Takes the PIN as an argument: the keypad submits on the sixth digit from
+  // inside the same render that set it, where `pin` still holds five.
+  const handleRunPayroll = async (enteredPin: string = pin) => {
+    if (enteredPin.length < 6) return;
     setStep('processing');
     try {
       const fn = functions().httpsCallable('payrollPayout');
@@ -105,7 +117,7 @@ export default function PayrollScreen({ navigation }: Props) {
           name: e.name.trim() || undefined,
         })),
         currency: CURRENCY,
-        pin,
+        pin: enteredPin,
         payrollLabel: label.trim() || undefined,
       });
       const data = res.data as any;
@@ -117,7 +129,8 @@ export default function PayrollScreen({ navigation }: Props) {
       });
       setStep('result');
     } catch (e: any) {
-      Alert.alert('Payroll failed', e.message || 'Could not process payroll.');
+      Alert.alert(t('payroll.failedTitle'), t(pinActionErrorKey(e)));
+      setPin('');
       setStep('pin');
     }
   };
@@ -140,11 +153,11 @@ export default function PayrollScreen({ navigation }: Props) {
           <Text style={styles.backChevron}>‹</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
-          {step === 'build' ? 'Payroll'
-            : step === 'review' ? 'Review'
-            : step === 'pin' ? 'Confirm'
-            : step === 'processing' ? 'Processing…'
-            : 'Done'}
+          {step === 'build' ? t('payroll.title')
+            : step === 'review' ? t('payroll.header.review')
+            : step === 'pin' ? t('payroll.header.confirm')
+            : step === 'processing' ? t('payroll.header.processing')
+            : t('common.done')}
         </Text>
         <View style={styles.headerRight} />
       </View>
@@ -159,18 +172,18 @@ export default function PayrollScreen({ navigation }: Props) {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            <Text style={styles.stepTitle}>Add employees</Text>
-            <Text style={styles.stepSubtitle}>Enter phone numbers and salary amounts. Only Zapp Pay accounts receive funds.</Text>
+            <Text style={styles.stepTitle}>{t('payroll.addTitle')}</Text>
+            <Text style={styles.stepSubtitle}>{t('payroll.addSubtitle')}</Text>
 
             {/* Payroll label */}
             <View style={styles.field}>
-              <Text style={styles.fieldLabel}>PAYROLL LABEL (OPTIONAL)</Text>
+              <Text style={styles.fieldLabel}>{t('payroll.labelField')}</Text>
               <View style={styles.inputBox}>
                 <TextInput
                   style={styles.input}
                   value={label}
                   onChangeText={setLabel}
-                  placeholder="e.g. June 2026 Salaries"
+                  placeholder={t('payroll.labelPlaceholder')}
                   placeholderTextColor="rgba(255,255,255,0.2)"
                 />
               </View>
@@ -194,7 +207,7 @@ export default function PayrollScreen({ navigation }: Props) {
                       style={styles.input}
                       value={emp.name}
                       onChangeText={(v) => updateEmployee(emp.id, 'name', v)}
-                      placeholder="Name (optional)"
+                      placeholder={t('payroll.namePlaceholder')}
                       placeholderTextColor="rgba(255,255,255,0.2)"
                       autoCapitalize="words"
                     />
@@ -228,18 +241,20 @@ export default function PayrollScreen({ navigation }: Props) {
             ))}
 
             <TouchableOpacity style={styles.addRow} onPress={addRow} activeOpacity={0.7}>
-              <Text style={styles.addRowText}>+ Add Employee</Text>
+              <Text style={styles.addRowText}>{t('payroll.addEmployee')}</Text>
             </TouchableOpacity>
 
             {/* Total */}
             <GlassCard style={styles.totalCard}>
-              <Text style={styles.totalLabel}>Total payout</Text>
+              <Text style={styles.totalLabel}>{t('payroll.total')}</Text>
               <Text style={styles.totalAmount}>{formatUsd(totalCents)}</Text>
-              <Text style={styles.totalSub}>{validEmployees.length} of {employees.length} entries valid</Text>
+              <Text style={styles.totalSub}>
+                {t('payroll.validCount', { valid: validEmployees.length, total: employees.length })}
+              </Text>
             </GlassCard>
 
             <PillButton
-              label={`Review Payroll (${validEmployees.length})`}
+              label={t('payroll.reviewButton', { count: validEmployees.length })}
               onPress={goReview}
               disabled={validEmployees.length === 0}
               style={{ marginTop: 12 }}
@@ -250,10 +265,12 @@ export default function PayrollScreen({ navigation }: Props) {
         {/* ── REVIEW STEP ─────────────────────────────── */}
         {step === 'review' && (
           <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-            <Text style={styles.stepTitle}>Review payroll</Text>
+            <Text style={styles.stepTitle}>{t('payroll.reviewTitle')}</Text>
             {label ? <Text style={styles.labelBadge}>{label}</Text> : null}
             <Text style={styles.stepSubtitle}>
-              {formatUsd(validEmployees.reduce((s, e) => s + parseCents(e.amount), 0))} will be deducted from your balance.
+              {t('payroll.willDeduct', {
+                amount: formatUsd(validEmployees.reduce((s, e) => s + parseCents(e.amount), 0)),
+              })}
             </Text>
 
             {validEmployees.map((emp, i) => (
@@ -266,16 +283,18 @@ export default function PayrollScreen({ navigation }: Props) {
               </GlassCard>
             ))}
 
-            <PillButton label="Confirm & Enter PIN" onPress={goPin} style={{ marginTop: 16 }} />
+            <PillButton label={t('payroll.confirmAndPin')} onPress={goPin} style={{ marginTop: 16 }} />
           </ScrollView>
         )}
 
         {/* ── PIN STEP ────────────────────────────────── */}
         {step === 'pin' && (
           <View style={styles.pinContainer}>
-            <Text style={styles.stepTitle}>Enter your PIN</Text>
+            <Text style={styles.stepTitle}>{t('payroll.pinTitle')}</Text>
             <Text style={styles.stepSubtitle}>
-              Authorise payment of {formatUsd(validEmployees.reduce((s, e) => s + parseCents(e.amount), 0))} to {validEmployees.length} employees.
+              {t('payroll.pinSubtitle', {
+                amount: formatUsd(validEmployees.reduce((s, e) => s + parseCents(e.amount), 0)),
+              })}
             </Text>
 
             <View style={styles.pinDots}>
@@ -300,7 +319,7 @@ export default function PayrollScreen({ navigation }: Props) {
                       setPin(next);
                       if (next.length === 6) {
                         // auto-submit at 6 digits
-                        setTimeout(() => handleRunPayroll(), 100);
+                        setTimeout(() => handleRunPayroll(next), 100);
                       }
                     }
                   }}
@@ -311,9 +330,9 @@ export default function PayrollScreen({ navigation }: Props) {
             </View>
 
             <PillButton
-              label="Run Payroll"
-              onPress={handleRunPayroll}
-              disabled={pin.length < 4 || loading}
+              label={t('payroll.run')}
+              onPress={() => handleRunPayroll()}
+              disabled={pin.length < 6 || loading}
               style={{ marginTop: 24 }}
             />
           </View>
@@ -323,8 +342,8 @@ export default function PayrollScreen({ navigation }: Props) {
         {step === 'processing' && (
           <View style={styles.centerContent}>
             <ActivityIndicator size="large" color={ACCENT} />
-            <Text style={styles.processingText}>Processing {validEmployees.length} transfers…</Text>
-            <Text style={styles.processingSubtext}>This may take a moment</Text>
+            <Text style={styles.processingText}>{t('payroll.processing')}</Text>
+            <Text style={styles.processingSubtext}>{t('payroll.processingSub')}</Text>
           </View>
         )}
 
@@ -335,10 +354,14 @@ export default function PayrollScreen({ navigation }: Props) {
             <GlassCard style={[styles.resultBanner, summary.failedCount === 0 && styles.resultBannerSuccess]}>
               <Text style={styles.resultEmoji}>{summary.failedCount === 0 ? '✓' : '⚠'}</Text>
               <Text style={styles.resultBannerTitle}>
-                {summary.failedCount === 0 ? 'Payroll complete' : 'Partially complete'}
+                {summary.failedCount === 0 ? t('payroll.completeTitle') : t('payroll.partialTitle')}
               </Text>
               <Text style={styles.resultBannerSub}>
-                {summary.successCount} paid · {summary.failedCount} failed · {formatUsd(summary.totalPaid)} sent
+                {t('payroll.resultSummary', {
+                  paid: summary.successCount,
+                  failed: summary.failedCount,
+                  amount: formatUsd(summary.totalPaid),
+                })}
               </Text>
             </GlassCard>
 
@@ -346,7 +369,7 @@ export default function PayrollScreen({ navigation }: Props) {
               <GlassCard key={i} style={[styles.reviewRow, r.status === 'failed' && styles.reviewRowFailed]}>
                 <View style={styles.reviewLeft}>
                   <Text style={styles.reviewName}>{r.name || r.phone}</Text>
-                  {r.reason ? <Text style={styles.errorReason}>{r.reason}</Text> : null}
+                  {r.reason ? <Text style={styles.errorReason}>{t(reasonKey(r.reason))}</Text> : null}
                 </View>
                 <View style={styles.resultRight}>
                   <Text style={[styles.reviewAmount, r.status === 'failed' && styles.amountFailed]}>
@@ -359,7 +382,7 @@ export default function PayrollScreen({ navigation }: Props) {
               </GlassCard>
             ))}
 
-            <PillButton label="Done" onPress={() => navigation.goBack()} style={{ marginTop: 16 }} />
+            <PillButton label={t('common.done')} onPress={() => navigation.goBack()} style={{ marginTop: 16 }} />
           </ScrollView>
         )}
 

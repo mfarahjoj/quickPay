@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   View,
   TextInput,
@@ -31,6 +32,7 @@ export function CodeInput({
   autoFocus = true,
   otpMode = false,
 }: CodeInputProps) {
+  const { t } = useTranslation();
   const inputRefs = useRef<Array<TextInput | null>>([]);
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const [focusedIndex, setFocusedIndex] = useState<number | null>(autoFocus ? 0 : null);
@@ -116,7 +118,7 @@ export function CodeInput({
                 autoFocus={autoFocus && index === 0}
                 textContentType={otpMode && index === 0 ? 'oneTimeCode' : 'none'}
                 autoComplete={otpMode && index === 0 ? (Platform.OS === 'android' ? 'sms-otp' : 'one-time-code') : 'off'}
-                accessibilityLabel={`Digit ${index + 1}`}
+                accessibilityLabel={t('common.digit', { n: index + 1 })}
               />
             </View>
           );

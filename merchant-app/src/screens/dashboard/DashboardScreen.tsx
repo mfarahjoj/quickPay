@@ -104,13 +104,13 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
     ...(isMerchantRole ? [
       { key: 'qr', label: t('dashboard.quickActions.generateQR'), Icon: QrIcon, route: 'GenerateQR' },
       { key: 'scan', label: t('dashboard.quickActions.scanAndCharge'), Icon: ScanIcon, route: 'ScanCharge' },
-      { key: 'payroll', label: 'Payroll', Icon: HistoryIcon, route: 'Payroll' },
+      { key: 'payroll', label: t('dashboard.quickActions.payroll'), Icon: HistoryIcon, route: 'Payroll' },
       { key: 'payout', label: t('dashboard.quickActions.getPaid'), Icon: TopUpIcon, route: 'Payout' },
     ] : []),
     ...(isAgentRole ? [
       { key: 'topup', label: t('dashboard.quickActions.topUpCustomer'), Icon: TopUpIcon, route: 'TopupCustomer' },
       { key: 'confirmTopup', label: t('dashboard.quickActions.confirmTopUp'), Icon: TopUpIcon, route: 'ConfirmTopup' },
-      { key: 'cashout', label: 'Confirm Cash Out', Icon: TopUpIcon, route: 'ConfirmCashOut' },
+      { key: 'cashout', label: t('dashboard.quickActions.confirmCashOut'), Icon: TopUpIcon, route: 'ConfirmCashOut' },
       { key: 'history', label: t('dashboard.quickActions.topUpHistory'), Icon: HistoryIcon, route: 'TopupHistory' },
     ] : []),
     ...(!isMerchantRole && !isAgentRole ? [

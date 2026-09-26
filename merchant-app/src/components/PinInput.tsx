@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
 import { View, TextInput, StyleSheet, StyleProp, ViewStyle } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { colors, typography, spacing, borderRadius } from '../theme';
 
 const PIN_LENGTH = 6;
@@ -19,6 +20,7 @@ export function PinInput({
   style,
   secure = true,
 }: PinInputProps) {
+  const { t } = useTranslation();
   const inputRefs = useRef<Array<TextInput | null>>([]);
   const digits = value.split('').concat(Array(PIN_LENGTH - value.length).fill(''));
 
@@ -64,7 +66,7 @@ export function PinInput({
           maxLength={1}
           selectTextOnFocus
           secureTextEntry={secure}
-          accessibilityLabel={`PIN digit ${index + 1}`}
+          accessibilityLabel={t('common.pinDigit', { n: index + 1 })}
         />
       ))}
     </View>

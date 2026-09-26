@@ -25,6 +25,8 @@ import {
   TEXT_FAINT,
 } from '../../components';
 import { SuccessCheckIcon, CloseIcon, ScanIcon } from '../../components/icons/AuthIcons';
+import { formatCents } from '../../utils/money';
+import { isWrongPin, pinActionErrorKey } from '../../utils/errors';
 
 // VisionCamera v3 crashes at module level on the simulator — guard before hooks.
 const CAMERA_NATIVE_AVAILABLE =
@@ -118,6 +120,7 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
   // holding the phone is the agent whose float is about to be spent.
   const [pendingCode, setPendingCode] = useState('');
   const [pin, setPin] = useState('');
+  const [pinError, setPinError] = useState('');
   const isProcessing = useRef(false);
 
   useFocusEffect(
@@ -137,17 +140,25 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
       setResult((res.data as any).data);
       setStep('success');
     } catch (e: any) {
-      setErrorMsg(e.message || 'Failed to confirm top-up');
-      setStep('error');
+      // The PIN is checked before the code is looked up, so a wrong PIN costs
+      // no code guess: keep the scanned code and ask for the PIN again.
+      if (isWrongPin(e)) {
+        setPinError(t('errors.wrongPin'));
+        setStep('pin');
+      } else {
+        setErrorMsg(t(pinActionErrorKey(e)));
+        setStep('error');
+      }
     } finally {
       setPin('');
       isProcessing.current = false;
     }
-  }, []);
+  }, [t]);
 
   const askForPin = useCallback((code: string) => {
     setPendingCode(code);
     setPin('');
+    setPinError('');
     setStep('pin');
   }, []);
 
@@ -156,19 +167,19 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
       if (isProcessing.current) return;
       const code = extractCode(value);
       if (!code) {
-        setScanError('Not a Zapp top-up code');
+        setScanError(t('topup.confirm.notTopupCode'));
         return;
       }
       Vibration.vibrate(80);
       askForPin(code);
     },
-    [askForPin],
+    [askForPin, t],
   );
 
   const handleManual = () => {
     const code = extractCode(manual);
     if (!code) {
-      setScanError('Enter the 6-digit code from the customer');
+      setScanError(t('agent.enterCustomerCode'));
       return;
     }
     askForPin(code);
@@ -178,21 +189,23 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
     return (
       <DarkScreen edges={[]} contentStyle={styles.resultWrap}>
         <SuccessCheckIcon size={72} />
-        <Text style={styles.resultTitle}>Top-Up Confirmed</Text>
-        <Text style={styles.resultAmount}>${(result.amount / 100).toFixed(2)}</Text>
-        <Text style={styles.resultSub}>Credited to {result.customerName}</Text>
+        <Text style={styles.resultTitle}>{t('topup.confirm.successTitle')}</Text>
+        <Text style={styles.resultAmount}>{formatCents(result.amount)}</Text>
+        <Text style={styles.resultSub}>
+          {t('topup.confirm.creditedTo', { name: result.customerName })}
+        </Text>
         <GlassCard style={styles.confCard}>
-          <Text style={styles.confLabel}>CONFIRMATION ID</Text>
+          <Text style={styles.confLabel}>{t('topup.confirm.confirmationId')}</Text>
           <Text style={styles.confValue}>{shortConfirmation(result.confirmationId)}</Text>
         </GlassCard>
         {result.commission > 0 && (
           <GlassCard style={styles.commissionCard}>
-            <Text style={styles.commissionLabel}>YOUR COMMISSION</Text>
-            <Text style={styles.commissionValue}>+${(result.commission / 100).toFixed(2)}</Text>
+            <Text style={styles.commissionLabel}>{t('agent.yourCommission')}</Text>
+            <Text style={styles.commissionValue}>+{formatCents(result.commission)}</Text>
           </GlassCard>
         )}
         <View style={styles.resultBtn}>
-          <PillButton label="Done" onPress={() => navigation.goBack()} />
+          <PillButton label={t('common.done')} onPress={() => navigation.goBack()} />
         </View>
       </DarkScreen>
     );
@@ -204,11 +217,11 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
         <View style={styles.failIcon}>
           <CloseIcon size={32} color="#FF6961" />
         </View>
-        <Text style={styles.resultTitle}>Couldn’t Confirm</Text>
+        <Text style={styles.resultTitle}>{t('agent.couldNotConfirm')}</Text>
         <Text style={styles.resultSub}>{errorMsg}</Text>
         <View style={styles.resultBtn}>
           <PillButton
-            label="Try Again"
+            label={t('common.tryAgain')}
             variant="glass"
             onPress={() => {
               setStep('capture');
@@ -230,16 +243,21 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
         <Text style={styles.resultSub}>{t('topup.confirm.pinSubtitle')}</Text>
         <PinInput
           value={pin}
-          onChange={setPin}
+          onChange={(value) => {
+            setPin(value);
+            if (pinError) setPinError('');
+          }}
           onComplete={(entered) => confirm(pendingCode, entered)}
           style={styles.pinInput}
         />
+        {pinError ? <Text style={styles.pinError}>{pinError}</Text> : null}
         <View style={styles.resultBtn}>
           <PillButton
             label={t('common.cancel')}
             variant="glass"
             onPress={() => {
               setPin('');
+              setPinError('');
               setPendingCode('');
               setScanError(null);
               isProcessing.current = false;
@@ -255,7 +273,7 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
     return (
       <DarkScreen edges={[]} contentStyle={styles.resultWrap}>
         <ActivityIndicator size="large" color={ACCENT} />
-        <Text style={styles.processingText}>Confirming top-up…</Text>
+        <Text style={styles.processingText}>{t('topup.confirm.processing')}</Text>
       </DarkScreen>
     );
   }
@@ -296,7 +314,7 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
         <View style={styles.bottomOverlay}>
           <View style={styles.hintBox}>
             <Text style={styles.hintText}>
-              {scanError || 'Scan the customer’s top-up QR'}
+              {scanError || t('topup.confirm.scanHint')}
             </Text>
           </View>
         </View>
@@ -306,7 +324,7 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Text style={styles.backArrow}>‹</Text>
         </TouchableOpacity>
-        <Text style={styles.topBarTitle}>Confirm Top-Up</Text>
+        <Text style={styles.topBarTitle}>{t('topup.confirm.title')}</Text>
         <View style={styles.topBarSpacer} />
       </View>
 
@@ -318,14 +336,14 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
         <View style={styles.manualSection}>
           <View style={styles.orRow}>
             <View style={styles.orLine} />
-            <Text style={styles.orText}>OR ENTER CODE</Text>
+            <Text style={styles.orText}>{t('topup.confirm.orEnterCode')}</Text>
             <View style={styles.orLine} />
           </View>
           <GlassCard style={styles.inputCard}>
             <TextInput
               style={styles.otpInput}
               value={manual}
-              onChangeText={(t) => { setManual(t.replace(/\D/g, '').slice(0, 6)); setScanError(null); }}
+              onChangeText={(v) => { setManual(v.replace(/\D/g, '').slice(0, 6)); setScanError(null); }}
               keyboardType="number-pad"
               maxLength={6}
               placeholder="— — — — — —"
@@ -333,7 +351,7 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
             />
           </GlassCard>
           <PillButton
-            label="Confirm & Credit"
+            label={t('topup.confirm.submit')}
             onPress={handleManual}
             disabled={extractCode(manual) === null}
             style={styles.verifyBtn}
@@ -426,5 +444,6 @@ const styles = StyleSheet.create({
   commissionValue: { fontSize: 26, fontWeight: '800', color: '#34C77B', marginTop: 4 },
   resultBtn: { alignSelf: 'stretch', marginTop: 28 },
   pinInput: { marginTop: 28 },
+  pinError: { fontSize: 14, color: '#FF6961', textAlign: 'center', marginTop: 16 },
   processingText: { fontSize: 16, color: TEXT_DIM, marginTop: 20 },
 });

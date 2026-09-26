@@ -225,9 +225,9 @@ export default function MerchantRoleSelectScreen({
 
         {/* Section label — explicitly tells users both is an option */}
         <Animated.View style={[styles.selectLabelRow, { opacity: card0Opacity }]}>
-          <Text style={styles.selectLabel}>Pick one</Text>
+          <Text style={styles.selectLabel}>{t('auth.onboarding.role.pickOne')}</Text>
           <View style={styles.selectLabelDot} />
-          <Text style={styles.selectLabelBoth}>or select both</Text>
+          <Text style={styles.selectLabelBoth}>{t('auth.onboarding.role.orSelectBoth')}</Text>
         </Animated.View>
 
         {/* Role cards */}
@@ -294,7 +294,7 @@ export default function MerchantRoleSelectScreen({
                 }}
                 activeOpacity={0.7}
               >
-                <Text style={styles.selectBothText}>I do both  ⚡</Text>
+                <Text style={styles.selectBothText}>{`${t('auth.onboarding.role.iDoBoth')}  ⚡`}</Text>
               </TouchableOpacity>
             )}
           </Animated.View>
@@ -313,7 +313,7 @@ export default function MerchantRoleSelectScreen({
             disabled={!canSubmit || loading}
           >
             <Text style={[styles.ctaText, (!canSubmit || loading) && styles.ctaTextDisabled]}>
-              {loading ? 'Setting up…' : t('auth.onboarding.role.completeRegistration')}
+              {loading ? t('auth.splash.settingUp') : t('auth.onboarding.role.completeRegistration')}
             </Text>
           </TouchableOpacity>
         </Animated.View>

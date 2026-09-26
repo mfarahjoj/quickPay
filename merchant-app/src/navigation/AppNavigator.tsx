@@ -219,7 +219,7 @@ function MainStackNavigator() {
       <MainStack.Screen
         name="ConfirmCashOut"
         getComponent={() => require('../screens/cashout/ConfirmCashOutScreen').default}
-        options={{ title: 'Confirm Cash Out', presentation: 'modal' }}
+        options={{ headerShown: false, presentation: 'modal' }}
       />
       <MainStack.Screen
         name="ConfirmTopup"

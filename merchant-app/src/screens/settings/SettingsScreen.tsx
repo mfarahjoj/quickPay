@@ -96,10 +96,10 @@ export default function SettingsScreen() {
       {/* Agent profile */}
       {isAgent && (
         <>
-          <Text style={styles.sectionLabel}>Agent</Text>
+          <Text style={styles.sectionLabel}>{t('settings.section.agent')}</Text>
           <GlassCard style={[styles.sectionCard, { paddingHorizontal: 16 }]}>
             <TappableRow
-              label="Update Agent Profile"
+              label={t('settings.updateAgentProfile')}
               onPress={() => navigation.navigate('AgentProfileEdit')}
             />
           </GlassCard>

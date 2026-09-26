@@ -18,15 +18,29 @@ import {
   PayoutRecord,
   PayoutRoute,
 } from '../../services/payout.service';
+import { useWallet } from '../../hooks/useWallet';
 import { toCents, formatCents, sanitizeAmountInput } from '../../utils/money';
-import { callableErrorKey } from '../../utils/errors';
+import { isWrongPin, pinActionErrorKey } from '../../utils/errors';
 
 type Step = 'form' | 'pin' | 'sent';
 
 const ROUTES: PayoutRoute[] = ['bank', 'zaad', 'edahab', 'cash'];
 
+/** Mirrors MIN_PAYOUT_CENTS in functions/src/payouts/requestPayout.ts. */
+const MIN_PAYOUT_CENTS = 500;
+
+function payoutErrorKey(error: any): string {
+  const message: string = typeof error?.message === 'string' ? error.message : '';
+  if (error?.code === 'functions/resource-exhausted' && /payouts waiting/i.test(message)) {
+    return 'payout.tooManyOpen';
+  }
+  if (error?.code === 'functions/invalid-argument') return 'payout.checkDetails';
+  return pinActionErrorKey(error);
+}
+
 export default function PayoutScreen() {
   const { t } = useTranslation();
+  const { wallet } = useWallet();
 
   const [step, setStep] = useState<Step>('form');
   const [amount, setAmount] = useState('');
@@ -34,15 +48,36 @@ export default function PayoutScreen() {
   const [destinationName, setDestinationName] = useState('');
   const [destinationRef, setDestinationRef] = useState('');
   const [pin, setPin] = useState('');
+  const [pinError, setPinError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [payouts, setPayouts] = useState<PayoutRecord[]>([]);
+  // The money leaves the balance the moment a payout is requested, so an
+  // empty list that is really a dead listener reads as money gone missing.
+  const [historyFailed, setHistoryFailed] = useState(false);
 
-  useEffect(() => watchMyPayouts(setPayouts), []);
+  useEffect(
+    () =>
+      watchMyPayouts(
+        (list) => {
+          setPayouts(list);
+          setHistoryFailed(false);
+        },
+        () => setHistoryFailed(true),
+      ),
+    [],
+  );
 
   const amountCents = toCents(amount);
+  const balanceCents = wallet?.balanceCents;
+  const belowMinimum = amountCents > 0 && amountCents < MIN_PAYOUT_CENTS;
+  const overBalance = balanceCents !== undefined && amountCents > balanceCents;
   const canSubmit =
-    amountCents > 0 && destinationName.trim().length >= 2 && destinationRef.trim().length >= 3;
+    amountCents > 0 &&
+    !belowMinimum &&
+    !overBalance &&
+    destinationName.trim().length >= 2 &&
+    destinationRef.trim().length >= 3;
 
   const pending = useMemo(
     () => payouts.filter((p) => p.status === 'requested'),
@@ -50,6 +85,7 @@ export default function PayoutScreen() {
   );
 
   const submit = async (enteredPin: string) => {
+    if (submitting) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -63,8 +99,13 @@ export default function PayoutScreen() {
       setStep('sent');
       setAmount('');
     } catch (e: any) {
-      setError(t(callableErrorKey(e), { defaultValue: e.message }));
-      setStep('form');
+      // The PIN is checked before anything is held, so trying again is safe.
+      if (isWrongPin(e)) {
+        setPinError(t('errors.wrongPin'));
+      } else {
+        setError(t(payoutErrorKey(e)));
+        setStep('form');
+      }
     } finally {
       setPin('');
       setSubmitting(false);
@@ -80,16 +121,21 @@ export default function PayoutScreen() {
         </Text>
         <PinInput
           value={pin}
-          onChange={setPin}
+          onChange={(value) => {
+            setPin(value);
+            if (pinError) setPinError(null);
+          }}
           onComplete={submit}
           style={styles.pinInput}
         />
+        {pinError ? <Text style={styles.pinError}>{pinError}</Text> : null}
         <View style={styles.block}>
           <PillButton
             label={t('common.cancel')}
             variant="glass"
             onPress={() => {
               setPin('');
+              setPinError(null);
               setStep('form');
             }}
           />
@@ -130,6 +176,17 @@ export default function PayoutScreen() {
             />
           </View>
         </GlassCard>
+        {belowMinimum || overBalance ? (
+          <Text style={styles.amountError}>
+            {belowMinimum
+              ? t('payout.minimum', { amount: formatCents(MIN_PAYOUT_CENTS) })
+              : t('errors.insufficientBalance')}
+          </Text>
+        ) : balanceCents !== undefined ? (
+          <Text style={styles.available}>
+            {t('payout.available', { amount: formatCents(balanceCents) })}
+          </Text>
+        ) : null}
 
         <Text style={styles.label}>{t('payout.routeLabel')}</Text>
         <View style={styles.routeRow}>
@@ -181,6 +238,7 @@ export default function PayoutScreen() {
           onPress={() => {
             setError(null);
             setPin('');
+            setPinError(null);
             setStep('pin');
           }}
           disabled={!canSubmit || submitting}
@@ -189,7 +247,9 @@ export default function PayoutScreen() {
         <Text style={[styles.label, styles.historyLabel]}>
           {t('payout.historyLabel')}
         </Text>
-        {payouts.length === 0 ? (
+        {historyFailed ? (
+          <Text style={styles.error}>{t('payout.historyError')}</Text>
+        ) : payouts.length === 0 ? (
           <Text style={styles.hint}>{t('payout.historyEmpty')}</Text>
         ) : (
           payouts.map((p) => (
@@ -242,6 +302,7 @@ const styles = StyleSheet.create({
   },
   sub: { fontSize: 15, color: TEXT_DIM, textAlign: 'center', marginTop: 6 },
   pinInput: { marginTop: 28 },
+  pinError: { fontSize: 14, color: '#FF6961', textAlign: 'center', marginTop: 16 },
   block: { alignSelf: 'stretch', marginTop: 28 },
   label: {
     fontSize: 11,
@@ -265,6 +326,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   input: { fontSize: 15, color: '#FFFFFF', padding: 16 },
+  available: { fontSize: 12, color: TEXT_FAINT, marginTop: 4 },
+  amountError: { fontSize: 12, color: '#FF6961', marginTop: 4 },
   routeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   routeChip: {
     paddingHorizontal: 16,
