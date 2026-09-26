@@ -68,6 +68,7 @@ export { scanCustomerToken } from "./customer-qr/scanToken";
 export { createPaymentRequest } from "./customer-qr/createPaymentRequest";
 export { approvePaymentRequest } from "./customer-qr/approvePayment";
 export { rejectPaymentRequest } from "./customer-qr/rejectPayment";
+export { cancelPaymentRequest } from "./customer-qr/cancelPayment";
 
 // Merchant functions
 export { registerMerchant } from "./merchants/registerMerchant";

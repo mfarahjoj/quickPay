@@ -3,6 +3,7 @@ import { https } from "firebase-functions/v2";
 import { requireAuth } from "../utils/validation";
 import { sendPushNotification } from "../utils/notifications";
 import { ApiResponse, MerchantPaymentRequest, User } from "../types";
+import { requestExpiryMillis } from "./requestExpiry";
 
 interface RejectPaymentInput {
   requestId: string;
@@ -24,36 +25,50 @@ export const rejectPaymentRequest = https.onCall(
     }
 
     const db = admin.firestore();
+    const requestRef = db.collection("paymentRequests").doc(requestId);
 
-    const requestDoc = await db
-      .collection("paymentRequests")
-      .doc(requestId)
-      .get();
+    // Read and write in one transaction. As separate steps, a decline landing
+    // while an approval committed could overwrite "approved" with "rejected"
+    // after the money had moved, and the merchant would see a sale that was
+    // paid reported as declined.
+    const { paymentReq, expired } = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(requestRef);
+      if (!snap.exists) {
+        throw new https.HttpsError("not-found", "Payment request not found");
+      }
 
-    if (!requestDoc.exists) {
-      throw new https.HttpsError("not-found", "Payment request not found");
-    }
+      const req = snap.data() as MerchantPaymentRequest;
 
-    const paymentReq = requestDoc.data() as MerchantPaymentRequest;
+      if (req.customerId !== customerId) {
+        throw new https.HttpsError(
+          "permission-denied",
+          "This request is not for you"
+        );
+      }
 
-    if (paymentReq.customerId !== customerId) {
-      throw new https.HttpsError(
-        "permission-denied",
-        "This request is not for you"
-      );
-    }
+      if (req.status !== "pending") {
+        throw new https.HttpsError(
+          "failed-precondition",
+          `Request is already ${req.status}`
+        );
+      }
 
-    if (paymentReq.status !== "pending") {
+      const now = admin.firestore.Timestamp.now();
+      if (now.toMillis() > requestExpiryMillis(req)) {
+        tx.update(requestRef, { status: "expired", resolvedAt: now });
+        return { paymentReq: req, expired: true };
+      }
+
+      tx.update(requestRef, { status: "rejected", resolvedAt: now });
+      return { paymentReq: req, expired: false };
+    });
+
+    if (expired) {
       throw new https.HttpsError(
         "failed-precondition",
-        `Request is already ${paymentReq.status}`
+        "Payment request has expired"
       );
     }
-
-    await requestDoc.ref.update({
-      status: "rejected",
-      resolvedAt: admin.firestore.Timestamp.now(),
-    });
 
     const customerDoc = await db.collection("users").doc(customerId).get();
     const customer = customerDoc.data() as User;

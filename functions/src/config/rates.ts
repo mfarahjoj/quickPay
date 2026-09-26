@@ -22,12 +22,20 @@ export interface Rates {
    * depends on how much float agents actually buy.
    */
   floatApprovalThresholdCents: number;
+  /**
+   * How long a merchant's charge stays payable after it is raised. Short on
+   * purpose: the customer is standing at the counter, and a merchant who
+   * gives up waiting and takes cash must not be paid a second time by an
+   * approval that lands afterwards.
+   */
+  paymentRequestTtlSeconds: number;
 }
 
 export const DEFAULT_RATES: Rates = {
   paymentFeeRate: 0.01,
   topupCommissionRate: 0.02,
   floatApprovalThresholdCents: 50000, // $500
+  paymentRequestTtlSeconds: 90,
 };
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
@@ -48,6 +56,22 @@ function coerceRate(value: unknown, fallback: number): number {
  */
 function coerceCents(value: unknown, fallback: number): number {
   if (typeof value === "number" && Number.isInteger(value) && value >= 0) {
+    return value;
+  }
+  return fallback;
+}
+
+/**
+ * Coerce a whole number of seconds into [min, max]. Out-of-range values fall
+ * back rather than clamp: a typo of 9000 should not quietly become the max.
+ */
+function coerceSeconds(
+  value: unknown,
+  fallback: number,
+  min: number,
+  max: number
+): number {
+  if (typeof value === "number" && Number.isInteger(value) && value >= min && value <= max) {
     return value;
   }
   return fallback;
@@ -75,6 +99,12 @@ export async function getRates(): Promise<Rates> {
       floatApprovalThresholdCents: coerceCents(
         data.floatApprovalThresholdCents,
         DEFAULT_RATES.floatApprovalThresholdCents
+      ),
+      paymentRequestTtlSeconds: coerceSeconds(
+        data.paymentRequestTtlSeconds,
+        DEFAULT_RATES.paymentRequestTtlSeconds,
+        30,
+        600
       ),
     };
     cached = { rates, expiresAt: now + CACHE_TTL_MS };

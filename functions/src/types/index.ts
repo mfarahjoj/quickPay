@@ -401,7 +401,12 @@ export interface CustomerToken {
 }
 
 // Merchant-initiated payment request types
-export type PaymentRequestStatus = "pending" | "approved" | "rejected" | "expired";
+export type PaymentRequestStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "expired"
+  | "cancelled";
 
 export interface MerchantPaymentRequest {
   merchantId: string;
@@ -412,7 +417,14 @@ export interface MerchantPaymentRequest {
   status: PaymentRequestStatus;
   reference?: string;
   createdAt: FirebaseFirestore.Timestamp;
+  /**
+   * When the customer can no longer approve. Absent on requests raised before
+   * this field existed; `requestExpiryMillis` supplies their old 5-minute limit.
+   */
+  expiresAt?: FirebaseFirestore.Timestamp;
   resolvedAt?: FirebaseFirestore.Timestamp;
+  /** The `transactions` row an approval wrote, so a retried approval can return it. */
+  transactionId?: string;
 }
 
 // Remittance types

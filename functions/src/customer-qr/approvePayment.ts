@@ -21,12 +21,17 @@ import {
   JournalLine,
   PLATFORM_FEES,
 } from "../ledger";
-
-const REQUEST_TTL_MS = 5 * 60 * 1000; // 5 minutes
+import { requestExpiryMillis } from "./requestExpiry";
 
 interface ApprovePaymentInput {
   requestId: string;
   pin: string;
+  /**
+   * The amount the customer was shown, in cents. When sent, the approval is
+   * refused unless it matches the request — the customer pays what they saw
+   * or nothing. Optional so builds that predate it keep working.
+   */
+  expectedAmount?: number;
 }
 
 interface ApprovePaymentResponse {
@@ -42,12 +47,21 @@ export const approvePaymentRequest = https.onCall(
     requireAuth(request);
     const customerId = request.auth!.uid;
 
-    const { requestId, pin } = request.data;
+    const { requestId, pin, expectedAmount } = request.data;
 
     if (!requestId || !pin) {
       throw new https.HttpsError(
         "invalid-argument",
         "Request ID and PIN are required"
+      );
+    }
+    if (
+      expectedAmount !== undefined &&
+      (typeof expectedAmount !== "number" || !Number.isInteger(expectedAmount))
+    ) {
+      throw new https.HttpsError(
+        "invalid-argument",
+        "expectedAmount must be whole cents"
       );
     }
 
@@ -58,20 +72,43 @@ export const approvePaymentRequest = https.onCall(
       throw new https.HttpsError("permission-denied", "Invalid PIN");
     }
 
+    const requestPreCheck = await db
+      .collection("paymentRequests")
+      .doc(requestId)
+      .get();
+    const preRequest = requestPreCheck.exists
+      ? (requestPreCheck.data() as MerchantPaymentRequest)
+      : undefined;
+
+    // A retry after the first approval's reply was lost. The payment went
+    // through, so answer with it: an error here tells the customer it failed,
+    // and they pay again another way. Answered before velocity and limits,
+    // which already count this payment and would refuse the retry for it.
+    if (
+      preRequest &&
+      preRequest.customerId === customerId &&
+      preRequest.status === "approved"
+    ) {
+      return {
+        success: true,
+        data: {
+          transactionId:
+            preRequest.transactionId ?? (await findTransactionId(db, requestId)),
+          amount: preRequest.amount,
+        },
+      };
+    }
+
     const customerData = await requireActiveAccount(customerId);
 
     await enforceVelocity(customerId);
 
     // Limits are checked against the requested amount before posting. The
     // transaction below re-reads the request as the authoritative copy.
-    const requestPreCheck = await db
-      .collection("paymentRequests")
-      .doc(requestId)
-      .get();
-    if (requestPreCheck.exists) {
+    if (preRequest) {
       await enforceTransactionLimits(
         customerId,
-        (requestPreCheck.data()?.amount as number) ?? 0,
+        preRequest.amount ?? 0,
         customerData
       );
     }
@@ -79,6 +116,7 @@ export const approvePaymentRequest = https.onCall(
     const { paymentFeeRate } = await getRates();
 
     const transactionId = db.collection("transactions").doc().id;
+    let replayedTransactionId: string | undefined;
     let approvedAmount: number;
     let approvedCurrency: string;
     let approvedMerchantId: string;
@@ -88,7 +126,10 @@ export const approvePaymentRequest = https.onCall(
 
     const requestRef = db.collection("paymentRequests").doc(requestId);
 
+    let lapsed = false;
+
     await db.runTransaction(async (tx) => {
+      lapsed = false;
       const requestSnap = await tx.get(requestRef);
       if (!requestSnap.exists) {
         throw new https.HttpsError("not-found", "Payment request not found");
@@ -110,15 +151,22 @@ export const approvePaymentRequest = https.onCall(
         );
       }
 
-      const ageMs = Date.now() - paymentReq.createdAt.toMillis();
-      if (ageMs > REQUEST_TTL_MS) {
+      if (Date.now() > requestExpiryMillis(paymentReq)) {
+        // Record the expiry, then refuse once the transaction has committed:
+        // throwing in here would roll the write back and leave the request
+        // reading "pending" to both apps for good.
         tx.update(requestRef, {
           status: "expired",
           resolvedAt: admin.firestore.Timestamp.now(),
         });
+        lapsed = true;
+        return;
+      }
+
+      if (expectedAmount !== undefined && expectedAmount !== paymentReq.amount) {
         throw new https.HttpsError(
           "failed-precondition",
-          "Payment request has expired"
+          "The amount of this request does not match what was shown"
         );
       }
 
@@ -152,6 +200,23 @@ export const approvePaymentRequest = https.onCall(
 
       const now = admin.firestore.Timestamp.now();
 
+      if (pending.alreadyPosted) {
+        // The entry exists but the request still reads pending — the two are
+        // written together, so this should not happen. Settle the request on
+        // the transaction that entry names rather than write a second row.
+        const entrySnap = await tx.get(
+          db.collection("journal_entries").doc(`custqr_${requestId}`)
+        );
+        const postedTxId = entrySnap.data()?.refs?.transactionId as string | undefined;
+        tx.update(requestRef, {
+          status: "approved",
+          resolvedAt: now,
+          ...(postedTxId ? { transactionId: postedTxId } : {}),
+        });
+        replayedTransactionId = postedTxId ?? "";
+        return;
+      }
+
       pending.write(tx);
 
       const txRecord: Transaction = {
@@ -176,8 +241,23 @@ export const approvePaymentRequest = https.onCall(
       tx.update(requestRef, {
         status: "approved",
         resolvedAt: now,
+        transactionId,
       });
     });
+
+    if (lapsed) {
+      throw new https.HttpsError(
+        "failed-precondition",
+        "Payment request has expired"
+      );
+    }
+
+    if (replayedTransactionId !== undefined) {
+      return {
+        success: true,
+        data: { transactionId: replayedTransactionId, amount: approvedAmount! },
+      };
+    }
 
     notifyPaymentReceived(
       approvedMerchantId!,
@@ -202,3 +282,19 @@ export const approvePaymentRequest = https.onCall(
     };
   }
 );
+
+/**
+ * The transaction behind an approval made before requests recorded it. The
+ * row carries the journal entry ID, which is derived from the request.
+ */
+async function findTransactionId(
+  db: FirebaseFirestore.Firestore,
+  requestId: string
+): Promise<string> {
+  const snap = await db
+    .collection("transactions")
+    .where("journalEntryId", "==", `custqr_${requestId}`)
+    .limit(1)
+    .get();
+  return snap.empty ? "" : snap.docs[0].id;
+}
