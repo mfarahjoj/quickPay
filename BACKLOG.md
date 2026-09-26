@@ -141,6 +141,16 @@ first. Verified open as of 2026-08-05.
   *Done when:* `docs` (or root) holds a runbook someone could follow under
   pressure, and any automatable part is committed.
 
+- [ ] **8. Localise the merchant app's remaining server errors.**
+  Added 2026-09-26. The agent confirm, payout and payroll screens now map
+  failures through `pinActionErrorKey` in `merchant-app/src/utils/errors.ts`,
+  but manual top-up (`TopupCustomerScreen`), refund (`TransactionDetailScreen`),
+  charge (`ChargeScreen`), scan (`ScanCustomerScreen`) and login/OTP still show
+  `e.message` first — English server text, including "Invalid agent PIN" and
+  "Invalid PIN" on the two PIN-gated ones.
+  *Done when:* none of those screens can show a raw server message, and a wrong
+  PIN on top-up or refund goes back to the keypad instead of failing the flow.
+
 ---
 
 ## Not for a loop — these need Mahamed
@@ -164,8 +174,25 @@ Listed so nothing tries to fake progress on them:
   class this catches — a config value present nowhere, invisible until a real
   user hits the feature. It sat broken in prod undetected.
 
-- **Test build 8 of the merchant app.** Uploaded 2026-08-15 with the reworked
-  receive screen (live confirmation, counter code, hardening). The UI shipped
-  without anyone driving it — the simulator session was signed out and signing
-  in needs a phone number and OTP. Worth walking amount → QR → pay → paid state
-  and checking the gross/fee/net split before pilot merchants see it.
+- **Test merchant build 9 and customer build 57.** Uploaded 2026-09-26, with the
+  payout, agent-PIN and retry-safe `payMerchant` backend deployed the same day
+  (plus the `payoutRequests` rule and indexes). Both apps were only booted on a
+  simulator to the signed-out welcome screen, in all three languages for the
+  merchant app; nothing behind sign-in has been driven, since that needs a
+  phone number and OTP. Worth walking, on device:
+  merchant — Get paid (request → the admin payout desk → "Sent" with the
+  reference), confirm top-up and cash-out with a deliberately wrong PIN first
+  (should return to the keypad with the code kept), a two-person payroll,
+  counter-code feed, and the receive flow build 8 never had walked;
+  customer — sign out and log back in with the PIN (needs the grant below),
+  and a sticker payment. Merchant build 8 can no longer confirm agent top-ups
+  or cash-outs: the backend now requires the PIN it never sends.
+- **Let the functions mint sign-in tokens.** `loginWithPin` (trusted-device PIN
+  login, first shipped in customer build 57) calls `createCustomToken`, which
+  signs through IAM as `76440907220-compute@developer.gserviceaccount.com`. That
+  account only has `roles/editor`, which does not include
+  `iam.serviceAccounts.signBlob` (checked 2026-09-26), so every PIN login fails
+  after the PIN is accepted and the customer has to fall back to an SMS code.
+  Fix: Cloud Console → IAM & Admin → Service Accounts → that account →
+  Principals with access → Grant access → the same account as principal, role
+  *Service Account Token Creator*. The IAM Credentials API is already enabled.
