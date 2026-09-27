@@ -190,7 +190,12 @@ Listed so nothing tries to fake progress on them:
   keypad with the code kept), a two-person payroll, the counter-code feed, the
   receive flow, and back/swipe on every screen;
   customer — sign out and log back in with the PIN (needs the grant below),
-  and a sticker payment.
+  and a sticker payment;
+  PIN reset (customer build 59, backend deployed 2026-09-27) — on the usual
+  phone, Forgot PIN → SMS → new PIN should work and then refuse a transfer
+  for 24 hours while a small shop payment still goes through; on a fresh
+  install it should ask for the last 4 of the ID (or send an unverified
+  customer to an agent). Build 58 can't complete a reset any more.
   Merchant build 8 can no longer confirm agent top-ups or cash-outs (the
   backend requires the PIN it never sends), and merchant 9 keeps spinning
   when a charge expires, since only build 10 counts down.
