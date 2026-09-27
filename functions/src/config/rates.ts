@@ -29,6 +29,18 @@ export interface Rates {
    * approval that lands afterwards.
    */
   paymentRequestTtlSeconds: number;
+  /**
+   * After a PIN reset, outgoing money is paused this long. A reset proves only
+   * that someone holds the phone number, which a thief or a SIM swap also
+   * does; the pause stops a takeover draining the wallet before the owner
+   * notices.
+   */
+  pinResetCooldownHours: number;
+  /**
+   * What may still be spent at shops during that pause, in total, so someone
+   * who genuinely forgot their PIN isn't stranded at the counter.
+   */
+  pinResetCooldownAllowanceCents: number;
 }
 
 export const DEFAULT_RATES: Rates = {
@@ -36,6 +48,8 @@ export const DEFAULT_RATES: Rates = {
   topupCommissionRate: 0.02,
   floatApprovalThresholdCents: 50000, // $500
   paymentRequestTtlSeconds: 90,
+  pinResetCooldownHours: 24,
+  pinResetCooldownAllowanceCents: 2000, // $20
 };
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
@@ -62,10 +76,10 @@ function coerceCents(value: unknown, fallback: number): number {
 }
 
 /**
- * Coerce a whole number of seconds into [min, max]. Out-of-range values fall
+ * Coerce a whole number into [min, max]. Out-of-range values fall
  * back rather than clamp: a typo of 9000 should not quietly become the max.
  */
-function coerceSeconds(
+function coerceIntInRange(
   value: unknown,
   fallback: number,
   min: number,
@@ -100,11 +114,23 @@ export async function getRates(): Promise<Rates> {
         data.floatApprovalThresholdCents,
         DEFAULT_RATES.floatApprovalThresholdCents
       ),
-      paymentRequestTtlSeconds: coerceSeconds(
+      paymentRequestTtlSeconds: coerceIntInRange(
         data.paymentRequestTtlSeconds,
         DEFAULT_RATES.paymentRequestTtlSeconds,
         30,
         600
+      ),
+      // Bounded so a typo can't switch the pause off (0) or freeze a wallet
+      // for weeks.
+      pinResetCooldownHours: coerceIntInRange(
+        data.pinResetCooldownHours,
+        DEFAULT_RATES.pinResetCooldownHours,
+        1,
+        168
+      ),
+      pinResetCooldownAllowanceCents: coerceCents(
+        data.pinResetCooldownAllowanceCents,
+        DEFAULT_RATES.pinResetCooldownAllowanceCents
       ),
     };
     cached = { rates, expiresAt: now + CACHE_TTL_MS };

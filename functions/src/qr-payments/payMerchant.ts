@@ -1,5 +1,6 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
+import { assertResetCooldownAllows } from "../utils/resetCooldown";
 import { requireAuth, validateAmount, validateCurrency } from "../utils/validation";
 import { enforceTransactionLimits } from "../utils/limits";
 import { assertAccountActive } from "../utils/accountStatus";
@@ -140,6 +141,9 @@ export const payMerchant = https.onCall(
           return { success: true, data: replay };
         }
       }
+
+      // Outgoing money waits out the pause after a PIN reset.
+      await assertResetCooldownAllows(customerId, "shop_payment", amount);
 
       await enforceVelocity(customerId);
 

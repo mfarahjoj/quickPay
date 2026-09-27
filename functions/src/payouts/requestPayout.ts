@@ -22,6 +22,7 @@
 
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
+import { assertResetCooldownAllows } from "../utils/resetCooldown";
 import { requireAuth } from "../utils/validation";
 import { assertAccountActive } from "../utils/accountStatus";
 import { verifyUserPin } from "../auth/validatePin";
@@ -126,6 +127,9 @@ export const requestPayout = https.onCall(
     if (!pinValid) {
       throw new https.HttpsError("permission-denied", "Invalid PIN");
     }
+
+    // Outgoing money waits out the pause after a PIN reset.
+    await assertResetCooldownAllows(merchantId, "other", 0);
 
     const open = await db
       .collection(PAYOUT_REQUESTS_COLLECTION)

@@ -28,9 +28,12 @@ service cloud.firestore {
       // KYC subcollection. Read-only for the owner: submitKYC is the only
       // writer, and a client that could write here could stamp its own
       // submission `verified` or edit it after review.
+      // Server-only, reads included. The ID number here is what a PIN reset
+      // on an unknown phone asks for, and whoever is signed in on a stolen or
+      // SIM-swapped phone is the owner as far as rules can tell. Neither app
+      // reads it; the admin console goes through callables.
       match /kyc/{document=**} {
-        allow read: if isAuthenticated() && isOwner(userId);
-        allow write: if false;
+        allow read, write: if false;
       }
       
       // FCM push notification tokens

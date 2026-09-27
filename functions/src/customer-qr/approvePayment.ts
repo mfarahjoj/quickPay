@@ -1,5 +1,6 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
+import { assertResetCooldownAllows } from "../utils/resetCooldown";
 import { requireAuth } from "../utils/validation";
 import { requireActiveAccount } from "../utils/accountStatus";
 import { enforceTransactionLimits } from "../utils/limits";
@@ -98,6 +99,10 @@ export const approvePaymentRequest = https.onCall(
         },
       };
     }
+
+    // Outgoing money waits out the pause after a PIN reset. After the retry
+    // check: a payment made before the reset must still get its receipt.
+    await assertResetCooldownAllows(customerId, "shop_payment", preRequest?.amount ?? 0);
 
     const customerData = await requireActiveAccount(customerId);
 

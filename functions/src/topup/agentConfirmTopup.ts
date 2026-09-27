@@ -1,5 +1,6 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
+import { assertResetCooldownAllows } from "../utils/resetCooldown";
 import { requireAuth } from "../utils/validation";
 import { assertAccountActive } from "../utils/accountStatus";
 import { verifyUserPin } from "../auth/validatePin";
@@ -84,6 +85,9 @@ export const agentConfirmTopup = https.onCall(
     if (!pinValid) {
       throw new https.HttpsError("permission-denied", "Invalid PIN");
     }
+
+    // Spending float is outgoing money: it waits out the pause after a reset.
+    await assertResetCooldownAllows(agentId, "other", 0);
 
     // Rate-limit code guesses so the 6-digit space can't be brute-forced.
     assertNotOtpLocked(agentData);

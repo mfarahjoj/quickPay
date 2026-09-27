@@ -53,6 +53,11 @@ export interface User {
   /** PIN checks rejected until this time after too many failures */
   pinLockedUntil?: FirebaseFirestore.Timestamp | null;
   pinResetAt?: FirebaseFirestore.Timestamp;
+  /** Recent PIN resets, newest last, for the reset rate limit. */
+  pinResetHistory?: FirebaseFirestore.Timestamp[];
+  /** Wrong ID answers to the new-phone reset check, and the lock they earn. */
+  resetIdFailedAttempts?: number;
+  resetIdLockedUntil?: FirebaseFirestore.Timestamp | null;
   /** Consecutive failed top-up/cash-out code guesses (agents only) */
   agentOtpFailedAttempts?: number;
   /** Code guesses rejected until this time after too many failures */
@@ -372,7 +377,8 @@ export interface Notification {
     | "payout_sent"
     | "payout_rejected"
     | "kyc_approved"
-    | "kyc_rejected";
+    | "kyc_rejected"
+    | "pin_reset";
   title: string;
   body: string;
   data?: Record<string, string>;

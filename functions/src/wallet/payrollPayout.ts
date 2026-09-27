@@ -1,5 +1,6 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
+import { assertResetCooldownAllows } from "../utils/resetCooldown";
 import { assertAccountActive } from "../utils/accountStatus";
 import {
   enforceAggregateLimits,
@@ -76,6 +77,9 @@ export const payrollPayout = https.onCall(
     if (!pinValid) {
       throw new https.HttpsError("permission-denied", "Incorrect PIN");
     }
+
+    // Outgoing money waits out the pause after a PIN reset.
+    await assertResetCooldownAllows(merchantId, "other", 0);
 
     // Verify merchant account type
     const merchantDoc = await db.collection("users").doc(merchantId).get();

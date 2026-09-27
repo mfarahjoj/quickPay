@@ -1,5 +1,6 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
+import { assertResetCooldownAllows } from "../utils/resetCooldown";
 import { requireAuth } from "../utils/validation";
 import { enforceTransactionLimits } from "../utils/limits";
 import { assertAccountActive } from "../utils/accountStatus";
@@ -72,6 +73,9 @@ export const sendP2P = https.onCall(
           "Invalid PIN"
         );
       }
+
+      // Outgoing money waits out the pause after a PIN reset.
+      await assertResetCooldownAllows(senderId, "other", 0);
 
       await enforceVelocity(senderId);
 

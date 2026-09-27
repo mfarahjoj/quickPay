@@ -1,5 +1,6 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
+import { assertResetCooldownAllows } from "../utils/resetCooldown";
 import { requireAuth } from "../utils/validation";
 import { enforceTransactionLimits } from "../utils/limits";
 import {
@@ -72,6 +73,9 @@ export const processPayment = https.onCall(
       if (qrPreData.merchantId === customerId) {
         throw new https.HttpsError("permission-denied", "Cannot pay yourself");
       }
+
+      // Outgoing money waits out the pause after a PIN reset.
+      await assertResetCooldownAllows(customerId, "shop_payment", qrPreData.amount);
 
       // A frozen merchant must not keep taking payments while under review.
       await requireActiveAccount(qrPreData.merchantId, "counterparty");

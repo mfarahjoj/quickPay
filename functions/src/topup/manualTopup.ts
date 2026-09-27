@@ -1,5 +1,6 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
+import { assertResetCooldownAllows } from "../utils/resetCooldown";
 import { verifyUserPin } from "../auth/validatePin";
 import { validateAmount, requireAuth, dollarsToCents } from "../utils/validation";
 import { assertAccountActive } from "../utils/accountStatus";
@@ -99,6 +100,9 @@ export const manualTopup = https.onCall(
       if (!pinValid) {
         throw new https.HttpsError("permission-denied", "Invalid agent PIN");
       }
+
+      // Outgoing money waits out the pause after a PIN reset.
+      await assertResetCooldownAllows(agentId, "other", 0);
 
       // Verify user exists
       const userDoc = await db.collection("users").doc(userId).get();
