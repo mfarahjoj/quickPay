@@ -992,5 +992,16 @@
   "payments.approve.expiredTitle": "Request expired",
   "payments.approve.expiredMessage": "This request ran out of time. You haven't paid anything.",
   "payments.approve.alreadyPaid": "You've already paid this request.",
-  "payments.approve.amountChanged": "The amount doesn't match what you were shown. Ask the shop to send a new request."
+  "payments.approve.amountChanged": "The amount doesn't match what you were shown. Ask the shop to send a new request.",
+  "auth.resetPin.idTitle": "Confirm it's you",
+  "auth.resetPin.idSubtitle": "This phone is new to your account. Enter the last 4 characters of the ID you verified with Zapp Pay.",
+  "auth.resetPin.idWrong": "That doesn't match your ID. {{count}} tries left.",
+  "auth.resetPin.agentTitle": "Reset with an agent",
+  "auth.resetPin.agentMessage": "To reset your PIN on this phone, visit a Zapp Pay agent or contact support, and bring your ID.",
+  "auth.resetPin.lockedMessage": "Too many wrong answers. Try again tomorrow, or visit an agent with your ID.",
+  "auth.resetPin.limitMessage": "You've reset your PIN too many times. Contact support.",
+  "auth.resetPin.verifyAgain": "Please verify your phone number again.",
+  "auth.resetPin.doneTitle": "PIN reset",
+  "auth.resetPin.cooldownMessage": "For your safety, sending money is paused until {{time}}. Shop payments up to {{amount}} in total still work.",
+  "payments.cooldown": "Sending money is paused until {{time}} because your PIN was reset. Shop payments up to {{amount}} in total still work."
 }

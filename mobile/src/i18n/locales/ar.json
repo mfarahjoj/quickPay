@@ -992,5 +992,16 @@
   "payments.approve.expiredTitle": "انتهت صلاحية الطلب",
   "payments.approve.expiredMessage": "انتهى وقت هذا الطلب. لم تدفع أي مبلغ.",
   "payments.approve.alreadyPaid": "لقد دفعت هذا الطلب بالفعل.",
-  "payments.approve.amountChanged": "المبلغ لا يطابق ما عُرض عليك. اطلب من المتجر إرسال طلب جديد."
+  "payments.approve.amountChanged": "المبلغ لا يطابق ما عُرض عليك. اطلب من المتجر إرسال طلب جديد.",
+  "auth.resetPin.idTitle": "أكّد هويتك",
+  "auth.resetPin.idSubtitle": "هذا الهاتف جديد على حسابك. أدخل آخر 4 خانات من الهوية التي وثّقتها لدى Zapp Pay.",
+  "auth.resetPin.idWrong": "هذا لا يطابق هويتك. تبقّت {{count}} محاولات.",
+  "auth.resetPin.agentTitle": "أعد التعيين لدى وكيل",
+  "auth.resetPin.agentMessage": "لإعادة تعيين رمز PIN على هذا الهاتف، زر وكيل Zapp Pay أو تواصل مع الدعم، واحضر هويتك.",
+  "auth.resetPin.lockedMessage": "إجابات خاطئة كثيرة. حاول مرة أخرى غدًا، أو زر وكيلًا ومعك هويتك.",
+  "auth.resetPin.limitMessage": "أعدت تعيين رمز PIN مرات كثيرة. تواصل مع الدعم.",
+  "auth.resetPin.verifyAgain": "يرجى التحقق من رقم هاتفك مرة أخرى.",
+  "auth.resetPin.doneTitle": "تمت إعادة تعيين رمز PIN",
+  "auth.resetPin.cooldownMessage": "حفاظًا على أمانك، تم إيقاف إرسال الأموال مؤقتًا حتى {{time}}. تبقى المدفوعات في المتاجر حتى {{amount}} إجمالًا متاحة.",
+  "payments.cooldown": "تم إيقاف إرسال الأموال مؤقتًا حتى {{time}} لأنه تمت إعادة تعيين رمز PIN. تبقى المدفوعات في المتاجر حتى {{amount}} إجمالًا متاحة."
 }

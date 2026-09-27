@@ -992,5 +992,16 @@
   "payments.approve.expiredTitle": "Codsigu wuu dhacay",
   "payments.approve.expiredMessage": "Waqtigii codsigan wuu dhammaaday. Wax lacag ah ma aadan bixin.",
   "payments.approve.alreadyPaid": "Codsigan hore ayaad u bixisay.",
-  "payments.approve.amountChanged": "Qadarku kuma eka kii lagu tusay. Dukaanka ka codso inuu kuu soo diro codsi cusub."
+  "payments.approve.amountChanged": "Qadarku kuma eka kii lagu tusay. Dukaanka ka codso inuu kuu soo diro codsi cusub.",
+  "auth.resetPin.idTitle": "Xaqiiji inaad adigu tahay",
+  "auth.resetPin.idSubtitle": "Taleefankani waa ku cusub yahay akoonkaaga. Geli 4-ta xaraf ee ugu dambeeya aqoonsiga aad ku xaqiijisay Zapp Pay.",
+  "auth.resetPin.idWrong": "Taasi kuma eka aqoonsigaaga. {{count}} isku day ayaa kuu haray.",
+  "auth.resetPin.agentTitle": "Dib ugu deji wakiil",
+  "auth.resetPin.agentMessage": "Si aad PIN-kaaga uga beddesho taleefankan, booqo wakiil Zapp Pay ama la xiriir taageerada, oo keen aqoonsigaaga.",
+  "auth.resetPin.lockedMessage": "Jawaabo khaldan oo badan. Berri mar kale isku day, ama booqo wakiil adigoo wata aqoonsigaaga.",
+  "auth.resetPin.limitMessage": "PIN-kaaga marar badan ayaad beddeshay. La xiriir taageerada.",
+  "auth.resetPin.verifyAgain": "Fadlan mar kale xaqiiji lambarka taleefankaaga.",
+  "auth.resetPin.doneTitle": "PIN-ka waa la beddelay",
+  "auth.resetPin.cooldownMessage": "Ammaankaaga darteed, lacag dirista waa la hakiyay ilaa {{time}}. Lacag-bixinta dukaamada ilaa {{amount}} wadar ahaan way shaqaynaysaa.",
+  "payments.cooldown": "Lacag dirista waa la hakiyay ilaa {{time}} sababtoo ah PIN-kaaga ayaa la beddelay. Lacag-bixinta dukaamada ilaa {{amount}} wadar ahaan way shaqaynaysaa."
 }

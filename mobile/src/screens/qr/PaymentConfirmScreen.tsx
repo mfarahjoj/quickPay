@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { cooldownMessage } from '../../utils/cooldownMessage';
 import { BiometryTypes } from 'react-native-biometrics';
 import LinearGradient from 'react-native-linear-gradient';
 import { processPayment } from '../../services/qr.service';
@@ -78,7 +79,7 @@ export default function PaymentConfirmScreen({ navigation, route }: Props) {
         merchantId: result.merchantId,
       });
     } catch (err: any) {
-      setError(err.message || t('qr.confirm.paymentFailed'));
+      setError(cooldownMessage(err, t) ?? (err.message || t('qr.confirm.paymentFailed')));
       setPin('');
     } finally {
       setProcessing(false);

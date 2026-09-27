@@ -15,6 +15,8 @@ import Animated, {
   withDelay,
 } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
+import { cooldownMessage } from '../../utils/cooldownMessage';
 import { functions } from '../../services/firebase.config';
 import { triggerHaptic } from '../../services/haptics.service';
 import { colors } from '../../theme';
@@ -55,6 +57,7 @@ function CashOutPinDot({ filled }: { filled: boolean }) {
 }
 
 export default function CashOutScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation();
   const [step, setStep] = useState<Step>('amount');
   const [amountText, setAmountText] = useState('');
@@ -139,10 +142,10 @@ export default function CashOutScreen() {
       otpOpacity.value = withDelay(200, withTiming(1, { duration: 400 }));
       otpScale.value = withDelay(200, withSpring(1, Springs.celebration));
     } catch (e: any) {
-      setErrorMsg(e.message || 'Something went wrong');
+      setErrorMsg(cooldownMessage(e, t) ?? (e.message || 'Something went wrong'));
       setStep('error');
     }
-  }, [pin, amount, otpOpacity, otpScale]);
+  }, [pin, amount, otpOpacity, otpScale, t]);
 
   useEffect(() => {
     if (pin.length === 6) handleSubmit();

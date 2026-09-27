@@ -135,20 +135,42 @@ export async function validatePin(pin: string): Promise<boolean> {
  * checks the ID token's auth_time), so callers must re-run sendOTP/verifyOTP
  * immediately before this.
  */
-export async function resetPin(newPin: string): Promise<void> {
+export interface ResetPinResult {
+  /** Sending money is paused until then. */
+  cooldownUntil: string;
+  /** What can still be spent at shops before then, in cents. */
+  allowanceCents: number;
+}
+
+/**
+ * On a phone that has been this account's trusted device for a week, the SMS
+ * code is enough; anywhere else the server also asks for `idLast4`. Errors
+ * keep their `details.reason` so the screen can take the next step.
+ */
+export async function resetPin(newPin: string, idLast4?: string): Promise<ResetPinResult> {
   try {
     // Force-refresh so the callable sees the post-reauth auth_time.
     await auth().currentUser?.getIdToken(true);
+    const device = await getDeviceCredential();
     const resetPinFunction = functions().httpsCallable('resetPin');
-    const result = await resetPinFunction({ newPin });
+    const result = await resetPinFunction({
+      newPin,
+      ...(device ? { deviceId: device.deviceId, deviceSecret: device.deviceSecret } : {}),
+      ...(idLast4 ? { idLast4 } : {}),
+    });
 
-    const responseData = result.data as { success: boolean; error?: string };
+    const responseData = result.data as {
+      success: boolean;
+      error?: string;
+      data: ResetPinResult;
+    };
     if (!responseData.success) {
       throw new Error(responseData.error || 'Failed to reset PIN');
     }
+    return responseData.data;
   } catch (error: any) {
     logger.error('Reset PIN error:', error);
-    throw new Error(error.message || 'Failed to reset PIN');
+    throw error;
   }
 }
 

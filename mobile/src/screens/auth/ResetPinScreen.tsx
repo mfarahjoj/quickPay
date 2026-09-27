@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   SafeAreaView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -24,6 +26,7 @@ import {
 } from '../../services/biometric.service';
 import { markPinVerifiedThisInstall } from '../../hooks/usePinVerifiedThisInstall';
 import { logger } from '../../utils/logger';
+import { formatUntil } from '../../utils/cooldownMessage';
 import { colors, typography, spacing } from '../../theme';
 
 interface Props {
@@ -32,7 +35,13 @@ interface Props {
   onCancel: () => void;
 }
 
-type Step = 'otp' | 'newPin' | 'confirm';
+/**
+ * otp → newPin → confirm, then:
+ * - `id` when this phone isn't one the account has used for a week, and the
+ *   server wants the last characters of the customer's verified ID;
+ * - `agent` when the reset can't happen in the app at all.
+ */
+type Step = 'otp' | 'newPin' | 'confirm' | 'id' | 'agent';
 
 /**
  * Forgot-PIN flow: re-verify the phone number via OTP (refreshes auth_time,
@@ -52,6 +61,9 @@ export default function ResetPinScreen({ onDone, onCancel }: Props) {
   const [confirmPin, setConfirmPin] = useState('');
   const [confirmError, setConfirmError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [idLast4, setIdLast4] = useState('');
+  const [idError, setIdError] = useState('');
+  const [agentMessage, setAgentMessage] = useState('');
 
   const confirmationRef = useRef<FirebaseAuthTypes.ConfirmationResult | null>(null);
   const phoneNumber = getCurrentUser()?.phoneNumber ?? '';
@@ -98,31 +110,77 @@ export default function ResetPinScreen({ onDone, onCancel }: Props) {
     setStep('confirm');
   };
 
+  const submitReset = async (pinValue: string, idAnswer?: string) => {
+    try {
+      setSubmitting(true);
+      setConfirmError('');
+      const result = await resetPin(pinValue, idAnswer);
+      // Keep Face ID payments working with the new PIN if biometrics are on.
+      if (await isBiometricEnabled()) {
+        await storePinInKeychain(pinValue).catch((err) =>
+          logger.warn('Keychain update after PIN reset failed:', err)
+        );
+      }
+      await markPinVerifiedThisInstall();
+      // Say why sending money will be refused for a while, before it is.
+      Alert.alert(
+        t('auth.resetPin.doneTitle'),
+        t('auth.resetPin.cooldownMessage', {
+          time: formatUntil(result.cooldownUntil),
+          amount: `$${(result.allowanceCents / 100).toFixed(2)}`,
+        }),
+        [{ text: t('common.ok'), onPress: () => onDone(pinValue) }],
+      );
+    } catch (err: any) {
+      logger.error('Reset PIN error:', err);
+      const message: string = typeof err?.message === 'string' ? err.message : '';
+      switch (err?.details?.reason) {
+        case 'reset_needs_id':
+          setIdError('');
+          setStep('id');
+          break;
+        case 'reset_id_wrong':
+          setIdError(t('auth.resetPin.idWrong', { count: err.details.attemptsLeft }));
+          setIdLast4('');
+          setStep('id');
+          break;
+        case 'reset_id_locked':
+          setAgentMessage(t('auth.resetPin.lockedMessage'));
+          setStep('agent');
+          break;
+        case 'reset_needs_agent':
+          setAgentMessage(t('auth.resetPin.agentMessage'));
+          setStep('agent');
+          break;
+        case 'reset_limit':
+          setAgentMessage(t('auth.resetPin.limitMessage'));
+          setStep('agent');
+          break;
+        default:
+          if (/phone verification/i.test(message)) {
+            // The SMS check is only good for a few minutes; ask for a new code.
+            setOtpCode('');
+            setOtpError(t('auth.resetPin.verifyAgain'));
+            setStep('otp');
+            sendCode();
+          } else {
+            setConfirmError(t('auth.resetPin.failed'));
+            setConfirmPin('');
+            setStep('confirm');
+          }
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleConfirmComplete = async (val: string) => {
     if (val !== newPin) {
       setConfirmError(t('auth.resetPin.mismatch'));
       setConfirmPin('');
       return;
     }
-    try {
-      setSubmitting(true);
-      setConfirmError('');
-      await resetPin(newPin);
-      // Keep Face ID payments working with the new PIN if biometrics are on.
-      if (await isBiometricEnabled()) {
-        await storePinInKeychain(newPin).catch((err) =>
-          logger.warn('Keychain update after PIN reset failed:', err)
-        );
-      }
-      await markPinVerifiedThisInstall();
-      onDone(newPin);
-    } catch (err: any) {
-      logger.error('Reset PIN error:', err);
-      setConfirmError(err.message ?? t('auth.resetPin.failed'));
-      setConfirmPin('');
-    } finally {
-      setSubmitting(false);
-    }
+    await submitReset(newPin);
   };
 
   const handleBack = () => {
@@ -134,6 +192,52 @@ export default function ResetPinScreen({ onDone, onCancel }: Props) {
       onCancel();
     }
   };
+
+  if (step === 'agent') {
+    return (
+      <AuthLayout onBack={onCancel} contentStyle={styles.centered}>
+        <AuthHeader title={t('auth.resetPin.agentTitle')} subtitle={agentMessage} />
+        <TouchableOpacity style={styles.primaryBtn} onPress={onCancel}>
+          <Text style={styles.primaryBtnText}>{t('common.back')}</Text>
+        </TouchableOpacity>
+      </AuthLayout>
+    );
+  }
+
+  if (step === 'id') {
+    const ready = idLast4.length === 4 && !submitting;
+    return (
+      <AuthLayout onBack={onCancel} contentStyle={styles.centered}>
+        <AuthHeader title={t('auth.resetPin.idTitle')} subtitle={t('auth.resetPin.idSubtitle')} />
+        <TextInput
+          style={styles.idInput}
+          value={idLast4}
+          onChangeText={(v) => {
+            setIdLast4(v.replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toUpperCase());
+            if (idError) setIdError('');
+          }}
+          autoCapitalize="characters"
+          autoCorrect={false}
+          maxLength={4}
+          placeholder="····"
+          placeholderTextColor={colors.dark.textDim}
+          accessibilityLabel={t('auth.resetPin.idTitle')}
+        />
+        {idError ? <Text style={styles.idError}>{idError}</Text> : null}
+        <TouchableOpacity
+          style={[styles.primaryBtn, !ready && styles.primaryBtnDisabled]}
+          disabled={!ready}
+          onPress={() => submitReset(newPin, idLast4)}
+        >
+          {submitting ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.primaryBtnText}>{t('common.continue')}</Text>
+          )}
+        </TouchableOpacity>
+      </AuthLayout>
+    );
+  }
 
   if (step === 'otp') {
     return (
@@ -236,5 +340,36 @@ const styles = StyleSheet.create({
   },
   confirmWrap: {
     flex: 1,
+  },
+  idInput: {
+    ...typography.h3,
+    color: colors.dark.text,
+    textAlign: 'center',
+    letterSpacing: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.dark.divider,
+    paddingVertical: spacing.md,
+    marginTop: spacing.xl,
+    marginHorizontal: spacing.xl,
+  },
+  idError: {
+    ...typography.caption,
+    color: colors.dark.error,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+  },
+  primaryBtn: {
+    backgroundColor: colors.dark.accent,
+    borderRadius: 999,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    marginTop: spacing.xl,
+  },
+  primaryBtnDisabled: {
+    opacity: 0.4,
+  },
+  primaryBtnText: {
+    ...typography.bodySemibold,
+    color: '#FFFFFF',
   },
 });

@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { cooldownMessage } from '../../utils/cooldownMessage';
 import {
   View,
   Text,
@@ -344,7 +345,9 @@ export default function PaymentsScreen({ route }: Props) {
       triggerHaptic('success');
       setStep('success');
     } catch (err: any) {
-      const msg = err.message?.replace(/^\[.*?\]\s*/, '') || t('payments.transferFailed');
+      const msg =
+        cooldownMessage(err, t) ??
+        (err.message?.replace(/^\[.*?\]\s*/, '') || t('payments.transferFailed'));
       Alert.alert(t('common.error'), msg);
       setPin('');
     } finally {

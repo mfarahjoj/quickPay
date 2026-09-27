@@ -16,6 +16,7 @@ import Animated, {
   withDelay,
 } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
+import { cooldownMessage } from '../../utils/cooldownMessage';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { PinInput } from '../../components/PinInput';
 import { approvePayment, rejectPayment } from '../../services/customerToken.service';
@@ -227,6 +228,8 @@ export default function ApprovePaymentScreen() {
         showResult('error', t('payments.approve.amountChanged'));
       } else if (e?.code === 'functions/permission-denied' && /invalid pin/i.test(message)) {
         showResult('error', t('auth.pinLogin.invalidPin'));
+      } else if (cooldownMessage(e, t)) {
+        showResult('error', cooldownMessage(e, t)!);
       } else if (e?.code === 'functions/resource-exhausted' && e?.details?.secondsLeft) {
         showResult('error', t('pin.lockedOut', { seconds: e.details.secondsLeft }));
       } else {
