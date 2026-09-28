@@ -20,6 +20,7 @@ import { cooldownMessage } from '../../utils/cooldownMessage';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { PinInput } from '../../components/PinInput';
 import { approvePayment, rejectPayment } from '../../services/customerToken.service';
+import { approveApiCharge, getApiCharge } from '../../services/apiCharge.service';
 import { firestore } from '../../services/firebase.config';
 import { triggerHaptic } from '../../services/haptics.service';
 import { colors, typography, spacing, borderRadius } from '../../theme';
@@ -28,12 +29,21 @@ import { Springs } from '../../constants/springs';
 import { SuccessCheckIcon } from '../../components/icons/AuthIcons';
 import { AnimatedXMark, AnimatedWarning } from '../../components/icons/StatusIcons';
 
+/**
+ * Two kinds of charge land here, with the same review → PIN → result flow:
+ * - `requestId`: a shop raised it in person from the merchant app
+ *   (`paymentRequests`, followed live from Firestore);
+ * - `chargeId`: a merchant raised it through the Zapp API — an online checkout
+ *   or a till. `api_charges` is server-only, so the screen loads and follows it
+ *   through the getApiCharge callable instead.
+ */
 type ApprovePaymentParams = {
   ApprovePayment: {
-    requestId: string;
-    merchantName: string;
-    amount: number;
-    currency: string;
+    requestId?: string;
+    chargeId?: string;
+    merchantName?: string;
+    amount?: number;
+    currency?: string;
     createdAt?: string;
     reference?: string;
   };
@@ -46,6 +56,8 @@ type ResultKind = 'approved' | 'declined' | 'error' | 'closed';
 const LEGACY_TTL_MS = 5 * 60 * 1000;
 /** Grace for a phone clock running slightly ahead of the server's. */
 const CLOCK_GRACE_MS = 3000;
+/** How often an API charge is re-read while the customer decides. */
+const CHARGE_POLL_MS = 4000;
 
 const formatClock = (seconds: number) =>
   `${Math.floor(seconds / 60)}:${(seconds % 60).toString().padStart(2, '0')}`;
@@ -54,7 +66,15 @@ export default function ApprovePaymentScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation();
   const route = useRoute<RouteProp<ApprovePaymentParams, 'ApprovePayment'>>();
-  const { requestId, merchantName, amount, currency, createdAt, reference } = route.params;
+  const { requestId, chargeId, createdAt } = route.params;
+  const isApiCharge = !!chargeId;
+  const chargeKey = (chargeId ?? requestId) as string;
+  const [merchantName, setMerchantName] = useState(route.params.merchantName ?? '');
+  const [currency, setCurrency] = useState(route.params.currency ?? 'USD');
+  const [reference, setReference] = useState(route.params.reference);
+  const amount = route.params.amount ?? 0;
+  // An API charge opened from a link or a scan arrives with only its ID.
+  const [chargeLoaded, setChargeLoaded] = useState(!isApiCharge);
 
   const [step, setStep] = useState<Step>('review');
   const [pin, setPin] = useState('');
@@ -122,16 +142,71 @@ export default function ApprovePaymentScreen() {
     setStep('result');
   };
 
-  const showClosed = (why: 'cancelled' | 'expired') =>
+  const showClosed = (why: 'cancelled' | 'expired', merchant = merchantName) =>
     showResult(
       'closed',
       why === 'cancelled'
-        ? t('payments.approve.cancelledMessage', { merchant: merchantName })
+        ? t('payments.approve.cancelledMessage', { merchant })
         : t('payments.approve.expiredMessage'),
       why === 'cancelled' ? t('payments.approve.cancelledTitle') : t('payments.approve.expiredTitle'),
     );
 
   useEffect(() => {
+    if (!chargeId) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const load = async () => {
+      try {
+        const c = await getApiCharge(chargeId);
+        if (cancelled) return;
+        setMerchantName(c.merchantName);
+        setCurrency(c.currency);
+        setReference(c.reference);
+        setLiveAmount(c.amount);
+        setExpiresAtMs(Date.now() + c.expiresInSeconds * 1000);
+        setChargeLoaded(true);
+        if (!approving.current && !resultShown.current) {
+          if (c.status === 'canceled') showClosed('cancelled', c.merchantName);
+          else if (c.status === 'expired') showClosed('expired');
+          else if (c.status === 'succeeded') {
+            if (c.paidByYou) {
+              setTransactionAmount(`${CURRENCY_SYMBOL}${(c.amount / 100).toFixed(2)}`);
+              showResult('approved', t('payments.approve.alreadyPaid'));
+            } else {
+              showResult('closed', t('payments.approve.paidElsewhere'), t('payments.approve.unavailableTitle'));
+            }
+          }
+        }
+      } catch (e: any) {
+        if (cancelled) return;
+        // Once the charge is on screen a failed refresh is not worth
+        // interrupting the customer for; the approval re-checks everything.
+        if (!resultShown.current && !approving.current) {
+          const message: string = typeof e?.message === 'string' ? e.message : '';
+          if (e?.code === 'functions/not-found') {
+            setChargeLoaded(true);
+            showResult('closed', t('payments.approve.chargeNotFound'), t('payments.approve.unavailableTitle'));
+          } else if (/different customer/i.test(message)) {
+            setChargeLoaded(true);
+            showResult('closed', t('payments.approve.chargeForSomeoneElse'), t('payments.approve.unavailableTitle'));
+          } else if (/pay yourself/i.test(message)) {
+            setChargeLoaded(true);
+            showResult('closed', t('payments.approve.ownCharge'), t('payments.approve.unavailableTitle'));
+          }
+        }
+      }
+      if (!cancelled && !resultShown.current) timer = setTimeout(load, CHARGE_POLL_MS);
+    };
+    load();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chargeId]);
+
+  useEffect(() => {
+    if (!requestId) return;
     return firestore()
       .collection('paymentRequests')
       .doc(requestId)
@@ -190,9 +265,9 @@ export default function ApprovePaymentScreen() {
     minute: '2-digit',
   });
   const shortRef = reference?.trim()
-    || (requestId.length > 12
-      ? `${requestId.slice(0, 6)}...${requestId.slice(-4)}`
-      : requestId);
+    || (chargeKey.length > 12
+      ? `${chargeKey.slice(0, 6)}...${chargeKey.slice(-4)}`
+      : chargeKey);
 
   const handleAccept = () => {
     triggerHaptic('medium');
@@ -204,7 +279,11 @@ export default function ApprovePaymentScreen() {
     approving.current = true;
     try {
       setLoading(true);
-      await approvePayment(requestId, submittedPin, shownAmount);
+      if (chargeId) {
+        await approveApiCharge(chargeId, submittedPin, shownAmount);
+      } else {
+        await approvePayment(requestId as string, submittedPin, shownAmount);
+      }
       triggerHaptic('success');
       setTransactionAmount(`${CURRENCY_SYMBOL}${amountFormatted}`);
       setResultKind('approved');
@@ -224,6 +303,10 @@ export default function ApprovePaymentScreen() {
         showClosed('expired');
       } else if (/already rejected/i.test(message)) {
         showResult('declined', t('payments.approve.declinedMessage'));
+      } else if (/already paid/i.test(message)) {
+        showResult('closed', t('payments.approve.paidElsewhere'), t('payments.approve.unavailableTitle'));
+      } else if (/different customer/i.test(message)) {
+        showResult('closed', t('payments.approve.chargeForSomeoneElse'), t('payments.approve.unavailableTitle'));
       } else if (/does not match/i.test(message)) {
         showResult('error', t('payments.approve.amountChanged'));
       } else if (e?.code === 'functions/permission-denied' && /invalid pin/i.test(message)) {
@@ -245,9 +328,15 @@ export default function ApprovePaymentScreen() {
   };
 
   const handleReject = async () => {
+    // Nothing to decline on the server: an API charge is not addressed to
+    // anyone until they pay it, and the merchant cancels or lets it lapse.
+    if (isApiCharge) {
+      navigation.goBack();
+      return;
+    }
     try {
       setRejecting(true);
-      await rejectPayment(requestId);
+      await rejectPayment(requestId as string);
       triggerHaptic('medium');
       setResultKind('declined');
       setResultMessage(t('payments.approve.declinedMessage'));
@@ -280,6 +369,17 @@ export default function ApprovePaymentScreen() {
     setPin('');
     setStep('pin');
   };
+
+  if (!chargeLoaded) {
+    return (
+      <View style={[styles.container, styles.resultContainer]}>
+        <ActivityIndicator size="large" color={colors.dark.accent} />
+        <Text style={[styles.requestLabel, styles.loadingLabel]}>
+          {t('payments.approve.loadingCharge')}
+        </Text>
+      </View>
+    );
+  }
 
   if (step === 'review') {
     return (
@@ -375,7 +475,9 @@ export default function ApprovePaymentScreen() {
           {rejecting ? (
             <ActivityIndicator size="small" color={colors.error} />
           ) : (
-            <Text style={styles.declineButtonText}>{t('payments.approve.decline')}</Text>
+            <Text style={styles.declineButtonText}>
+              {isApiCharge ? t('common.cancel') : t('payments.approve.decline')}
+            </Text>
           )}
         </TouchableOpacity>
       </ScrollView>
@@ -538,6 +640,9 @@ const styles = StyleSheet.create({
   requestLabel: {
     ...typography.body,
     color: colors.dark.textDim,
+  },
+  loadingLabel: {
+    marginTop: spacing.md,
   },
 
   amountCard: {

@@ -143,6 +143,8 @@ Every product flow is a journal entry template. The rails differ; the ledger doe
 | P2P (`sendP2P`) / payroll | `user:{sender}` | `user:{recipient}` |
 | QR payment against balance (`processPayment`, `payMerchant`, `approvePayment`) | `user:{customer}` | `user:{merchant}` (net) + `platform:fees` (fee) |
 | Refund | `user:{merchant}` (net) + `platform:fees` (fee) | `user:{customer}` |
+| Online / API payment (`approveApiCharge`, type `online_payment`, entry `apicharge_{chargeId}`) | `user:{customer}` | `user:{merchant}` (net) + `platform:fees` (fee at `onlinePaymentFeeRate`) |
+| API refund, full or partial (`POST /v1/charges/{id}/refunds`, entry `refund_apicharge_{chargeId}_{n}`) | `user:{merchant}` (share of net) + `platform:fees` (share of fee, rounded on the running total so the parts sum to the fee) | `user:{customer}` |
 | Agent cash-out (`agentConfirmCashOut`, `customerCashOut`) | `user:{customer}` | `user:{agent}` |
 | Referral bonus (`setupPin`) | `platform:promo` | `user:{customer}` |
 | **No-custody QR→USSD dial** (V1 merchant QR) | `external:clearing` | `external:clearing` |

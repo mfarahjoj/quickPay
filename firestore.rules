@@ -180,6 +180,38 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Merchant Payments API (functions/src/api/). All server-only, reads
+    // included. Keys are stored as hashes but still name which merchant can
+    // raise charges; charges are read by customers through getApiCharge and
+    // by the hosted checkout through the public endpoint, never directly.
+    // Webhook endpoints hold signing secrets; deliveries and events carry
+    // merchants' order data. The default deny below covers these too — they
+    // are listed so nobody opens one up by accident.
+    match /merchant_api_keys/{keyId} {
+      allow read, write: if false;
+    }
+    match /api_charges/{chargeId} {
+      allow read, write: if false;
+    }
+    match /api_refunds/{refundId} {
+      allow read, write: if false;
+    }
+    match /api_idempotency/{recordId} {
+      allow read, write: if false;
+    }
+    match /api_rate_limits/{bucketId} {
+      allow read, write: if false;
+    }
+    match /api_events/{eventId} {
+      allow read, write: if false;
+    }
+    match /webhook_endpoints/{endpointId} {
+      allow read, write: if false;
+    }
+    match /webhook_deliveries/{deliveryId} {
+      allow read, write: if false;
+    }
+
     // Default deny all other access
     match /{document=**} {
       allow read, write: if false;

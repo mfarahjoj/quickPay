@@ -31,6 +31,17 @@
         {
           "source": "/send/**",
           "destination": "/index.html"
+        },
+        {
+          "source": "/v1/**",
+          "function": {
+            "functionId": "api",
+            "region": "us-central1"
+          }
+        },
+        {
+          "source": "/checkout/**",
+          "destination": "/checkout.html"
         }
       ],
       "headers": [

@@ -28,7 +28,8 @@ export type AuditTargetType =
   | "kyc"
   | "role_request"
   | "float_issuance"
-  | "payout";
+  | "payout"
+  | "api_key";
 
 /**
  * One immutable record of an admin action. Written in the same transaction as

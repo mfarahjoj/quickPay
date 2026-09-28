@@ -81,6 +81,14 @@ export const refundPayment = https.onCall(
           "This payment has already been refunded"
         );
       }
+      // An API payment can be refunded in parts, and the parts are tracked on
+      // its charge. Refunding it here as well would return money twice.
+      if (original.apiChargeId) {
+        throw new https.HttpsError(
+          "failed-precondition",
+          "This payment was taken online. Refund it from the system that took it."
+        );
+      }
 
       const pinValid = await verifyUserPin(merchantId, pin);
       if (!pinValid) {

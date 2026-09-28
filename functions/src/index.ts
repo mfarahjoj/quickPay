@@ -134,3 +134,16 @@ export {
 
 // Role applications (privileged roles are granted by admins, not chosen)
 export { requestRole, getMyRoleRequests } from "./merchants/requestRole";
+
+// Merchant Payments API (docs/MERCHANT_API.md). `api` serves /v1/... behind a
+// Hosting rewrite; money moves only in approveApiCharge, under the customer's
+// PIN, and in API refunds, which only ever return a customer's own payment.
+export { api } from "./api/app";
+export { getApiCharge, approveApiCharge } from "./api/approveApiCharge";
+export { expireApiCharges } from "./api/expireCharges";
+export { onApiChargeWritten, retryWebhookDeliveries } from "./api/webhooks";
+export {
+  adminListApiKeys,
+  adminIssueApiKey,
+  adminRevokeApiKey,
+} from "./admin/apiKeys";

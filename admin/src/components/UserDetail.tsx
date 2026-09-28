@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type UserDetail as Detail } from "../api";
 import { ReasonPrompt } from "./ReasonPrompt";
+import { ApiKeysPanel } from "./ApiKeysPanel";
 
 type PendingAction = "freeze" | "unfreeze" | "clearLockouts" | "revokeDevices";
 
@@ -173,6 +174,10 @@ export function UserDetail({ userId }: { userId: string }) {
           </p>
         )}
       </div>
+
+      {(profile.accountType === "merchant" || profile.accountType === "agent_merchant") && (
+        <ApiKeysPanel merchantId={detail.userId} disabled={detail.accountStatus !== "active"} />
+      )}
 
       <div className="panel">
         <h2>Recent transactions</h2>
