@@ -132,6 +132,17 @@ interface StoredDrift {
   detail?: unknown;
 }
 
+/** An activity-monitor finding as stored on an alert (ledger/activityMonitor.ts). */
+interface StoredFinding {
+  kind?: unknown;
+  account?: unknown;
+  counterparty?: unknown;
+  amount?: unknown;
+  count?: unknown;
+  entryIds?: unknown[];
+  detail?: unknown;
+}
+
 /** Run history and alert state for the ledger desk. */
 export const adminGetLedgerOverview = https.onCall(
   { enforceAppCheck: true },
@@ -161,6 +172,8 @@ export const adminGetLedgerOverview = https.onCall(
             // Checkpoints from before the spend-index probe have no field.
             spendIndexOk: run.spendIndexOk !== false,
             ok: run.ok === true,
+            // Runs from before the activity monitor have no field.
+            activityFindingCount: run.activityFindingCount ?? 0,
             trigger: run.trigger ?? "schedule",
             triggeredBy: run.triggeredBy ?? null,
           };
@@ -172,6 +185,7 @@ export const adminGetLedgerOverview = https.onCall(
             ranAt: alert.ranAt ?? null,
             driftCount: alert.driftCount ?? 0,
             spendIndexOk: alert.spendIndexOk !== false,
+            activityFindingCount: alert.activityFindingCount ?? 0,
             acknowledged: alert.acknowledged === true,
             acknowledgedByEmail: alert.acknowledgedByEmail ?? null,
             acknowledgedAt: alert.acknowledgedAt ?? null,
@@ -204,9 +218,15 @@ export const adminGetLedgerAlert = https.onCall(
     const alert = snap.data()!;
     const stored: StoredDrift[] = Array.isArray(alert.drifts) ? alert.drifts : [];
     const accountOf = (d: StoredDrift) => (typeof d.account === "string" ? d.account : "");
+    const findings: StoredFinding[] = Array.isArray(alert.activity) ? alert.activity : [];
+    const findingAccounts = findings.flatMap((f) =>
+      [f.account, f.counterparty].filter((a): a is string => typeof a === "string")
+    );
 
     const uids = [
-      ...new Set(stored.map(accountOf).filter(isUserAccount).map(userIdOf)),
+      ...new Set(
+        [...stored.map(accountOf), ...findingAccounts].filter(isUserAccount).map(userIdOf)
+      ),
     ];
     const others = [
       ...new Set(
@@ -229,6 +249,19 @@ export const adminGetLedgerAlert = https.onCall(
     const walletMap = byId(wallets);
     const balanceMap = byId(balances);
 
+    // The customer behind a wallet account; null for platform accounts.
+    const who = (account: unknown) => {
+      if (typeof account !== "string" || !isUserAccount(account)) return null;
+      const uid = userIdOf(account);
+      const profile = userMap.get(uid);
+      return {
+        userId: uid,
+        fullName: profile?.fullName ?? null,
+        phoneNumber: profile?.phoneNumber ?? null,
+        accountType: profile?.accountType ?? null,
+      };
+    };
+
     const drifts = stored.map((d) => {
       const account = accountOf(d);
       const expected = finiteOrNull(d.expected);
@@ -237,15 +270,8 @@ export const adminGetLedgerAlert = https.onCall(
       let user: Record<string, unknown> | null = null;
 
       if (isUserAccount(account)) {
-        const uid = userIdOf(account);
-        const profile = userMap.get(uid);
-        user = {
-          userId: uid,
-          fullName: profile?.fullName ?? null,
-          phoneNumber: profile?.phoneNumber ?? null,
-          accountType: profile?.accountType ?? null,
-        };
-        const wallet = walletMap.get(uid);
+        user = who(account);
+        const wallet = walletMap.get(userIdOf(account));
         currentBalance = wallet ? finiteOrNull(wallet.balance ?? 0) : null;
       } else if (balanceMap.has(account)) {
         currentBalance = finiteOrNull(balanceMap.get(account)!.balance ?? 0);
@@ -271,6 +297,18 @@ export const adminGetLedgerAlert = https.onCall(
       reason: "Ledger drift review",
     }).catch((err) => console.error("Failed to write view audit:", err));
 
+    const activity = findings.map((f) => ({
+      kind: typeof f.kind === "string" ? f.kind : "",
+      account: typeof f.account === "string" ? f.account : "",
+      counterparty: typeof f.counterparty === "string" ? f.counterparty : null,
+      amount: finiteOrNull(f.amount),
+      count: finiteOrNull(f.count) ?? 0,
+      entryIds: Array.isArray(f.entryIds) ? f.entryIds.filter((id) => typeof id === "string") : [],
+      detail: typeof f.detail === "string" ? f.detail : "",
+      user: who(f.account),
+      counterpartyUser: who(f.counterparty),
+    }));
+
     return {
       success: true,
       data: {
@@ -283,6 +321,11 @@ export const adminGetLedgerAlert = https.onCall(
         drifts,
         spendIndexOk: alert.spendIndexOk !== false,
         spendIndexError: alert.spendIndexError ?? null,
+        activity,
+        activityFindingCount: alert.activityFindingCount ?? activity.length,
+        activityEntryCount: alert.activityEntryCount ?? null,
+        activityTruncated: alert.activityTruncated === true,
+        activityError: alert.activityError ?? null,
         acknowledged: alert.acknowledged === true,
         acknowledgedByEmail: alert.acknowledgedByEmail ?? null,
         acknowledgedAt: alert.acknowledgedAt ?? null,
@@ -458,6 +501,7 @@ export const adminRunLedgerCheck = https.onCall(
         driftCount: result.drifts.length,
         entryCount: result.entryCount,
         spendIndexOk: result.spendIndexOk,
+        activityFindingCount: result.activityFindingCount,
       },
     });
 
@@ -468,6 +512,7 @@ export const adminRunLedgerCheck = https.onCall(
         driftCount: result.drifts.length,
         entryCount: result.entryCount,
         spendIndexOk: result.spendIndexOk,
+        activityFindingCount: result.activityFindingCount,
       },
     };
   }

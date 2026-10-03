@@ -200,6 +200,8 @@ export interface LedgerRun {
   driftCount: number;
   spendIndexOk: boolean;
   ok: boolean;
+  /** Activity-monitor findings: leads for review, kept apart from `ok`. */
+  activityFindingCount: number;
   trigger: "schedule" | "manual" | string;
   triggeredBy: string | null;
 }
@@ -209,6 +211,7 @@ export interface LedgerAlertSummary {
   ranAt: Ts | null;
   driftCount: number;
   spendIndexOk: boolean;
+  activityFindingCount: number;
   acknowledged: boolean;
   acknowledgedByEmail: string | null;
   acknowledgedAt: Ts | null;
@@ -240,11 +243,33 @@ export interface LedgerDriftRow {
   } | null;
 }
 
+/**
+ * Balanced entries that look like value creation, from the activity monitor
+ * (functions/src/ledger/activityMonitor.ts). Leads for review, not verdicts.
+ */
+export interface LedgerActivityFinding {
+  kind: "self_dealing" | "agent_commission" | "round_trip" | "fees_net" | string;
+  account: string;
+  counterparty: string | null;
+  /** Cents: commission gained, value returned, or the platform:fees net. */
+  amount: number | null;
+  count: number;
+  entryIds: string[];
+  detail: string;
+  user: LedgerDriftRow["user"];
+  counterpartyUser: LedgerDriftRow["user"];
+}
+
 export interface LedgerAlertDetail extends LedgerAlertSummary {
   trigger: string;
   drifts: LedgerDriftRow[];
   shownCount: number;
   spendIndexError: string | null;
+  activity: LedgerActivityFinding[];
+  /** Journal entries the monitor read for this run's 24h window. */
+  activityEntryCount: number | null;
+  activityTruncated: boolean;
+  activityError: string | null;
   acknowledgeReason: string | null;
 }
 
@@ -411,6 +436,12 @@ export const api = {
   runLedgerCheck: (reason: string) =>
     call<
       { reason: string },
-      { runId: string; driftCount: number; entryCount: number; spendIndexOk: boolean }
+      {
+        runId: string;
+        driftCount: number;
+        entryCount: number;
+        spendIndexOk: boolean;
+        activityFindingCount: number;
+      }
     >("adminRunLedgerCheck", { reason }, 9 * 60 * 1000),
 };

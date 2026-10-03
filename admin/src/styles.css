@@ -794,6 +794,7 @@ button.danger .spinner { border-color: rgba(255, 255, 255, 0.35); border-top-col
 }
 .status-disc.ok { background: var(--ok-soft); color: var(--ok); }
 .status-disc.bad { background: var(--danger-soft); color: var(--danger); }
+.status-disc.warn { background: var(--warn-soft); color: var(--warn); }
 
 .badge.keep-case { text-transform: none; }
 td.diff { color: var(--danger); font-weight: 600; }

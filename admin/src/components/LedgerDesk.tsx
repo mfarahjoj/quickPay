@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useState } from "react";
 import {
   api,
+  type LedgerActivityFinding,
   type LedgerAlertDetail,
   type LedgerDriftRow,
   type LedgerOverview,
@@ -76,7 +77,107 @@ function RunBadge({ run }: { run: LedgerRun }) {
     );
   }
   if (!run.spendIndexOk) return <span className="badge closed keep-case">Spend index down</span>;
+  if (run.activityFindingCount > 0) {
+    return (
+      <span className="badge warn keep-case">
+        {plural(run.activityFindingCount, "lead", "leads")} to review
+      </span>
+    );
+  }
   return <span className="badge active keep-case">Clean</span>;
+}
+
+const FINDING_LABEL: Record<string, string> = {
+  self_dealing: "Self-dealing",
+  agent_commission: "High commission",
+  round_trip: "Round trip",
+  fees_net: "Fees net negative",
+};
+
+function Who({ account, user }: { account: string; user: LedgerActivityFinding["user"] }) {
+  if (!user) return <span className="mono">{account}</span>;
+  return (
+    <>
+      {user.fullName || "(no name)"}
+      {user.phoneNumber ? <span className="muted"> · {user.phoneNumber}</span> : null}
+      {user.accountType ? <span className="muted"> · {user.accountType}</span> : null}{" "}
+      <span className="muted mono">{account}</span>
+    </>
+  );
+}
+
+/**
+ * What the activity monitor flagged in this run's 24h window. These are
+ * balanced entries — the books agree with themselves — that look like value
+ * being created, so they need a person to read them.
+ */
+function ActivityFindings({ detail }: { detail: LedgerAlertDetail }) {
+  if (detail.activityError) {
+    return (
+      <div className="banner error">
+        <strong>The activity monitor failed during this check.</strong> {detail.activityError}
+      </div>
+    );
+  }
+  if (detail.activity.length === 0) return null;
+  return (
+    <div className="panel">
+      <div className="panel-head">
+        <h2>Activity to review</h2>
+      </div>
+      <p className="hint">
+        Entries from the 24 hours before this check that balance but look like value being
+        created: an agent paid commission on money that never left them, or that came straight
+        back. Leads, not verdicts. Trace the wallet, and post an adjustment if it was abuse.
+        {detail.activityEntryCount !== null
+          ? ` ${plural(detail.activityEntryCount, "entry", "entries")} read`
+          : ""}
+        {detail.activityTruncated ? " (window truncated)." : "."}
+      </p>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Kind</th>
+              <th className="wide">Who and why</th>
+              <th className="num">Amount</th>
+              <th className="num">Entries</th>
+            </tr>
+          </thead>
+          <tbody>
+            {detail.activity.map((f, i) => (
+              <tr key={`${f.kind}-${f.account}-${i}`}>
+                <td>
+                  <span className="badge warn keep-case">{FINDING_LABEL[f.kind] ?? f.kind}</span>
+                </td>
+                <td className="wide">
+                  <div className="drift-who">
+                    <Who account={f.account} user={f.user} />
+                  </div>
+                  {f.counterparty && (
+                    <div className="drift-who">
+                      ↔ <Who account={f.counterparty} user={f.counterpartyUser} />
+                    </div>
+                  )}
+                  <div className="muted drift-issue">{f.detail}</div>
+                  {f.entryIds.length > 0 && (
+                    <div className="muted mono drift-issue">{f.entryIds.join(", ")}</div>
+                  )}
+                </td>
+                <td className="num">{cents(f.amount, true)}</td>
+                <td className="num">{n(f.count)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {detail.activityFindingCount > detail.activity.length && (
+        <p className="hint" style={{ marginTop: 10 }}>
+          Showing the first {n(detail.activity.length)} of {n(detail.activityFindingCount)}.
+        </p>
+      )}
+    </div>
+  );
 }
 
 function JournalBadge({ row }: { row: LedgerTraceRow }) {
@@ -384,6 +485,8 @@ function AlertView({
         )}
       </div>
 
+      <ActivityFindings detail={detail} />
+
       {acknowledging && (
         <ReasonPrompt
           title="Acknowledge this alert"
@@ -441,10 +544,15 @@ export function LedgerDesk() {
   const runCheck = async (reason: string) => {
     const res = await api.runLedgerCheck(reason);
     setRunning(false);
+    const leads =
+      res.activityFindingCount > 0
+        ? ` ${plural(res.activityFindingCount, "activity lead", "activity leads")} to review.`
+        : "";
     setNotice(
-      res.driftCount === 0 && res.spendIndexOk
+      (res.driftCount === 0 && res.spendIndexOk
         ? `Check finished: ${n(res.entryCount)} entries, zero drift.`
-        : `Check finished: ${plural(res.driftCount, "mismatch", "mismatches")} across ${n(res.entryCount)} entries.`
+        : `Check finished: ${plural(res.driftCount, "mismatch", "mismatches")} across ${n(res.entryCount)} entries.`) +
+        leads
     );
     await load(res.runId);
   };
@@ -507,6 +615,12 @@ export function LedgerDesk() {
               tone={latest.spendIndexOk ? "ok" : "bad"}
             />
             <Tile
+              label="To review"
+              value={n(latest.activityFindingCount)}
+              sub="Activity leads, last 24h"
+              tone={latest.activityFindingCount > 0 ? "warn" : "ok"}
+            />
+            <Tile
               label="Open alerts"
               value={n(overview.openAlertCount)}
               tone={overview.openAlertCount > 0 ? "warn" : undefined}
@@ -525,14 +639,18 @@ export function LedgerDesk() {
             <div className="list">
               {overview.runs.map((run) => {
                 const bad = run.driftCount > 0 || !run.spendIndexOk;
+                const review = !bad && run.activityFindingCount > 0;
                 return (
                   <button
                     key={run.id}
                     className={`item${run.id === selected ? " selected" : ""}`}
                     onClick={() => setSelected(run.id)}
                   >
-                    <span className={`status-disc ${bad ? "bad" : "ok"}`} aria-hidden="true">
-                      <Icon name={bad ? "alert" : "check"} size={18} />
+                    <span
+                      className={`status-disc ${bad ? "bad" : review ? "warn" : "ok"}`}
+                      aria-hidden="true"
+                    >
+                      <Icon name={bad || review ? "alert" : "check"} size={18} />
                     </span>
                     <div className="item-text">
                       <div className="name">{when(run.ranAt)}</div>

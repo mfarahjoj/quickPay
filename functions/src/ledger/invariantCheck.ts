@@ -7,6 +7,10 @@
  * `postJournalEntry()` or a projection write was lost. Results are recorded
  * in `ledger_checkpoints`; drift additionally writes a `ledger_alerts` doc
  * and logs at ERROR severity so Cloud Monitoring can page on it.
+ *
+ * Each run also runs the activity monitor (activityMonitor.ts) over the last
+ * 24h. Drift says the books disagree with themselves; the monitor looks for
+ * balanced entries that should not exist, which drift can never show.
  */
 
 import * as admin from "firebase-admin";
@@ -15,6 +19,7 @@ import { JournalEntryDoc } from "./types";
 import { isUserAccount, userIdOf } from "./accounts";
 import { JOURNAL_COLLECTION, LEDGER_BALANCES_COLLECTION } from "./post";
 import { probeSpendIndex } from "../utils/limits";
+import { ActivityReport, runActivityMonitor } from "./activityMonitor";
 
 const BATCH_SIZE = 500;
 
@@ -86,6 +91,7 @@ export async function runInvariantCheck(
   drifts: Drift[];
   entryCount: number;
   spendIndexOk: boolean;
+  activityFindingCount: number;
   runId: string;
 }> {
   const db = admin.firestore();
@@ -192,6 +198,17 @@ export async function runInvariantCheck(
   // pages ops, rather than a customer being the one to notice.
   const spendIndex = await probeSpendIndex();
 
+  // A monitor failure must not cost us the reconciliation result above, so
+  // it is caught and recorded on the alert instead of thrown.
+  let activity: ActivityReport = { findings: [], entryCount: 0, truncated: false };
+  let activityError: string | undefined;
+  try {
+    activity = await runActivityMonitor();
+  } catch (err) {
+    activityError = (err as Error)?.message ?? String(err);
+  }
+  const findings = activity.findings;
+
   // Record the run.
   const now = admin.firestore.Timestamp.now();
   const runId = now.toDate().toISOString().slice(0, 19).replace(/[:T]/g, "-");
@@ -206,10 +223,13 @@ export async function runInvariantCheck(
     driftCount: drifts.length,
     spendIndexOk: spendIndex.ok,
     ok: drifts.length === 0 && spendIndex.ok,
+    // Kept apart from `ok`: findings are leads for review, not broken books.
+    activityFindingCount: findings.length,
+    activityOk: !activityError,
     ...trigger,
   });
 
-  if (drifts.length > 0 || !spendIndex.ok) {
+  if (drifts.length > 0 || !spendIndex.ok || findings.length > 0 || activityError) {
     await db.collection("ledger_alerts").doc(runId).set({
       ...trigger,
       ranAt: now,
@@ -217,8 +237,25 @@ export async function runInvariantCheck(
       driftCount: drifts.length,
       spendIndexOk: spendIndex.ok,
       ...(spendIndex.error ? { spendIndexError: spendIndex.error } : {}),
+      activity: findings.slice(0, 100),
+      activityFindingCount: findings.length,
+      activityEntryCount: activity.entryCount,
+      activityTruncated: activity.truncated,
+      ...(activityError ? { activityError } : {}),
       acknowledged: false,
     });
+  }
+
+  if (findings.length > 0) {
+    console.error(
+      `SUSPICIOUS LEDGER ACTIVITY: ${findings.length} finding(s) in the last 24h ` +
+        `(${activity.entryCount} entries)`,
+      JSON.stringify(findings.slice(0, 20))
+    );
+  }
+
+  if (activityError) {
+    console.error("Activity monitor failed; reconciliation still recorded:", activityError);
   }
 
   if (drifts.length > 0) {
@@ -243,7 +280,13 @@ export async function runInvariantCheck(
     );
   }
 
-  return { drifts, entryCount, spendIndexOk: spendIndex.ok, runId };
+  return {
+    drifts,
+    entryCount,
+    spendIndexOk: spendIndex.ok,
+    activityFindingCount: findings.length,
+    runId,
+  };
 }
 
 /** Daily at 03:00 Africa/Mogadishu (EAT — Hargeisa's timezone). */

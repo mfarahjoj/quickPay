@@ -126,7 +126,12 @@ export function fakeFirestore(seed: Record<string, Data> = {}): FakeDb {
       count: () => ({ get: async () => ({ data: () => ({ count: run().length }) }) }),
       get: async () => {
         const docs = run();
-        return { empty: docs.length === 0, size: docs.length, docs };
+        return {
+          empty: docs.length === 0,
+          size: docs.length,
+          docs,
+          forEach: (fn: (doc: any) => void) => docs.forEach(fn),
+        };
       },
     };
   }
