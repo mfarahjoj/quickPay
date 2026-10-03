@@ -10,7 +10,8 @@ import { usePinVerifiedThisInstall } from '../hooks/usePinVerifiedThisInstall';
 import { useAppLock } from '../hooks/useAppLock';
 import { hasDeviceCredential } from '../services/device.service';
 import { registerTrustedDevice } from '../services/auth.service';
-import { View, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Linking } from 'react-native';
+import { parsePaymentLink, type PaymentLink } from '../services/paymentLink.service';
 import { colors } from '../theme';
 import OnboardingScreen from '../screens/onboarding/OnboardingScreen';
 import { Springs } from '../constants/springs';
@@ -39,7 +40,8 @@ type AuthStackParamList = {
 };
 
 type MainStackParamList = {
-  MainTabs: undefined;
+  /** `screen` targets a tab, e.g. a payment link opening Payments pre-filled. */
+  MainTabs: { screen: string; params?: object } | undefined;
   ScanQR: undefined;
   PaymentConfirm: {
     qrCodeId: string;
@@ -390,6 +392,36 @@ export default function AppNavigator() {
     usePinVerifiedThisInstall();
   const { locked, unlock } = useAppLock();
 
+  // A zapppay://send link waits here until the app is signed in and unlocked:
+  // every gate below renders outside the NavigationContainer, so the container
+  // only mounts — and reports ready — once there is nothing left to bypass.
+  const [pendingLink, setPendingLink] = useState<PaymentLink | null>(null);
+  const [navReadyTick, setNavReadyTick] = useState(0);
+
+  useEffect(() => {
+    Linking.getInitialURL()
+      .then((url) => {
+        const link = parsePaymentLink(url);
+        if (link) setPendingLink(link);
+      })
+      .catch(() => {});
+    const sub = Linking.addEventListener('url', ({ url }) => {
+      const link = parsePaymentLink(url);
+      if (link) setPendingLink(link);
+    });
+    return () => sub.remove();
+  }, []);
+
+  useEffect(() => {
+    if (!pendingLink || !user || !navigationRef.isReady()) return;
+    navigationRef.navigate('MainTabs', {
+      screen: 'Payments',
+      // A fresh object per link, so a second link re-triggers the pre-fill.
+      params: { mode: 'send', prefill: { ...pendingLink } },
+    });
+    setPendingLink(null);
+  }, [pendingLink, user, navReadyTick]);
+
   // The welcome screen is the logged-out home, not a one-time tour: this is
   // session state, so signing out lands you back on it with both entry points
   // available. Null means "hasn't chosen yet".
@@ -524,7 +556,7 @@ export default function AppNavigator() {
   }
 
   return (
-    <NavigationContainer ref={navigationRef}>
+    <NavigationContainer ref={navigationRef} onReady={() => setNavReadyTick((n) => n + 1)}>
       <RootStack.Navigator screenOptions={{ headerShown: false }}>
         {user ? (
           <RootStack.Screen name="Main" component={MainStackNavigator} />

@@ -4,11 +4,19 @@
 #import <React/RCTLinkingManager.h>
 #import <ReactAppDependencyProvider/RCTAppDependencyProvider.h>
 #import <Firebase.h>
+#import <RNFBAppCheck/RNFBAppCheckModule.h>
 
 @implementation AppDelegate
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
 {
+  // Must run before [FIRApp configure]: it installs React Native Firebase's
+  // App Check provider factory. Without it the native SDK silently uses its
+  // default DeviceCheck provider and ignores the provider configured in
+  // App.tsx — so the debug token never applies (simulator builds send a
+  // placeholder token that every enforced callable rejects) and release
+  // builds never use App Attest.
+  [RNFBAppCheckModule sharedInstance];
   if ([FIRApp defaultApp] == nil) {
     [FIRApp configure];
   }

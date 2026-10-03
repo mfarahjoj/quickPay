@@ -40,6 +40,16 @@
 				<string>app-1-76440907220-ios-9c072e118c65731683fa41</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>CFBundleURLName</key>
+			<string>so.zapppay.paymentlink</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>zapppay</string>
+			</array>
+		</dict>
 	</array>
 	<key>CFBundleVersion</key>
 	<string>59</string>

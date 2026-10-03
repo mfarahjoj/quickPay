@@ -5,7 +5,10 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  ScrollView,
+  Alert,
 } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -30,6 +33,11 @@ type Step = 'amount' | 'pin' | 'processing' | 'success' | 'error';
 const ACCENT = '#FF8A7A';
 const INCOMING = '#34C77B';
 const KEYPAD = ['1','2','3','4','5','6','7','8','9','.','0','⌫'];
+
+// The agent scans this. It names the one request the code belongs to, so a
+// guessed code can never be tried against anyone else's cash-out.
+const qrPayload = (id: string, code: string) =>
+  JSON.stringify({ type: 'zapp_cashout', id, code });
 
 // Dots must own their animation hooks: calling useAnimatedStyle inside the
 // pin-step JSX changes the hook count between renders and crashes React.
@@ -64,6 +72,8 @@ export default function CashOutScreen() {
   const [pin, setPin] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [otpCode, setOtpCode] = useState('');
+  const [cashOutId, setCashOutId] = useState('');
+  const [cancelling, setCancelling] = useState(false);
   const [expiresAt, setExpiresAt] = useState<Date | null>(null);
   const [timeLeft, setTimeLeft] = useState(0);
 
@@ -136,6 +146,7 @@ export default function CashOutScreen() {
         throw new Error((result.data as any)?.error || 'Cash-out failed');
       }
       setOtpCode(data.otpCode);
+      setCashOutId(data.cashOutId ?? '');
       setExpiresAt(new Date(data.expiresAt));
       setTimeLeft(Math.floor((new Date(data.expiresAt).getTime() - Date.now()) / 1000));
       setStep('success');
@@ -150,6 +161,29 @@ export default function CashOutScreen() {
   useEffect(() => {
     if (pin.length === 6) handleSubmit();
   }, [pin, handleSubmit]);
+
+  // The money is held, not gone: cancelling returns it to the wallet at once.
+  const doCancel = useCallback(async () => {
+    if (!cashOutId) return;
+    setCancelling(true);
+    try {
+      await functions().httpsCallable('cancelCashOut')({ cashOutId });
+      triggerHaptic('success');
+      Alert.alert(t('cashout.cancelledTitle'), t('cashout.cancelledBody'));
+      navigation.goBack();
+    } catch (e: any) {
+      Alert.alert(t('cashout.cancelFailed'), e?.message || '');
+    } finally {
+      setCancelling(false);
+    }
+  }, [cashOutId, navigation, t]);
+
+  const confirmCancel = () => {
+    Alert.alert(t('cashout.cancelConfirmTitle'), t('cashout.cancelConfirmBody'), [
+      { text: t('cashout.keepCode'), style: 'cancel' },
+      { text: t('cashout.cancelCta'), style: 'destructive', onPress: doCancel },
+    ]);
+  };
 
   const formatTime = (s: number) =>
     `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
@@ -168,20 +202,31 @@ export default function CashOutScreen() {
   // ── Success: show OTP ──────────────────────────────────
   if (step === 'success') {
     const warn = timeLeft < 120;
+    const expired = timeLeft <= 0;
     return (
       <View style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
             <Text style={styles.backArrow}>‹</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Your Cash-Out Code</Text>
+          <Text style={styles.headerTitle}>{t('cashout.codeTitle')}</Text>
         </View>
 
-        <View style={styles.otpContainer}>
-          <SuccessCheckIcon size={56} />
-
+        <ScrollView contentContainerStyle={styles.otpContainer}>
           <Animated.View style={[styles.otpBox, otpStyle]}>
-            <Text style={styles.otpLabel}>Show this code to the agent</Text>
+            {cashOutId && !expired ? (
+              <View style={styles.qrCard}>
+                <QRCode
+                  value={qrPayload(cashOutId, otpCode)}
+                  size={180}
+                  color="#000000"
+                  backgroundColor="#FFFFFF"
+                />
+              </View>
+            ) : (
+              <SuccessCheckIcon size={56} />
+            )}
+            <Text style={styles.otpLabel}>{t('cashout.showAgent')}</Text>
             <View style={styles.otpDigits}>
               {otpCode.split('').map((digit, i) => (
                 <View key={i} style={styles.otpDigitBox}>
@@ -190,24 +235,42 @@ export default function CashOutScreen() {
               ))}
             </View>
             <Text style={styles.otpAmount}>
-              {CURRENCY_SYMBOL}{amount.toFixed(2)} will be paid in cash
+              {t('cashout.willBePaid', { amount: `${CURRENCY_SYMBOL}${amount.toFixed(2)}` })}
             </Text>
           </Animated.View>
 
           <Animated.View style={[styles.timerRow, warn && styles.timerWarn, timerStyle]}>
             <Text style={[styles.timerText, warn && styles.timerTextWarn]}>
-              Expires in {formatTime(timeLeft)}
+              {expired
+                ? t('cashout.expiredReturned')
+                : t('cashout.expiresIn', { time: formatTime(timeLeft) })}
             </Text>
           </Animated.View>
 
           <View style={styles.instructionCard}>
-            <Text style={styles.instructionTitle}>How it works</Text>
-            <Text style={styles.instructionStep}>1. Find an agent using the Agent Locator</Text>
-            <Text style={styles.instructionStep}>2. Show this 6-digit code to the agent</Text>
-            <Text style={styles.instructionStep}>3. Agent enters the code to confirm</Text>
-            <Text style={styles.instructionStep}>4. Receive your cash — done</Text>
+            <Text style={styles.instructionTitle}>{t('cashout.howTitle')}</Text>
+            <Text style={styles.instructionStep}>{t('cashout.how1')}</Text>
+            <Text style={styles.instructionStep}>{t('cashout.how2')}</Text>
+            <Text style={styles.instructionStep}>{t('cashout.how3')}</Text>
+            <Text style={styles.instructionStep}>{t('cashout.how4')}</Text>
           </View>
-        </View>
+
+          <Text style={styles.heldNote}>{t('cashout.heldNote')}</Text>
+
+          {!expired && cashOutId ? (
+            <TouchableOpacity
+              style={styles.cancelBtn}
+              onPress={confirmCancel}
+              disabled={cancelling}
+            >
+              {cancelling ? (
+                <ActivityIndicator color="#FF6B6B" />
+              ) : (
+                <Text style={styles.cancelText}>{t('cashout.cancelCta')}</Text>
+              )}
+            </TouchableOpacity>
+          ) : null}
+        </ScrollView>
       </View>
     );
   }
@@ -385,7 +448,11 @@ const styles = StyleSheet.create({
   continueBtnText: { fontSize: 17, fontWeight: '700', color: '#FFFFFF' },
 
   // Success / OTP
-  otpContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, gap: 24 },
+  otpContainer: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 24, gap: 20 },
+  qrCard: { padding: 14, borderRadius: 20, backgroundColor: '#FFFFFF' },
+  heldNote: { fontSize: 13, lineHeight: 19, color: 'rgba(255,255,255,0.5)', textAlign: 'center' },
+  cancelBtn: { minWidth: 200, alignItems: 'center', paddingHorizontal: 32, paddingVertical: 14, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(255,107,107,0.4)' },
+  cancelText: { fontSize: 16, fontWeight: '600', color: '#FF6B6B' },
   otpBox: { width: '100%', backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', borderRadius: 20, padding: 24, alignItems: 'center', gap: 16 },
   otpLabel: { fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, color: 'rgba(255,255,255,0.45)' },
   otpDigits: { flexDirection: 'row', gap: 8 },

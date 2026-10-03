@@ -42,6 +42,7 @@ import {
   resolveReceiveToken,
   secondsLeftFromToken,
 } from '../../services/customerToken.service';
+import type { PaymentLink } from '../../services/paymentLink.service';
 
 type PaymentTab = 'send' | 'receive';
 type SendStep = 'phone' | 'amount' | 'review' | 'pin' | 'success';
@@ -56,13 +57,15 @@ interface RecipientInfo {
 }
 
 interface Props {
-  route?: { params?: { mode?: PaymentTab } };
+  route?: { params?: { mode?: PaymentTab; prefill?: PaymentLink } };
 }
 
 export default function PaymentsScreen({ route }: Props) {
   const { t } = useTranslation();
   const initialMode = route?.params?.mode === 'receive' ? 'receive' : 'send';
   const [tab, setTab] = useState<PaymentTab>(initialMode);
+  /** Set when a zapppay:// link started this payment; drives the "check before paying" notice. */
+  const [fromLink, setFromLink] = useState(false);
 
   const [step, setStep] = useState<SendStep>('phone');
   const [phoneInput, setPhoneInput] = useState('');
@@ -294,19 +297,23 @@ export default function PaymentsScreen({ route }: Props) {
     setPin('');
     setSending(false);
     setTransactionId(null);
+    setFromLink(false);
   };
 
   const fullPhone = phoneInput.startsWith('+') ? phoneInput : `${PHONE_PREFIX}${phoneInput}`;
 
-  const handleLookup = async () => {
-    if (!phoneInput.trim()) {
+  /** `phoneOverride` lets a payment link look up before the input state has updated. */
+  const handleLookup = async (phoneOverride?: string) => {
+    const input = (phoneOverride ?? phoneInput).trim();
+    if (!input) {
       Alert.alert(t('common.error'), t('payments.enterPhoneError'));
       return;
     }
+    const phoneNumber = input.startsWith('+') ? input : `${PHONE_PREFIX}${input}`;
     try {
       setLookingUp(true);
       const lookupFn = functions().httpsCallable('lookupUserByPhone');
-      const result = await lookupFn({ phoneNumber: fullPhone });
+      const result = await lookupFn({ phoneNumber });
       const data = result.data as { success: boolean; data?: RecipientInfo; error?: string };
       if (!data.success || !data.data) {
         Alert.alert(t('common.notFound'), t('payments.userNotFound'));
@@ -320,6 +327,24 @@ export default function PaymentsScreen({ route }: Props) {
       setLookingUp(false);
     }
   };
+
+  // A payment link pre-fills recipient, amount and note, then runs the same
+  // lookup a typed number would. Review and PIN are still the payer's to do.
+  const prefill = route?.params?.prefill;
+  const lookupRef = useRef(handleLookup);
+  lookupRef.current = handleLookup;
+  useEffect(() => {
+    if (!prefill) return;
+    setTab('send');
+    resetSend();
+    setFromLink(true);
+    const local = prefill.to.startsWith(PHONE_PREFIX) ? prefill.to.slice(PHONE_PREFIX.length) : prefill.to;
+    setPhoneInput(local);
+    setAmountText(prefill.amount ?? '');
+    setNote(prefill.note ?? '');
+    void lookupRef.current(prefill.to);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill]);
 
   const handleConfirmSend = async () => {
     if (pin.length < 6) return;
@@ -408,7 +433,7 @@ export default function PaymentsScreen({ route }: Props) {
               </View>
               <Button
                 title={lookingUp ? t('common.lookingUp') : t('common.continue')}
-                onPress={handleLookup}
+                onPress={() => handleLookup()}
                 disabled={lookingUp || !phoneInput.trim()}
                 fullWidth
                 style={styles.primaryCta}
@@ -420,6 +445,11 @@ export default function PaymentsScreen({ route }: Props) {
           {step === 'amount' && recipient && (
             <Card>
               <Text style={styles.stepTitle}>{t('payments.enterAmount')}</Text>
+              {fromLink && (
+                <View style={styles.linkNotice}>
+                  <Text style={styles.linkNoticeText}>{t('payments.linkNotice')}</Text>
+                </View>
+              )}
               <View style={styles.recipientBadge}>
                 <View style={styles.avatar}>
                   <Text style={styles.avatarText}>{recipient.fullName.slice(0, 1)}</Text>
@@ -472,6 +502,11 @@ export default function PaymentsScreen({ route }: Props) {
           {step === 'review' && recipient && (
             <Card>
               <Text style={styles.stepTitle}>{t('payments.review')}</Text>
+              {fromLink && (
+                <View style={styles.linkNotice}>
+                  <Text style={styles.linkNoticeText}>{t('payments.linkNotice')}</Text>
+                </View>
+              )}
               <View style={styles.reviewRow}>
                 <Text style={styles.reviewKey}>{t('common.recipient')}</Text>
                 <Text style={styles.reviewValue}>{recipient.fullName}</Text>
@@ -738,6 +773,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     color: colors.dark.text,
     ...typography.body,
+  },
+  linkNotice: {
+    backgroundColor: colors.dark.warningSoft,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+  },
+  linkNoticeText: {
+    ...typography.caption,
+    color: colors.dark.warning,
   },
   recipientBadge: {
     flexDirection: 'row',

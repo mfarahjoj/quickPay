@@ -12,6 +12,9 @@ interface TransactionItemProps {
 
 export function TransactionItem({ transaction, onPress }: TransactionItemProps) {
   const { t } = useTranslation();
+  // A cancelled or expired cash-out returned its money: never show it as spent.
+  const voided = transaction.status === 'cancelled' || transaction.status === 'failed';
+  const pending = transaction.status === 'pending';
 
   return (
     <TouchableOpacity
@@ -49,12 +52,18 @@ export function TransactionItem({ transaction, onPress }: TransactionItemProps) 
           style={[
             styles.amount,
             transaction.isIncoming ? styles.amountIncoming : styles.amountOutgoing,
+            voided && styles.amountVoided,
           ]}
         >
           {transaction.isIncoming ? '+' : '-'}
           {CURRENCY_SYMBOL}
           {transaction.amount.toFixed(2)}
         </Text>
+        {voided || pending ? (
+          <Text style={styles.statusText}>
+            {t(`transaction.status.${transaction.status}`)}
+          </Text>
+        ) : null}
       </View>
     </TouchableOpacity>
   );
@@ -109,5 +118,14 @@ const styles = StyleSheet.create({
   },
   amountOutgoing: {
     color: colors.text.primary,
+  },
+  amountVoided: {
+    color: colors.text.muted,
+    textDecorationLine: 'line-through',
+  },
+  statusText: {
+    ...typography.caption,
+    color: colors.text.muted,
+    marginTop: 2,
   },
 });
