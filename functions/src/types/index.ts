@@ -277,6 +277,10 @@ export interface Transaction {
   refundTransactionId?: string;
   /** Journal entry that moved the money (accounting source of truth). */
   journalEntryId?: string;
+  /** Cash-out only: the entry that took the hold (journalEntryId is the settlement once completed). */
+  holdEntryId?: string;
+  /** Cash-out only: the entry that returned the hold to the customer. */
+  releaseEntryId?: string;
   createdAt: FirebaseFirestore.Timestamp;
   completedAt?: FirebaseFirestore.Timestamp;
   errorMessage?: string;
@@ -378,7 +382,9 @@ export interface Notification {
     | "payout_rejected"
     | "kyc_approved"
     | "kyc_rejected"
-    | "pin_reset";
+    | "pin_reset"
+    | "cashout_completed"
+    | "cashout_returned";
   title: string;
   body: string;
   data?: Record<string, string>;
@@ -497,7 +503,17 @@ export interface CashOutRequest {
   expiresAt: FirebaseFirestore.Timestamp;
   createdAt: FirebaseFirestore.Timestamp;
   completedAt?: FirebaseFirestore.Timestamp;
+  /** The customer's history row, written as "pending" when the hold is taken. */
+  transactionId?: string;
+  /** Wrong codes entered against this request, by any agent. 5 locks it. */
+  failedAttempts?: number;
+  /** Why held money went back to the customer. */
+  releaseReason?: CashOutReleaseReason;
+  releasedAt?: FirebaseFirestore.Timestamp;
 }
+
+/** cancelled: by the customer · replaced: a newer request superseded it · expired: unclaimed in time · too_many_attempts: wrong codes */
+export type CashOutReleaseReason = "cancelled" | "replaced" | "expired" | "too_many_attempts";
 
 export type AgentTopupStatus = "pending" | "completed" | "expired" | "cancelled";
 

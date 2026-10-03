@@ -70,7 +70,9 @@ describe("agent confirmations require the agent's PIN", () => {
 
       await expect(
         fn()({
-          data: { otpCode: "123456", agentPin: "000000" },
+          // cashOutId: cash-out confirmations must name the request (from the
+          // customer's QR); top-up ignores it.
+          data: { otpCode: "123456", agentPin: "000000", cashOutId: "co-1" },
           auth: { uid: AGENT },
         })
       ).rejects.toThrow(/Invalid PIN/);

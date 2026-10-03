@@ -1,3 +1,4 @@
+import * as crypto from "crypto";
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { requireAuth } from "../utils/validation";
@@ -8,7 +9,7 @@ import {
   recordOtpFailure,
   clearOtpFailures,
 } from "../utils/otpGuard";
-import { sendPushNotification } from "../utils/notifications";
+import { notifyUser } from "../utils/notifications";
 import { ApiResponse, CashOutRequest, Transaction, User } from "../types";
 import { getRates, computeCommission } from "../config/rates";
 import {
@@ -18,10 +19,18 @@ import {
   PLATFORM_FEES,
   CASHOUT_HOLD,
 } from "../ledger";
+import { releaseCashOutHold } from "./cashOutHold";
+
+/** Wrong codes against one request, from any agents, before it locks and the money goes back. */
+export const MAX_CODE_ATTEMPTS_PER_REQUEST = 5;
 
 interface AgentConfirmCashOutRequest {
   otpCode: string;
   agentPin: string;
+  /** From the customer's QR. */
+  cashOutId?: string;
+  /** Typed by the agent when there is no QR: the customer's phone number. */
+  customerPhone?: string;
 }
 
 interface AgentConfirmCashOutResponse {
@@ -31,6 +40,41 @@ interface AgentConfirmCashOutResponse {
   commission: number;
 }
 
+/** "+252634…", "0634…", "634…", "00252…" → "+252634…". Other countries need their "+". */
+export function normaliseCustomerPhone(raw: string): string | null {
+  const t = raw.trim();
+  const digits = t.replace(/\D/g, "");
+  if (!digits) return null;
+  let e164: string;
+  if (t.startsWith("+")) e164 = `+${digits}`;
+  else if (digits.startsWith("00")) e164 = `+${digits.slice(2)}`;
+  else if (digits.startsWith("252")) e164 = `+${digits}`;
+  else e164 = `+252${digits.replace(/^0/, "")}`;
+  return /^\+\d{8,15}$/.test(e164) ? e164 : null;
+}
+
+function codesMatch(a: string, b: string): boolean {
+  const x = Buffer.from(a);
+  const y = Buffer.from(b);
+  return x.length === y.length && crypto.timingSafeEqual(x, y);
+}
+
+const INVALID_CODE = "Invalid or expired code. Ask the customer to show their cash-out code again.";
+
+/**
+ * Agent claims a customer's cash-out and hands over the cash.
+ *
+ * The customer's money has been in platform:cashout_hold since they asked for
+ * it. Every attempt here targets ONE request — scanned from the customer's QR
+ * (cashOutId) or found by the customer's phone number — so wrong codes are
+ * counted against that request whichever agents try them. That closes the
+ * hole a bare 6-digit code leaves: colluding agents can no longer pool
+ * guesses across every pending cash-out.
+ *
+ * Ledger: `cashout_{cashOutId}` — platform:cashout_hold → user:{agent}
+ * (the agent's float grows by the cash they hand out), plus the commission
+ * pair platform:fees → user:{agent}.
+ */
 export const agentConfirmCashOut = https.onCall(
   { enforceAppCheck: true },
   async (
@@ -38,112 +82,116 @@ export const agentConfirmCashOut = https.onCall(
   ): Promise<ApiResponse<AgentConfirmCashOutResponse>> => {
     requireAuth(request);
     const agentId = request.auth!.uid;
+    const { otpCode, agentPin, cashOutId, customerPhone } = request.data ?? ({} as AgentConfirmCashOutRequest);
 
-    const { otpCode, agentPin } = request.data;
-
-    if (!otpCode || otpCode.length !== 6) {
-      throw new https.HttpsError("invalid-argument", "6-digit OTP code required");
+    if (typeof otpCode !== "string" || !/^\d{6}$/.test(otpCode)) {
+      throw new https.HttpsError("invalid-argument", "6-digit code required");
     }
-
     if (!agentPin) {
       throw new https.HttpsError("invalid-argument", "Agent PIN is required");
+    }
+    if (!cashOutId && !customerPhone) {
+      // A bare code is what made pooled guessing possible; older merchant
+      // builds that send only the code must update.
+      throw new https.HttpsError(
+        "failed-precondition",
+        "Scan the customer's cash-out QR, or enter their phone number with the code. Update Zapp Merchant if you can't."
+      );
     }
 
     const db = admin.firestore();
 
-    // Verify agent role
+    // Only vetted agents, who hold float, pay out cash.
     const agentDoc = await db.collection("users").doc(agentId).get();
     if (!agentDoc.exists) {
       throw new https.HttpsError("not-found", "Agent not found");
     }
     const agentData = agentDoc.data() as User;
-    if (
-      agentData.accountType !== "topup_agent" &&
-      agentData.accountType !== "agent_merchant"
-    ) {
+    if (agentData.accountType !== "topup_agent" && agentData.accountType !== "agent_merchant") {
       throw new https.HttpsError("permission-denied", "Only agents can confirm cash-outs");
     }
     assertAccountActive(agentData);
 
-    // Confirming a cash-out moves the customer's held value into this agent's
-    // float, so the agent is claiming money — the same PIN rule as the top-up
-    // side, for the same reason.
+    // The agent is claiming money: PIN, as on the top-up side.
     const pinValid = await verifyUserPin(agentId, agentPin);
     if (!pinValid) {
       throw new https.HttpsError("permission-denied", "Invalid PIN");
     }
-
-    // The top-up side has rate-limited code guesses since the OTP hardening
-    // work; this side never did. Six digits with unlimited attempts is a few
-    // thousand calls away from claiming a stranger's cash-out, and the customer
-    // would be left holding neither the cash nor the balance.
+    // Per-agent backstop on top of the per-request limit below.
     assertNotOtpLocked(agentData);
 
-    // Find the pending cash-out with this OTP
-    const snapshot = await db
-      .collection("cashOutRequests")
-      .where("otpCode", "==", otpCode)
-      .where("status", "==", "pending")
-      .limit(1)
-      .get();
-
-    if (snapshot.empty) {
+    // Resolve the ONE request this attempt is about.
+    let cashOutRef: FirebaseFirestore.DocumentReference | null = null;
+    if (typeof cashOutId === "string" && cashOutId && !cashOutId.includes("/")) {
+      cashOutRef = db.collection("cashOutRequests").doc(cashOutId);
+    } else if (typeof customerPhone === "string") {
+      const phone = normaliseCustomerPhone(customerPhone);
+      if (phone) {
+        const users = await db.collection("users").where("phoneNumber", "==", phone).limit(1).get();
+        if (!users.empty) {
+          const pending = await db
+            .collection("cashOutRequests")
+            .where("customerId", "==", users.docs[0].id)
+            .where("status", "==", "pending")
+            .limit(1)
+            .get();
+          if (!pending.empty) cashOutRef = pending.docs[0].ref;
+        }
+      }
+    }
+    const cashOutSnap = cashOutRef ? await cashOutRef.get() : null;
+    const cashOut = cashOutSnap?.exists ? (cashOutSnap.data() as CashOutRequest) : null;
+    if (!cashOutRef || !cashOut || cashOut.status !== "pending") {
       await recordOtpFailure(agentId, agentData);
-      throw new https.HttpsError(
-        "not-found",
-        "Invalid or expired code. Ask the customer to generate a new one."
-      );
+      throw new https.HttpsError("not-found", INVALID_CODE);
+    }
+
+    if (!codesMatch(otpCode, cashOut.otpCode)) {
+      await recordOtpFailure(agentId, agentData);
+      // Count it against the request; the fifth wrong code returns the money.
+      const attempts = await db.runTransaction(async (tx) => {
+        const fresh = (await tx.get(cashOutRef!)).data() as CashOutRequest;
+        if (fresh.status !== "pending") return 0;
+        const n = (fresh.failedAttempts ?? 0) + 1;
+        tx.update(cashOutRef!, { failedAttempts: n });
+        return n;
+      });
+      if (attempts >= MAX_CODE_ATTEMPTS_PER_REQUEST) {
+        await releaseCashOutHold(cashOutRef.id, "too_many_attempts", "system");
+      }
+      throw new https.HttpsError("not-found", INVALID_CODE);
     }
     await clearOtpFailures(agentId, agentData);
 
-    const cashOutDoc = snapshot.docs[0];
-    const cashOut = cashOutDoc.data() as CashOutRequest;
-
-    if (new Date() > cashOut.expiresAt.toDate()) {
-      // Expire and return the held amount to the customer.
-      await db.runTransaction(async (tx) => {
-        const fresh = (await tx.get(cashOutDoc.ref)).data() as CashOutRequest;
-        if (fresh.status !== "pending") return;
-        const pending = await prepareJournalEntry(tx, {
-          entryId: `cashoutrelease_${cashOutDoc.id}`,
-          type: "adjustment",
-          currency: cashOut.currency as "USD" | "SLS",
-          lines: [
-            { account: CASHOUT_HOLD, debit: cashOut.amount, credit: 0 },
-            { account: userAccount(cashOut.customerId), debit: 0, credit: cashOut.amount },
-          ],
-          refs: { topupId: cashOutDoc.id },
-          description: "Cash-out expired — hold returned",
-          postedBy: "system",
-        });
-        pending.write(tx);
-        tx.update(cashOutDoc.ref, { status: "expired" });
-      });
-      throw new https.HttpsError("failed-precondition", "This code has expired");
+    if (agentId === cashOut.customerId) {
+      throw new https.HttpsError("permission-denied", "You cannot confirm your own cash-out");
     }
 
-    // Fetch customer name for response
+    if (new Date() > cashOut.expiresAt.toDate()) {
+      await releaseCashOutHold(cashOutRef.id, "expired", "system");
+      throw new https.HttpsError("failed-precondition", "This code has expired. The money has gone back to the customer.");
+    }
+
     const customerDoc = await db.collection("users").doc(cashOut.customerId).get();
-    // The customer's funds already sit in the cash-out hold, so the ledger
-    // debit here is against that hold, not their wallet — a freeze applied
-    // after the request was raised would otherwise let the payout through.
+    // The funds already sit in the hold, so the debit here is against the hold,
+    // not the wallet — a freeze applied after the request would otherwise let
+    // the payout through.
     assertAccountActive(customerDoc.data(), "counterparty");
     const customerName = customerDoc.data()?.fullName || "Customer";
 
     const { topupCommissionRate } = await getRates();
     const commissionCents = computeCommission(cashOut.amount, topupCommissionRate);
     const now = admin.firestore.Timestamp.now();
-    const transactionId = db.collection("transactions").doc().id;
+    const entryId = `cashout_${cashOutRef.id}`;
+    // Requests from before history rows existed get one written now.
+    const transactionId = cashOut.transactionId ?? db.collection("transactions").doc().id;
 
     await db.runTransaction(async (tx) => {
-      const freshCashOut = (await tx.get(cashOutDoc.ref)).data() as CashOutRequest;
-      if (freshCashOut.status !== "pending") {
+      const fresh = (await tx.get(cashOutRef!)).data() as CashOutRequest;
+      if (fresh.status !== "pending") {
         throw new https.HttpsError("failed-precondition", "Code already used");
       }
 
-      // The held amount becomes the agent's float — they handed out physical
-      // cash and get e-money back, mirroring the top-up float model — plus a
-      // platform-funded commission.
       const lines: JournalLine[] = [
         { account: CASHOUT_HOLD, debit: cashOut.amount, credit: 0 },
         { account: userAccount(agentId), debit: 0, credit: cashOut.amount },
@@ -154,53 +202,55 @@ export const agentConfirmCashOut = https.onCall(
       }
 
       const pending = await prepareJournalEntry(tx, {
-        entryId: `cashout_${cashOutDoc.id}`,
+        entryId,
         type: "agent_cashout",
         currency: cashOut.currency as "USD" | "SLS",
         lines,
-        refs: { transactionId, topupId: cashOutDoc.id },
+        refs: { transactionId, topupId: cashOutRef!.id },
         description: "Agent cash-out",
         postedBy: agentId,
       });
-
       pending.write(tx);
 
-      // Mark cash-out complete
-      tx.update(cashOutDoc.ref, {
-        status: "completed",
-        agentId,
-        completedAt: now,
-      });
+      tx.update(cashOutRef!, { status: "completed", agentId, completedAt: now });
 
-      // Transaction record
-      const txRecord: Transaction = {
-        type: "withdrawal",
-        fromUserId: cashOut.customerId,
+      const settled: Partial<Transaction> = {
         toUserId: agentId,
         participants: [cashOut.customerId, agentId],
-        amount: cashOut.amount,
         commissionCents,
-        currency: cashOut.currency,
         status: "completed",
         description: "Agent cash-out",
-        journalEntryId: `cashout_${cashOutDoc.id}`,
-        createdAt: now,
+        journalEntryId: entryId,
+        holdEntryId: `cashouthold_${cashOutRef!.id}`,
         completedAt: now,
       };
-      tx.set(db.collection("transactions").doc(transactionId), txRecord);
+      const txRef = db.collection("transactions").doc(transactionId);
+      if (cashOut.transactionId) {
+        tx.update(txRef, settled);
+      } else {
+        tx.set(txRef, {
+          type: "withdrawal",
+          fromUserId: cashOut.customerId,
+          amount: cashOut.amount,
+          currency: cashOut.currency,
+          createdAt: now,
+          ...settled,
+        } as Transaction);
+      }
     });
 
-    sendPushNotification(
+    notifyUser(
       cashOut.customerId,
+      "cashout_completed",
       "Cash Out Complete",
-      `${agentData.fullName} confirmed your cash-out of ${cashOut.currency} ${(cashOut.amount / 100).toFixed(2)}`,
+      `${agentData.fullName} paid out your cash-out of ${cashOut.currency} ${(cashOut.amount / 100).toFixed(2)}`,
       { type: "cashout_complete", transactionId }
     ).catch((err) => console.error("Failed to notify customer:", err));
 
     return {
       success: true,
       data: {
-        cashOutId: cashOutDoc.id,
+        cashOutId: cashOutRef.id,
         amount: cashOut.amount,
         customerName,
         commission: commissionCents,

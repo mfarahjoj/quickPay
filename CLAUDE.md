@@ -50,5 +50,6 @@ Every user-facing string ships in **all three locales** — `en`, `so`, `ar` —
 | `LEDGER_ARCHITECTURE.md` | Chart of accounts, journal entry schema, per-flow templates, reconciliation |
 | `DESIGN_SYSTEM.md` | Colors, typography, component patterns |
 | `GTM_ROADMAP.md` | Hargeisa launch phases, KPIs, risks |
+| `CASH_IN_CASH_OUT.md` | Agent cash-in/cash-out: flow steps, ledger entries, guards, threat model |
 | `MANUAL_TOPUP_GUIDE.md` | Agent top-up operational flow |
 | `TESTFLIGHT_QUICKSTART.md` | One-time Apple/signing setup |

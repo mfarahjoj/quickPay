@@ -1,3 +1,4 @@
+import * as crypto from "crypto";
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { assertResetCooldownAllows } from "../utils/resetCooldown";
@@ -6,8 +7,9 @@ import { requireActiveAccount } from "../utils/accountStatus";
 import { enforceTransactionLimits } from "../utils/limits";
 import { verifyUserPin } from "../auth/validatePin";
 import { enforceVelocity } from "../utils/velocity";
-import { ApiResponse, Wallet, CashOutRequest } from "../types";
+import { ApiResponse, Wallet, CashOutRequest, Transaction } from "../types";
 import { prepareJournalEntry, userAccount, CASHOUT_HOLD } from "../ledger";
+import { releaseCashOutHold } from "./cashOutHold";
 
 const CASHOUT_EXPIRY_MINUTES = 30;
 const MIN_CASHOUT_CENTS = 100; // $1 minimum
@@ -25,7 +27,9 @@ interface CustomerCashOutResponse {
 }
 
 function generateOTP(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  // crypto-secure: Math.random() output can be predicted from observations,
+  // and this code is what releases the customer's money to an agent.
+  return crypto.randomInt(100000, 1000000).toString();
 }
 
 export const customerCashOut = https.onCall(
@@ -72,33 +76,15 @@ export const customerCashOut = https.onCall(
       throw new https.HttpsError("failed-precondition", "Insufficient balance");
     }
 
-    // Cancel any existing pending cash-out for this customer, returning each
-    // held amount from platform:cashout_hold to their wallet.
+    // One live cash-out per customer: a new request returns any older held
+    // money first (through the same path as cancel and expiry).
     const existing = await db
       .collection("cashOutRequests")
       .where("customerId", "==", customerId)
       .where("status", "==", "pending")
       .get();
     for (const doc of existing.docs) {
-      const held = doc.data() as CashOutRequest;
-      await db.runTransaction(async (tx) => {
-        const fresh = (await tx.get(doc.ref)).data() as CashOutRequest;
-        if (fresh.status !== "pending") return;
-        const pending = await prepareJournalEntry(tx, {
-          entryId: `cashoutrelease_${doc.id}`,
-          type: "adjustment",
-          currency: held.currency as "USD" | "SLS",
-          lines: [
-            { account: CASHOUT_HOLD, debit: held.amount, credit: 0 },
-            { account: userAccount(customerId), debit: 0, credit: held.amount },
-          ],
-          refs: { topupId: doc.id },
-          description: "Cash-out cancelled — hold returned",
-          postedBy: customerId,
-        });
-        pending.write(tx);
-        tx.update(doc.ref, { status: "cancelled" });
-      });
+      await releaseCashOutHold(doc.id, "replaced", customerId);
     }
 
     const now = admin.firestore.Timestamp.now();
@@ -107,6 +93,10 @@ export const customerCashOut = https.onCall(
 
     const otpCode = generateOTP();
     const cashOutRef = db.collection("cashOutRequests").doc();
+    // The customer's history shows the held money straight away as a pending
+    // cash-out, rather than a balance that silently dropped.
+    const transactionId = db.collection("transactions").doc().id;
+    const holdEntryId = `cashouthold_${cashOutRef.id}`;
 
     const cashOutRecord: CashOutRequest = {
       customerId,
@@ -116,25 +106,42 @@ export const customerCashOut = https.onCall(
       status: "pending",
       expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
       createdAt: now,
+      transactionId,
+      failedAttempts: 0,
     };
 
     // Deduct balance immediately into the cash-out hold — released to the
     // agent's float on confirm, or back to the customer on cancel/expiry.
     await db.runTransaction(async (tx) => {
       const pending = await prepareJournalEntry(tx, {
-        entryId: `cashouthold_${cashOutRef.id}`,
+        entryId: holdEntryId,
         type: "agent_cashout",
         currency: wallet.currency as "USD" | "SLS",
         lines: [
           { account: userAccount(customerId), debit: amount, credit: 0 },
           { account: CASHOUT_HOLD, debit: 0, credit: amount },
         ],
-        refs: { topupId: cashOutRef.id },
+        refs: { topupId: cashOutRef.id, transactionId },
         description: "Cash-out hold",
         postedBy: customerId,
       });
       pending.write(tx);
       tx.set(cashOutRef, cashOutRecord);
+      // toUserId is filled in by the agent who claims it.
+      const txRecord: Transaction = {
+        type: "withdrawal",
+        fromUserId: customerId,
+        toUserId: "",
+        participants: [customerId],
+        amount,
+        currency: wallet.currency,
+        status: "pending",
+        description: "Cash-out — show your code to an agent",
+        journalEntryId: holdEntryId,
+        holdEntryId,
+        createdAt: now,
+      };
+      tx.set(db.collection("transactions").doc(transactionId), txRecord);
     });
 
     return {

@@ -63,10 +63,12 @@ export const agentConfirmTopup = https.onCall(
       throw new https.HttpsError("not-found", "Agent not found");
     }
     const agentData = agentDoc.data() as User;
+    // Only vetted agents handle customers' cash. A plain merchant accepts
+    // payments; it was never approved to run cash-in, and cash-out already
+    // refused it — the two sides now agree.
     if (
       agentData.accountType !== "topup_agent" &&
-      agentData.accountType !== "agent_merchant" &&
-      agentData.accountType !== "merchant"
+      agentData.accountType !== "agent_merchant"
     ) {
       throw new https.HttpsError(
         "permission-denied",
