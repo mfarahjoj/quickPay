@@ -80,6 +80,46 @@ export async function sumSpendSince(userId: string, since: Date): Promise<number
   return typeof total === "number" ? total : 0;
 }
 
+/**
+ * A uid no account can hold, so the probe reads nobody's history.
+ *
+ * `__` is not a character Firebase Auth issues in a uid, and the aggregation
+ * only has to be *planned* to prove the index exists — the expected answer is
+ * an empty sum.
+ */
+const INDEX_PROBE_UID = "__spend_index_probe__";
+
+export interface SpendIndexProbe {
+  ok: boolean;
+  /** Firestore's own message when the query cannot be served. */
+  error?: string;
+}
+
+/**
+ * Check that production can still serve the spend-limit query.
+ *
+ * `enforceAggregateLimits` fails closed, which is correct — a spend cap that
+ * opens up during an outage is not a cap — but it means one unservable query
+ * takes down every outbound flow at once: cash-out, QR payment, P2P,
+ * remittance, payroll and the limits screen. That is exactly what a missing
+ * `amount` field in the composite index did, and the first thing to notice
+ * was a customer.
+ *
+ * So the fragility is answered by finding out first, not by failing open.
+ * This deliberately calls `sumSpendSince` rather than rebuilding the query,
+ * so the probe cannot drift from what the callables actually run.
+ */
+export async function probeSpendIndex(
+  now: Date = new Date()
+): Promise<SpendIndexProbe> {
+  try {
+    await sumSpendSince(INDEX_PROBE_UID, startOfLocalMonth(now));
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: (err as Error)?.message ?? String(err) };
+  }
+}
+
 export interface SpendUsage {
   dailyUsed: number;
   monthlyUsed: number;

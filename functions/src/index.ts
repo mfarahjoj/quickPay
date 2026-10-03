@@ -41,6 +41,9 @@ export { manualTopup, getAgentTopupHistory } from "./topup/manualTopup";
 // Agent cash-out (customer gets OTP → shows to agent → agent confirms)
 export { customerCashOut } from "./topup/customerCashOut";
 export { agentConfirmCashOut } from "./topup/agentConfirmCashOut";
+export { cancelCashOut } from "./topup/cancelCashOut";
+// Returns unclaimed cash-out holds and closes stale top-up codes, every 5 minutes
+export { expireAgentRequests } from "./topup/expireAgentRequests";
 export { customerRequestAgentTopup } from "./topup/customerRequestAgentTopup";
 export { agentConfirmTopup } from "./topup/agentConfirmTopup";
 
@@ -123,6 +126,14 @@ export {
   adminGetKycSubmission,
   adminReviewKyc,
 } from "./admin/kycReview";
+// Reconciliation: read what the invariant check found, trace it, re-run it
+export {
+  adminGetLedgerOverview,
+  adminGetLedgerAlert,
+  adminTraceLedgerAccount,
+  adminAcknowledgeLedgerAlert,
+  adminRunLedgerCheck,
+} from "./admin/ledgerDesk";
 
 // Merchant settlement: the merchant asks, ops sends the transfer and records it
 export { requestPayout } from "./payouts/requestPayout";

@@ -14,6 +14,7 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import { JournalEntryDoc } from "./types";
 import { isUserAccount, userIdOf } from "./accounts";
 import { JOURNAL_COLLECTION, LEDGER_BALANCES_COLLECTION } from "./post";
+import { probeSpendIndex } from "../utils/limits";
 
 const BATCH_SIZE = 500;
 
@@ -72,8 +73,21 @@ async function replayJournal(db: FirebaseFirestore.Firestore): Promise<ReplayRes
   return { entryCount, balances, corruptEntries };
 }
 
-/** Full check, callable from the schedule or from tests/scripts. */
-export async function runInvariantCheck(): Promise<{ drifts: Drift[]; entryCount: number }> {
+/** Who started a run: the nightly schedule, or an admin from the console. */
+export interface RunMeta {
+  trigger: "schedule" | "manual";
+  triggeredBy?: string;
+}
+
+/** Full check, callable from the schedule, the admin ledger desk, or tests/scripts. */
+export async function runInvariantCheck(
+  meta: RunMeta = { trigger: "schedule" }
+): Promise<{
+  drifts: Drift[];
+  entryCount: number;
+  spendIndexOk: boolean;
+  runId: string;
+}> {
   const db = admin.firestore();
   const { entryCount, balances, corruptEntries } = await replayJournal(db);
   const drifts: Drift[] = [];
@@ -172,35 +186,64 @@ export async function runInvariantCheck(): Promise<{ drifts: Drift[]; entryCount
     }
   });
 
+  // Drift is about money that already moved. This is about money that cannot
+  // move at all: the spend-limit query fails closed, so an index it cannot use
+  // blocks every outbound flow at once. Checking it here means the daily job
+  // pages ops, rather than a customer being the one to notice.
+  const spendIndex = await probeSpendIndex();
+
   // Record the run.
   const now = admin.firestore.Timestamp.now();
   const runId = now.toDate().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+  const trigger = {
+    trigger: meta.trigger,
+    ...(meta.triggeredBy ? { triggeredBy: meta.triggeredBy } : {}),
+  };
   await db.collection("ledger_checkpoints").doc(runId).set({
     ranAt: now,
     entryCount,
     accountCount: balances.size,
     driftCount: drifts.length,
-    ok: drifts.length === 0,
+    spendIndexOk: spendIndex.ok,
+    ok: drifts.length === 0 && spendIndex.ok,
+    ...trigger,
   });
 
-  if (drifts.length > 0) {
+  if (drifts.length > 0 || !spendIndex.ok) {
     await db.collection("ledger_alerts").doc(runId).set({
+      ...trigger,
       ranAt: now,
       drifts: drifts.slice(0, 100),
       driftCount: drifts.length,
+      spendIndexOk: spendIndex.ok,
+      ...(spendIndex.error ? { spendIndexError: spendIndex.error } : {}),
       acknowledged: false,
     });
+  }
+
+  if (drifts.length > 0) {
     console.error(
       `LEDGER DRIFT DETECTED: ${drifts.length} mismatch(es) across ${entryCount} entries`,
       JSON.stringify(drifts.slice(0, 20))
     );
-  } else {
+  }
+
+  if (!spendIndex.ok) {
+    console.error(
+      "SPEND LIMIT QUERY UNSERVABLE: every outbound flow (cash-out, QR payment, " +
+        "sendP2P, approvePaymentRequest, remittance, payroll) is failing closed. " +
+        "Check the transactions fromUserId/type/createdAt/amount composite index.",
+      spendIndex.error
+    );
+  }
+
+  if (drifts.length === 0 && spendIndex.ok) {
     console.log(
       `Ledger invariant check OK: ${entryCount} entries, ${balances.size} accounts, zero drift`
     );
   }
 
-  return { drifts, entryCount };
+  return { drifts, entryCount, spendIndexOk: spendIndex.ok, runId };
 }
 
 /** Daily at 03:00 Africa/Mogadishu (EAT — Hargeisa's timezone). */

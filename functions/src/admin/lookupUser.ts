@@ -16,6 +16,7 @@ import { ApiResponse } from "../types";
 import { requireAdmin, requireRecentAdminAuth, requireReason } from "./guard";
 import { stageAuditEntry, writeAuditEntry } from "./audit";
 import { resolveAccountStatus } from "../utils/accountStatus";
+import { probeSpendIndex } from "../utils/limits";
 
 const SENSITIVE_FIELDS = ["pinHash"];
 
@@ -294,9 +295,13 @@ export const adminGetLedgerHealth = https.onCall(
     requireAdmin(request);
 
     const db = admin.firestore();
-    const [checkpoints, alerts] = await Promise.all([
+    // The spend-index probe is cheap and answers "can anyone pay right now?",
+    // so it runs live rather than being read off the last nightly checkpoint —
+    // an index broken at noon should not stay invisible until 03:00.
+    const [checkpoints, alerts, spendIndex] = await Promise.all([
       db.collection("ledger_checkpoints").orderBy("ranAt", "desc").limit(1).get(),
       db.collection("ledger_alerts").where("acknowledged", "==", false).limit(5).get(),
+      probeSpendIndex(),
     ]);
 
     const latest = checkpoints.empty ? null : checkpoints.docs[0].data();
@@ -308,6 +313,7 @@ export const adminGetLedgerHealth = https.onCall(
         neverRun: checkpoints.empty,
         openAlertCount: alerts.size,
         openAlerts: alerts.docs.map((d) => ({ id: d.id, ...d.data() })),
+        spendIndex,
       },
     };
   }
