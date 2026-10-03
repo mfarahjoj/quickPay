@@ -8,9 +8,9 @@ money ships to prod without explicit per-deploy authorization (CLAUDE.md).
 
 | Item | Phase | Status |
 |---|---|---|
-| W1 One source for prod | 0 | committed 2026-10-03, merchant API merged (`b6e3e81`); **push pending**. Prod/source names match except `cancelCashOut`, `expireAgentRequests` (not deployed) |
+| W1 One source for prod | 0 | committed 2026-10-03, merchant API merged (`b6e3e81`), pushed 2026-10-03. Prod/source names match except `cancelCashOut`, `expireAgentRequests` (not deployed) |
 | W2 CI fix | 0 | committed 2026-10-03 — runs on all branches, deploy job removed, merchant/admin typecheck added; lint non-blocking (backlog) |
-| #1 Self top-up mint | 1 | open |
+| #1 Self top-up mint | 1 | hotfix committed 2026-10-03 (`utils/agentGuards.ts`, 11 tests); **deploy pending authorization**: `manualTopup`, `agentConfirmTopup`. Retirement of `manualTopup` waits on D2 |
 | M Business-level monitors | 1 | open |
 | #2 Commission round-trip | 1 | blocked on D1 |
 | #3 Unauthenticated name lookup | 2 | blocked on D4 |
@@ -38,7 +38,6 @@ jobs for `merchant-app` and `admin`.
 
 ### Phase 0 follow-ups
 
-- **Push** `fix/remove-minting-callables` (no upstream yet).
 - **Cash-out holds in prod.** Prod's `customerCashOut` hash can't be tied to a
   commit. If it is the hold version (money moves to `platform:cashout_hold` at
   request time), unclaimed holds have no expiry path until `cancelCashOut` and

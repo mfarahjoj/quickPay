@@ -4,6 +4,10 @@ import { assertResetCooldownAllows } from "../utils/resetCooldown";
 import { verifyUserPin } from "../auth/validatePin";
 import { validateAmount, requireAuth, dollarsToCents } from "../utils/validation";
 import { assertAccountActive } from "../utils/accountStatus";
+import { assertCashInRecipient } from "../utils/agentGuards";
+import { enforcePerTransactionLimit } from "../utils/limits";
+import { enforceVelocity } from "../utils/velocity";
+import { isAgentRole } from "../utils/roles";
 import { notifyTopupCompleted } from "../utils/notifications";
 import { ApiResponse, Wallet, Transaction } from "../types";
 import { getRates, computeCommission } from "../config/rates";
@@ -83,10 +87,10 @@ export const manualTopup = https.onCall(
 
       const agentData = agentDoc.data();
 
-      // Check if agent has topup_agent role
-      if (agentData?.accountType !== "topup_agent" &&
-          agentData?.accountType !== "merchant" &&
-          agentData?.accountType !== "agent_merchant") {
+      // Only vetted agents hold float for cash-in. A plain merchant was never
+      // approved to handle customers' cash; agentConfirmTopup and the
+      // merchant app's dashboard already agree.
+      if (!isAgentRole(agentData?.accountType)) {
         throw new https.HttpsError(
           "permission-denied",
           "Only authorized agents can perform manual top-ups"
@@ -109,6 +113,19 @@ export const manualTopup = https.onCall(
       if (!userDoc.exists) {
         throw new https.HttpsError("not-found", "User not found");
       }
+      const userData = userDoc.data();
+
+      // Not the agent, not another agent or merchant, and not frozen: see
+      // assertCashInRecipient for how each of those minted commission.
+      assertCashInRecipient(agentId, userId, userData);
+
+      // Cash-in is inbound for the customer, so only their per-transaction
+      // ceiling applies — the same rule as customerRequestAgentTopup.
+      await enforcePerTransactionLimit(amountCents, userData ?? {});
+
+      // Every call pays commission, so how often an agent can call is a
+      // control in its own right.
+      await enforceVelocity(agentId);
 
       const { topupCommissionRate } = await getRates();
       const commissionCents = computeCommission(amountCents, topupCommissionRate);

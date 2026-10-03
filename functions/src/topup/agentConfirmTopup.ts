@@ -3,6 +3,7 @@ import { https } from "firebase-functions/v2";
 import { assertResetCooldownAllows } from "../utils/resetCooldown";
 import { requireAuth } from "../utils/validation";
 import { assertAccountActive } from "../utils/accountStatus";
+import { assertCashInRecipient } from "../utils/agentGuards";
 import { verifyUserPin } from "../auth/validatePin";
 import { notifyUser } from "../utils/notifications";
 import {
@@ -127,6 +128,9 @@ export const agentConfirmTopup = https.onCall(
     }
 
     const customerDoc = await db.collection("users").doc(topup.customerId).get();
+    // Agent-to-agent cash-in moves float in a circle and pays commission on
+    // every lap; a frozen customer must not be credited fresh value either.
+    assertCashInRecipient(agentId, topup.customerId, customerDoc.data());
     const customerName = customerDoc.data()?.fullName || "Customer";
 
     const { topupCommissionRate } = await getRates();
