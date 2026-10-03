@@ -3,6 +3,7 @@ import { api, type UserDetail as Detail } from "../api";
 import { Icon } from "./Icon";
 import { ReasonPrompt } from "./ReasonPrompt";
 import { Avatar, EmptyState, Loading } from "./ui";
+import { ApiKeysPanel } from "./ApiKeysPanel";
 
 type PendingAction = "freeze" | "unfreeze" | "clearLockouts" | "revokeDevices";
 
@@ -221,6 +222,10 @@ export function UserDetail({ userId }: { userId: string }) {
           </p>
         )}
       </div>
+
+      {(profile.accountType === "merchant" || profile.accountType === "agent_merchant") && (
+        <ApiKeysPanel merchantId={detail.userId} disabled={detail.accountStatus !== "active"} />
+      )}
 
       <div className="panel">
         <div className="panel-head">

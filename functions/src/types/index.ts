@@ -281,6 +281,14 @@ export interface Transaction {
   holdEntryId?: string;
   /** Cash-out only: the entry that returned the hold to the customer. */
   releaseEntryId?: string;
+  /**
+   * Set on a payment taken through the merchant API, and on its refunds.
+   * Such a payment is refunded through the API only, where partial refunds
+   * are tracked on the charge — see refundPayment.
+   */
+  apiChargeId?: string;
+  /** On an API payment: cents refunded so far, across partial refunds. */
+  amountRefunded?: number;
   createdAt: FirebaseFirestore.Timestamp;
   completedAt?: FirebaseFirestore.Timestamp;
   errorMessage?: string;

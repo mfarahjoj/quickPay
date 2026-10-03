@@ -64,11 +64,14 @@ type MainStackParamList = {
   TransactionDetail: { transaction: any };
   Security: undefined;
   MyQR: undefined;
+  // Exactly one of requestId (a shop's in-person charge) or chargeId (a
+  // charge raised through the Zapp API: online checkout or a till).
   ApprovePayment: {
-    requestId: string;
-    merchantName: string;
-    amount: number;
-    currency: string;
+    requestId?: string;
+    chargeId?: string;
+    merchantName?: string;
+    amount?: number;
+    currency?: string;
     createdAt?: string;
     reference?: string;
   };

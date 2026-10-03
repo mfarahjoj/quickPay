@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="referrer" content="no-referrer" />
+  <meta name="theme-color" content="#0D0B0A" />
+  <title>Zapp Pay Checkout</title>
+  <!--
+    Hosted checkout for the Merchant Payments API (functions/src/api/).
+    Served at /checkout/{chargeId} by a Hosting rewrite. Reads only the public
+    charge endpoint (/v1/public/charges/{id}); the money moves when the customer
+    approves in the Zapp Pay app, never from this page.
+  -->
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --ink: #0D0B0A;
+      --ink-2: #171413;
+      --surface: rgba(255, 255, 255, 0.05);
+      --border: rgba(255, 255, 255, 0.10);
+      --coral: #FF5043;
+      --coral-soft: rgba(255, 80, 67, 0.14);
+      --teal: #5DCAA5;
+      --teal-soft: rgba(93, 202, 165, 0.14);
+      --amber: #F5B84B;
+      --text: #FFFFFF;
+      --dim: rgba(255, 255, 255, 0.62);
+      --faint: rgba(255, 255, 255, 0.38);
+      --r: 20px;
+    }
+
+    html { background: var(--ink); }
+    body {
+      background:
+        radial-gradient(120% 60% at 50% -10%, rgba(255, 80, 67, 0.16), transparent 60%),
+        var(--ink);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", "Noto Sans Arabic", sans-serif;
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px 16px calc(40px + env(safe-area-inset-bottom));
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .top {
+      width: 100%; max-width: 440px;
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 28px;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .brand-mark {
+      width: 34px; height: 34px; border-radius: 10px;
+      background: var(--coral);
+      display: grid; place-items: center;
+      font-weight: 900; font-size: 18px; color: var(--ink);
+      letter-spacing: -1px;
+    }
+    .brand-name { font-weight: 800; font-size: 18px; letter-spacing: -0.3px; }
+
+    .langs { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 3px; }
+    .langs button {
+      background: none; border: 0; color: var(--dim);
+      font: inherit; font-size: 12px; font-weight: 700;
+      padding: 6px 10px; border-radius: 999px; cursor: pointer;
+      min-width: 36px;
+    }
+    .langs button[aria-pressed="true"] { background: rgba(255,255,255,0.12); color: var(--text); }
+
+    main { width: 100%; max-width: 440px; }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 28px;
+      padding: 28px 22px 24px;
+      text-align: center;
+    }
+
+    .merchant-row { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 18px; }
+    .avatar {
+      width: 52px; height: 52px; border-radius: 50%;
+      background: var(--coral-soft); color: var(--coral);
+      display: grid; place-items: center;
+      font-weight: 800; font-size: 22px;
+    }
+    .pay-to { color: var(--dim); font-size: 15px; }
+    .pay-to strong { color: var(--text); font-weight: 700; }
+
+    .amount {
+      font-size: 48px; font-weight: 800; letter-spacing: -1.5px;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.05;
+      direction: ltr; unicode-bidi: isolate;
+    }
+    .amount small { font-size: 18px; font-weight: 700; color: var(--dim); letter-spacing: 0; margin-inline-start: 6px; }
+    .ref { margin-top: 8px; color: var(--faint); font-size: 13px; overflow-wrap: anywhere; }
+
+    .divider { height: 1px; background: var(--border); margin: 22px -22px; }
+
+    .qr-wrap {
+      display: inline-block;
+      background: #fff; border-radius: var(--r);
+      padding: 14px;
+      line-height: 0;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.35);
+    }
+    .qr-wrap svg { width: 208px; height: 208px; display: block; }
+    .qr-wrap.hidden { display: none; }
+
+    .scan-title { font-weight: 700; font-size: 17px; margin: 18px 0 10px; }
+    .steps { list-style: none; counter-reset: s; text-align: start; display: grid; gap: 8px; max-width: 300px; margin: 0 auto; }
+    .steps li { counter-increment: s; display: flex; gap: 10px; color: var(--dim); font-size: 14px; line-height: 1.4; }
+    .steps li::before {
+      content: counter(s);
+      flex: 0 0 22px; height: 22px; border-radius: 50%;
+      background: rgba(255,255,255,0.08); color: var(--text);
+      font-size: 12px; font-weight: 700; display: grid; place-items: center;
+    }
+
+    .btn {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      width: 100%; min-height: 54px;
+      border-radius: 16px; border: 0;
+      font: inherit; font-size: 17px; font-weight: 700;
+      text-decoration: none; cursor: pointer;
+    }
+    .btn-primary { background: var(--coral); color: #fff; }
+    .btn-primary:active { transform: scale(0.99); filter: brightness(0.95); }
+    .btn-ghost { background: transparent; color: var(--dim); font-size: 15px; font-weight: 600; min-height: 44px; margin-top: 8px; }
+    .btn-ghost:hover { color: var(--text); }
+
+    .status {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      margin-top: 20px; color: var(--dim); font-size: 14px;
+    }
+    .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--teal); position: relative; flex: none; }
+    .pulse::after {
+      content: ""; position: absolute; inset: -4px; border-radius: 50%;
+      border: 2px solid var(--teal); opacity: 0; animation: ring 1.6s ease-out infinite;
+    }
+    @keyframes ring { 0% { transform: scale(0.6); opacity: 0.8; } 100% { transform: scale(1.8); opacity: 0; } }
+    .timer { margin-top: 6px; color: var(--faint); font-size: 13px; font-variant-numeric: tabular-nums; }
+    .timer.urgent { color: var(--amber); }
+
+    .result-icon {
+      width: 72px; height: 72px; border-radius: 50%;
+      display: grid; place-items: center; margin: 4px auto 18px;
+    }
+    .result-icon.ok { background: var(--teal-soft); color: var(--teal); }
+    .result-icon.warn { background: rgba(245,184,75,0.14); color: var(--amber); }
+    .result-icon svg { width: 36px; height: 36px; }
+    .result-title { font-size: 22px; font-weight: 800; letter-spacing: -0.3px; margin-bottom: 8px; }
+    .result-body { color: var(--dim); font-size: 15px; line-height: 1.5; margin-bottom: 22px; }
+
+    .foot { margin-top: 18px; text-align: center; color: var(--faint); font-size: 12px; line-height: 1.5; padding: 0 12px; }
+    .foot svg { width: 12px; height: 12px; vertical-align: -1px; margin-inline-end: 4px; }
+
+    .skeleton { height: 16px; border-radius: 8px; background: rgba(255,255,255,0.07); margin: 10px auto; animation: shimmer 1.2s ease-in-out infinite; }
+    @keyframes shimmer { 50% { opacity: 0.5; } }
+
+    .notice { margin-top: 12px; font-size: 13px; color: var(--amber); min-height: 18px; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .pulse::after, .skeleton { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="brand" aria-label="Zapp Pay">
+      <div class="brand-mark" aria-hidden="true">Z</div>
+      <div class="brand-name">Zapp Pay</div>
+    </div>
+    <nav class="langs" aria-label="Language">
+      <button type="button" data-lang="en" aria-pressed="true">EN</button>
+      <button type="button" data-lang="so" aria-pressed="false">SO</button>
+      <button type="button" data-lang="ar" aria-pressed="false" lang="ar">ع</button>
+    </nav>
+  </header>
+
+  <main>
+    <section class="card" id="card" aria-live="polite">
+      <div class="skeleton" style="width:52px;height:52px;border-radius:50%"></div>
+      <div class="skeleton" style="width:60%"></div>
+      <div class="skeleton" style="width:45%;height:40px"></div>
+    </section>
+    <p class="notice" id="notice" role="status"></p>
+    <p class="foot">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+      <span data-t="secured"></span>
+    </p>
+  </main>
+
+  <script src="/assets/qrcode-generator-1.4.4.js"></script>
+  <script>
+  (function () {
+    'use strict';
+
+    var STRINGS = {
+      en: {
+        docTitle: 'Pay with Zapp Pay',
+        payTo: 'Pay {merchant}',
+        reference: 'Ref: {ref}',
+        scanTitle: 'Scan to pay',
+        step1: 'Open Zapp Pay on your phone',
+        step2: 'Tap Scan and point it at this code',
+        step3: 'Check the amount and confirm with your PIN',
+        openApp: 'Open Zapp Pay',
+        showQr: 'Show QR code instead',
+        hideQr: 'Hide QR code',
+        waiting: 'Waiting for you to approve in the app…',
+        expiresIn: 'Expires in {time}',
+        paidTitle: 'Payment complete',
+        paidBody: 'Thank you. {merchant} has received your payment.',
+        returning: 'Taking you back to {merchant}…',
+        returnTo: 'Return to {merchant}',
+        closeTab: 'You can close this page.',
+        expiredTitle: 'This payment has expired',
+        expiredBody: 'Nothing was charged. Go back to {merchant} to try again.',
+        canceledTitle: 'This payment was cancelled',
+        canceledBody: 'Nothing was charged.',
+        cancelLink: 'Cancel and return to {merchant}',
+        notFoundTitle: 'Payment link not found',
+        notFoundBody: 'Check the link, or ask the merchant for a new one.',
+        offline: 'Connection lost — retrying…',
+        secured: 'Secured by Zapp Pay. You approve every payment in the app with your PIN.'
+      },
+      so: {
+        docTitle: 'Ku bixi Zapp Pay',
+        payTo: 'U bixi {merchant}',
+        reference: 'Tixraac: {ref}',
+        scanTitle: 'Sawir koodhka si aad u bixiso',
+        step1: 'Ka fur Zapp Pay taleefankaaga',
+        step2: 'Taabo Sawir oo u jeedi koodhkan',
+        step3: 'Hubi qadarka oo ku xaqiiji PIN-kaaga',
+        openApp: 'Fur Zapp Pay',
+        showQr: 'Tus koodhka QR',
+        hideQr: 'Qari koodhka QR',
+        waiting: 'Waxaa la sugayaa inaad ku oggolaato app-ka…',
+        expiresIn: 'Waqtiga haray: {time}',
+        paidTitle: 'Lacag bixintu waa guulaysatay',
+        paidBody: 'Mahadsanid. {merchant} wuu helay lacagtaada.',
+        returning: 'Waxaa laguu celinayaa {merchant}…',
+        returnTo: 'Ku noqo {merchant}',
+        closeTab: 'Waad xiri kartaa boggan.',
+        expiredTitle: 'Waqtigii lacag bixintan wuu dhammaaday',
+        expiredBody: 'Wax lacag ah lagaama jarin. Ku noqo {merchant} si aad mar kale isugu daydo.',
+        canceledTitle: 'Lacag bixintan waa la joojiyay',
+        canceledBody: 'Wax lacag ah lagaama jarin.',
+        cancelLink: 'Jooji oo ku noqo {merchant}',
+        notFoundTitle: 'Linkiga lacag bixinta lama helin',
+        notFoundBody: 'Hubi linkiga, ama ganacsadaha ka codso mid cusub.',
+        offline: 'Xiriirka ayaa go’ay — mar kale ayaa la isku dayayaa…',
+        secured: 'Waxaa sugaya Zapp Pay. Lacag bixin kasta waxaad app-ka ku oggolaataa PIN-kaaga.'
+      },
+      ar: {
+        docTitle: 'الدفع عبر Zapp Pay',
+        payTo: 'ادفع إلى {merchant}',
+        reference: 'المرجع: {ref}',
+        scanTitle: 'امسح الرمز للدفع',
+        step1: 'افتح تطبيق Zapp Pay على هاتفك',
+        step2: 'اضغط على مسح ووجّه الكاميرا إلى هذا الرمز',
+        step3: 'تحقق من المبلغ وأكّد برمز PIN الخاص بك',
+        openApp: 'افتح Zapp Pay',
+        showQr: 'اعرض رمز QR بدلاً من ذلك',
+        hideQr: 'إخفاء رمز QR',
+        waiting: 'بانتظار موافقتك في التطبيق…',
+        expiresIn: 'ينتهي خلال {time}',
+        paidTitle: 'تم الدفع بنجاح',
+        paidBody: 'شكرًا لك. استلم {merchant} دفعتك.',
+        returning: 'جارٍ إعادتك إلى {merchant}…',
+        returnTo: 'العودة إلى {merchant}',
+        closeTab: 'يمكنك إغلاق هذه الصفحة.',
+        expiredTitle: 'انتهت صلاحية هذه الدفعة',
+        expiredBody: 'لم يتم خصم أي مبلغ. عد إلى {merchant} للمحاولة مرة أخرى.',
+        canceledTitle: 'تم إلغاء هذه الدفعة',
+        canceledBody: 'لم يتم خصم أي مبلغ.',
+        cancelLink: 'إلغاء والعودة إلى {merchant}',
+        notFoundTitle: 'رابط الدفع غير موجود',
+        notFoundBody: 'تحقق من الرابط، أو اطلب من التاجر رابطًا جديدًا.',
+        offline: 'انقطع الاتصال — جارٍ إعادة المحاولة…',
+        secured: 'محمي بواسطة Zapp Pay. توافق على كل دفعة في التطبيق برمز PIN الخاص بك.'
+      }
+    };
+
+    var POLL_MS = 3000;
+    var REDIRECT_MS = 2500;
+    var LANG_KEY = 'zapp.checkout.lang';
+
+    var chargeId = (location.pathname.match(/\/checkout\/(ch_[A-Za-z0-9_-]{16,64})\/?$/) || [])[1];
+    var isTouch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+
+    var lang = pickLanguage();
+    var charge = null;          // last public charge from the API
+    var state = 'loading';      // loading | pending | succeeded | expired | canceled | not_found
+    var qrVisible = !isTouch;   // phones get the button first; the QR is one tap away
+    var pollTimer = null;
+    var tickTimer = null;
+    var failures = 0;
+    var redirectTimer = null;
+
+    var card = document.getElementById('card');
+    var notice = document.getElementById('notice');
+
+    function pickLanguage() {
+      try {
+        var saved = localStorage.getItem(LANG_KEY);
+        if (saved && STRINGS[saved]) return saved;
+      } catch (e) { /* storage blocked */ }
+      var nav = (navigator.languages && navigator.languages[0]) || navigator.language || 'en';
+      var code = nav.slice(0, 2).toLowerCase();
+      return STRINGS[code] ? code : 'en';
+    }
+
+    function t(key, vars) {
+      var s = (STRINGS[lang] && STRINGS[lang][key]) || STRINGS.en[key] || key;
+      return s.replace(/\{(\w+)\}/g, function (_, k) { return vars && vars[k] != null ? vars[k] : ''; });
+    }
+
+    function esc(s) {
+      return String(s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+
+    function money(cents) {
+      return '$' + (cents / 100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    }
+
+    function safeHttpsUrl(u) {
+      try {
+        var url = new URL(u);
+        return url.protocol === 'https:' ? url.toString() : null;
+      } catch (e) { return null; }
+    }
+
+    function setLanguage(next) {
+      lang = next;
+      try { localStorage.setItem(LANG_KEY, next); } catch (e) { /* storage blocked */ }
+      document.documentElement.lang = next;
+      document.documentElement.dir = next === 'ar' ? 'rtl' : 'ltr';
+      document.title = t('docTitle');
+      Array.prototype.forEach.call(document.querySelectorAll('.langs button'), function (b) {
+        b.setAttribute('aria-pressed', String(b.getAttribute('data-lang') === next));
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('[data-t]'), function (el) {
+        el.textContent = t(el.getAttribute('data-t'));
+      });
+      render();
+    }
+
+    function qrSvg(text) {
+      var qr = qrcode(0, 'M');
+      qr.addData(text);
+      qr.make();
+      return qr.createSvgTag({ cellSize: 6, margin: 0, scalable: true });
+    }
+
+    function header() {
+      var name = charge.merchant_name || 'Merchant';
+      return (
+        '<div class="merchant-row">' +
+          '<div class="avatar" aria-hidden="true">' + esc(name.charAt(0).toUpperCase()) + '</div>' +
+          '<div class="pay-to">' + t('payTo', { merchant: '<strong>' + esc(name) + '</strong>' }) + '</div>' +
+        '</div>' +
+        '<div class="amount">' + money(charge.amount) + '<small>' + esc(charge.currency) + '</small></div>' +
+        (charge.reference ? '<div class="ref">' + esc(t('reference', { ref: charge.reference })) + '</div>' : '')
+      );
+    }
+
+    function timeLeft() {
+      var ms = Date.parse(charge.expires_at) - Date.now();
+      var s = Math.max(0, Math.ceil(ms / 1000));
+      var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+      var mm = h ? String(m).padStart(2, '0') : String(m);
+      return { seconds: s, text: (h ? h + ':' : '') + mm + ':' + String(sec).padStart(2, '0') };
+    }
+
+    function resultView(kind, title, body, action) {
+      var icon = kind === 'ok'
+        ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>'
+        : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 7v6"/><circle cx="12" cy="17" r="0.6" fill="currentColor"/><circle cx="12" cy="12" r="9.5"/></svg>';
+      return (
+        '<div class="result-icon ' + kind + '">' + icon + '</div>' +
+        '<div class="result-title">' + esc(title) + '</div>' +
+        '<p class="result-body">' + esc(body) + '</p>' +
+        (action || '')
+      );
+    }
+
+    function render() {
+      if (state === 'loading') return;
+      clearInterval(tickTimer);
+
+      if (state === 'not_found') {
+        card.innerHTML = resultView('warn', t('notFoundTitle'), t('notFoundBody'));
+        return;
+      }
+
+      var merchant = charge.merchant_name || 'Merchant';
+      var successUrl = charge.success_url && safeHttpsUrl(charge.success_url);
+      var cancelUrl = charge.cancel_url && safeHttpsUrl(charge.cancel_url);
+
+      if (state === 'succeeded') {
+        var action = successUrl
+          ? '<a class="btn btn-primary" href="' + esc(successUrl) + '">' + esc(t('returnTo', { merchant: merchant })) + '</a>'
+          : '';
+        card.innerHTML = header() + '<div class="divider"></div>' +
+          resultView('ok', t('paidTitle'), successUrl ? t('returning', { merchant: merchant }) : t('paidBody', { merchant: merchant }) + ' ' + t('closeTab'), action);
+        if (successUrl && !redirectTimer) {
+          redirectTimer = setTimeout(function () { location.assign(successUrl); }, REDIRECT_MS);
+        }
+        return;
+      }
+
+      if (state === 'expired' || state === 'canceled') {
+        var back = cancelUrl
+          ? '<a class="btn btn-primary" href="' + esc(cancelUrl) + '">' + esc(t('returnTo', { merchant: merchant })) + '</a>'
+          : '';
+        card.innerHTML = header() + '<div class="divider"></div>' + (state === 'expired'
+          ? resultView('warn', t('expiredTitle'), t('expiredBody', { merchant: merchant }), back)
+          : resultView('warn', t('canceledTitle'), t('canceledBody'), back));
+        return;
+      }
+
+      // pending
+      var openBtn = '<a class="btn btn-primary" href="' + esc(charge.deep_link) + '">' + esc(t('openApp')) + '</a>';
+      var qrToggle = isTouch
+        ? '<button type="button" class="btn btn-ghost" id="qr-toggle" aria-expanded="' + qrVisible + '">' + esc(t(qrVisible ? 'hideQr' : 'showQr')) + '</button>'
+        : '';
+      var qrBlock =
+        '<div class="qr-wrap' + (qrVisible ? '' : ' hidden') + '" role="img" aria-label="' + esc(t('scanTitle')) + '">' + qrSvg(charge.qr_payload) + '</div>' +
+        (qrVisible
+          ? '<div class="scan-title">' + esc(t('scanTitle')) + '</div>' +
+            '<ol class="steps"><li>' + esc(t('step1')) + '</li><li>' + esc(t('step2')) + '</li><li>' + esc(t('step3')) + '</li></ol>'
+          : '');
+
+      card.innerHTML =
+        header() +
+        '<div class="divider"></div>' +
+        (isTouch ? openBtn + qrToggle + (qrVisible ? '<div style="height:16px"></div>' + qrBlock : '') : qrBlock) +
+        '<div class="status"><span class="pulse" aria-hidden="true"></span><span>' + esc(t('waiting')) + '</span></div>' +
+        '<div class="timer" id="timer"></div>' +
+        (cancelUrl ? '<a class="btn btn-ghost" href="' + esc(cancelUrl) + '">' + esc(t('cancelLink', { merchant: merchant })) + '</a>' : '');
+
+      var toggle = document.getElementById('qr-toggle');
+      if (toggle) toggle.addEventListener('click', function () { qrVisible = !qrVisible; render(); });
+
+      var timerEl = document.getElementById('timer');
+      var tick = function () {
+        var left = timeLeft();
+        timerEl.textContent = t('expiresIn', { time: left.text });
+        timerEl.className = 'timer' + (left.seconds <= 60 ? ' urgent' : '');
+        if (left.seconds === 0) { clearInterval(tickTimer); poll(); }
+      };
+      tick();
+      tickTimer = setInterval(tick, 1000);
+    }
+
+    function schedule() {
+      clearTimeout(pollTimer);
+      if (state === 'pending' || state === 'loading') {
+        pollTimer = setTimeout(poll, document.hidden ? POLL_MS * 5 : POLL_MS);
+      }
+    }
+
+    function poll() {
+      fetch('/v1/public/charges/' + encodeURIComponent(chargeId), { cache: 'no-store', credentials: 'omit' })
+        .then(function (res) {
+          if (res.status === 404) return { notFound: true };
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          return res.json();
+        })
+        .then(function (body) {
+          failures = 0;
+          notice.textContent = '';
+          if (body.notFound) { state = 'not_found'; render(); return; }
+          var changed = !charge || body.status !== charge.status || state === 'loading';
+          charge = body;
+          state = body.status;
+          if (changed) render();
+          schedule();
+        })
+        .catch(function () {
+          failures++;
+          if (failures >= 2) notice.textContent = t('offline');
+          schedule();
+        });
+    }
+
+    Array.prototype.forEach.call(document.querySelectorAll('.langs button'), function (b) {
+      b.addEventListener('click', function () { setLanguage(b.getAttribute('data-lang')); });
+    });
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) poll(); });
+
+    setLanguage(lang);
+    if (!chargeId) {
+      state = 'not_found';
+      render();
+    } else {
+      poll();
+    }
+  })();
+  </script>
+</body>
+</html>

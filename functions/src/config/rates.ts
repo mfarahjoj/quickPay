@@ -41,6 +41,20 @@ export interface Rates {
    * who genuinely forgot their PIN isn't stranded at the counter.
    */
   pinResetCooldownAllowanceCents: number;
+  /**
+   * Fraction kept as the platform fee on a payment taken through the
+   * merchant API (hosted checkout or a POS integration). Separate from
+   * paymentFeeRate so online pricing can move without touching the counter.
+   */
+  onlinePaymentFeeRate: number;
+  /**
+   * How long an API charge stays payable unless the merchant asks for less.
+   * Longer than paymentRequestTtlSeconds: an online shopper has to find their
+   * phone, open the app and scan, and nobody is waiting at a counter.
+   */
+  apiChargeTtlSeconds: number;
+  /** Requests one merchant API key may make per minute. */
+  apiRequestsPerMinute: number;
 }
 
 export const DEFAULT_RATES: Rates = {
@@ -50,6 +64,9 @@ export const DEFAULT_RATES: Rates = {
   paymentRequestTtlSeconds: 90,
   pinResetCooldownHours: 24,
   pinResetCooldownAllowanceCents: 2000, // $20
+  onlinePaymentFeeRate: 0.01,
+  apiChargeTtlSeconds: 900, // 15 minutes
+  apiRequestsPerMinute: 120,
 };
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
@@ -131,6 +148,24 @@ export async function getRates(): Promise<Rates> {
       pinResetCooldownAllowanceCents: coerceCents(
         data.pinResetCooldownAllowanceCents,
         DEFAULT_RATES.pinResetCooldownAllowanceCents
+      ),
+      onlinePaymentFeeRate: coerceRate(
+        data.onlinePaymentFeeRate,
+        DEFAULT_RATES.onlinePaymentFeeRate
+      ),
+      // A minute is the least a shopper needs to scan; a day is the most a
+      // merchant should leave an order payable without re-raising it.
+      apiChargeTtlSeconds: coerceIntInRange(
+        data.apiChargeTtlSeconds,
+        DEFAULT_RATES.apiChargeTtlSeconds,
+        60,
+        86400
+      ),
+      apiRequestsPerMinute: coerceIntInRange(
+        data.apiRequestsPerMinute,
+        DEFAULT_RATES.apiRequestsPerMinute,
+        10,
+        6000
       ),
     };
     cached = { rates, expiresAt: now + CACHE_TTL_MS };

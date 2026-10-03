@@ -44,7 +44,7 @@
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
 			<key>CFBundleURLName</key>
-			<string>so.zapppay.paymentlink</string>
+			<string>so.zapppay.links</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>zapppay</string>

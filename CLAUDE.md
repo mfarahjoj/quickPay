@@ -48,6 +48,7 @@ Every user-facing string ships in **all three locales** — `en`, `so`, `ar` —
 | Doc | Contents |
 |---|---|
 | `LEDGER_ARCHITECTURE.md` | Chart of accounts, journal entry schema, per-flow templates, reconciliation |
+| `docs/MERCHANT_API.md` | Merchant Payments API (`functions/src/api/`): keys, charges, refunds, webhooks, hosted checkout |
 | `DESIGN_SYSTEM.md` | Colors, typography, component patterns |
 | `GTM_ROADMAP.md` | Hargeisa launch phases, KPIs, risks |
 | `CASH_IN_CASH_OUT.md` | Agent cash-in/cash-out: flow steps, ledger entries, guards, threat model |

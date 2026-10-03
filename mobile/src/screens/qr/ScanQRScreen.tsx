@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { useFocusEffect } from '@react-navigation/native';
 import { Camera, useCameraDevice, useCodeScanner } from 'react-native-vision-camera';
 import { validateQRCode } from '../../services/qr.service';
+import { parseChargeLink } from '../../services/apiCharge.service';
 import { colors, typography, spacing, borderRadius } from '../../theme';
 
 interface Props {
@@ -71,6 +72,15 @@ export default function ScanQRScreen({ navigation }: Props) {
 
   const handleQRScanned = async (qrData: string) => {
     setIsScanning(false);
+
+    // An online checkout or a till's customer display: the charge already
+    // carries the amount, so it goes straight to review.
+    const chargeId = parseChargeLink(qrData);
+    if (chargeId) {
+      Vibration.vibrate(100);
+      navigation.navigate('ApprovePayment', { chargeId });
+      return;
+    }
 
     try {
       const validation = await validateQRCode(qrData);

@@ -144,6 +144,8 @@ Agent cash-in and cash-out, with guards and threat model: `CASH_IN_CASH_OUT.md`.
 | P2P (`sendP2P`) / payroll | `user:{sender}` | `user:{recipient}` |
 | QR payment against balance (`processPayment`, `payMerchant`, `approvePayment`) | `user:{customer}` | `user:{merchant}` (net) + `platform:fees` (fee) |
 | Refund | `user:{merchant}` (net) + `platform:fees` (fee) | `user:{customer}` |
+| Online / API payment (`approveApiCharge`, type `online_payment`, entry `apicharge_{chargeId}`) | `user:{customer}` | `user:{merchant}` (net) + `platform:fees` (fee at `onlinePaymentFeeRate`) |
+| API refund, full or partial (`POST /v1/charges/{id}/refunds`, entry `refund_apicharge_{chargeId}_{n}`) | `user:{merchant}` (share of net) + `platform:fees` (share of fee, rounded on the running total so the parts sum to the fee) | `user:{customer}` |
 | Cash-out hold (`customerCashOut`, entry `cashouthold_{id}`) | `user:{customer}` | `platform:cashout_hold` |
 | Cash-out settle (`agentConfirmCashOut`, entry `cashout_{id}`) | `platform:cashout_hold` | `user:{agent}` |
 | Cash-out release: cancel, expiry, 5 wrong codes, replaced (`cashoutrelease_{id}`) | `platform:cashout_hold` | `user:{customer}` |

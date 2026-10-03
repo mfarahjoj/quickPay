@@ -10,6 +10,12 @@ export type JournalEntryType =
   | "p2p"
   | "qr_payment"
   | "customer_qr_payment"
+  /**
+   * Customer approves, in the app, a charge a merchant raised through the
+   * public API (online checkout or a POS integration). Same shape as
+   * qr_payment: customer debited, merchant credited the net, fee to platform.
+   */
+  | "online_payment"
   | "refund"
   | "agent_topup"
   | "agent_cashout"
@@ -50,6 +56,10 @@ export interface JournalRefs {
   refundOfEntryId?: string;
   /** Merchant settlement request behind a payout_* entry. */
   payoutId?: string;
+  /** API charge (`api_charges`) behind an online_payment or its refund. */
+  apiChargeId?: string;
+  /** API refund (`api_refunds`) behind a partial or full API refund. */
+  apiRefundId?: string;
 }
 
 export interface JournalEntryInput {

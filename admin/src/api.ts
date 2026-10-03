@@ -83,6 +83,17 @@ export interface UserDetail {
   transactions: TransactionRow[];
 }
 
+/** A merchant's API key as the console sees it. The key itself is never listed. */
+export interface ApiKeyRow {
+  keyId: string;
+  label: string;
+  hint: string;
+  revoked: boolean;
+  createdAt: string;
+  lastUsedAt?: string;
+  revokedAt?: string;
+}
+
 export interface RoleRequestRow {
   requestId: string;
   userId: string;
@@ -287,6 +298,24 @@ export const api = {
       "adminRevokeUserDevices",
       { userId, reason }
     ),
+
+  listApiKeys: (merchantId: string) =>
+    call<{ merchantId: string }, { keys: ApiKeyRow[] }>("adminListApiKeys", {
+      merchantId,
+    }).then((body) => body.keys),
+
+  /** Returns the full key exactly once; it cannot be fetched again. */
+  issueApiKey: (merchantId: string, label: string, reason: string) =>
+    call<
+      { merchantId: string; label: string; reason: string },
+      ApiKeyRow & { apiKey: string }
+    >("adminIssueApiKey", { merchantId, label, reason }),
+
+  revokeApiKey: (keyId: string, reason: string) =>
+    call<{ keyId: string; reason: string }, ApiKeyRow>("adminRevokeApiKey", {
+      keyId,
+      reason,
+    }),
 
   listRoleRequests: (status = "pending") =>
     call<{ status: string }, RoleRequestRow[]>("adminListRoleRequests", { status }),

@@ -25,12 +25,14 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
-        <!-- Payment links (zapppay://send?to=…&amount=…): pre-fill the send flow only. -->
+        <!-- zapppay://send?to=…&amount=… (payment links: pre-fill the send flow only)
+             and zapppay://charge/{id} ("Open Zapp Pay" on the hosted checkout page) -->
         <intent-filter>
             <action android:name="android.intent.action.VIEW" />
             <category android:name="android.intent.category.DEFAULT" />
             <category android:name="android.intent.category.BROWSABLE" />
             <data android:scheme="zapppay" android:host="send" />
+            <data android:scheme="zapppay" android:host="charge" />
         </intent-filter>
       </activity>
     </application>
