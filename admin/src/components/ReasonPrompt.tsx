@@ -1,4 +1,5 @@
-import { useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
+import { Spinner } from "./ui";
 
 interface Props {
   title: string;
@@ -34,6 +35,7 @@ export function ReasonPrompt({
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const titleId = useId();
 
   const tooShort = reason.trim().length < MIN_REASON;
 
@@ -50,9 +52,9 @@ export function ReasonPrompt({
   };
 
   return (
-    <div className="overlay" role="dialog" aria-modal="true">
+    <div className="overlay" role="dialog" aria-modal="true" aria-labelledby={titleId}>
       <div className="modal">
-        <h2>{title}</h2>
+        <h2 id={titleId}>{title}</h2>
         <p>{description}</p>
 
         {error && <div className="banner error">{error}</div>}
@@ -70,7 +72,7 @@ export function ReasonPrompt({
           />
         </label>
         {tooShort && reason.length > 0 && (
-          <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+          <div className="hint" style={{ marginTop: 6 }}>
             At least {MIN_REASON} characters.
           </div>
         )}
@@ -84,7 +86,14 @@ export function ReasonPrompt({
             onClick={submit}
             disabled={tooShort || busy || confirmDisabled}
           >
-            {busy ? "Working…" : confirmLabel}
+            {busy ? (
+              <>
+                <Spinner />
+                Working…
+              </>
+            ) : (
+              confirmLabel
+            )}
           </button>
         </div>
       </div>

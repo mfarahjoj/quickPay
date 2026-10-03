@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api, type UserSummary } from "../api";
+import { Avatar, EmptyState } from "./ui";
 
 interface Props {
   selectedId?: string;
@@ -32,40 +33,53 @@ export function UserSearch({ selectedId, onSelect }: Props) {
 
   return (
     <div className="panel">
-      <h2>Find a customer</h2>
+      <div className="panel-head">
+        <h2>Find a customer</h2>
+      </div>
 
-      <form onSubmit={search} className="stack">
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="+252… , uid, or name"
-          aria-label="Search customers"
-        />
+      <form onSubmit={search} className="search-form">
+        <div className="search-field">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="+252… , uid, or name"
+            aria-label="Search customers"
+          />
+        </div>
         <button className="primary" type="submit" disabled={busy}>
           {busy ? "Searching…" : "Search"}
         </button>
       </form>
 
-      <p className="muted" style={{ fontSize: 12, marginTop: 10 }}>
+      <p className="hint" style={{ marginTop: 10 }}>
         Phone and uid match exactly. Names match from the start.
       </p>
 
-      {error && <div className="banner error">{error}</div>}
+      {error && (
+        <div className="banner error" style={{ marginTop: 14 }}>
+          {error}
+        </div>
+      )}
 
-      {results && results.length === 0 && <div className="empty">No matches.</div>}
+      {results && results.length === 0 && (
+        <EmptyState icon="search" title="No matches" />
+      )}
 
       {results && results.length > 0 && (
-        <div className="list" style={{ marginTop: 12 }}>
+        <div className="list">
           {results.map((u) => (
             <button
               key={u.userId}
               className={`item${u.userId === selectedId ? " selected" : ""}`}
               onClick={() => onSelect(u.userId)}
             >
-              <div className="name">{u.fullName || "(no name)"}</div>
-              <div className="sub">
-                {u.phoneNumber || "(no phone)"} · {u.accountType || "customer"}
-                {u.accountStatus !== "active" && ` · ${u.accountStatus}`}
+              <Avatar name={u.fullName} />
+              <div className="item-text">
+                <div className="name">{u.fullName || "(no name)"}</div>
+                <div className="sub">
+                  {u.phoneNumber || "(no phone)"} · {u.accountType || "customer"}
+                  {u.accountStatus !== "active" && ` · ${u.accountStatus}`}
+                </div>
               </div>
             </button>
           ))}

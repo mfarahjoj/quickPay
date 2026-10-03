@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type PayoutRow } from "../api";
+import { Icon } from "./Icon";
 import { ReasonPrompt } from "./ReasonPrompt";
+import { EmptyState, Loading } from "./ui";
 
 function money(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
@@ -79,92 +81,97 @@ export function PayoutDesk() {
   };
 
   return (
-    <div>
+    <div className="stack-lg">
       {notice && <div className="banner ok">{notice}</div>}
       {error && <div className="banner error">{error}</div>}
 
       <div className="panel">
-        <div className="row">
-          <h2 style={{ margin: 0 }}>Merchant payouts</h2>
+        <div className="panel-head">
+          <div className="segmented" role="group" aria-label="Payout status">
+            {(["requested", "paid", "rejected"] as const).map((s) => (
+              <button key={s} aria-pressed={view === s} onClick={() => setView(s)}>
+                {s === "requested" ? "To send" : s === "paid" ? "Sent" : "Declined"}
+              </button>
+            ))}
+          </div>
           <div className="spacer" />
-          {(["requested", "paid", "rejected"] as const).map((s) => (
-            <button
-              key={s}
-              className={view === s ? "" : "ghost"}
-              onClick={() => setView(s)}
-            >
-              {s === "requested" ? "To send" : s === "paid" ? "Sent" : "Declined"}
-            </button>
-          ))}
           <button className="ghost" onClick={() => void load()}>
+            <Icon name="refresh" size={16} />
             Refresh
           </button>
         </div>
 
         {loading ? (
-          <p>Loading…</p>
-        ) : rows.length === 0 ? (
-          <p className="muted">
-            {view === "requested"
-              ? "Nothing waiting. Merchants' takings are all settled."
-              : "Nothing here yet."}
-          </p>
+          <Loading />
+        ) : error ? null : rows.length === 0 ? (
+          // As in the other queues: an errored load must not read as "all settled".
+          view === "requested" ? (
+            <EmptyState icon="send" title="Nothing waiting">
+              Merchants' takings are all settled.
+            </EmptyState>
+          ) : (
+            <EmptyState icon="send" title="Nothing here yet" />
+          )
         ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Merchant</th>
-                <th>Amount</th>
-                <th>Send to</th>
-                <th>Requested</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.id}>
-                  <td>
-                    {row.businessName || row.merchantName || row.merchantId}
-                    {row.requiresSeniorApproval && view === "requested" && (
-                      <div className="muted">needs a senior admin</div>
-                    )}
-                  </td>
-                  <td>{money(row.amountCents)}</td>
-                  <td>
-                    {row.route} · {row.destinationName}
-                    <div className="muted">{row.destinationRef}</div>
-                  </td>
-                  <td>
-                    {when(row.createdAt)}
-                    {view === "requested" && waitingFor(row.createdAt) && (
-                      <div className="muted">waiting {waitingFor(row.createdAt)}</div>
-                    )}
-                  </td>
-                  <td>
-                    {view === "requested" ? (
-                      <div className="row">
-                        <button
-                          onClick={() => {
-                            setReference("");
-                            setSettling(row);
-                          }}
-                        >
-                          Mark sent
-                        </button>
-                        <button className="ghost" onClick={() => setRejecting(row)}>
-                          Decline
-                        </button>
-                      </div>
-                    ) : row.externalReference ? (
-                      <span className="muted">{row.externalReference}</span>
-                    ) : (
-                      <span className="muted">—</span>
-                    )}
-                  </td>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th className="wide">Merchant</th>
+                  <th className="num">Amount</th>
+                  <th className="wide">Send to</th>
+                  <th>Requested</th>
+                  <th />
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={row.id}>
+                    <td className="wide">
+                      {row.businessName || row.merchantName || row.merchantId}
+                      {row.requiresSeniorApproval && view === "requested" && (
+                        <div className="muted" style={{ color: "var(--warn)", fontWeight: 500 }}>
+                          needs a senior admin
+                        </div>
+                      )}
+                    </td>
+                    <td className="num">{money(row.amountCents)}</td>
+                    <td className="wide">
+                      {row.route} · {row.destinationName}
+                      <div className="muted">{row.destinationRef}</div>
+                    </td>
+                    <td className="nowrap">
+                      {when(row.createdAt)}
+                      {view === "requested" && waitingFor(row.createdAt) && (
+                        <div className="muted">waiting {waitingFor(row.createdAt)}</div>
+                      )}
+                    </td>
+                    <td className="actions">
+                      {view === "requested" ? (
+                        <div className="row">
+                          <button
+                            onClick={() => {
+                              setReference("");
+                              setSettling(row);
+                            }}
+                          >
+                            Mark sent
+                          </button>
+                          <button className="ghost" onClick={() => setRejecting(row)}>
+                            Decline
+                          </button>
+                        </div>
+                      ) : row.externalReference ? (
+                        <span className="muted">{row.externalReference}</span>
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 

@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { api, type AgentPosition, type FloatDirection, type FloatRoute } from "../api";
+import { Spinner } from "./ui";
 
 interface Props {
   agent: AgentPosition;
@@ -24,6 +25,7 @@ export function FloatRequestModal({ agent, onDone, onCancel }: Props) {
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const titleId = useId();
 
   const routeMeta = ROUTES.find((r) => r.id === route)!;
 
@@ -66,9 +68,9 @@ export function FloatRequestModal({ agent, onDone, onCancel }: Props) {
   };
 
   return (
-    <div className="overlay" role="dialog" aria-modal="true">
+    <div className="overlay" role="dialog" aria-modal="true" aria-labelledby={titleId}>
       <div className="modal">
-        <h2>Float for {agent.fullName || agent.agentId}</h2>
+        <h2 id={titleId}>Float for {agent.fullName || agent.agentId}</h2>
         <p>
           Currently holding ${(agent.balanceCents / 100).toFixed(2)}. Requesting does
           not move money — an approval posts it.
@@ -99,7 +101,7 @@ export function FloatRequestModal({ agent, onDone, onCancel }: Props) {
             />
           </label>
           {withdrawingTooMuch && (
-            <div className="muted" style={{ fontSize: 12, color: "var(--danger)" }}>
+            <div className="hint" style={{ color: "var(--danger)" }}>
               More than the agent holds (${(agent.balanceCents / 100).toFixed(2)}).
             </div>
           )}
@@ -119,7 +121,7 @@ export function FloatRequestModal({ agent, onDone, onCancel }: Props) {
               ))}
             </select>
           </label>
-          <div className="muted" style={{ fontSize: 12 }}>
+          <div className="hint">
             This decides which asset account the value is booked against, so the
             books can be reconciled against the real statement.
           </div>
@@ -151,7 +153,14 @@ export function FloatRequestModal({ agent, onDone, onCancel }: Props) {
             Cancel
           </button>
           <button className="primary" onClick={submit} disabled={!valid || busy}>
-            {busy ? "Submitting…" : "Submit request"}
+            {busy ? (
+              <>
+                <Spinner />
+                Submitting…
+              </>
+            ) : (
+              "Submit request"
+            )}
           </button>
         </div>
       </div>

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type UserDetail as Detail } from "../api";
+import { Icon } from "./Icon";
 import { ReasonPrompt } from "./ReasonPrompt";
+import { Avatar, EmptyState, Loading } from "./ui";
 
 type PendingAction = "freeze" | "unfreeze" | "clearLockouts" | "revokeDevices";
 
@@ -46,6 +48,34 @@ function when(ts?: { _seconds?: number; seconds?: number }) {
   return new Date(secs * 1000).toLocaleString();
 }
 
+/** "USD 1284.50" → small currency, large figure. Anything else renders as-is. */
+function Figure({ text }: { text: string }) {
+  const m = /^([A-Z]{3}) (.+)$/.exec(text);
+  if (!m) return <>{text}</>;
+  return (
+    <>
+      <span className="stat-cur">{m[1]}</span>
+      {m[2]}
+    </>
+  );
+}
+
+/** Pill colour for a transaction status. Anything unrecognised stays neutral. */
+function statusTone(status?: string) {
+  switch (status) {
+    case "completed":
+    case "success":
+      return "ok";
+    case "pending":
+      return "warn";
+    case "failed":
+    case "rejected":
+      return "bad";
+    default:
+      return "";
+  }
+}
+
 export function UserDetail({ userId }: { userId: string }) {
   const [detail, setDetail] = useState<Detail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -81,8 +111,13 @@ export function UserDetail({ userId }: { userId: string }) {
     await load();
   };
 
-  if (loading) return <div className="panel empty">Loading…</div>;
-  if (error) return <div className="panel banner error">{error}</div>;
+  if (loading)
+    return (
+      <div className="panel">
+        <Loading />
+      </div>
+    );
+  if (error) return <div className="banner error">{error}</div>;
   if (!detail) return null;
 
   const profile = detail.profile as Record<string, string | undefined>;
@@ -90,15 +125,24 @@ export function UserDetail({ userId }: { userId: string }) {
   const closed = detail.accountStatus === "closed";
 
   return (
-    <div>
+    <div className="stack-lg">
       {notice && <div className="banner ok">{notice}</div>}
 
       <div className="panel">
-        <div className="row">
-          <h2 style={{ margin: 0 }}>{profile.fullName || "(no name)"}</h2>
-          <span className={`badge ${detail.accountStatus}`}>{detail.accountStatus}</span>
+        <div className="person-head">
+          <Avatar name={profile.fullName} size={56} />
+          <div className="person-text">
+            <div className="row">
+              <h2>{profile.fullName || "(no name)"}</h2>
+              <span className={`badge ${detail.accountStatus}`}>{detail.accountStatus}</span>
+            </div>
+            <div className="sub">
+              {profile.phoneNumber || "(no phone)"} · {profile.accountType || "customer"}
+            </div>
+          </div>
           <div className="spacer" />
           <button className="ghost" onClick={() => void load()}>
+            <Icon name="refresh" size={16} />
             Refresh
           </button>
         </div>
@@ -124,7 +168,7 @@ export function UserDetail({ userId }: { userId: string }) {
           <dt>Trusted devices</dt>
           <dd>{detail.trustedDeviceCount}</dd>
           <dt>uid</dt>
-          <dd>{detail.userId}</dd>
+          <dd className="mono">{detail.userId}</dd>
           {frozen && (
             <>
               <dt>Frozen reason</dt>
@@ -134,9 +178,13 @@ export function UserDetail({ userId }: { userId: string }) {
         </dl>
 
         <h3>Wallet</h3>
+        <div className="stat">
+          <span className="stat-label">Balance</span>
+          <span className="stat-value">
+            <Figure text={money(detail.wallet?.balance, detail.wallet?.currency)} />
+          </span>
+        </div>
         <dl className="kv">
-          <dt>Balance</dt>
-          <dd>{money(detail.wallet?.balance, detail.wallet?.currency)}</dd>
           <dt>Ledger freeze flag</dt>
           <dd>
             {detail.wallet?.frozen ? "frozen" : "not frozen"}
@@ -149,7 +197,7 @@ export function UserDetail({ userId }: { userId: string }) {
         </dl>
 
         <h3>Support actions</h3>
-        <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
+        <div className="row wrap" style={{ marginTop: 10 }}>
           {frozen ? (
             <button className="primary" onClick={() => setAction("unfreeze")}>
               Reactivate
@@ -168,39 +216,49 @@ export function UserDetail({ userId }: { userId: string }) {
           </button>
         </div>
         {closed && (
-          <p className="muted" style={{ fontSize: 12 }}>
+          <p className="hint" style={{ marginTop: 12 }}>
             This account is closed; freeze and reactivate do not apply.
           </p>
         )}
       </div>
 
       <div className="panel">
-        <h2>Recent transactions</h2>
+        <div className="panel-head">
+          <h2>Recent transactions</h2>
+        </div>
         {detail.transactions.length === 0 ? (
-          <div className="empty">No transactions.</div>
+          <EmptyState title="No transactions" />
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>When</th>
-                <th>Type</th>
-                <th>Description</th>
-                <th>Status</th>
-                <th className="num">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {detail.transactions.map((tx) => (
-                <tr key={tx.id}>
-                  <td className="muted">{when(tx.createdAt)}</td>
-                  <td>{tx.type || "—"}</td>
-                  <td>{tx.description || "—"}</td>
-                  <td>{tx.status || "—"}</td>
-                  <td className="num">{money(tx.amount, tx.currency)}</td>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>When</th>
+                  <th>Type</th>
+                  <th className="wide">Description</th>
+                  <th>Status</th>
+                  <th className="num">Amount</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {detail.transactions.map((tx) => (
+                  <tr key={tx.id}>
+                    <td className="muted nowrap">{when(tx.createdAt)}</td>
+                    <td className="nowrap">{tx.type || "—"}</td>
+                    <td className="wide">{tx.description || "—"}</td>
+                    <td>
+                      {tx.status ? (
+                        <span className={`badge ${statusTone(tx.status)}`}>{tx.status}</span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="num">{money(tx.amount, tx.currency)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 

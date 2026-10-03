@@ -16,8 +16,16 @@ interface ApiResponse<T> {
   message?: string;
 }
 
-async function call<TReq, TRes>(name: string, payload?: TReq): Promise<TRes> {
-  const fn = httpsCallable<TReq, ApiResponse<TRes>>(functions, name);
+async function call<TReq, TRes>(
+  name: string,
+  payload?: TReq,
+  timeoutMs?: number
+): Promise<TRes> {
+  const fn = httpsCallable<TReq, ApiResponse<TRes>>(
+    functions,
+    name,
+    timeoutMs ? { timeout: timeoutMs } : undefined
+  );
   const result = await fn(payload as TReq);
   const body = result.data;
   if (!body?.success) {
@@ -158,10 +166,101 @@ export interface LedgerHealth {
     ranAt?: { _seconds?: number; seconds?: number };
     entryCount?: number;
     driftCount?: number;
+    spendIndexOk?: boolean;
     ok?: boolean;
   } | null;
   neverRun: boolean;
   openAlertCount: number;
+  /**
+   * Checked live on every call, not read off the last nightly run: when this
+   * is not ok, nobody can pay, cash out or send money at all.
+   */
+  spendIndex?: { ok: boolean; error?: string };
+}
+
+type Ts = { _seconds?: number; seconds?: number };
+
+/** One run of the invariant check (a `ledger_checkpoints` doc). */
+export interface LedgerRun {
+  id: string;
+  ranAt: Ts | null;
+  entryCount: number;
+  accountCount: number;
+  driftCount: number;
+  spendIndexOk: boolean;
+  ok: boolean;
+  trigger: "schedule" | "manual" | string;
+  triggeredBy: string | null;
+}
+
+export interface LedgerAlertSummary {
+  id: string;
+  ranAt: Ts | null;
+  driftCount: number;
+  spendIndexOk: boolean;
+  acknowledged: boolean;
+  acknowledgedByEmail: string | null;
+  acknowledgedAt: Ts | null;
+}
+
+export interface LedgerOverview {
+  runs: LedgerRun[];
+  alerts: LedgerAlertSummary[];
+  openAlertCount: number;
+}
+
+/** One mismatch. Cents; null where the check had no value (e.g. no wallet doc). */
+export interface LedgerDriftRow {
+  account: string;
+  detail: string;
+  /** What the journal says the balance should be. */
+  expected: number | null;
+  /** What the cached projection held when the check ran. */
+  actual: number | null;
+  /** actual − expected. Positive: the balance holds value the journal can't explain. */
+  difference: number | null;
+  /** The projection now; it may have moved since the check. */
+  currentBalance: number | null;
+  user: {
+    userId: string;
+    fullName: string | null;
+    phoneNumber: string | null;
+    accountType: string | null;
+  } | null;
+}
+
+export interface LedgerAlertDetail extends LedgerAlertSummary {
+  trigger: string;
+  drifts: LedgerDriftRow[];
+  shownCount: number;
+  spendIndexError: string | null;
+  acknowledgeReason: string | null;
+}
+
+export type LedgerLink = "posted" | "no-entry-id" | "entry-missing";
+
+export interface LedgerTraceRow {
+  id: string;
+  type: string | null;
+  status: string | null;
+  amount: number | null;
+  currency: string | null;
+  description: string | null;
+  createdAt: Ts | null;
+  direction: "in" | "out" | null;
+  journalEntryId: string | null;
+  link: LedgerLink;
+  entryType: string | null;
+  walletEffect: number | null;
+}
+
+export interface LedgerTrace {
+  account: string;
+  user: LedgerDriftRow["user"];
+  wallet: { balance: number | null; currency: string | null; frozen: boolean } | null;
+  transactions: LedgerTraceRow[];
+  truncated: boolean;
+  summary: { completed: number; completedUnposted: number; completedUnpostedAmount: number };
 }
 
 export const api = {
@@ -264,4 +363,25 @@ export const api = {
       payoutId,
       reason,
     }),
+
+  ledgerOverview: () => call<void, LedgerOverview>("adminGetLedgerOverview"),
+
+  getLedgerAlert: (alertId: string) =>
+    call<{ alertId: string }, LedgerAlertDetail>("adminGetLedgerAlert", { alertId }),
+
+  traceLedgerAccount: (account: string) =>
+    call<{ account: string }, LedgerTrace>("adminTraceLedgerAccount", { account }),
+
+  acknowledgeLedgerAlert: (alertId: string, reason: string) =>
+    call<{ alertId: string; reason: string }, { auditId: string }>(
+      "adminAcknowledgeLedgerAlert",
+      { alertId, reason }
+    ),
+
+  // A full journal replay can outlast the SDK's 70s default.
+  runLedgerCheck: (reason: string) =>
+    call<
+      { reason: string },
+      { runId: string; driftCount: number; entryCount: number; spendIndexOk: boolean }
+    >("adminRunLedgerCheck", { reason }, 9 * 60 * 1000),
 };

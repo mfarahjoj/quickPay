@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type RoleRequestRow } from "../api";
+import { Icon } from "./Icon";
 import { ReasonPrompt } from "./ReasonPrompt";
+import { EmptyState, Loading } from "./ui";
 
 interface Pending {
   request: RoleRequestRow;
@@ -45,15 +47,17 @@ export function RoleQueue() {
 
   return (
     <div className="panel">
-      <div className="row">
-        <h2 style={{ margin: 0 }}>Role applications</h2>
+      <div className="panel-head">
+        <h2>Pending applications</h2>
+        {!loading && !error && <span className="badge">{rows.length}</span>}
         <div className="spacer" />
         <button className="ghost" onClick={() => void load()}>
+          <Icon name="refresh" size={16} />
           Refresh
         </button>
       </div>
 
-      <p className="muted" style={{ fontSize: 12 }}>
+      <p className="hint">
         Approving grants the role and creates the merchant profile. Rejecting an
         account that already holds the role demotes it to customer.
       </p>
@@ -62,58 +66,60 @@ export function RoleQueue() {
       {error && <div className="banner error">{error}</div>}
 
       {loading ? (
-        <div className="empty">Loading…</div>
+        <Loading />
       ) : error ? null : rows.length === 0 ? (
         // Only claim the queue is empty when we actually know it is — an
         // errored load must not read as "nothing to do".
-        <div className="empty">Nothing waiting for review.</div>
+        <EmptyState icon="briefcase" title="Nothing waiting for review" />
       ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>Applicant</th>
-              <th>Phone</th>
-              <th>Requested</th>
-              <th>Currently</th>
-              <th>Business</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.requestId}>
-                <td>
-                  {r.applicantName || "(no name)"}
-                  {r.backfilled && (
-                    <span className="badge frozen" style={{ marginLeft: 6 }}>
-                      existing
-                    </span>
-                  )}
-                </td>
-                <td className="muted">{r.applicantPhone || "—"}</td>
-                <td>{r.requestedRole}</td>
-                <td className="muted">{r.currentAccountType || "customer"}</td>
-                <td className="muted">{r.businessName || r.area || "—"}</td>
-                <td>
-                  <div className="row">
-                    <button
-                      className="primary"
-                      onClick={() => setPending({ request: r, decision: "approve" })}
-                    >
-                      Approve
-                    </button>
-                    <button
-                      className="danger"
-                      onClick={() => setPending({ request: r, decision: "reject" })}
-                    >
-                      Reject
-                    </button>
-                  </div>
-                </td>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Applicant</th>
+                <th>Phone</th>
+                <th>Requested</th>
+                <th>Currently</th>
+                <th className="wide">Business</th>
+                <th />
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.requestId}>
+                  <td>
+                    {r.applicantName || "(no name)"}
+                    {r.backfilled && (
+                      <span className="badge frozen" style={{ marginLeft: 8 }}>
+                        existing
+                      </span>
+                    )}
+                  </td>
+                  <td className="muted nowrap">{r.applicantPhone || "—"}</td>
+                  <td>{r.requestedRole}</td>
+                  <td className="muted">{r.currentAccountType || "customer"}</td>
+                  <td className="muted wide">{r.businessName || r.area || "—"}</td>
+                  <td className="actions">
+                    <div className="row">
+                      <button
+                        className="primary"
+                        onClick={() => setPending({ request: r, decision: "approve" })}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        className="danger"
+                        onClick={() => setPending({ request: r, decision: "reject" })}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {pending && (

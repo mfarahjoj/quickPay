@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type KycQueueRow, type KycSubmission } from "../api";
+import { Icon } from "./Icon";
 import { ReasonPrompt } from "./ReasonPrompt";
+import { Avatar, EmptyState, Loading } from "./ui";
 
 function secondsOf(ts?: { _seconds?: number; seconds?: number }) {
   return ts?._seconds ?? ts?.seconds;
@@ -65,20 +67,31 @@ function SubmissionView({
     setDecision(null);
   };
 
-  if (loading) return <div className="panel empty">Loading…</div>;
-  if (error) return <div className="panel banner error">{error}</div>;
+  if (loading)
+    return (
+      <div className="panel">
+        <Loading />
+      </div>
+    );
+  if (error) return <div className="banner error">{error}</div>;
   if (!submission) return null;
 
   const { applicant, wallet } = submission;
 
   return (
-    <div>
+    <div className="stack-lg">
       <div className="panel">
-        <div className="row">
-          <h2 style={{ margin: 0 }}>{applicant.fullName || "(no name)"}</h2>
-          <span className={`badge ${applicant.accountStatus ?? "active"}`}>
-            {applicant.accountStatus}
-          </span>
+        <div className="person-head">
+          <Avatar name={applicant.fullName} size={56} />
+          <div className="person-text">
+            <div className="row">
+              <h2>{applicant.fullName || "(no name)"}</h2>
+              <span className={`badge ${applicant.accountStatus ?? "active"}`}>
+                {applicant.accountStatus}
+              </span>
+            </div>
+            <div className="sub">{applicant.phoneNumber || "(no phone)"}</div>
+          </div>
         </div>
 
         <h3>Submitted documents</h3>
@@ -108,7 +121,7 @@ function SubmissionView({
         </dl>
 
         <h3>Photos</h3>
-        <p className="muted" style={{ fontSize: 12 }}>
+        <p className="hint">
           Links are signed and expire after 15 minutes. Reload the submission if
           the images stop loading.
         </p>
@@ -128,7 +141,7 @@ function SubmissionView({
         </div>
 
         <h3>Decision</h3>
-        <div className="row" style={{ gap: 8 }}>
+        <div className="row wrap" style={{ marginTop: 10 }}>
           <button className="primary" onClick={() => setDecision("approve")}>
             Verify identity
           </button>
@@ -136,6 +149,7 @@ function SubmissionView({
             Reject
           </button>
           <button className="ghost" onClick={() => void load()}>
+            <Icon name="refresh" size={16} />
             Reload
           </button>
         </div>
@@ -184,28 +198,28 @@ export function KycQueue() {
   }, [load]);
 
   return (
-    <div>
+    <div className="stack-lg">
       {notice && <div className="banner ok">{notice}</div>}
 
       <div className="split">
         <div className="panel">
-          <div className="row">
-            <h2 style={{ margin: 0 }}>Awaiting review</h2>
+          <div className="panel-head">
+            <h2>Awaiting review</h2>
+            {!loading && !error && <span className="badge">{rows.length}</span>}
             <div className="spacer" />
             <button className="ghost" onClick={() => void load()}>
+              <Icon name="refresh" size={16} />
               Refresh
             </button>
           </div>
-          <p className="muted" style={{ fontSize: 12 }}>
-            Oldest first.
-          </p>
+          <p className="hint">Oldest first.</p>
 
           {error && <div className="banner error">{error}</div>}
 
           {loading ? (
-            <div className="empty">Loading…</div>
+            <Loading />
           ) : error ? null : rows.length === 0 ? (
-            <div className="empty">Nothing to review.</div>
+            <EmptyState icon="idcard" title="Nothing to review" />
           ) : (
             <div className="list">
               {rows.map((r) => {
@@ -216,18 +230,21 @@ export function KycQueue() {
                     className={`item${r.userId === selected ? " selected" : ""}`}
                     onClick={() => setSelected(r.userId)}
                   >
-                    <div className="row">
-                      <span className="name">{r.applicantName || "(no name)"}</span>
-                      <div className="spacer" />
-                      {age && (
-                        <span className={`badge ${age.stale ? "frozen" : ""}`}>
-                          {age.label}
-                        </span>
-                      )}
-                    </div>
-                    <div className="sub">
-                      {r.applicantPhone || "(no phone)"} ·{" "}
-                      {ID_LABEL[r.idType ?? ""] ?? r.idType ?? "—"}
+                    <Avatar name={r.applicantName} />
+                    <div className="item-text">
+                      <div className="row">
+                        <span className="name">{r.applicantName || "(no name)"}</span>
+                        <div className="spacer" />
+                        {age && (
+                          <span className={`badge ${age.stale ? "frozen" : ""}`}>
+                            {age.label}
+                          </span>
+                        )}
+                      </div>
+                      <div className="sub">
+                        {r.applicantPhone || "(no phone)"} ·{" "}
+                        {ID_LABEL[r.idType ?? ""] ?? r.idType ?? "—"}
+                      </div>
                     </div>
                   </button>
                 );
@@ -247,7 +264,11 @@ export function KycQueue() {
             }}
           />
         ) : (
-          <div className="panel empty">Pick a submission to review.</div>
+          <div className="panel">
+            <EmptyState icon="idcard" title="No submission selected">
+              Pick a submission to review.
+            </EmptyState>
+          </div>
         )}
       </div>
     </div>
