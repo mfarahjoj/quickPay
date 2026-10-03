@@ -7,13 +7,12 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Vibration,
-  NativeModules,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useFocusEffect } from '@react-navigation/native';
-import { Camera, useCameraDevice, useCodeScanner } from 'react-native-vision-camera';
+import { CameraLayer, CAMERA_NATIVE_AVAILABLE } from '../../components/QrCameraLayer';
 import { functions } from '../../services/firebase.config';
 import {
   DarkScreen,
@@ -28,10 +27,6 @@ import { SuccessCheckIcon, CloseIcon, ScanIcon } from '../../components/icons/Au
 import { formatCents } from '../../utils/money';
 import { useExitGuard } from '../../hooks/useExitGuard';
 import { isWrongPin, pinActionErrorKey } from '../../utils/errors';
-
-// VisionCamera v3 crashes at module level on the simulator — guard before hooks.
-const CAMERA_NATIVE_AVAILABLE =
-  !!NativeModules.VisionCameraProxy || !!NativeModules.CameraDevicesManager;
 
 type Step = 'capture' | 'pin' | 'processing' | 'success' | 'error';
 
@@ -63,48 +58,6 @@ function extractCode(value: string): string | null {
 
 function shortConfirmation(id: string): string {
   return `ZP-${id.slice(-6).toUpperCase()}`;
-}
-
-interface CameraLayerProps {
-  isActive: boolean;
-  onScan: (value: string) => void;
-  onPermission: (granted: boolean) => void;
-}
-
-function CameraLayer({ isActive, onScan, onPermission }: CameraLayerProps) {
-  const device = useCameraDevice('back');
-
-  React.useEffect(() => {
-    (async () => {
-      try {
-        const status = await Camera.requestCameraPermission();
-        onPermission(status === 'granted');
-      } catch {
-        onPermission(false);
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const codeScanner = useCodeScanner({
-    codeTypes: ['qr'],
-    onCodeScanned: (codes) => {
-      if (!isActive || codes.length === 0) return;
-      const value = codes[0].value;
-      if (value) onScan(value);
-    },
-  });
-
-  if (!device) return null;
-
-  return (
-    <Camera
-      style={StyleSheet.absoluteFill}
-      device={device}
-      isActive={isActive}
-      codeScanner={codeScanner}
-    />
-  );
 }
 
 export default function ConfirmTopupScreen({ navigation }: Props) {

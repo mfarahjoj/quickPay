@@ -418,8 +418,8 @@
   "cashout.confirm.title": "تأكيد السحب النقدي",
   "cashout.confirm.codeLabel": "رمز العميل",
   "cashout.confirm.howTitle": "كيفية إتمام السحب النقدي",
-  "cashout.confirm.how1": "1. يُريك العميل رمزًا من 6 أرقام من تطبيقه",
-  "cashout.confirm.how2": "2. أدخل الرمز أعلاه، واضغط تأكيد، ثم أدخل رمز PIN",
+  "cashout.confirm.how1": "١. امسح رمز QR للسحب لدى العميل، أو اكتب رقم هاتفه والرمز المكوّن من ٦ أرقام",
+  "cashout.confirm.how2": "٢. اضغط تأكيد، ثم أدخل رقمك السري",
   "cashout.confirm.how3": "3. سلّم العميل نقوده",
   "cashout.confirm.how4": "4. تحصل على عمولتك تلقائيًا",
   "cashout.confirm.submit": "تأكيد ودفع النقد",
@@ -523,5 +523,11 @@
   "scan.charge.unknownMessage": "تعذّر الوصول إلى Zapp Pay للتحقق من هذا التحصيل. راجع السجل قبل التحصيل مرة أخرى.",
   "scan.charge.scanAgain": "امسح مرة أخرى",
   "scan.charge.errors.scanExpired": "هذا المسح قديم. امسح رمز العميل مرة أخرى.",
-  "scan.charge.errors.overLimit": "هذا المبلغ يتجاوز ما يمكن لهذا العميل دفعه في مرة واحدة."
+  "scan.charge.errors.overLimit": "هذا المبلغ يتجاوز ما يمكن لهذا العميل دفعه في مرة واحدة.",
+  "cashout.confirm.scanHint": "امسح رمز QR في تطبيق Zapp لدى العميل",
+  "cashout.confirm.notCashOutQr": "هذا ليس رمز QR للسحب من Zapp",
+  "cashout.confirm.orManual": "أو اكتب الهاتف + الرمز",
+  "cashout.confirm.phoneLabel": "هاتف العميل",
+  "cashout.confirm.phoneRequiredTitle": "رقم الهاتف مطلوب",
+  "cashout.confirm.phoneRequired": "أدخل رقم هاتف العميل مع رمزه."
 }

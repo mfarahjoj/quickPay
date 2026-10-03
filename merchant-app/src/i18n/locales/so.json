@@ -418,8 +418,8 @@
   "cashout.confirm.title": "Xaqiiji Qaadashada",
   "cashout.confirm.codeLabel": "KOODHKA MACMIILKA",
   "cashout.confirm.howTitle": "Sida loo dhammaystiro lacag-qaadasho",
-  "cashout.confirm.how1": "1. Macmiilku wuxuu ku tusayaa kood 6 lambar ah oo ku jira abkiisa",
-  "cashout.confirm.how2": "2. Geli koodhka kore, taabo Xaqiiji, kadibna geli PIN-kaaga",
+  "cashout.confirm.how1": "1. Sawir QR-ka lacag-qaadashada ee macmiilka, ama qor lambarkiisa iyo koodhka 6-da god",
+  "cashout.confirm.how2": "2. Riix Xaqiiji, kadib geli PIN-kaaga",
   "cashout.confirm.how3": "3. Macmiilka u dhiib lacagtiisa caddaanka ah",
   "cashout.confirm.how4": "4. Komishan ayaad si toos ah u helaysaa",
   "cashout.confirm.submit": "Xaqiiji oo Bixi Lacagta",
@@ -523,5 +523,11 @@
   "scan.charge.unknownMessage": "Zapp Pay lama gaari karin si loo hubiyo dalacan. Eeg Taariikhda ka hor intaadan mar kale dalacin.",
   "scan.charge.scanAgain": "Mar kale sawir",
   "scan.charge.errors.scanExpired": "Sawirkaasi waa duug. Mar kale sawir koodhka macmiilka.",
-  "scan.charge.errors.overLimit": "Taasi waxay ka badan tahay inta macmiilkani hal mar bixin karo."
+  "scan.charge.errors.overLimit": "Taasi waxay ka badan tahay inta macmiilkani hal mar bixin karo.",
+  "cashout.confirm.scanHint": "Sawir QR-ka ku jira app-ka Zapp ee macmiilka",
+  "cashout.confirm.notCashOutQr": "Kani maaha QR lacag-qaadasho Zapp",
+  "cashout.confirm.orManual": "AMA QOR LAMBARKA + KOODHKA",
+  "cashout.confirm.phoneLabel": "LAMBARKA MACMIILKA",
+  "cashout.confirm.phoneRequiredTitle": "Lambarka taleefanka ayaa loo baahan yahay",
+  "cashout.confirm.phoneRequired": "Geli lambarka taleefanka macmiilka iyo koodhkiisa."
 }
