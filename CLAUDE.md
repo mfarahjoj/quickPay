@@ -24,6 +24,7 @@ Use the `new-money-flow` skill when adding or modifying any flow that moves valu
 ## Deployment discipline
 
 - **Never deploy functions that alter money movement to prod without explicit per-target authorization from the user.**
+- Deploy only from a pushed commit, and only named targets (`firebase deploy --only functions:a,b`). A bare `--only functions` from a checkout missing another branch's functions deletes or rolls them back. CI never deploys.
 - App changes: build and verify on the **iOS simulator first**. Only archive/upload to TestFlight when the user explicitly asks — then use the `release-testflight` skill (it encodes the stale-archive verification steps).
 - Zaad/eDahab services (`functions/src/integrations/`) are **sandbox stubs** that fake success — do not assume real rails are connected.
 
@@ -51,6 +52,7 @@ Every user-facing string ships in **all three locales** — `en`, `so`, `ar` —
 | `docs/MERCHANT_API.md` | Merchant Payments API (`functions/src/api/`): keys, charges, refunds, webhooks, hosted checkout |
 | `DESIGN_SYSTEM.md` | Colors, typography, component patterns |
 | `GTM_ROADMAP.md` | Hargeisa launch phases, KPIs, risks |
+| `SECURITY_REMEDIATION_PLAN.md` | Audit findings (2026-10-03), fix plan per finding, status, open decisions |
 | `CASH_IN_CASH_OUT.md` | Agent cash-in/cash-out: flow steps, ledger entries, guards, threat model |
 | `MANUAL_TOPUP_GUIDE.md` | Agent top-up operational flow |
 | `TESTFLIGHT_QUICKSTART.md` | One-time Apple/signing setup |
