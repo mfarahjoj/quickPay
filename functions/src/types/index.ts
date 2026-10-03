@@ -513,7 +513,11 @@ export interface CashOutRequest {
   completedAt?: FirebaseFirestore.Timestamp;
   /** The customer's history row, written as "pending" when the hold is taken. */
   transactionId?: string;
-  /** Wrong codes entered against this request, by any agent. 5 locks it. */
+  /**
+   * Code attempts against this request, by any agent, counted before each
+   * comparison (so a successful one is counted too). The fifth wrong one
+   * returns the money; no attempt past the fifth is compared at all.
+   */
   failedAttempts?: number;
   /** Why held money went back to the customer. */
   releaseReason?: CashOutReleaseReason;

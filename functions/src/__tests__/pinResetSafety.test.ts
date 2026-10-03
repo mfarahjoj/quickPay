@@ -67,7 +67,26 @@ function fakeDb(seed: Record<string, any>) {
       where: (f: string, op: string, v: any) => query(prefix, [[f, op, v]]),
     };
   }
-  return { store, collection } as any;
+  // Writes apply only if the callback resolves, as in real Firestore, so a
+  // refused reset or a locked-out answer leaves the user doc as it was.
+  // One at a time, as Firestore's serializable transactions behave.
+  let queue: Promise<unknown> = Promise.resolve();
+  function runTransaction(fn: (tx: any) => Promise<any>) {
+    const run = queue.then(() => runOne(fn));
+    queue = run.catch(() => undefined);
+    return run;
+  }
+  async function runOne(fn: (tx: any) => Promise<any>) {
+    const staged: Array<() => Promise<void>> = [];
+    const tx = {
+      get: (r: any) => r.get(),
+      update: (r: any, d: any) => staged.push(() => r.update(d)),
+    };
+    const result = await fn(tx);
+    for (const write of staged) await write();
+    return result;
+  }
+  return { store, collection, runTransaction } as any;
 }
 
 describe("PIN reset safety", () => {
@@ -179,6 +198,30 @@ describe("PIN reset safety", () => {
       await expect(call({ idLast4: "1234" })).rejects.toThrow(/Too many wrong answers/);
       expect(db.store.get(`users/${UID}`).pinHash).toBe("old-hash");
     });
+
+    it("gives a burst of parallel answers three tries, not one each", async () => {
+      // The attempt used to be counted after the comparison, so every request
+      // in a burst read "not locked" and got a guess of its own.
+      const db = useDb(verifiedId());
+      const guesses = Array.from({ length: 20 }, (_, i) => String(i).padStart(4, "0"));
+
+      const settled = await Promise.allSettled(guesses.map((idLast4) => call({ idLast4 })));
+      const reasons = settled.map((r) =>
+        r.status === "rejected" ? (r.reason as any).details?.reason : "reset"
+      );
+
+      expect(reasons.filter((r) => r === "reset_id_wrong")).toHaveLength(2);
+      expect(reasons.filter((r) => r === "reset_id_locked")).toHaveLength(18);
+      expect(db.store.get(`users/${UID}`).resetIdFailedAttempts).toBe(3);
+      expect(db.store.get(`users/${UID}`).pinHash).toBe("old-hash");
+    });
+  });
+
+  it("lets only one of two racing resets through", async () => {
+    const db = useDb({ ...user(), ...device("dev-old", 30 * DAY) });
+    const settled = await Promise.allSettled([call(onKnownPhone), call(onKnownPhone)]);
+    expect(settled.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    expect(db.store.get(`users/${UID}`).pinResetHistory).toHaveLength(1);
   });
 
   it("allows one reset a day", async () => {

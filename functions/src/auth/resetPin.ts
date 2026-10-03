@@ -104,15 +104,7 @@ export const resetPin = https.onCall(
     const user = userDoc.data()!;
     const nowMs = Date.now();
 
-    const history: admin.firestore.Timestamp[] = user.pinResetHistory ?? [];
-    const within = (ms: number) => history.filter((t) => nowMs - t.toMillis() < ms).length;
-    if (within(DAY_MS) >= MAX_RESETS_PER_DAY || within(30 * DAY_MS) >= MAX_RESETS_PER_30_DAYS) {
-      throw new https.HttpsError(
-        "resource-exhausted",
-        "Too many PIN resets. Contact support.",
-        { reason: "reset_limit" }
-      );
-    }
+    assertResetLimit(user.pinResetHistory ?? [], nowMs);
 
     const knownDeviceId = await knownDevice(db, userId, deviceId, deviceSecret, nowMs);
 
@@ -123,15 +115,23 @@ export const resetPin = https.onCall(
     const pinHash = await hashPin(newPin);
     const now = admin.firestore.Timestamp.now();
 
-    await userRef.update({
-      pinHash,
-      pinFailedAttempts: 0,
-      pinLockedUntil: null,
-      pinResetAt: now,
-      pinResetHistory: [...history, now].slice(-HISTORY_KEPT),
-      resetIdFailedAttempts: 0,
-      resetIdLockedUntil: null,
-      updatedAt: now,
+    // The limit check above is a fast refusal; this is the one that holds.
+    // Two resets racing each other both pass a check made before either
+    // writes, so the history is re-read and appended under a transaction.
+    await db.runTransaction(async (tx) => {
+      const fresh = (await tx.get(userRef)).data() ?? {};
+      const freshHistory: admin.firestore.Timestamp[] = fresh.pinResetHistory ?? [];
+      assertResetLimit(freshHistory, nowMs);
+      tx.update(userRef, {
+        pinHash,
+        pinFailedAttempts: 0,
+        pinLockedUntil: null,
+        pinResetAt: now,
+        pinResetHistory: [...freshHistory, now].slice(-HISTORY_KEPT),
+        resetIdFailedAttempts: 0,
+        resetIdLockedUntil: null,
+        updatedAt: now,
+      });
     });
 
     // Whoever held the old trust — another phone, or the one this reset is
@@ -167,6 +167,18 @@ export const resetPin = https.onCall(
     };
   }
 );
+
+/** At most one reset a day and three in thirty days. */
+function assertResetLimit(history: admin.firestore.Timestamp[], nowMs: number): void {
+  const within = (ms: number) => history.filter((t) => nowMs - t.toMillis() < ms).length;
+  if (within(DAY_MS) >= MAX_RESETS_PER_DAY || within(30 * DAY_MS) >= MAX_RESETS_PER_30_DAYS) {
+    throw new https.HttpsError(
+      "resource-exhausted",
+      "Too many PIN resets. Contact support.",
+      { reason: "reset_limit" }
+    );
+  }
+}
 
 /**
  * The ID of the caller's trusted device, if it proves it is one of this
@@ -213,15 +225,6 @@ async function checkIdAnswer(
     );
   }
 
-  const lockedUntil = user.resetIdLockedUntil as admin.firestore.Timestamp | null | undefined;
-  if (lockedUntil && lockedUntil.toMillis() > nowMs) {
-    throw new https.HttpsError(
-      "resource-exhausted",
-      "Too many wrong answers. Try again later or visit an agent.",
-      { reason: "reset_id_locked", until: lockedUntil.toDate().toISOString() }
-    );
-  }
-
   if (typeof idLast4 !== "string" || !idLast4.trim()) {
     throw new https.HttpsError(
       "failed-precondition",
@@ -240,15 +243,34 @@ async function checkIdAnswer(
     );
   }
 
-  if (normaliseId(idLast4) !== stored.slice(-4)) {
-    const attempts = (user.resetIdFailedAttempts ?? 0) + 1;
-    const locked = attempts >= MAX_ID_ATTEMPTS;
-    await userRef.update({
-      resetIdFailedAttempts: attempts,
-      ...(locked
+  // Count the attempt before comparing, under a transaction that also checks
+  // the lock. Counted afterwards, a burst of parallel requests each read
+  // "not locked" and each got a guess, which turned three tries a day into
+  // as many as the caller could send at once — and if IDs are numeric, the
+  // last four are only 10,000 possibilities. A correct answer clears the
+  // counter when the reset is saved.
+  const attempts = await admin.firestore().runTransaction(async (tx) => {
+    const fresh = (await tx.get(userRef)).data() ?? {};
+    const lockedUntil = fresh.resetIdLockedUntil as admin.firestore.Timestamp | null | undefined;
+    if (lockedUntil && lockedUntil.toMillis() > nowMs) {
+      throw new https.HttpsError(
+        "resource-exhausted",
+        "Too many wrong answers. Try again later or visit an agent.",
+        { reason: "reset_id_locked", until: lockedUntil.toDate().toISOString() }
+      );
+    }
+    const n = (fresh.resetIdFailedAttempts ?? 0) + 1;
+    tx.update(userRef, {
+      resetIdFailedAttempts: n,
+      ...(n >= MAX_ID_ATTEMPTS
         ? { resetIdLockedUntil: admin.firestore.Timestamp.fromMillis(nowMs + ID_LOCK_MS) }
         : {}),
     });
+    return n;
+  });
+
+  if (normaliseId(idLast4) !== stored.slice(-4)) {
+    const locked = attempts >= MAX_ID_ATTEMPTS;
     throw new https.HttpsError(
       locked ? "resource-exhausted" : "permission-denied",
       locked ? "Too many wrong answers. Try again later or visit an agent." : "That doesn't match your ID.",

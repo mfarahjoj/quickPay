@@ -6,11 +6,7 @@ import { assertAccountActive } from "../utils/accountStatus";
 import { assertCashInRecipient } from "../utils/agentGuards";
 import { verifyUserPin } from "../auth/validatePin";
 import { notifyUser } from "../utils/notifications";
-import {
-  assertNotOtpLocked,
-  recordOtpFailure,
-  clearOtpFailures,
-} from "../utils/otpGuard";
+import { reserveOtpAttempt, clearOtpFailures } from "../utils/otpGuard";
 import { ApiResponse, AgentTopupRequest, Wallet, Transaction, User } from "../types";
 import { getRates, computeCommission } from "../config/rates";
 import {
@@ -93,7 +89,9 @@ export const agentConfirmTopup = https.onCall(
     await assertResetCooldownAllows(agentId, "other", 0);
 
     // Rate-limit code guesses so the 6-digit space can't be brute-forced.
-    assertNotOtpLocked(agentData);
+    // The guess is counted before the lookup, so parallel calls can't each
+    // slip one in under the lock.
+    await reserveOtpAttempt(agentId);
 
     // Find the pending top-up with this code
     const snapshot = await db
@@ -104,13 +102,12 @@ export const agentConfirmTopup = https.onCall(
       .get();
 
     if (snapshot.empty) {
-      await recordOtpFailure(agentId, agentData);
       throw new https.HttpsError(
         "not-found",
         "Invalid or expired code. Ask the customer to generate a new one."
       );
     }
-    await clearOtpFailures(agentId, agentData);
+    await clearOtpFailures(agentId);
 
     const topupDoc = snapshot.docs[0];
     const topup = topupDoc.data() as AgentTopupRequest;

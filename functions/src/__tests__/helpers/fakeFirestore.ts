@@ -143,7 +143,18 @@ export function fakeFirestore(seed: Record<string, Data> = {}): FakeDb {
     };
   }
 
-  const runTransaction = jest.fn(async (fn: (tx: any) => Promise<any>) => {
+  // Transactions run one at a time. Real Firestore transactions are
+  // serializable (contended ones retry), so this is the behaviour code may
+  // rely on — and running them concurrently here would hide exactly the
+  // read-then-write races a transaction exists to close.
+  let queue: Promise<unknown> = Promise.resolve();
+  const runTransaction = jest.fn((fn: (tx: any) => Promise<any>) => {
+    const run = queue.then(() => runOne(fn));
+    queue = run.catch(() => undefined);
+    return run;
+  });
+
+  async function runOne(fn: (tx: any) => Promise<any>) {
     const staged: Array<() => void> = [];
     const tx = {
       get: async (r: any) => (typeof r.get === "function" && !r.path ? r.get() : snap(r.path)),
@@ -154,7 +165,7 @@ export function fakeFirestore(seed: Record<string, Data> = {}): FakeDb {
     const result = await fn(tx);
     staged.forEach((w) => w());
     return result;
-  });
+  }
 
   return {
     store,

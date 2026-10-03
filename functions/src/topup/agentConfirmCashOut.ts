@@ -4,11 +4,7 @@ import { https } from "firebase-functions/v2";
 import { requireAuth } from "../utils/validation";
 import { assertAccountActive } from "../utils/accountStatus";
 import { verifyUserPin } from "../auth/validatePin";
-import {
-  assertNotOtpLocked,
-  recordOtpFailure,
-  clearOtpFailures,
-} from "../utils/otpGuard";
+import { reserveOtpAttempt, clearOtpFailures } from "../utils/otpGuard";
 import { notifyUser } from "../utils/notifications";
 import { ApiResponse, CashOutRequest, Transaction, User } from "../types";
 import { getRates, computeCommission } from "../config/rates";
@@ -21,7 +17,7 @@ import {
 } from "../ledger";
 import { releaseCashOutHold } from "./cashOutHold";
 
-/** Wrong codes against one request, from any agents, before it locks and the money goes back. */
+/** Code attempts against one request, from any agents; the last one wrong returns the money. */
 export const MAX_CODE_ATTEMPTS_PER_REQUEST = 5;
 
 interface AgentConfirmCashOutRequest {
@@ -117,8 +113,9 @@ export const agentConfirmCashOut = https.onCall(
     if (!pinValid) {
       throw new https.HttpsError("permission-denied", "Invalid PIN");
     }
-    // Per-agent backstop on top of the per-request limit below.
-    assertNotOtpLocked(agentData);
+    // Per-agent backstop on top of the per-request limit below, counted
+    // before the lookup so parallel calls can't each slip a guess in.
+    await reserveOtpAttempt(agentId);
 
     // Resolve the ONE request this attempt is about.
     let cashOutRef: FirebaseFirestore.DocumentReference | null = null;
@@ -142,26 +139,34 @@ export const agentConfirmCashOut = https.onCall(
     const cashOutSnap = cashOutRef ? await cashOutRef.get() : null;
     const cashOut = cashOutSnap?.exists ? (cashOutSnap.data() as CashOutRequest) : null;
     if (!cashOutRef || !cashOut || cashOut.status !== "pending") {
-      await recordOtpFailure(agentId, agentData);
+      throw new https.HttpsError("not-found", INVALID_CODE);
+    }
+
+    // Count this attempt against the request *before* comparing. Counting
+    // after let a burst of parallel guesses all compare before any of them
+    // was recorded; reserved in a transaction, at most
+    // MAX_CODE_ATTEMPTS_PER_REQUEST attempts ever reach the comparison, from
+    // however many agents.
+    const attempt = await db.runTransaction(async (tx) => {
+      const fresh = (await tx.get(cashOutRef!)).data() as CashOutRequest | undefined;
+      if (!fresh || fresh.status !== "pending") return 0;
+      const n = (fresh.failedAttempts ?? 0) + 1;
+      if (n > MAX_CODE_ATTEMPTS_PER_REQUEST) return 0;
+      tx.update(cashOutRef!, { failedAttempts: n });
+      return n;
+    });
+    if (attempt === 0) {
       throw new https.HttpsError("not-found", INVALID_CODE);
     }
 
     if (!codesMatch(otpCode, cashOut.otpCode)) {
-      await recordOtpFailure(agentId, agentData);
-      // Count it against the request; the fifth wrong code returns the money.
-      const attempts = await db.runTransaction(async (tx) => {
-        const fresh = (await tx.get(cashOutRef!)).data() as CashOutRequest;
-        if (fresh.status !== "pending") return 0;
-        const n = (fresh.failedAttempts ?? 0) + 1;
-        tx.update(cashOutRef!, { failedAttempts: n });
-        return n;
-      });
-      if (attempts >= MAX_CODE_ATTEMPTS_PER_REQUEST) {
+      // The last allowed attempt was wrong: the money goes back.
+      if (attempt >= MAX_CODE_ATTEMPTS_PER_REQUEST) {
         await releaseCashOutHold(cashOutRef.id, "too_many_attempts", "system");
       }
       throw new https.HttpsError("not-found", INVALID_CODE);
     }
-    await clearOtpFailures(agentId, agentData);
+    await clearOtpFailures(agentId);
 
     if (agentId === cashOut.customerId) {
       throw new https.HttpsError("permission-denied", "You cannot confirm your own cash-out");

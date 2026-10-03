@@ -57,6 +57,14 @@ export const validateUserPin = https.onCall(
 /**
  * Verify a user's PIN with shared attempt limiting.
  *
+ * The attempt is counted *before* the PIN is compared, inside a transaction
+ * that also checks the lock. Counting after the compare let a burst of
+ * parallel requests all read "not locked" and all get a guess, so the lockout
+ * only held for callers polite enough to wait for each answer. Now the
+ * transactions serialise on the user doc: the fifth reservation sets the
+ * lock, and every request after it is refused without a guess. A correct PIN
+ * then gives its reservation back by clearing the counter.
+ *
  * Throws `resource-exhausted` (with `secondsLeft` in details) while the PIN is
  * locked out, `not-found` when the user doc is missing, and
  * `failed-precondition` when no PIN has been set up yet.
@@ -67,61 +75,56 @@ export async function verifyUserPin(
 ): Promise<boolean> {
   const db = admin.firestore();
   const userRef = db.collection("users").doc(userId);
-  const userDoc = await userRef.get();
 
-  if (!userDoc.exists) {
-    throw new https.HttpsError("not-found", "User not found");
-  }
+  const pinHash = await db.runTransaction(async (tx) => {
+    const userDoc = await tx.get(userRef);
+    if (!userDoc.exists) {
+      throw new https.HttpsError("not-found", "User not found");
+    }
 
-  const userData = userDoc.data()!;
-  const pinHash = userData.pinHash;
+    const userData = userDoc.data()!;
+    if (!userData.pinHash) {
+      throw new https.HttpsError(
+        "failed-precondition",
+        "PIN not set up. Please set up your PIN first."
+      );
+    }
 
-  if (!pinHash) {
-    throw new https.HttpsError(
-      "failed-precondition",
-      "PIN not set up. Please set up your PIN first."
-    );
-  }
+    const now = admin.firestore.Timestamp.now();
+    const lockedUntil = userData.pinLockedUntil as
+      | admin.firestore.Timestamp
+      | null
+      | undefined;
+    if (lockedUntil && lockedUntil.toMillis() > now.toMillis()) {
+      const secondsLeft = Math.ceil(
+        (lockedUntil.toMillis() - now.toMillis()) / 1000
+      );
+      throw new https.HttpsError(
+        "resource-exhausted",
+        `Too many incorrect PIN attempts. Try again in ${secondsLeft} seconds.`,
+        { secondsLeft }
+      );
+    }
 
-  const now = admin.firestore.Timestamp.now();
-  const lockedUntil = userData.pinLockedUntil as
-    | admin.firestore.Timestamp
-    | null
-    | undefined;
-
-  if (lockedUntil && lockedUntil.toMillis() > now.toMillis()) {
-    const secondsLeft = Math.ceil(
-      (lockedUntil.toMillis() - now.toMillis()) / 1000
-    );
-    throw new https.HttpsError(
-      "resource-exhausted",
-      `Too many incorrect PIN attempts. Try again in ${secondsLeft} seconds.`,
-      { secondsLeft }
-    );
-  }
+    // Reserve this attempt as a failure; a correct PIN clears it below.
+    const attempts = (userData.pinFailedAttempts ?? 0) + 1;
+    const updates: Record<string, unknown> = { pinFailedAttempts: attempts };
+    if (attempts >= MAX_ATTEMPTS_BEFORE_LOCK) {
+      const lockSeconds = Math.min(
+        BASE_LOCK_SECONDS * 2 ** (attempts - MAX_ATTEMPTS_BEFORE_LOCK),
+        MAX_LOCK_SECONDS
+      );
+      updates.pinLockedUntil = admin.firestore.Timestamp.fromMillis(
+        now.toMillis() + lockSeconds * 1000
+      );
+    }
+    tx.update(userRef, updates);
+    return userData.pinHash as string;
+  });
 
   const isValid = await verifyPin(pin, pinHash);
-
   if (isValid) {
-    if ((userData.pinFailedAttempts ?? 0) > 0 || lockedUntil) {
-      await userRef.update({ pinFailedAttempts: 0, pinLockedUntil: null });
-    }
-    return true;
+    await userRef.update({ pinFailedAttempts: 0, pinLockedUntil: null });
   }
-
-  const failedAttempts = (userData.pinFailedAttempts ?? 0) + 1;
-  const updates: Record<string, unknown> = {
-    pinFailedAttempts: admin.firestore.FieldValue.increment(1),
-  };
-  if (failedAttempts >= MAX_ATTEMPTS_BEFORE_LOCK) {
-    const lockSeconds = Math.min(
-      BASE_LOCK_SECONDS * 2 ** (failedAttempts - MAX_ATTEMPTS_BEFORE_LOCK),
-      MAX_LOCK_SECONDS
-    );
-    updates.pinLockedUntil = admin.firestore.Timestamp.fromMillis(
-      now.toMillis() + lockSeconds * 1000
-    );
-  }
-  await userRef.update(updates);
-  return false;
+  return isValid;
 }
