@@ -10,6 +10,7 @@ interface DeleteAccountRequest {
 }
 
 export const requestAccountDeletion = https.onCall(
+  { enforceAppCheck: true },
   async (
     request: https.CallableRequest<DeleteAccountRequest>
   ): Promise<ApiResponse> => {

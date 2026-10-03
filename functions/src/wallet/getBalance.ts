@@ -17,6 +17,7 @@ interface BalanceResponse {
  * Callable function to get user wallet balance
  */
 export const getBalance = https.onCall(
+  { enforceAppCheck: true },
   async (request: https.CallableRequest): 
     Promise<ApiResponse<BalanceResponse>> => {
     // Validate authentication

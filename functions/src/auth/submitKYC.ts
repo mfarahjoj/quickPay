@@ -15,6 +15,7 @@ interface SubmitKYCRequest {
 const VALID_ID_TYPES = ["national_id", "passport", "drivers_license"];
 
 export const submitKYC = https.onCall(
+  { enforceAppCheck: true },
   async (
     request: https.CallableRequest<SubmitKYCRequest>
   ): Promise<ApiResponse> => {

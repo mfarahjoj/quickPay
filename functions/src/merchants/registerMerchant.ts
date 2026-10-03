@@ -16,6 +16,7 @@ interface RegisterMerchantRequest {
 }
 
 export const registerMerchant = https.onCall(
+  { enforceAppCheck: true },
   async (
     request: https.CallableRequest<RegisterMerchantRequest>
   ): Promise<ApiResponse<MerchantProfile>> => {

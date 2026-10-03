@@ -266,6 +266,7 @@ export const manualTopup = https.onCall(
  * Get manual top-up history for an agent
  */
 export const getAgentTopupHistory = https.onCall(
+  { enforceAppCheck: true },
   async (
     request: https.CallableRequest<{ limit?: number }>
   ): Promise<ApiResponse> => {

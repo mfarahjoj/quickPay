@@ -10,6 +10,7 @@ interface RejectPaymentInput {
 }
 
 export const rejectPaymentRequest = https.onCall(
+  { enforceAppCheck: true },
   async (
     request: https.CallableRequest<RejectPaymentInput>
   ): Promise<ApiResponse<{ success: boolean }>> => {

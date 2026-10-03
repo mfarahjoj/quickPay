@@ -11,6 +11,7 @@ interface SetupAgentProfileRequest {
 }
 
 export const setupAgentProfile = https.onCall(
+  { enforceAppCheck: true },
   async (
     request: https.CallableRequest<SetupAgentProfileRequest>
   ): Promise<ApiResponse<AgentInfo>> => {

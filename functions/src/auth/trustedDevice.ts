@@ -44,6 +44,7 @@ interface LoginRequest {
  * account has authenticated by SMS and its PIN is confirmed.
  */
 export const registerTrustedDevice = https.onCall(
+  { enforceAppCheck: true },
   async (request: https.CallableRequest<RegisterRequest>):
     Promise<ApiResponse<{ deviceId: string; deviceSecret: string }>> => {
     requireAuth(request);
@@ -91,6 +92,7 @@ export const registerTrustedDevice = https.onCall(
  * by necessity — the caller has no session yet, which is the whole point.
  */
 export const loginWithPin = https.onCall(
+  { enforceAppCheck: true },
   async (request: https.CallableRequest<LoginRequest>):
     Promise<ApiResponse<{ token: string }>> => {
     const { deviceId, deviceSecret, pin } = request.data ?? {};
@@ -189,6 +191,7 @@ export const loginWithPin = https.onCall(
  * re-verify by SMS.
  */
 export const revokeTrustedDevices = https.onCall(
+  { enforceAppCheck: true },
   async (request: https.CallableRequest<unknown>):
     Promise<ApiResponse<{ revoked: number }>> => {
     requireAuth(request);

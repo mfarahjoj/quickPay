@@ -72,6 +72,7 @@ async function resolveParties(
  * Uses a single participants array-contains query so paging is cursor-based.
  */
 export const getTransactions = https.onCall(
+  { enforceAppCheck: true },
   async (
     request: https.CallableRequest<GetTransactionsRequest>
   ): Promise<GetTransactionsResult> => {

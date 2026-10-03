@@ -20,6 +20,7 @@ const MAX_LOCK_SECONDS = 15 * 60;
  * Used before sensitive operations
  */
 export const validateUserPin = https.onCall(
+  { enforceAppCheck: true },
   async (request: https.CallableRequest<ValidatePinRequest>):
     Promise<ApiResponse<{ valid: boolean }>> => {
     // Validate authentication

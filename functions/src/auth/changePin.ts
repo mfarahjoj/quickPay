@@ -11,6 +11,7 @@ interface ChangePinRequest {
 }
 
 export const changePin = https.onCall(
+  { enforceAppCheck: true },
   async (
     request: https.CallableRequest<ChangePinRequest>
   ): Promise<ApiResponse> => {

@@ -26,6 +26,7 @@ interface AccountLimitsResponse {
  * account told $50 and allowed $100.
  */
 export const getAccountLimits = https.onCall(
+  { enforceAppCheck: true },
   async (
     request: https.CallableRequest
   ): Promise<ApiResponse<AccountLimitsResponse>> => {

@@ -12,6 +12,7 @@ interface CompleteRemittanceRequest {
 }
 
 export const completeRemittance = https.onCall(
+  { enforceAppCheck: true },
   async (
     request: https.CallableRequest<CompleteRemittanceRequest>
   ): Promise<ApiResponse> => {

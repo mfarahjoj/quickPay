@@ -26,6 +26,7 @@ const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const PHONE_REGEX = /^\+252[0-9]{9}$/;
 
 export const updateProfile = https.onCall(
+  { enforceAppCheck: true },
   async (
     request: https.CallableRequest<UpdateProfileRequest>
   ): Promise<ApiResponse> => {

@@ -137,6 +137,7 @@ async function creditReferralBonus(
  * a review-pending state instead of appearing to succeed.
  */
 export const setupPin = https.onCall(
+  { enforceAppCheck: true },
   async (request: https.CallableRequest<SetupPinRequest>):
   Promise<ApiResponse<SetupPinResponse>> => {
     requireAuth(request);

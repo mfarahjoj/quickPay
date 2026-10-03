@@ -10,6 +10,7 @@ interface ReferralStatsResponse {
 }
 
 export const getReferralStats = https.onCall(
+  { enforceAppCheck: true },
   async (request: https.CallableRequest): Promise<ApiResponse<ReferralStatsResponse>> => {
     requireAuth(request);
     const uid = request.auth!.uid;

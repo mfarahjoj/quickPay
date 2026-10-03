@@ -36,6 +36,7 @@ interface CashOutResponse {
 }
 
 export const topupFromMobileMoney = https.onCall(
+  { enforceAppCheck: true },
   async (
     request: https.CallableRequest<MobileMoneyRequest>
   ): Promise<ApiResponse<TopupResponse>> => {
@@ -187,6 +188,7 @@ export const topupFromMobileMoney = https.onCall(
 );
 
 export const cashOutToMobileMoney = https.onCall(
+  { enforceAppCheck: true },
   async (
     request: https.CallableRequest<MobileMoneyRequest>
   ): Promise<ApiResponse<CashOutResponse>> => {

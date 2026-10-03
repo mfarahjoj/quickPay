@@ -31,6 +31,7 @@ interface RefundResponse {
  * the customer, then records a refund transaction.
  */
 export const refundPayment = https.onCall(
+  { enforceAppCheck: true },
   async (
     request: https.CallableRequest<RefundRequest>
   ): Promise<ApiResponse<RefundResponse>> => {
