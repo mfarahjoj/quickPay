@@ -11,7 +11,7 @@ money ships to prod without explicit per-deploy authorization (CLAUDE.md).
 | W1 One source for prod | 0 | committed 2026-10-03, merchant API merged (`b6e3e81`), pushed 2026-10-03. Prod/source names match except `cancelCashOut`, `expireAgentRequests` (not deployed) |
 | W2 CI fix | 0 | committed 2026-10-03 — runs on all branches, deploy job removed, merchant/admin typecheck added; lint non-blocking (backlog) |
 | #1 Self top-up mint | 1 | hotfix committed 2026-10-03 (`utils/agentGuards.ts`, 11 tests); deployed to prod 2026-10-03 (hash bc9ab2b4, from `0ac145e`). Retirement of `manualTopup` waits on D2 |
-| M Business-level monitors | 1 | committed 2026-10-03 (`ledger/activityMonitor.ts`, 17 tests, Ledger Desk section); **deploy pending authorization**: `ledgerInvariantCheck`, `adminGetLedgerOverview`, `adminGetLedgerAlert`, `adminRunLedgerCheck` + hosting:admin |
+| M Business-level monitors | 1 | committed 2026-10-03 (`ledger/activityMonitor.ts`, 17 tests, Ledger Desk section); deployed to prod 2026-10-03 (functions hash 29796837, hosting:admin); admin App Check site key still blank, so the console cannot call it yet |
 | #2 Commission round-trip | 1 | blocked on D1 |
 | #3 Unauthenticated name lookup | 2 | blocked on D4 |
 | #4 Lockout races | 2 | open |
