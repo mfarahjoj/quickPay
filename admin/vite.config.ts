@@ -11,6 +11,12 @@ import react from "@vitejs/plugin-react";
  *
  * So a missing config is a build failure, not a warning. Set
  * ALLOW_UNCONFIGURED_BUILD=1 if you deliberately want the stub (CI smoke test).
+ *
+ * The App Check site key is required for the same reason. Every admin
+ * callable runs with enforceAppCheck, so a build without the key signs in and
+ * then has every action refused. That used to be a warning, and a keyless
+ * console went to production twice. Set ALLOW_NO_APPCHECK=1 to build one on
+ * purpose (a local preview that never calls the backend).
  */
 const REQUIRED = ["VITE_FIREBASE_API_KEY", "VITE_FIREBASE_PROJECT_ID"];
 
@@ -29,11 +35,14 @@ export default defineConfig(({ command, mode }) => {
           "ALLOW_UNCONFIGURED_BUILD=1 to build the stub on purpose."
       );
     }
-    if (!env.VITE_APPCHECK_SITE_KEY) {
-      console.warn(
-        "\n[zapp-admin] VITE_APPCHECK_SITE_KEY is not set. The admin callables " +
-          "run with enforceAppCheck, so every request from this build will be " +
-          "rejected.\n"
+    if (!env.VITE_APPCHECK_SITE_KEY && process.env.ALLOW_NO_APPCHECK !== "1") {
+      throw new Error(
+        "Refusing to build the admin console without VITE_APPCHECK_SITE_KEY.\n" +
+          "The admin callables run with enforceAppCheck, so every request from " +
+          "this build would be rejected.\n" +
+          "Register a reCAPTCHA Enterprise key for the admin web app under " +
+          "Firebase console -> App Check and put it in admin/.env.local, or set " +
+          "ALLOW_NO_APPCHECK=1 to build a keyless preview on purpose."
       );
     }
   }

@@ -3,6 +3,7 @@ import type { User } from "firebase/auth";
 import {
   auth,
   configError,
+  appCheckMissing,
   readAdminClaims,
   signInWithGoogle,
   signOut,
@@ -215,6 +216,14 @@ export default function App() {
 
       <main className="content" id="main" tabIndex={-1}>
         <div className="content-inner">
+          {appCheckMissing && (
+            <div className="banner error" role="alert">
+              <strong>This build has no App Check key, so every action will be refused.</strong>{" "}
+              Set <code>VITE_APPCHECK_SITE_KEY</code> in <code>admin/.env.local</code> to the
+              reCAPTCHA Enterprise key registered for this web app under Firebase console → App
+              Check, then rebuild and redeploy.
+            </div>
+          )}
           <header className="page-header">
             <h1>{TABS[tab].label}</h1>
             <p>{TABS[tab].subtitle}</p>
