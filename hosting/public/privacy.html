@@ -31,6 +31,7 @@
       <span class="logo-name">Zapp Pay</span>
     </a>
     <nav class="nav">
+      <a href="/terms">Terms</a>
       <a href="/privacy" aria-current="page">Privacy</a>
       <a href="/support">Support</a>
     </nav>
@@ -95,7 +96,7 @@
           <tr><td>Do you sell my data?</td><td>No. We have never sold personal information and we do not share it for advertising.</td></tr>
           <tr><td>Do you track me across apps?</td><td>No. Zapp Pay contains no advertising SDKs and does not use tracking identifiers.</td></tr>
           <tr><td>Can you see my PIN?</td><td>No. Your PIN is stored only as a cryptographic hash. Nobody at Zapp Pay can read it.</td></tr>
-          <tr><td>Do you store my card number?</td><td>No. Card payments are handled entirely by Stripe. Card numbers never reach our servers.</td></tr>
+          <tr><td>Do you store my card number?</td><td>No. We never receive full card numbers on our servers.</td></tr>
           <tr><td>Can I delete my account?</td><td>Yes, from inside the app. See section 10.</td></tr>
           <tr><td>Where is my data held?</td><td>On Google Cloud infrastructure in the United States. See section 8.</td></tr>
         </tbody>
@@ -137,7 +138,7 @@
   <section id="not-collect">
     <h2>4. What we don't collect</h2>
     <ul>
-      <li><strong>We do not collect your card details.</strong> When you fund a wallet by card, the card form is served by Stripe and the card number, expiry and security code go directly to Stripe. We receive only a payment reference and the last four digits.</li>
+      <li><strong>We do not collect your card details.</strong> Full card numbers never reach our servers.</li>
       <li><strong>We do not collect your precise location.</strong> The app does not request location permission.</li>
       <li><strong>We do not read your SMS messages or call logs.</strong> The apps do not request those permissions.</li>
       <li><strong>We do not collect advertising identifiers</strong> and we do not track you across other companies' apps or websites.</li>
@@ -208,7 +209,6 @@
         </thead>
         <tbody>
           <tr><td>Google (Firebase)</td><td>Account authentication and SMS codes, database storage, file storage, server functions, push notifications, crash reporting and app integrity checks</td></tr>
-          <tr><td>Stripe</td><td>Card payments used to fund wallets from abroad. Stripe collects card details directly and acts as its own controller for them.</td></tr>
         </tbody>
       </table>
     </div>
@@ -326,6 +326,7 @@
   <footer class="site-foot">
     <p>© 2026 Zapp Pay · Hargeisa, Somaliland</p>
     <nav>
+      <a href="/terms">Terms of Use</a>
       <a href="/privacy">Privacy Policy</a>
       <a href="/support">Support</a>
     </nav>

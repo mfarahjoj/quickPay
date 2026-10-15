@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<!--
+  Zapp Pay — Marketing homepage
+  ────────────────────────────────────────────────────────────
+  Customer sections use the "dark kinetic" theme (ink / coral / teal);
+  the merchant section switches to the merchant app's blue dark-glass.
+  Legal pages (/privacy, /terms, /support) share assets/legal.css.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Zapp Pay — Instant mobile payments for Somaliland</title>
+  <meta name="description" content="Zapp Pay is the fastest way to pay, get paid and receive money in Somaliland. Scan a QR to pay in seconds, top up with cash at an agent, and accept payments as a merchant — in dollars, with no hidden fees." />
+  <meta name="robots" content="index, follow" />
+  <meta property="og:title" content="Zapp Pay — Instant mobile payments for Somaliland" />
+  <meta property="og:description" content="Pay with a scan. Get paid in seconds. Built in Hargeisa." />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --ink: #0D0B0A;
+      --ink-raised: #161312;
+      --glass: rgba(255,255,255,0.06);
+      --glass-raised: rgba(255,255,255,0.09);
+      --border: rgba(255,255,255,0.10);
+      --border-strong: rgba(255,255,255,0.18);
+      --text: #FFFFFF;
+      --text-dim: rgba(255,255,255,0.62);
+      --text-faint: rgba(255,255,255,0.38);
+      --coral: #FF5043;
+      --coral-soft: rgba(255,80,67,0.16);
+      --coral-border: rgba(255,80,67,0.32);
+      --coral-text: #FF8A7A;
+      --teal: #5DCAA5;
+      --teal-soft: rgba(93,202,165,0.14);
+      --green: #34C77B;
+      --blue: #1A56FF;
+      --blue-soft: rgba(26,86,255,0.16);
+      --blue-border: rgba(26,86,255,0.35);
+      --blue-text: #7FA3FF;
+      --r: 16px;
+      --r-lg: 24px;
+      --maxw: 1080px;
+    }
+
+    html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+
+    body {
+      background: var(--ink);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    .wrap { width: 100%; max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+
+    /* ── Header ─────────────────────────────────────── */
+    .site-head {
+      position: sticky; top: 0; z-index: 50;
+      background: rgba(13,11,10,0.82);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+    }
+    .site-head .wrap {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 16px; height: 68px;
+    }
+    .logo { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text); }
+    .logo-mark {
+      width: 36px; height: 36px; border-radius: 10px;
+      background: var(--coral);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      box-shadow: 0 4px 18px rgba(255,80,67,0.35);
+    }
+    .logo-mark svg { width: 17px; height: 17px; display: block; }
+    .logo-name { font-size: 19px; font-weight: 800; letter-spacing: -0.5px; }
+
+    .nav { display: flex; align-items: center; gap: 4px; }
+    .nav a {
+      font-size: 14px; font-weight: 600; text-decoration: none;
+      color: var(--text-dim);
+      padding: 8px 14px; border-radius: 9999px;
+      transition: color .15s, background .15s;
+    }
+    .nav a:hover { color: var(--text); background: var(--glass); }
+    .nav .nav-cta {
+      color: var(--ink); background: var(--text);
+      margin-left: 8px;
+    }
+    .nav .nav-cta:hover { background: rgba(255,255,255,0.85); color: var(--ink); }
+    @media (max-width: 720px) { .nav a:not(.nav-cta) { display: none; } }
+
+    /* ── Hero ───────────────────────────────────────── */
+    .hero { position: relative; padding: 88px 0 72px; }
+    .hero::before {
+      content: ''; position: absolute; inset: 0; z-index: -1;
+      background:
+        radial-gradient(640px 420px at 18% 8%, rgba(255,80,67,0.17), transparent 65%),
+        radial-gradient(560px 420px at 86% 32%, rgba(93,202,165,0.12), transparent 65%);
+    }
+    .hero .wrap {
+      display: grid; grid-template-columns: 1.08fr 0.92fr;
+      gap: 48px; align-items: center;
+    }
+    @media (max-width: 880px) {
+      .hero { padding: 56px 0 56px; }
+      .hero .wrap { grid-template-columns: 1fr; gap: 56px; }
+    }
+
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+      color: var(--coral-text);
+      background: var(--coral-soft); border: 1px solid var(--coral-border);
+      padding: 7px 14px; border-radius: 9999px; margin-bottom: 22px;
+    }
+    .eyebrow::before { content: ''; width: 6px; height: 6px; border-radius: 3px; background: var(--coral); }
+
+    h1 {
+      font-size: clamp(40px, 6.5vw, 64px);
+      font-weight: 800; letter-spacing: -2.2px; line-height: 1.04;
+      margin-bottom: 20px;
+    }
+    h1 .accent {
+      background: linear-gradient(100deg, var(--coral) 10%, var(--teal) 90%);
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent; color: transparent;
+    }
+    .hero-sub {
+      font-size: 18px; color: var(--text-dim); line-height: 1.65;
+      max-width: 480px; margin-bottom: 32px;
+    }
+
+    .btn-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      height: 54px; padding: 0 26px; border-radius: 9999px;
+      font-size: 16px; font-weight: 700; letter-spacing: -0.2px;
+      text-decoration: none; cursor: pointer; border: none;
+      transition: transform .12s, opacity .15s, background .15s;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-coral { background: var(--coral); color: #fff; box-shadow: 0 8px 28px rgba(255,80,67,0.35); }
+    .btn-coral:hover { opacity: 0.92; }
+    .btn-ghost { background: transparent; color: var(--text); border: 1.5px solid var(--border-strong); }
+    .btn-ghost:hover { background: var(--glass); }
+    .btn-white { background: #fff; color: var(--ink); }
+    .btn-white:hover { opacity: 0.9; }
+    .btn-blue { background: var(--blue); color: #fff; box-shadow: 0 8px 28px rgba(26,86,255,0.35); }
+    .btn-blue:hover { opacity: 0.92; }
+
+    .hero-note { margin-top: 18px; font-size: 13px; color: var(--text-faint); }
+
+    /* ── Phone mockup ───────────────────────────────── */
+    .phone-stage { display: flex; justify-content: center; position: relative; }
+    .phone {
+      width: 310px; border-radius: 44px;
+      background: linear-gradient(170deg, #1C1917 0%, #12100E 100%);
+      border: 1px solid var(--border-strong);
+      box-shadow: 0 40px 90px rgba(0,0,0,0.6), 0 0 0 10px rgba(255,255,255,0.03);
+      padding: 14px; position: relative;
+      animation: float 7s ease-in-out infinite;
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-12px); }
+    }
+    @media (prefers-reduced-motion: reduce) { .phone { animation: none; } }
+    .phone-screen {
+      border-radius: 32px; background: var(--ink);
+      border: 1px solid var(--border);
+      padding: 22px 16px 18px; overflow: hidden;
+    }
+    .phone-notch {
+      width: 96px; height: 24px; border-radius: 12px;
+      background: #000; border: 1px solid var(--border);
+      margin: 0 auto 18px;
+    }
+    .balance-card {
+      border-radius: 20px; padding: 18px;
+      background: linear-gradient(135deg, rgba(255,80,67,0.92) 0%, #C73A30 100%);
+      box-shadow: 0 10px 30px rgba(255,80,67,0.3);
+      margin-bottom: 14px;
+    }
+    .balance-label { font-size: 11px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; color: rgba(255,255,255,0.75); margin-bottom: 4px; }
+    .balance-amount { font-size: 34px; font-weight: 800; letter-spacing: -1.2px; color: #fff; }
+    .balance-sub { font-size: 12px; color: rgba(255,255,255,0.75); margin-top: 2px; }
+
+    .chip-row { display: flex; gap: 8px; margin-bottom: 16px; }
+    .chip {
+      flex: 1; text-align: center;
+      background: var(--glass); border: 1px solid var(--border);
+      border-radius: 14px; padding: 10px 4px;
+      font-size: 11px; font-weight: 700; color: var(--text-dim);
+    }
+    .chip span { display: block; font-size: 16px; margin-bottom: 3px; }
+
+    .txn { display: flex; align-items: center; gap: 10px; padding: 10px 2px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .txn:last-child { border-bottom: none; }
+    .txn-ico {
+      width: 34px; height: 34px; border-radius: 12px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; font-size: 14px;
+      background: var(--glass-raised); border: 1px solid var(--border);
+    }
+    .txn-ico.in { background: var(--teal-soft); border-color: rgba(93,202,165,0.3); }
+    .txn-body { flex: 1; min-width: 0; }
+    .txn-name { font-size: 13px; font-weight: 700; letter-spacing: -0.2px; }
+    .txn-time { font-size: 11px; color: var(--text-faint); }
+    .txn-amt { font-size: 13px; font-weight: 800; letter-spacing: -0.3px; }
+    .txn-amt.in { color: var(--green); }
+
+    /* ── Trust strip ────────────────────────────────── */
+    .trust { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); background: rgba(255,255,255,0.02); }
+    .trust .wrap {
+      display: flex; justify-content: space-between; gap: 10px;
+      padding-top: 22px; padding-bottom: 22px; flex-wrap: wrap;
+    }
+    .trust-item { display: flex; align-items: center; gap: 9px; font-size: 14px; font-weight: 600; color: var(--text-dim); }
+    .trust-item .dot { width: 7px; height: 7px; border-radius: 4px; background: var(--teal); flex-shrink: 0; }
+
+    /* ── Sections ───────────────────────────────────── */
+    section.block { padding: 96px 0; }
+    @media (max-width: 720px) { section.block { padding: 64px 0; } }
+    .kicker {
+      font-size: 12px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+    .kicker.coral { color: var(--coral-text); }
+    .kicker.blue { color: var(--blue-text); }
+    .kicker.teal { color: var(--teal); }
+    h2 {
+      font-size: clamp(30px, 4.6vw, 44px);
+      font-weight: 800; letter-spacing: -1.4px; line-height: 1.12;
+      margin-bottom: 16px; max-width: 640px;
+    }
+    .section-lede { font-size: 17px; color: var(--text-dim); max-width: 580px; margin-bottom: 48px; }
+
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    @media (max-width: 880px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
+
+    .feature {
+      background: var(--glass); border: 1px solid var(--border);
+      border-radius: var(--r-lg); padding: 26px 24px;
+      transition: border-color .2s, background .2s, transform .2s;
+    }
+    .feature:hover { background: var(--glass-raised); border-color: var(--border-strong); transform: translateY(-3px); }
+    .feature-ico {
+      width: 46px; height: 46px; border-radius: 15px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 21px; margin-bottom: 18px;
+      background: var(--coral-soft); border: 1px solid var(--coral-border);
+    }
+    .feature h3 { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; margin-bottom: 8px; }
+    .feature p { font-size: 14.5px; color: var(--text-dim); line-height: 1.6; }
+    .feature p a { color: var(--coral-text); text-decoration: none; border-bottom: 1px solid var(--coral-border); }
+
+    /* ── Merchant section ───────────────────────────── */
+    .merchant {
+      border-top: 1px solid var(--border);
+      background:
+        radial-gradient(720px 480px at 82% 12%, rgba(26,86,255,0.14), transparent 65%),
+        #0A0C12;
+    }
+    .merchant .feature-ico { background: var(--blue-soft); border-color: var(--blue-border); }
+    .merchant .feature p a { color: var(--blue-text); border-bottom-color: var(--blue-border); }
+
+    .api-card {
+      margin-top: 48px;
+      border-radius: var(--r-lg);
+      border: 1px solid var(--blue-border);
+      background: rgba(26,86,255,0.07);
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 36px; padding: 40px;
+      align-items: center;
+    }
+    @media (max-width: 880px) { .api-card { grid-template-columns: 1fr; padding: 28px 24px; } }
+    .api-card h3 { font-size: clamp(22px, 3vw, 28px); font-weight: 800; letter-spacing: -0.7px; margin-bottom: 12px; }
+    .api-card p { font-size: 15px; color: var(--text-dim); margin-bottom: 14px; }
+    .api-card ul { list-style: none; }
+    .api-card li {
+      font-size: 14.5px; color: var(--text-dim);
+      padding-left: 24px; position: relative; margin-bottom: 9px;
+    }
+    .api-card li::before {
+      content: '✓'; position: absolute; left: 0;
+      color: var(--blue-text); font-weight: 800;
+    }
+    pre.code {
+      background: #05070C; border: 1px solid var(--border);
+      border-radius: var(--r); padding: 20px;
+      font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+      font-size: 12.5px; line-height: 1.7;
+      color: rgba(255,255,255,0.78);
+      overflow-x: auto;
+    }
+    pre.code .c { color: rgba(255,255,255,0.32); }
+    pre.code .k { color: #7FA3FF; }
+    pre.code .s { color: #5DCAA5; }
+
+    /* ── Steps ──────────────────────────────────────── */
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; counter-reset: step; }
+    @media (max-width: 720px) { .steps { grid-template-columns: 1fr; } }
+    .step {
+      background: var(--glass); border: 1px solid var(--border);
+      border-radius: var(--r-lg); padding: 28px 24px;
+      counter-increment: step; position: relative;
+    }
+    .step::before {
+      content: counter(step, decimal-leading-zero);
+      display: block;
+      font-size: 13px; font-weight: 800; letter-spacing: 1px;
+      color: var(--coral-text); margin-bottom: 16px;
+    }
+    .step h3 { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; margin-bottom: 8px; }
+    .step p { font-size: 14.5px; color: var(--text-dim); }
+
+    /* ── Security ───────────────────────────────────── */
+    .security-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+    @media (max-width: 720px) { .security-grid { grid-template-columns: 1fr; } }
+
+    /* ── Get the app ────────────────────────────────── */
+    .getapp {
+      border-radius: var(--r-lg);
+      border: 1px solid var(--coral-border);
+      background:
+        radial-gradient(640px 360px at 50% 120%, rgba(255,80,67,0.22), transparent 70%),
+        var(--ink-raised);
+      text-align: center; padding: 72px 32px;
+    }
+    .getapp h2 { margin-left: auto; margin-right: auto; }
+    .getapp p { font-size: 16.5px; color: var(--text-dim); max-width: 460px; margin: 0 auto 32px; }
+    .store-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .store-badge {
+      display: inline-flex; align-items: center; gap: 12px;
+      background: #000; border: 1px solid var(--border-strong);
+      border-radius: 14px; padding: 10px 20px;
+      text-decoration: none; color: var(--text); text-align: left;
+    }
+    .store-badge .store-ico { font-size: 24px; }
+    .store-badge .store-top { display: block; font-size: 10px; font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase; color: var(--text-faint); }
+    .store-badge .store-name { display: block; font-size: 16px; font-weight: 700; letter-spacing: -0.3px; }
+    .getapp .soon { margin-top: 18px; font-size: 13px; color: var(--text-faint); }
+
+    /* ── Footer ─────────────────────────────────────── */
+    .site-foot { border-top: 1px solid var(--border); padding: 48px 0 56px; }
+    .foot-grid { display: flex; justify-content: space-between; gap: 32px; flex-wrap: wrap; }
+    .foot-brand p { font-size: 13.5px; color: var(--text-faint); max-width: 300px; margin-top: 14px; }
+    .foot-cols { display: flex; gap: 64px; flex-wrap: wrap; }
+    .foot-col h4 {
+      font-size: 11px; font-weight: 700; letter-spacing: 0.9px;
+      text-transform: uppercase; color: var(--text-faint); margin-bottom: 14px;
+    }
+    .foot-col a {
+      display: block; font-size: 14px; color: var(--text-dim);
+      text-decoration: none; margin-bottom: 10px;
+    }
+    .foot-col a:hover { color: var(--text); }
+    .foot-base {
+      margin-top: 44px; padding-top: 24px; border-top: 1px solid var(--border);
+      display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+      font-size: 13px; color: var(--text-faint);
+    }
+  </style>
+</head>
+<body>
+
+  <header class="site-head">
+    <div class="wrap">
+      <a class="logo" href="/">
+        <span class="logo-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M13.5 2 4 13.5h6.2L9.8 22 20 10.2h-6.6L13.5 2Z" fill="#fff"/>
+          </svg>
+        </span>
+        <span class="logo-name">Zapp Pay</span>
+      </a>
+      <nav class="nav" aria-label="Main">
+        <a href="#personal">Personal</a>
+        <a href="#business">Business</a>
+        <a href="/support">Support</a>
+        <a class="nav-cta" href="#get-app">Get the app</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- ── Hero ─────────────────────────────────────────── -->
+  <section class="hero">
+    <div class="wrap">
+      <div>
+        <span class="eyebrow">Built in Hargeisa</span>
+        <h1>Money that moves <span class="accent">at the speed of&nbsp;you</span></h1>
+        <p class="hero-sub">
+          Zapp Pay is the fastest way to pay, get paid and receive money in Somaliland.
+          Scan a QR code to pay in seconds, top up with cash at any agent, and keep
+          every shilling of your balance safe behind your PIN — all in US dollars.
+        </p>
+        <div class="btn-row">
+          <a class="btn btn-coral" href="#get-app">Get the app</a>
+          <a class="btn btn-ghost" href="#business">Zapp Pay for business</a>
+        </div>
+        <p class="hero-note">Free to download · English, Somali &amp; Arabic · iPhone and Android</p>
+      </div>
+
+      <div class="phone-stage" aria-hidden="true">
+        <div class="phone">
+          <div class="phone-screen">
+            <div class="phone-notch"></div>
+            <div class="balance-card">
+              <div class="balance-label">Available balance</div>
+              <div class="balance-amount">$125.50</div>
+              <div class="balance-sub">USD wallet</div>
+            </div>
+            <div class="chip-row">
+              <div class="chip"><span>⚡︎</span>Scan &amp; Pay</div>
+              <div class="chip"><span>↗</span>Send</div>
+              <div class="chip"><span>＋</span>Top up</div>
+            </div>
+            <div class="txn">
+              <div class="txn-ico in">↓</div>
+              <div class="txn-body">
+                <div class="txn-name">From Amina</div>
+                <div class="txn-time">Today, 2:45 PM</div>
+              </div>
+              <div class="txn-amt in">+$25.00</div>
+            </div>
+            <div class="txn">
+              <div class="txn-ico">↑</div>
+              <div class="txn-body">
+                <div class="txn-name">Maka Al-Mukarama Café</div>
+                <div class="txn-time">Today, 1:20 PM</div>
+              </div>
+              <div class="txn-amt">−$4.50</div>
+            </div>
+            <div class="txn">
+              <div class="txn-ico in">↓</div>
+              <div class="txn-body">
+                <div class="txn-name">Cash top-up · Agent</div>
+                <div class="txn-time">Yesterday</div>
+              </div>
+              <div class="txn-amt in">+$50.00</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Trust strip ──────────────────────────────────── -->
+  <div class="trust">
+    <div class="wrap">
+      <div class="trust-item"><span class="dot"></span>Payments in seconds</div>
+      <div class="trust-item"><span class="dot"></span>Fees shown before you confirm</div>
+      <div class="trust-item"><span class="dot"></span>PIN &amp; Face ID protected</div>
+      <div class="trust-item"><span class="dot"></span>Every cent on a double-entry ledger</div>
+    </div>
+  </div>
+
+  <!-- ── Personal ─────────────────────────────────────── -->
+  <section class="block" id="personal">
+    <div class="wrap">
+      <p class="kicker coral">For you</p>
+      <h2>Everything your money does, in one app</h2>
+      <p class="section-lede">
+        Open an account with just your phone number. No bank account, no paperwork,
+        no queue — your wallet is ready in under a minute.
+      </p>
+
+      <div class="grid">
+        <div class="feature">
+          <div class="feature-ico">⚡︎</div>
+          <h3>Scan &amp; pay in seconds</h3>
+          <p>Point your camera at any merchant's QR code, confirm the amount, enter your PIN — done. The merchant sees the payment instantly.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-ico">↗</div>
+          <h3>Send to any phone number</h3>
+          <p>Send dollars to anyone with a Zapp Pay account using just their phone number. It arrives instantly, with a push notification on both sides.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-ico">💵</div>
+          <h3>Top up with cash</h3>
+          <p>Hand cash to any Zapp Pay agent and watch your wallet balance update on the spot. You can also link your Zaad or eDahab number.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-ico">🧾</div>
+          <h3>Every payment on record</h3>
+          <p>Your full history with amounts, counterparties and references — pull up any receipt whenever a question comes up.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-ico">🗣️</div>
+          <h3>In your language</h3>
+          <p>The whole app ships in English, Somali and Arabic. Switch any time in settings.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── How it works ─────────────────────────────────── -->
+  <section class="block" style="padding-top: 0;">
+    <div class="wrap">
+      <p class="kicker coral">Getting started</p>
+      <h2>Three steps to your first payment</h2>
+      <p class="section-lede">No bank account required. If you have a phone number, you're in.</p>
+      <div class="steps">
+        <div class="step">
+          <h3>Download &amp; register</h3>
+          <p>Install Zapp Pay, enter your phone number and confirm the SMS code. Set a 6-digit PIN that only you know.</p>
+        </div>
+        <div class="step">
+          <h3>Load your wallet</h3>
+          <p>Top up with cash at an agent near you, or transfer from your linked Zaad or eDahab number.</p>
+        </div>
+        <div class="step">
+          <h3>Pay with a scan</h3>
+          <p>At the counter, scan the merchant's QR code and confirm with your PIN. Both of you see it settle instantly.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Business / merchant ──────────────────────────── -->
+  <section class="block merchant" id="business">
+    <div class="wrap">
+      <p class="kicker blue">For business</p>
+      <h2>Get paid the moment the customer taps confirm</h2>
+      <p class="section-lede">
+        The Zapp Pay Merchant app turns any phone into a till. Show one QR code,
+        take unlimited payments, and watch money land in your wallet in real time —
+        with one low fee, shown on every transaction.
+      </p>
+
+      <div class="grid">
+        <div class="feature">
+          <div class="feature-ico">🧿</div>
+          <h3>One QR, every customer</h3>
+          <p>Print your QR code or show it on screen. Raise an exact-amount request and it's payable immediately — no card machine, no cash float.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-ico">📊</div>
+          <h3>A live view of your day</h3>
+          <p>See every payment arrive in real time, track daily totals, and search your full history by amount, customer or reference.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-ico">↩</div>
+          <h3>Refunds done right</h3>
+          <p>Refund a payment in full or in part, straight from the transaction record. The customer gets the money and a notification instantly.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-ico">🛡️</div>
+          <h3>No chargebacks, no fraud rails</h3>
+          <p>Every payment is approved by the customer with their PIN before it settles. Once it's in your wallet, it's yours.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-ico">🤝</div>
+          <h3>Become an agent</h3>
+          <p>Registered agents earn a commission on every cash top-up they process. Pre-purchase float and serve your neighbourhood.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-ico">🚀</div>
+          <h3>Onboarded in person</h3>
+          <p>We review every merchant account before it goes live, and we'll visit you in Hargeisa to get you set up. <a href="/support">Talk to us</a>.</p>
+        </div>
+      </div>
+
+      <div class="api-card" id="developers">
+        <div>
+          <p class="kicker blue" style="margin-bottom:10px;">For developers</p>
+          <h3>Take Zapp Pay online with one API</h3>
+          <p>
+            Create a charge from your server; your customer approves it in the Zapp Pay
+            app with their PIN; you get a webhook when it's paid. You never touch their
+            credentials, and nothing moves until they approve.
+          </p>
+          <ul>
+            <li>Hosted checkout page — or build your own flow</li>
+            <li>Idempotent charges and refunds, so retries never double-charge</li>
+            <li>Signed webhooks for paid, expired and refunded events</li>
+            <li>Full test mode — develop without moving real money</li>
+            <li>Create API keys yourself in the Merchant app, under Settings → Developers</li>
+          </ul>
+        </div>
+        <pre class="code"><span class="c"># Charge a customer $12.50</span>
+curl https://quickpay-485417.web.app/v1/charges \
+  -H <span class="s">"Authorization: Bearer $ZAPP_KEY"</span> \
+  -H <span class="s">"Idempotency-Key: order-1001-a1"</span> \
+  -d '{
+    <span class="k">"amount"</span>: 1250,
+    <span class="k">"reference"</span>: <span class="s">"Order #1001"</span>,
+    <span class="k">"success_url"</span>: <span class="s">"https://shop.example/thanks"</span>
+  }'
+
+<span class="c"># → 201 { "id": "ch_…", "status": "pending",</span>
+<span class="c">#         "checkout_url": "https://…/checkout/ch_…" }</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Security ─────────────────────────────────────── -->
+  <section class="block" id="security">
+    <div class="wrap">
+      <p class="kicker coral">Security</p>
+      <h2>Built like a ledger, not an app</h2>
+      <p class="section-lede">
+        Zapp Pay is engineered the way banks keep books: every movement of money is a
+        balanced, immutable double-entry record. Nothing is ever edited or deleted —
+        so nothing can silently go missing.
+      </p>
+      <div class="security-grid">
+        <div class="feature">
+          <div class="feature-ico">🔐</div>
+          <h3>Your PIN approves every payment</h3>
+          <p>No money leaves your wallet without your 6-digit PIN. It's stored only as a cryptographic hash — nobody at Zapp Pay can read it — and repeated wrong guesses lock PIN entry to protect your balance.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-ico">📒</div>
+          <h3>Double-entry, always balanced</h3>
+          <p>Every transaction posts matching ledger entries that must sum to zero, with automated integrity checks running against them. Your balance is provable, not just a number on a screen.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-ico">📵</div>
+          <h3>Only genuine apps get through</h3>
+          <p>Requests are verified with device integrity checks, so traffic that doesn't come from a real copy of the app is rejected before it reaches your account.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-ico">🕶️</div>
+          <h3>Private by default</h3>
+          <p>We don't sell data, don't run ads, and don't track you across other apps. Your PIN and balance stay private to you. Read the full <a href="/privacy" style="color:var(--coral-text); text-decoration:none; border-bottom:1px solid var(--coral-border);">privacy policy</a>.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Get the app ──────────────────────────────────── -->
+  <section class="block" id="get-app" style="padding-top: 0;">
+    <div class="wrap">
+      <div class="getapp">
+        <p class="kicker coral">Get started</p>
+        <h2>Your wallet is one download away</h2>
+        <p>Zapp Pay for everyday payments. Zapp Pay Merchant for your business. Both free, on iPhone and Android.</p>
+        <div class="store-row">
+          <a class="store-badge" href="/support" aria-label="Download on the App Store">
+            <span class="store-ico" aria-hidden="true">
+              <svg width="22" height="26" viewBox="0 0 22 26" fill="#fff" xmlns="http://www.w3.org/2000/svg"><path d="M18.3 13.8c0-3 2.5-4.5 2.6-4.6-1.4-2.1-3.6-2.4-4.4-2.4-1.9-.2-3.7 1.1-4.6 1.1-1 0-2.4-1.1-4-1-2 0-3.9 1.2-5 3-2.1 3.7-.5 9.2 1.5 12.2 1 1.5 2.2 3.1 3.8 3 1.5-.1 2.1-1 4-1s2.4 1 4 1 2.7-1.5 3.7-3c1.2-1.7 1.7-3.4 1.7-3.5 0 0-3.2-1.2-3.3-4.8zM15.3 4.8c.8-1 1.4-2.4 1.2-3.8-1.2 0-2.7.8-3.5 1.8-.8.9-1.5 2.3-1.3 3.7 1.4.1 2.8-.7 3.6-1.7z"/></svg>
+            </span>
+            <span><span class="store-top">Download on the</span><span class="store-name">App Store</span></span>
+          </a>
+          <a class="store-badge" href="/support" aria-label="Get it on Google Play">
+            <span class="store-ico" aria-hidden="true">
+              <svg width="22" height="24" viewBox="0 0 24 26" xmlns="http://www.w3.org/2000/svg"><path d="M1.6.9C1.2 1.3 1 1.9 1 2.7v20.6c0 .8.2 1.4.6 1.8l.1.1L13.5 13.5v-.3L1.7.8l-.1.1z" fill="#5DCAA5"/><path d="M17.4 17.4l-3.9-3.9v-.3l3.9-3.9.1.1 4.7 2.7c1.3.8 1.3 2 0 2.8l-4.7 2.6-.1-.1z" fill="#F5A623"/><path d="M17.5 17.3l-4-4L1.6 25.1c.4.5 1.2.5 2 0l13.9-7.8z" fill="#FF5043"/><path d="M17.5 9.4L3.6.9C2.8.4 2 .5 1.6 1l11.9 12.3 4-3.9z" fill="#7FA3FF"/></svg>
+            </span>
+            <span><span class="store-top">Get it on</span><span class="store-name">Google Play</span></span>
+          </a>
+        </div>
+        <p class="soon">Rolling out now in Hargeisa — <a href="/support" style="color:var(--coral-text); text-decoration:none;">contact us</a> for early access.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Footer ───────────────────────────────────────── -->
+  <footer class="site-foot">
+    <div class="wrap">
+      <div class="foot-grid">
+        <div class="foot-brand">
+          <a class="logo" href="/">
+            <span class="logo-mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M13.5 2 4 13.5h6.2L9.8 22 20 10.2h-6.6L13.5 2Z" fill="#fff"/>
+              </svg>
+            </span>
+            <span class="logo-name">Zapp Pay</span>
+          </a>
+          <p>Instant mobile payments for Somaliland. Pay shops, send to friends, and get paid — in seconds.</p>
+        </div>
+        <div class="foot-cols">
+          <div class="foot-col">
+            <h4>Product</h4>
+            <a href="#personal">Personal</a>
+            <a href="#business">Business</a>
+            <a href="#developers">Developers</a>
+          </div>
+          <div class="foot-col">
+            <h4>Company</h4>
+            <a href="/support">Support</a>
+            <a href="mailto:support@zapppay.so">support@zapppay.so</a>
+          </div>
+          <div class="foot-col">
+            <h4>Legal</h4>
+            <a href="/privacy">Privacy Policy</a>
+            <a href="/terms">Terms of Use</a>
+          </div>
+        </div>
+      </div>
+      <div class="foot-base">
+        <span>© 2026 Zapp Pay · Hargeisa, Somaliland</span>
+        <span>Made with ⚡︎ in Hargeisa</span>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>
