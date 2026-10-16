@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<!--
+  Zapp Pay — Google Play store graphics (customer app)
+  ────────────────────────────────────────────────────────────
+  One page, many frames: the URL hash picks what renders.
+    #shot-1 … #shot-7  phone screenshots  (540×960 CSS @2x → 1080×1920)
+    #feature           feature graphic    (1024×500 CSS @1x)
+    #icon              hi-res icon        (512×512 CSS @1x)
+  render.sh drives headless Chrome over every frame.
+
+  In-phone UI mirrors mobile/src (DashboardScreen, PaymentsScreen,
+  AgentTopupScreen, InsightsScreen …): same tokens, copy from
+  src/i18n/locales/en.json. Change the app → change it here too.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Zapp Pay Play graphics</title>
+<link rel="stylesheet" href="common.css" />
+<script src="qr.js"></script>
+<script src="common.js"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script>
+/* ── Screens (374 × 832 CSS px) ──────────────────────── */
+const T = {
+  en: { salaam: 'Salaam,', bal: 'Available Balance', hide: 'Hide', qr: 'Show QR', top: 'Top up', pay: 'Pay', out: 'Cash out', act: 'Activity', all: 'See all', lang: '🇬🇧' },
+  so: { salaam: 'Salaam,', bal: 'Haraaga la heli karo', hide: 'Qari', qr: 'Muuji QR', top: 'Ku shubo', pay: 'Bixi', out: 'La bax', act: 'Hawlaha dhawaan', all: 'Arag dhammaan', lang: '' },
+};
+
+function homeScreen(lang = 'en', name = 'Hodan', rows) {
+  const t = T[lang];
+  rows = rows || [
+    ['in', 'Abdirahman Ali', '15/10/2026', '+$25.00'],
+    ['out', 'Nuura Café', '15/10/2026', '-$4.50'],
+    ['in', 'Cash top-up · Agent', '14/10/2026', '+$50.00'],
+    ['out', 'Hayaan Grocery', '14/10/2026', '-$12.40'],
+    ['out', 'Ilays Pharmacy', '13/10/2026', '-$8.75'],
+  ];
+  return `<div class="app">
+    <div class="glow" style="width:360px;height:360px;left:7px;top:-120px;opacity:0.22"></div>
+    <div class="glow" style="width:220px;height:220px;left:77px;top:-40px;opacity:0.14"></div>
+    ${statusBar()}
+    <div class="pad">
+      <div class="hdr">
+        <div><div class="hs">${t.salaam}</div><div class="hn">${name}</div></div>
+        <div class="hact">
+          <div class="icbtn">${bell()}</div>
+          <div class="lang">${t.lang ? t.lang : `<b>SO</b>`}<i>▾</i></div>
+        </div>
+      </div>
+      <div class="bal">
+        <div class="bl"><span>${t.bal}</span><b>${t.hide}</b></div>
+        <div class="ba">$248.50</div>
+      </div>
+      <div class="tiles">
+        <div class="tile"><div class="ib">${qrIcon()}</div><span>${t.qr}</span></div>
+        <div class="tile"><div class="ib">${plus()}</div><span>${t.top}</span></div>
+        <div class="tile"><div class="ib">${appBolt()}</div><span>${t.pay}</span></div>
+        <div class="tile"><div class="ib">${cash()}</div><span>${t.out}</span></div>
+      </div>
+      <div class="sech"><span>${t.act}</span><a>${t.all}</a></div>
+      <div class="card raised" style="padding:2px 0">
+        ${rows.map(([d, n, when, a]) => `
+          <div class="tx">
+            <div class="ti ${d}">${d === 'in' ? 'IN' : 'OUT'}</div>
+            <div class="tn"><b>${n}</b><small class="num">${when}</small></div>
+            <div class="ta ${d === 'in' ? 'in' : ''}">${a}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+  </div>`;
+}
+
+function scanScreen() {
+  // Camera feed: a café counter with the shop's Zapp Pay table tent filling the frame.
+  return `<div class="app" style="background:#140d09">
+    <div style="position:absolute;inset:-20px;filter:blur(10px);
+      background:
+        radial-gradient(70px 70px at 16% 20%, rgba(255,200,130,0.65), transparent 70%),
+        radial-gradient(50px 50px at 86% 14%, rgba(255,220,160,0.55), transparent 70%),
+        radial-gradient(110px 80px at 74% 34%, rgba(255,170,90,0.25), transparent 70%),
+        radial-gradient(60px 60px at 10% 64%, rgba(255,190,120,0.30), transparent 70%),
+        radial-gradient(260px 220px at 50% 42%, rgba(130,80,46,0.55), transparent 75%),
+        linear-gradient(180deg, #24180f 0%, #3a2618 40%, #6a4528 60%, #4a2f1a 78%, #2a1a0e 100%)"></div>
+    <!-- table tent -->
+    <div style="position:absolute;left:89px;top:186px;width:196px;height:236px;border-radius:12px;background:#fbfaf8;
+      box-shadow:0 18px 30px rgba(0,0,0,0.5);transform:rotate(-3deg);overflow:hidden">
+      <div style="background:var(--coral);height:38px;display:flex;align-items:center;justify-content:center;gap:7px">
+        ${bolt(15, '#fff')}<span style="font-size:13px;font-weight:800;letter-spacing:-0.3px;color:#fff">Zapp Pay</span>
+      </div>
+      <div style="padding:10px 0 0;text-align:center;color:#14110F">
+        <div style="font-size:14px;font-weight:800;letter-spacing:-0.3px">Nuura Café</div>
+        <div style="font-size:9.5px;color:#6B6560;margin:1px 0 8px">Scan to pay</div>
+        <div style="display:inline-block">${qr(132, '#14110F')}</div>
+      </div>
+    </div>
+    <!-- viewfinder: dim everything outside the frame -->
+    <div style="position:absolute;left:53px;top:170px;width:268px;height:268px;border-radius:30px;box-shadow:0 0 0 900px rgba(0,0,0,0.5)"></div>
+    <svg style="position:absolute;left:47px;top:164px" width="280" height="280" viewBox="0 0 280 280" fill="none" stroke="${CORAL}" stroke-width="5" stroke-linecap="round">
+      <path d="M4 56V36A32 32 0 0 1 36 4H56"/><path d="M224 4H244A32 32 0 0 1 276 36V56"/>
+      <path d="M276 224V244A32 32 0 0 1 244 276H224"/><path d="M56 276H36A32 32 0 0 1 4 244V224"/>
+    </svg>
+    <div style="position:absolute;left:72px;width:230px;top:334px;height:3px;border-radius:2px;background:${CORAL};box-shadow:0 0 18px 4px rgba(255,80,67,0.6)"></div>
+    ${statusBar()}
+    <div class="nav-h" style="justify-content:space-between">
+      <div class="back" style="background:rgba(0,0,0,0.35)">${closeX()}</div>
+      <div class="title">Scan QR Code</div>
+      <div class="back" style="background:rgba(0,0,0,0.35)">${flashlight(18)}</div>
+    </div>
+    <div style="position:absolute;left:0;right:0;top:466px;text-align:center">
+      <span style="display:inline-block;font-size:14px;font-weight:600;padding:10px 18px;border-radius:999px;background:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.14)">Position QR code inside the frame</span>
+    </div>
+  </div>`;
+}
+
+function confirmScreen() {
+  return `<div class="app">
+    <div class="glow" style="width:300px;height:300px;left:37px;top:40px;opacity:0.20"></div>
+    ${statusBar()}
+    <div class="nav-h"><div class="back">${chevronLeft()}</div><div class="title">Confirm Payment</div></div>
+    <div class="pad" style="text-align:center;padding-top:14px">
+      <div style="font-size:13px;color:var(--dim);margin-bottom:12px">Pay to</div>
+      <div style="width:64px;height:64px;border-radius:20px;margin:0 auto 12px;background:var(--coral-soft);border:1px solid var(--coral-border);display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:800;color:var(--coral-text)">N</div>
+      <div style="font-size:20px;font-weight:700;letter-spacing:-0.4px">Nuura Café</div>
+      <div class="num" style="font-size:52px;font-weight:800;letter-spacing:-2.2px;line-height:1.15;margin:4px 0 22px">$4.50</div>
+      <div class="btn coral" style="margin-bottom:16px">${fingerprint(22)}Pay with Biometrics</div>
+      <div style="font-size:13px;color:var(--dim);margin-bottom:14px">Or enter PIN to confirm</div>
+      <div style="display:flex;gap:8px;justify-content:center">
+        ${[1,1,1,1,2,0].map(f => `<div style="flex:1;height:56px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:26px;
+          ${f ? 'border:1.5px solid var(--coral);background:rgba(255,80,67,0.18)' : 'border:1px solid rgba(255,255,255,0.08);background:#0B0B0F'}">${f === 1 ? '<span style="width:12px;height:12px;border-radius:6px;background:#fff"></span>' : f === 2 ? '<span style="width:2px;height:24px;background:var(--coral);border-radius:1px"></span>' : ''}</div>`).join('')}
+      </div>
+    </div>
+    <!-- Android number pad (PinInput uses keyboardType="number-pad") -->
+    <div style="position:absolute;left:0;right:0;bottom:0;height:252px;background:#1f1f22;padding:10px 6px 0;display:grid;grid-template-columns:repeat(3,1fr);grid-auto-rows:52px;gap:6px">
+      ${['1','2','3','4','5','6','7','8','9'].map(k => `<div style="border-radius:10px;background:#3a3a3e;display:flex;align-items:center;justify-content:center;font-size:24px">${k}</div>`).join('')}
+</div>
+  </div>`;
+}
+
+function agentScreen() {
+  return `<div class="app">
+    <div class="glow" style="width:320px;height:320px;left:27px;top:60px;opacity:0.18"></div>
+    ${statusBar()}
+    <div class="nav-h"><div class="back">${chevronLeft()}</div><div class="title">Zapp Agent Top-Up</div></div>
+    <div class="pad" style="text-align:center;padding-top:8px">
+      <div style="font-size:22px;font-weight:700;letter-spacing:-0.5px;margin-bottom:4px">Show the Agent</div>
+      <div style="font-size:14px;color:var(--dim);margin-bottom:18px">Pay the agent <b style="color:#fff">$20.00</b> in cash</div>
+      <div style="display:inline-block;padding:16px;background:#fff;border-radius:22px;box-shadow:0 0 0 6px rgba(255,80,67,0.12),0 20px 50px rgba(255,80,67,0.18);margin-bottom:18px">${qr(176)}</div>
+      <div style="font-size:12px;color:var(--faint);margin-bottom:6px">Or give them this code</div>
+      <div class="num" style="font-size:38px;font-weight:800;letter-spacing:6px;margin-bottom:14px">482 913</div>
+      <div style="display:inline-block;font-size:12px;font-weight:600;color:var(--coral-text);background:var(--coral-soft);padding:6px 16px;border-radius:999px;margin-bottom:18px">Expires in 14:32</div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:10px;font-size:13px;color:var(--dim)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="rgba(255,255,255,0.15)" stroke-width="3"/><path d="M12 3a9 9 0 0 1 9 9" stroke="${CORAL}" stroke-width="3" stroke-linecap="round"/></svg>
+        Waiting for the agent to confirm…
+      </div>
+    </div>
+  </div>`;
+}
+
+function sendScreen() {
+  return `<div class="app">
+    <div class="glow" style="width:300px;height:300px;left:37px;top:-100px;opacity:0.20"></div>
+    ${statusBar()}
+    <div class="pad">
+      <div style="font-size:28px;font-weight:800;letter-spacing:-0.8px;margin:6px 0 14px">Payments</div>
+      <div style="display:flex;padding:4px;border-radius:14px;background:var(--glass);border:1px solid var(--glass-border);margin-bottom:16px">
+        <div style="flex:1;text-align:center;padding:9px 0;border-radius:10px;background:var(--coral);font-size:14px;font-weight:700">Send</div>
+        <div style="flex:1;text-align:center;padding:9px 0;font-size:14px;font-weight:600;color:var(--dim)">Receive</div>
+      </div>
+      <div class="card" style="padding:18px 16px 16px">
+        <div style="font-size:16px;font-weight:600;margin-bottom:14px">Enter Amount</div>
+        <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;background:rgba(255,255,255,0.05);border:1px solid var(--glass-border)">
+          <div style="width:40px;height:40px;border-radius:20px;background:var(--coral);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800">A</div>
+          <div style="flex:1"><div style="font-size:15px;font-weight:600">Amina Yusuf</div><div class="num" style="font-size:12px;color:var(--faint)">+252 63 412 7788</div></div>
+          <div style="width:22px;height:22px;border-radius:11px;background:var(--green);display:flex;align-items:center;justify-content:center">${check(13, '#fff', 3)}</div>
+        </div>
+        <div class="num" style="text-align:center;font-size:56px;font-weight:800;letter-spacing:-2.4px;margin:16px 0 10px">$25</div>
+        <div style="padding:12px 14px;border-radius:12px;border:1px solid var(--glass-border);background:rgba(255,255,255,0.04);font-size:14px;margin-bottom:14px">Lunch 🍲</div>
+        <div class="keys" style="gap:8px 10px">${['1','2','3','4','5','6','7','8','9'].map(k => `<div style="height:50px;font-size:24px">${k}</div>`).join('')}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function insightsScreen() {
+  const bars = [14, 22, 9, 31, 18, 26, 38];
+  const labels = ['10/9', '10/10', '10/11', '10/12', '10/13', '10/14', '10/15'];
+  const max = Math.max(...bars);
+  const brk = [['Payments', 128.4, 0.69], ['Cash-outs', 40, 0.21], ['Top-ups', 18, 0.10]];
+  return `<div class="app">
+    <div class="glow" style="width:300px;height:300px;left:37px;top:-110px;opacity:0.20"></div>
+    ${statusBar()}
+    <div class="nav-h"><div class="back">${chevronLeft()}</div><div class="title">Insights</div></div>
+    <div class="pad">
+      <div style="display:flex;gap:8px;margin:4px 0 16px">
+        ${['7 Days','30 Days','3 Months'].map((p, i) => `<div style="padding:8px 14px;border-radius:999px;font-size:13px;font-weight:600;${i === 0 ? 'background:var(--coral);' : 'background:var(--glass);border:1px solid var(--glass-border);color:var(--dim)'}">${p}</div>`).join('')}
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        ${[['Money Out','$186.40','#fff'],['Money In','$240.00','var(--green)'],['Net','+$53.60','var(--green)']].map(([l, v, c]) => `
+          <div class="card" style="flex:1;padding:12px 12px 11px;border-radius:16px">
+            <div style="font-size:11px;color:var(--faint);margin-bottom:4px">${l}</div>
+            <div class="num" style="font-size:18px;font-weight:800;letter-spacing:-0.6px;color:${c}">${v}</div>
+          </div>`).join('')}
+      </div>
+      <div class="card" style="padding:16px 16px 12px;margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px"><span style="font-size:15px;font-weight:600">Spending Trend</span><span style="font-size:12px;color:var(--faint)">23 payments</span></div>
+        <div style="display:flex;align-items:flex-end;gap:10px;height:120px">
+          ${bars.map((b, i) => `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end">
+            <div style="width:100%;height:${Math.round(b / max * 96)}px;border-radius:7px 7px 3px 3px;background:${i === bars.length - 1 ? 'linear-gradient(180deg,#FF6E5F,#FF5043)' : 'rgba(255,80,67,0.32)'}"></div>
+            <div class="num" style="font-size:9.5px;color:var(--faint)">${labels[i]}</div></div>`).join('')}
+        </div>
+      </div>
+      <div class="card" style="padding:16px">
+        <div style="font-size:15px;font-weight:600;margin-bottom:14px">Where It Goes</div>
+        ${brk.map(([l, a, p], i) => `
+          <div style="margin-bottom:${i < brk.length - 1 ? 13 : 2}px">
+            <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px"><span>${l}</span><span class="num" style="color:var(--dim)">$${a.toFixed(2)} · ${Math.round(p * 100)}%</span></div>
+            <div style="height:7px;border-radius:4px;background:rgba(255,255,255,0.07)"><div style="height:100%;width:${p * 100}%;border-radius:4px;background:${['var(--coral)','var(--amber)','var(--teal)'][i]}"></div></div>
+          </div>`).join('')}
+      </div>
+    </div>
+  </div>`;
+}
+
+
+const FRAMES = {
+  'shot-1': () => shot({
+    eyebrow: 'Zapp Pay',
+    h1: 'Instant payments<br><span class="accent">for Somaliland</span>',
+    p: 'Pay shops, send to friends and top up with cash — all in US dollars.',
+    screen: homeScreen(),
+    extra: `<div class="float" style="left:22px;top:842px">${notif('Payment received', 'Abdirahman sent you <span class="amt">$25.00</span>')}</div>`,
+  }),
+  'shot-2': () => shot({
+    eyebrow: 'Scan & pay',
+    h1: 'Pay any shop<br><span class="accent">with one scan</span>',
+    p: 'Point your camera at the QR, confirm, done. The shop sees it instantly.',
+    screen: scanScreen(),
+    vars: '--g1x:88%;--g1y:2%;--g2x:4%;--g2y:62%;',
+  }),
+  'shot-3': () => shot({
+    eyebrow: 'Security',
+    h1: 'Nothing moves<br><span class="accent">without your PIN</span>',
+    p: 'You approve every payment — with your PIN or your fingerprint.',
+    screen: confirmScreen(),
+    vars: '--g1x:20%;--g1y:0%;--g2x:100%;--g2y:40%;',
+  }),
+  'shot-4': () => shot({
+    eyebrow: 'Cash top-up',
+    h1: 'Top up with cash<br><span class="accent">at a Zapp agent</span>',
+    p: 'Hand over cash, show your code, and your balance updates on the spot.',
+    screen: agentScreen(),
+    vars: '--g1x:90%;--g1y:4%;--g2x:0%;--g2y:70%;',
+    extra: `<div class="float" style="right:20px;top:856px">${notif('Topped up!', 'Agent confirmed <span class="amt">+$20.00</span>')}</div>`,
+  }),
+  'shot-5': () => shot({
+    eyebrow: 'Send',
+    h1: 'Send to friends<br><span class="accent">in seconds</span>',
+    p: 'Just their phone number. It lands in their Zapp Pay wallet instantly.',
+    screen: sendScreen(),
+    vars: '--g1x:15%;--g1y:3%;--g2x:98%;--g2y:68%;',
+  }),
+  'shot-6': () => shot({
+    eyebrow: 'Insights',
+    h1: 'See where<br><span class="accent">every dollar goes</span>',
+    p: 'Spending trends, money in and out, and every receipt on record.',
+    screen: insightsScreen(),
+    vars: '--g1x:86%;--g1y:0%;--g2x:2%;--g2y:56%;',
+  }),
+  'shot-7': () => {
+    const sheet = `
+      <div class="float" style="right:18px;top:612px;width:244px;padding:16px 10px 10px">
+        <div style="font-size:13px;font-weight:700;color:var(--dim);padding:0 10px 10px">Select Language</div>
+        ${[['English','English',0],['Soomaali','Somali',1],['العربية','Arabic',0]].map(([n, l, on]) => `
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 12px;border-radius:14px;${on ? 'background:var(--coral-soft);border:1px solid var(--coral-border)' : ''}">
+            <div><div style="font-size:16px;font-weight:700">${n}</div><div style="font-size:11.5px;color:var(--faint)">${l}</div></div>
+            ${on ? `<div style="width:24px;height:24px;border-radius:12px;background:var(--coral);display:flex;align-items:center;justify-content:center">${check(14, '#fff', 3)}</div>` : ''}
+          </div>`).join('')}
+      </div>`;
+    return shot({
+      eyebrow: 'Your language',
+      h1: 'English, Somali<br><span class="accent">and Arabic</span>',
+      p: 'The whole app speaks your language. Switch any time in settings.',
+      screen: homeScreen('so', 'Hodan', [
+        ['in', 'Abdirahman Ali', '15/10/2026', '+$25.00'],
+        ['out', 'Nuura Café', '15/10/2026', '-$4.50'],
+        ['in', 'Cash top-up · Agent', '14/10/2026', '+$50.00'],
+        ['out', 'Hayaan Grocery', '14/10/2026', '-$12.40'],
+      ]),
+      vars: '--g1x:12%;--g1y:2%;--g2x:96%;--g2y:72%;',
+      phoneStyle: 'margin-left:-236px',
+      extra: sheet,
+    });
+  },
+
+  feature: () => `
+    <div class="feature">
+      <div class="bg"></div>
+      <div class="left">
+        <div class="brand"><div class="mk">${bolt(28, '#fff')}</div><span>Zapp Pay</span></div>
+        <h1>Pay with a scan.<br><span class="accent">Done in seconds.</span></h1>
+        <p>Instant mobile payments for Somaliland — pay shops, send to friends and top up with cash.</p>
+      </div>
+      <div style="position:absolute;left:640px;top:44px;transform:scale(0.84) rotate(-7deg);transform-origin:top left">
+        ${phone(homeScreen(), 'position:relative;left:0;margin-left:0;top:0')}
+      </div>
+      <div class="float" style="left:560px;top:330px;border-radius:20px">${notif('Payment Successful', 'You paid Nuura Café <strong>$4.50</strong>')}</div>
+    </div>`,
+
+  icon: () => `
+    <div class="icon">
+      <svg width="320" height="320" viewBox="0 0 24 24">
+        <path d="M13.5 2 4 13.5h6.2L9.8 22 20 10.2h-6.6L13.5 2Z" fill="#fff" stroke="#fff" stroke-width="0.5" stroke-linejoin="round"/>
+      </svg>
+    </div>`,
+};
+
+
+renderFrames(FRAMES);
+</script>
+</body>
+</html>

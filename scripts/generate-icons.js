@@ -1,91 +1,236 @@
+// Build every launcher icon for both apps from one vector source: the Zapp
+// bolt on a brand-coloured gradient square. Same artwork as the Play listing
+// icon (store-listing/google-play/src, `#icon` frame) and the
+// BrandMarkIcon in the apps.
+//
+//   cd scripts && npm install && npm run generate
+//
+// Writes, per app:
+//   iOS      AppIcon.appiconset/Icon-*.png       full-bleed, RGB, no alpha
+//   Android  mipmap-anydpi-v26/ic_launcher*.xml  adaptive icon (API 26+)
+//            drawable/ic_launcher_{background,foreground}.xml
+//            mipmap-*/ic_launcher{,_round}.png   legacy fallback (API 24–25)
+//
+// Not the Play listing icon: store-listing/google-play renders that
+// (out/<app>/icon-512.png). Keep the palettes here in step with it.
+
 const sharp = require('sharp');
 const fs = require('fs');
 const path = require('path');
 
-// Input logo path
-const inputLogo = '/Users/mahamedfarah/Downloads/touchpay.png';
+const ROOT = path.join(__dirname, '..');
 
-// iOS Icon Sizes
-const iosSizes = [
-  { size: 20, scale: 2, name: 'Icon-20@2x.png' },
-  { size: 20, scale: 3, name: 'Icon-20@3x.png' },
-  { size: 29, scale: 2, name: 'Icon-29@2x.png' },
-  { size: 29, scale: 3, name: 'Icon-29@3x.png' },
-  { size: 40, scale: 2, name: 'Icon-40@2x.png' },
-  { size: 40, scale: 3, name: 'Icon-40@3x.png' },
-  { size: 60, scale: 2, name: 'Icon-60@2x.png' },
-  { size: 60, scale: 3, name: 'Icon-60@3x.png' },
-  { size: 1024, scale: 1, name: 'Icon-1024.png' },
+// 24×24 bolt — the marketing site / BrandMarkIcon mark.
+const BOLT = 'M13.5 2 4 13.5h6.2L9.8 22 20 10.2h-6.6L13.5 2Z';
+// Same outline with explicit commands, for Android's path parser.
+const BOLT_ANDROID = 'M13.5,2 L4,13.5 L10.2,13.5 L9.8,22 L20,10.2 L13.4,10.2 Z';
+
+// Coral #FF5043, as in the store listing icons. Both apps share it.
+const CORAL = { glow: '#FF7A66', start: '#FF5A4C', mid: '#FF5043', end: '#E2372C' };
+
+const APPS = [
+  {
+    name: 'customer',
+    ios: 'mobile/ios/QuickPay/Images.xcassets/AppIcon.appiconset',
+    androidRes: 'mobile/android/app/src/main/res',
+    palette: CORAL,
+  },
+  {
+    name: 'merchant',
+    ios: 'merchant-app/ios/QuickPayMerchant/Images.xcassets/AppIcon.appiconset',
+    androidRes: 'merchant-app/android/app/src/main/res',
+    palette: CORAL,
+  },
 ];
 
-// Android Icon Sizes
-const androidSizes = [
-  { folder: 'mipmap-mdpi', size: 48 },
-  { folder: 'mipmap-hdpi', size: 72 },
-  { folder: 'mipmap-xhdpi', size: 96 },
-  { folder: 'mipmap-xxhdpi', size: 144 },
-  { folder: 'mipmap-xxxhdpi', size: 192 },
+// Artwork geometry on a 512 canvas, matching the store.html CSS:
+//   radial-gradient(420px 420px at 22% 12%, glow 0%, transparent 70%)
+//   linear-gradient(160deg, start 0%, mid 45%, end 100%)
+//   320px bolt (24-unit grid) centred
+const ART = 512;
+const LINEAR = (() => {
+  const a = (160 * Math.PI) / 180;
+  const dx = Math.sin(a);
+  const dy = -Math.cos(a);
+  const half = (ART * (Math.abs(dx) + Math.abs(dy))) / 2;
+  const c = ART / 2;
+  return { x1: c - dx * half, y1: c - dy * half, x2: c + dx * half, y2: c + dy * half };
+})();
+const RADIAL = { cx: ART * 0.22, cy: ART * 0.12, r: 420 };
+const BOLT_BOX = 320;
+
+const IOS_SIZES = [
+  ['Icon-20@2x.png', 40],
+  ['Icon-20@3x.png', 60],
+  ['Icon-29@2x.png', 58],
+  ['Icon-29@3x.png', 87],
+  ['Icon-40@2x.png', 80],
+  ['Icon-40@3x.png', 120],
+  ['Icon-60@2x.png', 120],
+  ['Icon-60@3x.png', 180],
+  ['Icon-1024.png', 1024],
 ];
 
-async function generateIcons() {
-  console.log('🎨 Generating all app icons from touchpay.png...\n');
-  
-  // Check if input file exists
-  if (!fs.existsSync(inputLogo)) {
-    console.error('❌ Error: Logo file not found at', inputLogo);
-    console.log('   Please make sure touchpay.png is in Downloads folder');
-    process.exit(1);
-  }
+const ANDROID_DENSITIES = [
+  ['mipmap-mdpi', 48],
+  ['mipmap-hdpi', 72],
+  ['mipmap-xhdpi', 96],
+  ['mipmap-xxhdpi', 144],
+  ['mipmap-xxxhdpi', 192],
+];
 
-  // Create directories
-  const iosDir = path.join(__dirname, '../mobile/ios/QuickPay/Images.xcassets/AppIcon.appiconset');
-  const androidDir = path.join(__dirname, '../mobile/android/app/src/main/res');
-  
-  fs.mkdirSync(iosDir, { recursive: true });
+const f = n => +n.toFixed(2);
 
-  // Generate iOS icons
-  console.log('📱 iOS Icons:');
-  for (const icon of iosSizes) {
-    const size = Math.round(icon.size * icon.scale);
-    const output = path.join(iosDir, icon.name);
-    
-    await sharp(inputLogo)
-      .resize(size, size)
-      .png()
-      .toFile(output);
-    
-    console.log(`  ✓ ${icon.name} (${size}x${size})`);
-  }
-
-  // Generate Android icons
-  console.log('\n🤖 Android Icons:');
-  for (const icon of androidSizes) {
-    const folder = path.join(androidDir, icon.folder);
-    fs.mkdirSync(folder, { recursive: true });
-    
-    const output = path.join(folder, 'ic_launcher.png');
-    await sharp(inputLogo)
-      .resize(icon.size, icon.size)
-      .png()
-      .toFile(output);
-    
-    console.log(`  ✓ ${icon.folder}/ic_launcher.png (${icon.size}x${icon.size})`);
-  }
-
-  // Play Store icon
-  const playStore = path.join(androidDir, 'play-store-icon.png');
-  await sharp(inputLogo).resize(512, 512).png().toFile(playStore);
-  console.log('  ✓ play-store-icon.png (512x512)');
-
-  console.log('\n✅ All icons generated successfully!');
-  console.log('\n📋 Generated:');
-  console.log(`   - ${iosSizes.length} iOS sizes`);
-  console.log(`   - ${androidSizes.length} Android densities`);
-  console.log(`   - 1 Play Store icon (512x512)`);
-  console.log(`   - 1 App Store icon (1024x1024)`);
+// shape: 'square' (full bleed), 'rounded' (legacy Android), 'circle'.
+function artSvg(p, size, shape = 'square') {
+  const clip =
+    shape === 'circle'
+      ? `<clipPath id="m"><circle cx="256" cy="256" r="256"/></clipPath>`
+      : shape === 'rounded'
+        ? `<clipPath id="m"><rect width="512" height="512" rx="112"/></clipPath>`
+        : '';
+  const s = BOLT_BOX / 24;
+  const o = (ART - BOLT_BOX) / 2;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${ART} ${ART}">
+  <defs>
+    <linearGradient id="base" gradientUnits="userSpaceOnUse" x1="${f(LINEAR.x1)}" y1="${f(LINEAR.y1)}" x2="${f(LINEAR.x2)}" y2="${f(LINEAR.y2)}">
+      <stop offset="0" stop-color="${p.start}"/>
+      <stop offset="0.45" stop-color="${p.mid}"/>
+      <stop offset="1" stop-color="${p.end}"/>
+    </linearGradient>
+    <radialGradient id="glow" gradientUnits="userSpaceOnUse" cx="${f(RADIAL.cx)}" cy="${f(RADIAL.cy)}" r="${RADIAL.r}">
+      <stop offset="0" stop-color="${p.glow}"/>
+      <stop offset="0.7" stop-color="${p.glow}" stop-opacity="0"/>
+    </radialGradient>
+    ${clip}
+  </defs>
+  <g${clip ? ' clip-path="url(#m)"' : ''}>
+    <rect width="${ART}" height="${ART}" fill="url(#base)"/>
+    <rect width="${ART}" height="${ART}" fill="url(#glow)"/>
+    <path transform="translate(${o} ${o}) scale(${f(s)})" d="${BOLT}" fill="#fff" stroke="#fff" stroke-width="0.5" stroke-linejoin="round"/>
+  </g>
+</svg>`;
 }
 
-generateIcons().catch(err => {
-  console.error('❌ Error:', err.message);
+// Adaptive icons draw on a 108dp canvas; launchers show the middle 72dp.
+// Map the 512 artwork onto that middle so the result matches the Play icon.
+const AD = 108;
+const AD_VISIBLE = 72;
+const toAd = v => f((AD - AD_VISIBLE) / 2 + (v * AD_VISIBLE) / ART);
+
+function adaptiveBackgroundXml(p) {
+  const argb = (hex, a = 'FF') => `#${a}${hex.slice(1).toUpperCase()}`;
+  return `<?xml version="1.0" encoding="utf-8"?>
+<!-- Generated by scripts/generate-icons.js — edit there, not here. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="${AD}dp"
+    android:height="${AD}dp"
+    android:viewportWidth="${AD}"
+    android:viewportHeight="${AD}">
+    <path android:pathData="M0,0h${AD}v${AD}h-${AD}z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="${toAd(LINEAR.x1)}"
+                android:startY="${toAd(LINEAR.y1)}"
+                android:endX="${toAd(LINEAR.x2)}"
+                android:endY="${toAd(LINEAR.y2)}">
+                <item android:offset="0" android:color="${argb(p.start)}" />
+                <item android:offset="0.45" android:color="${argb(p.mid)}" />
+                <item android:offset="1" android:color="${argb(p.end)}" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path android:pathData="M0,0h${AD}v${AD}h-${AD}z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="${toAd(RADIAL.cx)}"
+                android:centerY="${toAd(RADIAL.cy)}"
+                android:gradientRadius="${f((RADIAL.r * AD_VISIBLE) / ART)}">
+                <item android:offset="0" android:color="${argb(p.glow)}" />
+                <item android:offset="0.7" android:color="${argb(p.glow, '00')}" />
+            </gradient>
+        </aapt:attr>
+    </path>
+</vector>
+`;
+}
+
+function adaptiveForegroundXml() {
+  const scale = (BOLT_BOX * AD_VISIBLE) / ART / 24;
+  const offset = (AD - 24 * scale) / 2;
+  return `<?xml version="1.0" encoding="utf-8"?>
+<!-- Generated by scripts/generate-icons.js — edit there, not here. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="${AD}dp"
+    android:height="${AD}dp"
+    android:viewportWidth="${AD}"
+    android:viewportHeight="${AD}">
+    <group
+        android:translateX="${f(offset)}"
+        android:translateY="${f(offset)}"
+        android:scaleX="${f(scale)}"
+        android:scaleY="${f(scale)}">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="0.5"
+            android:strokeLineJoin="round"
+            android:pathData="${BOLT_ANDROID}" />
+    </group>
+</vector>
+`;
+}
+
+const ADAPTIVE_ICON_XML = `<?xml version="1.0" encoding="utf-8"?>
+<!-- Generated by scripts/generate-icons.js — edit there, not here. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@drawable/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+    <monochrome android:drawable="@drawable/ic_launcher_foreground" />
+</adaptive-icon>
+`;
+
+function write(rel, content) {
+  const file = path.join(ROOT, rel);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, content);
+  console.log(`  ${rel}`);
+}
+
+async function png(rel, svg, { opaque = false } = {}) {
+  const file = path.join(ROOT, rel);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  let img = sharp(Buffer.from(svg));
+  // App Store rejects icons with an alpha channel.
+  if (opaque) img = img.flatten({ background: '#ffffff' }).removeAlpha();
+  await img.png({ compressionLevel: 9 }).toFile(file);
+  console.log(`  ${rel}`);
+}
+
+async function generate(app) {
+  const p = app.palette;
+  console.log(`\n${app.name}`);
+
+  for (const [name, size] of IOS_SIZES) {
+    await png(`${app.ios}/${name}`, artSvg(p, size), { opaque: true });
+  }
+
+  for (const [dir, size] of ANDROID_DENSITIES) {
+    await png(`${app.androidRes}/${dir}/ic_launcher.png`, artSvg(p, size, 'rounded'));
+    await png(`${app.androidRes}/${dir}/ic_launcher_round.png`, artSvg(p, size, 'circle'));
+  }
+  write(`${app.androidRes}/drawable/ic_launcher_background.xml`, adaptiveBackgroundXml(p));
+  write(`${app.androidRes}/drawable/ic_launcher_foreground.xml`, adaptiveForegroundXml());
+  write(`${app.androidRes}/mipmap-anydpi-v26/ic_launcher.xml`, ADAPTIVE_ICON_XML);
+  write(`${app.androidRes}/mipmap-anydpi-v26/ic_launcher_round.xml`, ADAPTIVE_ICON_XML);
+}
+
+(async () => {
+  for (const app of APPS) await generate(app);
+})().catch(err => {
+  console.error(err);
   process.exit(1);
 });

@@ -1,247 +1,39 @@
-# 🎨 App Icon Generation Guide
+# App icons
 
-## ⚡ Quick Start (2 minutes)
+Both apps (`mobile/` and `merchant-app/`) use the same icon: the Zapp Pay bolt
+(`M13.5 2 4 13.5h6.2L9.8 22 20 10.2h-6.6L13.5 2Z`, 24×24 grid) in white on a coral
+`#FF5043` gradient square. It matches the Play listing icons rendered from the
+`store-listing/google-play/src` `#icon` frame.
 
-```bash
-# 1. Install tool
-cd /Users/mahamedfarah/quickPay/scripts
-npm install
-
-# 2. Generate ALL icons
-npm run generate
-
-# Done! All 40+ icons created automatically
-```
-
----
-
-## 📱 What Gets Generated
-
-### Customer App Icons
-- ✅ **15 iOS sizes** (including 1024x1024 for App Store)
-- ✅ **5 Android sizes** (mdpi to xxxhdpi)
-- ✅ **1 Play Store icon** (512x512)
-
-### Merchant App Icons  
-- ✅ Same as above (40+ total icons)
-
-**Total: 80+ icons in seconds!**
-
----
-
-## 📂 Output Locations
-
-### iOS Icons
-```
-mobile/ios/QuickPay/Images.xcassets/AppIcon.appiconset/
-├── Icon-20@2x.png      (40x40)
-├── Icon-20@3x.png      (60x60)
-├── Icon-29@2x.png      (58x58)
-├── Icon-40@2x.png      (80x80)
-├── Icon-60@2x.png      (120x120)
-├── Icon-60@3x.png      (180x180) ← iPhone app icon
-└── Icon-1024.png       (1024x1024) ← App Store
-```
-
-### Android Icons
-```
-mobile/android/app/src/main/res/
-├── mipmap-mdpi/ic_launcher.png       (48x48)
-├── mipmap-hdpi/ic_launcher.png       (72x72)
-├── mipmap-xhdpi/ic_launcher.png      (96x96)
-├── mipmap-xxhdpi/ic_launcher.png     (144x144)
-├── mipmap-xxxhdpi/ic_launcher.png    (192x192)
-└── play-store-icon.png               (512x512) ← Google Play
-```
-
----
-
-## 🎯 Key Icon Sizes
-
-| Platform | Purpose | Size | Location |
-|----------|---------|------|----------|
-| **iOS** | iPhone App | 180x180 | Icon-60@3x.png |
-| **iOS** | App Store | 1024x1024 | Icon-1024.png |
-| **Android** | App Launcher | 192x192 | mipmap-xxxhdpi |
-| **Android** | Play Store | 512x512 | play-store-icon.png |
-
----
-
-## ✅ Verification
-
-### Check iOS Icons (Xcode)
-```bash
-# 1. Open project
-cd mobile/ios
-open QuickPay.xcworkspace
-
-# 2. In Xcode:
-#    - Select QuickPay project
-#    - Go to General tab
-#    - Scroll to App Icons section
-#    - All slots should be filled ✓
-```
-
-### Check Android Icons (Finder)
-```bash
-# View generated icons
-open mobile/android/app/src/main/res/
-
-# You should see:
-# - mipmap-mdpi folder
-# - mipmap-hdpi folder
-# - mipmap-xhdpi folder
-# - mipmap-xxhdpi folder
-# - mipmap-xxxhdpi folder
-# - play-store-icon.png file
-```
-
----
-
-## 🚀 Store Submission
-
-### App Store (iOS)
-1. Open **App Store Connect**
-2. Go to your app → **App Store** tab
-3. Upload `Icon-1024.png` (1024x1024)
-4. Must be PNG, no transparency, RGB
-
-### Google Play Store
-1. Open **Play Console**
-2. Go to **Store presence** → **Main store listing**
-3. Upload `play-store-icon.png` (512x512)
-4. Can have transparency, 32-bit PNG
-
----
-
-## 🎨 Design Tips
-
-### Icon Best Practices
-
-1. **Simple & Bold**
-   - Should be recognizable at 40px
-   - Avoid fine details
-   - High contrast
-
-2. **Brand Colors**
-   - Use your blue (#0066FF)
-   - Match app theme
-   - Stands out on home screen
-
-3. **No Text**
-   - Icons with text rarely work
-   - Symbol/logo only
-
-4. **Test at Small Sizes**
-   - View at 60x60 on screen
-   - Should still be clear
-
-### Icon Checklist
-- [ ] Square aspect ratio (1:1)
-- [ ] High resolution source (1024x1024+)
-- [ ] PNG format
-- [ ] Transparent or solid background
-- [ ] Centered composition
-- [ ] Good contrast
-- [ ] Recognizable at small size
-
----
-
-## 🔧 Troubleshooting
-
-### "sharp module not found"
-```bash
-cd scripts
-rm -rf node_modules
-npm install
-```
-
-### "Input file not found"
-```bash
-# Make sure logo is at correct path:
-ls /Users/mahamedfarah/Downloads/touchpay.png
-
-# If different location, update in generate-icons.js:
-const inputLogo = '/path/to/your/logo.png';
-```
-
-### "Icons not showing in Xcode"
-```bash
-# Clean Xcode
-Product → Clean Build Folder (Cmd+Shift+K)
-
-# Or delete derived data:
-rm -rf ~/Library/Developer/Xcode/DerivedData/
-```
-
-### "Android build fails"
-```bash
-cd mobile/android
-./gradlew clean
-cd ../..
-```
-
----
-
-## 📱 Alternative: Online Tools
-
-If you prefer not to run scripts:
-
-### Option 1: AppIcon.co (Easiest)
-1. Go to https://www.appicon.co
-2. Upload `touchpay.png`
-3. Click "Generate"
-4. Download iOS + Android sets
-5. Extract to folders above
-
-### Option 2: MakeAppIcon.com
-1. Go to https://makeappicon.com  
-2. Upload logo
-3. Download both sets
-4. Extract to project
-
----
-
-## 🎯 Quick Commands
+Every icon file is generated from vector source. Don't hand-edit the PNGs.
 
 ```bash
-# Generate all icons
 cd scripts && npm install && npm run generate
-
-# View iOS icons
-open mobile/ios/QuickPay/Images.xcassets/AppIcon.appiconset/
-
-# View Android icons
-open mobile/android/app/src/main/res/
-
-# Build and test
-cd mobile
-npm run ios      # Test iOS icons
-npm run android  # Test Android icons
 ```
 
----
+Colours, gradient and bolt size live in `scripts/generate-icons.js` (`CORAL`, set per app in `APPS[].palette`).
+Change them there and re-run.
 
-## 📋 Final Checklist
+## What it writes (per app)
 
-Before submitting to stores:
+| Platform | Files | Notes |
+|---|---|---|
+| iOS | `ios/<App>/Images.xcassets/AppIcon.appiconset/Icon-*.png` | 40 → 1024 px, full bleed, RGB with no alpha (App Store rejects alpha) |
+| Android 8+ | `res/mipmap-anydpi-v26/ic_launcher{,_round}.xml` | Adaptive icon: `drawable/ic_launcher_background.xml` (gradient) + `ic_launcher_foreground.xml` (bolt), with the foreground reused as the Android 13 themed-icon `monochrome` layer |
+| Android 7 | `res/mipmap-*/ic_launcher.png`, `ic_launcher_round.png` | Legacy fallback for API 24–25 (rounded square and circle) |
 
-### Customer App
-- [ ] iOS icons generated (15 sizes)
-- [ ] Android icons generated (5 densities)
-- [ ] App Store icon ready (1024x1024)
-- [ ] Play Store icon ready (512x512)
-- [ ] Tested on physical device
-- [ ] Icons show correctly in both apps
+The 512 Play listing icon is not generated here. `store-listing/google-play` renders it to
+`out/<app>/icon-512.png` along with the rest of the listing graphics. The customer
+copy at `mobile/android/app/src/main/res/play-store-icon.png` is copied from there
+and is not drawn separately. If you change the colours in the generator, re-render the
+listing icon too.
 
-### Merchant App
-- [ ] iOS icons generated (15 sizes)
-- [ ] Android icons generated (5 densities)
-- [ ] App Store icon ready (1024x1024)
-- [ ] Play Store icon ready (512x512)
-- [ ] Tested on physical device
-- [ ] Different branding (if needed)
+Both manifests set `android:icon="@mipmap/ic_launcher"` and
+`android:roundIcon="@mipmap/ic_launcher_round"`.
 
----
+## Checking a change
 
-**That's it!** Run `npm run generate` and you're done! 🎉
+- iOS: build to the simulator and look at the home screen. If the old icon persists,
+  uninstall the app first, because SpringBoard caches icons.
+- Android: `./gradlew :app:assembleDebug`, then
+  `aapt2 dump badging app/build/outputs/apk/debug/app-debug.apk | grep icon`.
