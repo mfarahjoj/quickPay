@@ -1011,6 +1011,7 @@
   "auth.resetPin.doneTitle": "PIN-ka waa la beddelay",
   "auth.resetPin.cooldownMessage": "Ammaankaaga darteed, lacag dirista waa la hakiyay ilaa {{time}}. Lacag-bixinta dukaamada ilaa {{amount}} wadar ahaan way shaqaynaysaa.",
   "payments.cooldown": "Lacag dirista waa la hakiyay ilaa {{time}} sababtoo ah PIN-kaaga ayaa la beddelay. Lacag-bixinta dukaamada ilaa {{amount}} wadar ahaan way shaqaynaysaa.",
+  "payments.recipientIsBusiness": "Lambarkani waa ganacsi. Ku bixi adigoo iskaan ku sameynaya koodhkiisa QR ee Zapp Pay.",
   "cashout.codeTitle": "Koodhkaaga Lacag-Qaadashada",
   "cashout.showAgent": "U oggolow wakiilka inuu sawiro, ama u akhri koodhka",
   "cashout.willBePaid": "{{amount}} ayaa laguu siin doonaa lacag caddaan ah",

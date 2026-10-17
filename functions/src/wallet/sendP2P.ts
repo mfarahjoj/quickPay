@@ -6,6 +6,7 @@ import { enforceTransactionLimits } from "../utils/limits";
 import { assertAccountActive } from "../utils/accountStatus";
 import { verifyUserPin } from "../auth/validatePin";
 import { enforceVelocity } from "../utils/velocity";
+import { isMerchantRole } from "../utils/roles";
 import {
   notifyPaymentReceived,
   notifyPaymentSent,
@@ -98,6 +99,17 @@ export const sendP2P = https.onCall(
       const recipientData = recipientDoc.data() as User;
 
       assertAccountActive(recipientData, "counterparty");
+
+      // A shop is paid by QR, which carries the payment fee. A transfer to a
+      // shop's number would skip that fee and still read as a sale, so it is
+      // refused here and the app points the payer at the shop's QR instead.
+      if (isMerchantRole(recipientData.accountType)) {
+        throw new https.HttpsError(
+          "failed-precondition",
+          "This number belongs to a business. Pay it by scanning its Zapp Pay QR code.",
+          { reason: "recipient_is_merchant" }
+        );
+      }
 
       if (recipientId === senderId) {
         throw new https.HttpsError(

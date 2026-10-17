@@ -372,6 +372,9 @@ export default function PaymentsScreen({ route }: Props) {
     } catch (err: any) {
       const msg =
         cooldownMessage(err, t) ??
+        (err?.details?.reason === 'recipient_is_merchant'
+          ? t('payments.recipientIsBusiness')
+          : null) ??
         (err.message?.replace(/^\[.*?\]\s*/, '') || t('payments.transferFailed'));
       Alert.alert(t('common.error'), msg);
       setPin('');
