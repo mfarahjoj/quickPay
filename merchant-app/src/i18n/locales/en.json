@@ -67,7 +67,7 @@
   "navigation.accessibility.generateQRTab": "Generate QR tab",
   "navigation.accessibility.historyTab": "Transaction history tab",
   "navigation.accessibility.settingsTab": "Settings tab",
-  "auth.login.title": "QuickPay Merchant",
+  "auth.login.title": "Zapp Pay Merchant",
   "auth.login.subtitle": "Sign in to manage your payments.\nWe'll send you a verification code.",
   "auth.login.phoneLabel": "Phone Number",
   "auth.login.phoneHint": "We'll send you a verification code via SMS",

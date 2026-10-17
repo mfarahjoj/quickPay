@@ -67,7 +67,7 @@
   "navigation.accessibility.generateQRTab": "تبويب إنشاء QR",
   "navigation.accessibility.historyTab": "تبويب سجل المعاملات",
   "navigation.accessibility.settingsTab": "تبويب الإعدادات",
-  "auth.login.title": "QuickPay Merchant",
+  "auth.login.title": "Zapp Pay Merchant",
   "auth.login.subtitle": "سجّل الدخول لإدارة مدفوعاتك.\nسنرسل لك رمز تحقق.",
   "auth.login.phoneLabel": "رقم الهاتف",
   "auth.login.phoneHint": "سنرسل لك رمز تحقق عبر رسالة نصية",

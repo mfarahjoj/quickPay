@@ -67,7 +67,7 @@
   "navigation.accessibility.generateQRTab": "Tab-ka sameynta QR",
   "navigation.accessibility.historyTab": "Tab-ka taariikhda macaamillada",
   "navigation.accessibility.settingsTab": "Tab-ka dejinta",
-  "auth.login.title": "QuickPay Merchant",
+  "auth.login.title": "Zapp Pay Merchant",
   "auth.login.subtitle": "Soo gal si aad u maamusho lacag bixintaada.\nWaxaan kuu soo diri doonaa koodh xaqiijin ah.",
   "auth.login.phoneLabel": "Lambarka Telefoonka",
   "auth.login.phoneHint": "Waxaan kuu soo diri doonaa koodh xaqiijin ah SMS ahaan",
