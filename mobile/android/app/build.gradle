@@ -73,6 +73,20 @@ def enableProguardInReleaseBuilds = false
  */
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
+/**
+ * Play upload key. The keystore and its passwords live outside the repo, in
+ * ~/.gradle/gradle.properties (ZAPP_CUSTOMER_UPLOAD_*), so neither a `git clean -x` nor a
+ * fresh worktree can lose or leak them. Play App Signing re-signs what we
+ * upload with Google's key; this one only proves the upload came from us.
+ */
+def uploadKey = [
+    storeFile: findProperty('ZAPP_CUSTOMER_UPLOAD_STORE_FILE'),
+    storePassword: findProperty('ZAPP_CUSTOMER_UPLOAD_STORE_PASSWORD'),
+    keyAlias: findProperty('ZAPP_CUSTOMER_UPLOAD_KEY_ALIAS'),
+    keyPassword: findProperty('ZAPP_CUSTOMER_UPLOAD_KEY_PASSWORD'),
+]
+def hasUploadKey = uploadKey.values().every { it }
+
 android {
     ndkVersion rootProject.ext.ndkVersion
     buildToolsVersion rootProject.ext.buildToolsVersion
@@ -93,17 +107,36 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        if (hasUploadKey) {
+            release {
+                storeFile file(uploadKey.storeFile)
+                storePassword uploadKey.storePassword
+                keyAlias uploadKey.keyAlias
+                keyPassword uploadKey.keyPassword
+            }
+        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            // Never the debug key: its password is public, so anyone could sign
+            // a tampered build as ours. Without the upload key the release build
+            // stops instead (preReleaseBuild below).
+            signingConfig hasUploadKey ? signingConfigs.release : null
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+        }
+    }
+}
+
+tasks.matching { it.name == 'preReleaseBuild' }.configureEach {
+    doFirst {
+        if (!hasUploadKey) {
+            throw new GradleException(
+                "Release builds need the Play upload key: set ZAPP_CUSTOMER_UPLOAD_STORE_FILE, " +
+                "_STORE_PASSWORD, _KEY_ALIAS and _KEY_PASSWORD in ~/.gradle/gradle.properties.")
         }
     }
 }
