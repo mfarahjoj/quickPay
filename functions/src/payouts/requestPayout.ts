@@ -27,6 +27,7 @@ import { requireAuth } from "../utils/validation";
 import { assertAccountActive } from "../utils/accountStatus";
 import { verifyUserPin } from "../auth/validatePin";
 import { getRates } from "../config/rates";
+import { rollingWindowStart, sumStandingCents } from "../utils/rollingTotal";
 import { isFloatRoute } from "../ledger";
 import {
   prepareJournalEntry,
@@ -156,7 +157,6 @@ export const requestPayout = https.onCall(
     // need a second pair of eyes?") is the same one, and one number is easier
     // to reason about during a pilot than two.
     const { floatApprovalThresholdCents } = await getRates();
-    const requiresSeniorApproval = amountCents >= floatApprovalThresholdCents;
 
     const payoutRef = db.collection(PAYOUT_REQUESTS_COLLECTION).doc();
     const holdEntryId = `payout_hold_${payoutRef.id}`;
@@ -164,6 +164,19 @@ export const requestPayout = https.onCall(
 
     try {
       await db.runTransaction(async (tx) => {
+        // The merchant's payouts over the last 24 hours count towards the
+        // threshold, so three $200 requests are treated like one $600 one.
+        // Read in the transaction so simultaneous requests can't each see
+        // the others missing.
+        const recent = await tx.get(
+          db
+            .collection(PAYOUT_REQUESTS_COLLECTION)
+            .where("merchantId", "==", merchantId)
+            .where("createdAt", ">=", rollingWindowStart(now.toMillis()))
+        );
+        const requiresSeniorApproval =
+          sumStandingCents(recent.docs) + amountCents >= floatApprovalThresholdCents;
+
         const prepared = await prepareJournalEntry(tx, {
           entryId: holdEntryId,
           type: "payout_hold",

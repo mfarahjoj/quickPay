@@ -28,6 +28,7 @@ import {
 import { requireAdmin, requireRecentAdminAuth, requireReason } from "./guard";
 import { stageAuditEntry } from "./audit";
 import { getRates } from "../config/rates";
+import { rollingWindowStart, sumStandingCents } from "../utils/rollingTotal";
 import { isAgentRole } from "../utils/roles";
 import { resolveAccountStatus } from "../utils/accountStatus";
 import { notifyUser } from "../utils/notifications";
@@ -133,8 +134,18 @@ export const adminRequestFloat = https.onCall(
       );
     }
 
+    // Counted per agent and direction over the last 24 hours, whoever asked,
+    // so splitting a large movement into small requests still needs a second
+    // admin once the total crosses the threshold.
     const { floatApprovalThresholdCents } = await getRates();
-    const requiresSecondApprover = amountCents >= floatApprovalThresholdCents;
+    const recent = await db
+      .collection(FLOAT_ISSUANCES_COLLECTION)
+      .where("agentId", "==", agentId)
+      .where("createdAt", ">=", rollingWindowStart())
+      .get();
+    const recentCents = sumStandingCents(recent.docs, (d) => d.direction === direction);
+    const requiresSecondApprover =
+      recentCents + amountCents >= floatApprovalThresholdCents;
 
     const ref = db.collection(FLOAT_ISSUANCES_COLLECTION).doc();
     const issuance: FloatIssuance = {

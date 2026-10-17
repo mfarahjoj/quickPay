@@ -18,7 +18,7 @@ money ships to prod without explicit per-deploy authorization (CLAUDE.md).
 | #5 Missing App Check | 2 | deployed 2026-10-04 (`3f06704`, 22 callables); `appCheckCoverage.test.ts` guards it in CI. Verified: `loginWithPin` without a token → 401 |
 | #6 Referral farming | 3 | blocked on D3 |
 | #7 Merchant profile rename | 3 | committed 2026-10-17 on `fix/wallet-phase1` (`utils/nameLock.ts`, `adminRenameMerchant`, rules checked in the emulator), not deployed. Console has no rename button yet |
-| #8 Float maker-checker structuring | 3 | open |
+| #8 Float maker-checker structuring | 3 | committed 2026-10-17 on `fix/wallet-phase1` (`utils/rollingTotal.ts`: float per agent+direction, payouts per merchant, last 24h), not deployed. Needs the new `floatIssuances (agentId, createdAt)` index deployed first |
 | #9 Refunds on P2P/payroll | 3 | committed 2026-10-17 on `fix/wallet-phase1` (refundable = `qr_payment`/`customer_qr_payment` journal entries, `refundWindowDays` default 30 in `config/rates`), not deployed |
 | #10 PIN in Keychain | 3 | open (needs design pass) |
 | #11 Currency mixing | 3 | committed 2026-10-17 on `fix/wallet-phase1` (`CurrencyMismatchError` in `prepareJournalEntry`, callables USD-only), not deployed |
