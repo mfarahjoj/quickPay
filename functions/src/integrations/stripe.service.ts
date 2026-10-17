@@ -7,6 +7,7 @@
  */
 
 import { generateSecureId } from "../utils/encryption";
+import { sandboxAllowedHere, SANDBOX_REFUSED } from "./sandboxGuard";
 
 /**
  * Exported so value-crediting callers can refuse to act on sandbox output.
@@ -34,6 +35,7 @@ export async function createPaymentIntent(
   request: StripePaymentIntentRequest
 ): Promise<StripePaymentIntentResponse> {
   if (STRIPE_SANDBOX) {
+    if (!sandboxAllowedHere()) return { success: false, error: SANDBOX_REFUSED };
     const fakeId = `pi_sandbox_${generateSecureId(12)}`;
     console.log(
       `[Stripe Sandbox] PaymentIntent: ${request.amount} ${request.currency} for ${request.customerId}`
@@ -81,6 +83,7 @@ export async function getPaymentIntent(
   paymentIntentId: string
 ): Promise<StripePaymentIntent | null> {
   if (STRIPE_SANDBOX) {
+    if (!sandboxAllowedHere()) return null;
     return {
       id: paymentIntentId,
       status: "succeeded",
@@ -110,6 +113,7 @@ export async function createRefund(
   amount?: number
 ): Promise<{ success: boolean; refundId?: string; error?: string }> {
   if (STRIPE_SANDBOX) {
+    if (!sandboxAllowedHere()) return { success: false, error: SANDBOX_REFUSED };
     return { success: true, refundId: `re_sandbox_${generateSecureId(8)}` };
   }
 
@@ -133,6 +137,8 @@ export function verifyWebhook(
   webhookSecret: string
 ): unknown | null {
   if (STRIPE_SANDBOX) {
+    // Unverified bodies are for local testing only; deployed, nothing passes.
+    if (!sandboxAllowedHere()) return null;
     return JSON.parse(typeof payload === "string" ? payload : payload.toString());
   }
 

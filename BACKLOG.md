@@ -105,8 +105,16 @@ first. Verified open as of 2026-08-05.
   unsigned. Not yet done: checking prod `journal_entries` for existing
   `mmtopup_` / `remit_` ids (needs console access), and the guard-plus-test
   this item actually asks for.
+  *2026-10-17:* guard-plus-test committed on `fix/wallet-phase1`, not
+  deployed. Every Zaad, eDahab and Stripe stub now refuses in a deployed
+  function (`integrations/sandboxGuard.ts`, keyed on `K_SERVICE` without
+  `FUNCTIONS_EMULATOR`). `sandboxGuard.test.ts` fails if a guard is removed,
+  and also if `index.ts` exports a module that imports a stub without an
+  allow-listed reason (only `stripeWebhook`). Both were checked by removing
+  a guard and re-exporting `topupFromMobileMoney`. Left open only for the
+  prod `journal_entries` check above, which needs console access.
 
-- [ ] **4. Refund happy-path test.**
+- [x] **4. Refund happy-path test.** *(committed 2026-10-17, `refundPayment.test.ts`)*
   `refundPayment` has no test covering a successful refund — only rejection
   paths exist elsewhere. Cover the reversal amounts (merchant net, platform
   fee, customer gross), the `refundedAt` idempotency guard, and that a second

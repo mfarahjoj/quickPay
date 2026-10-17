@@ -8,6 +8,7 @@
 
 import axios from "axios";
 import { generateSecureId } from "../utils/encryption";
+import { sandboxAllowedHere, SANDBOX_REFUSED } from "./sandboxGuard";
 
 const EDAHAB_SANDBOX = (process.env.EDAHAB_SANDBOX ?? "true") === "true";
 const EDAHAB_API_URL = process.env.EDAHAB_API_URL || "https://api.edahab.com/v1";
@@ -41,6 +42,7 @@ export async function initiateEDahabPayment(
   request: EDahabPaymentRequest
 ): Promise<EDahabPaymentResponse> {
   if (EDAHAB_SANDBOX) {
+    if (!sandboxAllowedHere()) return { success: false, error: SANDBOX_REFUSED };
     console.log(`[eDahab Sandbox] Payment: ${request.amount} cents to ${request.phoneNumber}`);
     return sandboxResponse(request.reference);
   }
@@ -82,6 +84,7 @@ export async function checkEDahabPaymentStatus(
   transactionId: string
 ): Promise<EDahabPaymentResponse> {
   if (EDAHAB_SANDBOX) {
+    if (!sandboxAllowedHere()) return { success: false, error: SANDBOX_REFUSED };
     return { success: true, transactionId, status: "completed" };
   }
 
@@ -112,6 +115,7 @@ export async function initiateEDahabPayout(
   request: EDahabPaymentRequest
 ): Promise<EDahabPaymentResponse> {
   if (EDAHAB_SANDBOX) {
+    if (!sandboxAllowedHere()) return { success: false, error: SANDBOX_REFUSED };
     console.log(`[eDahab Sandbox] Payout: ${request.amount} cents to ${request.phoneNumber}`);
     return sandboxResponse(request.reference);
   }

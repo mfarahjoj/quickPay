@@ -118,4 +118,68 @@ describe("refundPayment", () => {
       expect(refundEntries(db)).toHaveLength(0);
     });
   });
+
+  // BACKLOG #4: a successful refund was never tested, only the refusals.
+  describe("a successful refund", () => {
+    it("reverses the payment exactly: merchant net, platform fee, customer gross", async () => {
+      const db = seed();
+      const res = await call();
+
+      expect(res.data.amount).toBe(GROSS / 100);
+      expect(db.get(`wallets/${MERCHANT}`)!.balance).toBe(5_000 - NET);
+      expect(db.get(`wallets/${CUSTOMER}`)!.balance).toBe(GROSS);
+      expect(db.get("ledger_balances/platform:fees")!.balance).toBe(-FEE);
+
+      const entry = db.get("journal_entries/refund_tx-1")!;
+      expect(entry.type).toBe("refund");
+      expect(entry.refs.refundOfEntryId).toBe("entry-1");
+      const sum = (side: "debit" | "credit") =>
+        entry.lines.reduce((n: number, l: any) => n + l[side], 0);
+      expect(sum("debit")).toBe(sum("credit"));
+    });
+
+    it("marks the payment refunded and writes the refund row for both sides", async () => {
+      const db = seed();
+      const res = await call();
+      const original = db.get("transactions/tx-1")!;
+      expect(original.refundedAt).toBeDefined();
+      expect(original.refundTransactionId).toBe(res.data.refundTransactionId);
+
+      const row = db.get(`transactions/${res.data.refundTransactionId}`)!;
+      expect(row).toMatchObject({
+        type: "refund",
+        fromUserId: MERCHANT,
+        toUserId: CUSTOMER,
+        participants: [MERCHANT, CUSTOMER],
+        amount: GROSS,
+        refundOfTransactionId: "tx-1",
+        journalEntryId: "refund_tx-1",
+        status: "completed",
+      });
+    });
+
+    it("refunds only once", async () => {
+      const db = seed();
+      await call();
+      await expect(call()).rejects.toThrow(/already been refunded/);
+      expect(refundEntries(db)).toHaveLength(1);
+      expect(db.get(`wallets/${CUSTOMER}`)!.balance).toBe(GROSS);
+    });
+
+    it("refunds only once when two refunds race", async () => {
+      const db = seed();
+      const results = await Promise.allSettled([call(), call()]);
+      expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+      expect(refundEntries(db)).toHaveLength(1);
+      expect(db.get(`wallets/${CUSTOMER}`)!.balance).toBe(GROSS);
+    });
+
+    it("moves nothing when the merchant can't cover it", async () => {
+      const db = seed();
+      db.store.set(`wallets/${MERCHANT}`, wallet(NET - 1));
+      await expect(call()).rejects.toThrow(/Insufficient balance/);
+      expect(refundEntries(db)).toHaveLength(0);
+      expect(db.get("transactions/tx-1")!.refundedAt).toBeUndefined();
+    });
+  });
 });
