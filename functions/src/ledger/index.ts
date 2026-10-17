@@ -10,6 +10,7 @@ export {
   InsufficientBalanceError,
   WalletNotFoundError,
   FrozenAccountError,
+  CurrencyMismatchError,
   JOURNAL_COLLECTION,
   LEDGER_BALANCES_COLLECTION,
 } from "./post";

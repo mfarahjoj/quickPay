@@ -21,7 +21,7 @@ money ships to prod without explicit per-deploy authorization (CLAUDE.md).
 | #8 Float maker-checker structuring | 3 | open |
 | #9 Refunds on P2P/payroll | 3 | open |
 | #10 PIN in Keychain | 3 | open (needs design pass) |
-| #11 Currency mixing | 3 | open |
+| #11 Currency mixing | 3 | committed 2026-10-17 on `fix/wallet-phase1` (`CurrencyMismatchError` in `prepareJournalEntry`, callables USD-only), not deployed |
 | Phase 4 lows, W3 rules tests | 4 | open |
 
 ## Phase 0 — one source for prod, before any deploy

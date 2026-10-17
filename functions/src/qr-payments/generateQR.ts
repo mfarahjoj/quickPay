@@ -52,7 +52,7 @@ export const generateQRCode = https.onCall(
     if (!validateCurrency(currency)) {
       throw new https.HttpsError(
         "invalid-argument",
-        "Invalid currency. Supported: USD, SLS"
+        "Invalid currency. Supported: USD"
       );
     }
 

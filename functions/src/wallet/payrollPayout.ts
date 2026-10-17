@@ -6,7 +6,7 @@ import {
   enforceAggregateLimits,
   enforcePerTransactionLimit,
 } from "../utils/limits";
-import { requireAuth } from "../utils/validation";
+import { requireAuth, validateCurrency } from "../utils/validation";
 import { verifyUserPin } from "../auth/validatePin";
 import { notifyPaymentReceived } from "../utils/notifications";
 import { ApiResponse, Wallet, Transaction } from "../types";
@@ -63,8 +63,8 @@ export const payrollPayout = https.onCall(
         `Maximum ${MAX_EMPLOYEES} employees per payroll run`
       );
     }
-    if (!["USD", "SLS"].includes(currency)) {
-      throw new https.HttpsError("invalid-argument", "Currency must be USD or SLS");
+    if (!validateCurrency(currency)) {
+      throw new https.HttpsError("invalid-argument", "Currency must be USD");
     }
     if (!pin) {
       throw new https.HttpsError("invalid-argument", "PIN is required");

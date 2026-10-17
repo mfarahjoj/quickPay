@@ -34,11 +34,15 @@ export function validateAmount(amount: number): boolean {
 }
 
 /**
- * Validate currency code
+ * Currencies a payment may be made in. USD only: every wallet is USD, and
+ * an SLS amount debited from one would be read as dollars (the ledger
+ * refuses that too — CurrencyMismatchError). Add SLS here once wallets can
+ * hold it and the apps show it.
  */
+export const SUPPORTED_CURRENCIES: readonly string[] = ["USD"];
+
 export function validateCurrency(currency: string): boolean {
-  const validCurrencies = ["USD", "SLS"];
-  return validCurrencies.includes(currency);
+  return SUPPORTED_CURRENCIES.includes(currency);
 }
 
 /**

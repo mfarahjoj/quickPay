@@ -1,7 +1,7 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { assertResetCooldownAllows } from "../utils/resetCooldown";
-import { requireAuth } from "../utils/validation";
+import { requireAuth, validateCurrency } from "../utils/validation";
 import { enforceTransactionLimits } from "../utils/limits";
 import { assertAccountActive } from "../utils/accountStatus";
 import { verifyUserPin } from "../auth/validatePin";
@@ -57,10 +57,10 @@ export const sendP2P = https.onCall(
       );
     }
 
-    if (!["USD", "SLS"].includes(currency)) {
+    if (!validateCurrency(currency)) {
       throw new https.HttpsError(
         "invalid-argument",
-        "Currency must be USD or SLS"
+        "Currency must be USD"
       );
     }
 

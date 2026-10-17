@@ -136,7 +136,7 @@ export const createPaymentRequest = https.onCall(
     if (!validateCurrency(currency)) {
       throw new https.HttpsError(
         "invalid-argument",
-        "Currency must be USD or SLS"
+        "Currency must be USD"
       );
     }
 

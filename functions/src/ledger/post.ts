@@ -69,6 +69,22 @@ export class WalletNotFoundError extends Error {
   }
 }
 
+/**
+ * Thrown when an entry's currency differs from a wallet it touches.
+ *
+ * Amounts are bare integers, so nothing else stops 10,000 SLS cents (about a
+ * dollar) being taken from a USD wallet as $100. Checked here rather than in
+ * each callable so a call site that forgets still can't mix currencies.
+ */
+export class CurrencyMismatchError extends Error {
+  readonly account: string;
+  constructor(account: string, walletCurrency: string, entryCurrency: string) {
+    super(`${account} holds ${walletCurrency}, entry is ${entryCurrency}`);
+    this.name = "CurrencyMismatchError";
+    this.account = account;
+  }
+}
+
 export interface PreparedJournalEntry {
   /** True if this entryId was already posted; write() is then a no-op. */
   alreadyPosted: boolean;
@@ -116,6 +132,12 @@ export async function prepareJournalEntry(
       throw new WalletNotFoundError(d.account);
     }
     const wallet = snap.data() as Wallet;
+
+    // Wallets written before `currency` was stored are all USD.
+    const walletCurrency = wallet.currency ?? "USD";
+    if (walletCurrency !== input.currency) {
+      throw new CurrencyMismatchError(d.account, walletCurrency, input.currency);
+    }
 
     // Frozen accounts may still receive (see FrozenAccountError) but never spend.
     if (d.debits > 0 && wallet.frozen === true) {
