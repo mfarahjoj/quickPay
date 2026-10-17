@@ -55,6 +55,12 @@ export interface Rates {
   apiChargeTtlSeconds: number;
   /** Requests one merchant API key may make per minute. */
   apiRequestsPerMinute: number;
+  /**
+   * How many days after a shop payment the merchant may still refund it from
+   * the app. Past that, a return goes through support, where the books for
+   * that period may already have been reconciled.
+   */
+  refundWindowDays: number;
 }
 
 export const DEFAULT_RATES: Rates = {
@@ -67,6 +73,7 @@ export const DEFAULT_RATES: Rates = {
   onlinePaymentFeeRate: 0.01,
   apiChargeTtlSeconds: 900, // 15 minutes
   apiRequestsPerMinute: 120,
+  refundWindowDays: 30,
 };
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
@@ -166,6 +173,12 @@ export async function getRates(): Promise<Rates> {
         DEFAULT_RATES.apiRequestsPerMinute,
         10,
         6000
+      ),
+      refundWindowDays: coerceIntInRange(
+        data.refundWindowDays,
+        DEFAULT_RATES.refundWindowDays,
+        1,
+        365
       ),
     };
     cached = { rates, expiresAt: now + CACHE_TTL_MS };

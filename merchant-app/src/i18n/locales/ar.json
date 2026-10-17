@@ -349,6 +349,8 @@
   "transactions.refund.confirmSubtitle": "أدخل رقمك السري لاسترداد {{amount}} إلى العميل",
   "transactions.refund.successMessage": "تم استرداد {{amount}} إلى العميل",
   "transactions.refund.failed": "فشل الاسترداد",
+  "transactions.refund.notRefundable": "يمكن هنا استرداد المدفوعات التي استلمتها في متجرك فقط.",
+  "transactions.refund.windowClosed": "يمكن استرداد المدفوعات خلال {{days}} يومًا. للمدفوعات الأقدم، تواصل مع دعم Zapp Pay.",
   "transactions.detail.method": "الطريقة",
   "transactions.timeline.initiated": "بدأت",
   "transactions.timeline.completed": "اكتملت",

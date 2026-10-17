@@ -129,8 +129,20 @@ export default function TransactionDetailScreen({ route, navigation }: Props) {
         [{ text: t('common.ok'), onPress: () => navigation.goBack() }]
       );
     } catch (e: any) {
-      Alert.alert(t('common.error'), e.message || t('transactions.refund.failed'));
+      const reason = e?.details?.reason;
       setPin('');
+      // Neither of these changes with another PIN, so leave the keypad.
+      if (reason === 'not_refundable' || reason === 'refund_window_closed') {
+        Alert.alert(
+          t('common.error'),
+          reason === 'not_refundable'
+            ? t('transactions.refund.notRefundable')
+            : t('transactions.refund.windowClosed', { days: e.details.refundWindowDays })
+        );
+        setRefundStep('idle');
+        return;
+      }
+      Alert.alert(t('common.error'), e.message || t('transactions.refund.failed'));
       setRefundStep('pin');
     }
   };

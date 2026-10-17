@@ -6,14 +6,30 @@ import { requireActiveAccount } from "../utils/accountStatus";
 import { verifyUserPin } from "../auth/validatePin";
 import { notifyUser } from "../utils/notifications";
 import { ApiResponse, Transaction } from "../types";
+import { getRates } from "../config/rates";
 import {
   prepareJournalEntry,
   userAccount,
   JournalLine,
+  JournalEntryType,
+  JOURNAL_COLLECTION,
   PLATFORM_FEES,
   InsufficientBalanceError,
   WalletNotFoundError,
 } from "../ledger";
+
+/**
+ * The entries a merchant may refund from the app: payments a customer made
+ * at their counter. P2P and payroll rows are typed `payment` too, so the row
+ * type can't tell them apart; the journal entry behind the row can. Online
+ * payments are refunded through the API instead (see the apiChargeId check).
+ */
+const REFUNDABLE_ENTRY_TYPES: readonly JournalEntryType[] = [
+  "qr_payment",
+  "customer_qr_payment",
+];
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 interface RefundRequest {
   transactionId: string;
@@ -88,6 +104,29 @@ export const refundPayment = https.onCall(
         throw new https.HttpsError(
           "failed-precondition",
           "This payment was taken online. Refund it from the system that took it."
+        );
+      }
+
+      // Only a payment taken at the counter is the merchant's to give back.
+      const entrySnap = original.journalEntryId
+        ? await db.collection(JOURNAL_COLLECTION).doc(original.journalEntryId).get()
+        : null;
+      const entryType = entrySnap?.data()?.type as JournalEntryType | undefined;
+      if (!entryType || !REFUNDABLE_ENTRY_TYPES.includes(entryType)) {
+        throw new https.HttpsError(
+          "failed-precondition",
+          "Only payments taken at your counter can be refunded here",
+          { reason: "not_refundable" }
+        );
+      }
+
+      const { refundWindowDays } = await getRates();
+      const paidAt = (original.completedAt ?? original.createdAt)?.toMillis?.();
+      if (!paidAt || Date.now() - paidAt > refundWindowDays * DAY_MS) {
+        throw new https.HttpsError(
+          "failed-precondition",
+          `Payments can be refunded for ${refundWindowDays} days. Contact support for older ones.`,
+          { reason: "refund_window_closed", refundWindowDays }
         );
       }
 

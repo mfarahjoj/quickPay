@@ -349,6 +349,8 @@
   "transactions.refund.confirmSubtitle": "Geli PIN-kaaga si aad {{amount}} ugu celiso macmiilka",
   "transactions.refund.successMessage": "{{amount}} ayaa loo celiyay macmiilka",
   "transactions.refund.failed": "Celintu way fashilantay",
+  "transactions.refund.notRefundable": "Kaliya lacagaha laguugu bixiyay miiskaaga ayaa halkan dib loogu celin karaa.",
+  "transactions.refund.windowClosed": "Lacagaha waxaa dib loo celin karaa {{days}} maalmood gudahood. Kuwa ka sii da'da weyn, la xiriir taageerada Zapp Pay.",
   "transactions.detail.method": "Habka",
   "transactions.timeline.initiated": "La bilaabay",
   "transactions.timeline.completed": "La dhammaystiray",

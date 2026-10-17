@@ -215,6 +215,8 @@
   "transactions.refund.confirmSubtitle": "Enter your PIN to refund {{amount}} to the customer",
   "transactions.refund.successMessage": "{{amount}} refunded to the customer",
   "transactions.refund.failed": "Refund failed",
+  "transactions.refund.notRefundable": "Only payments taken at your counter can be refunded here.",
+  "transactions.refund.windowClosed": "Payments can be refunded for {{days}} days. For older ones, contact Zapp Pay support.",
   "transactions.detail.method": "Method",
   "transactions.timeline.initiated": "Initiated",
   "transactions.timeline.completed": "Completed",
