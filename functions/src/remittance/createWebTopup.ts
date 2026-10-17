@@ -19,7 +19,14 @@ interface CreateWebTopupBody {
 
 // CORS-enabled plain HTTP function so the web page can call it without Firebase SDK.
 export const createWebTopup = https.onRequest(
-  { cors: ["https://quickpay-485417.web.app", "http://localhost:5000", "https://quickpay-485417.firebaseapp.com"] },
+  {
+    cors: [
+      "https://zapppay.web.app",
+      "https://quickpay-485417.web.app",
+      "https://quickpay-485417.firebaseapp.com",
+      "http://localhost:5000",
+    ],
+  },
   async (req, res) => {
     if (req.method !== "POST") {
       res.status(405).json({ success: false, error: "Method not allowed" });
