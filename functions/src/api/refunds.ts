@@ -14,6 +14,10 @@
  * No PIN: the API key is the merchant's credential for this server-to-server
  * call. What a leaked key can do here is bounded — money only goes back to the
  * customer who paid, and never more than they paid.
+ *
+ * In test mode the same numbers are worked out and recorded on the charge and
+ * the refund, but nothing is posted: a test charge was never paid, so there is
+ * no money to return.
  */
 
 import * as admin from "firebase-admin";
@@ -30,7 +34,7 @@ import {
   WalletNotFoundError,
 } from "../ledger";
 import { ApiCaller } from "./keys";
-import { ApiError, badRequest, conflict } from "./http";
+import { ApiError, badRequest, conflict, notFound } from "./http";
 import { getOwnCharge, parseAmount } from "./charges";
 import {
   idempotencyDocId,
@@ -44,6 +48,7 @@ import {
   ApiCharge,
   ApiIdempotencyRecord,
   ApiRefund,
+  isLiveObject,
 } from "./types";
 
 const MAX_REASON = 200;
@@ -71,8 +76,53 @@ export function serializeRefund(id: string, refund: ApiRefund) {
     currency: "USD",
     reason: refund.reason ?? null,
     status: "succeeded",
-    transaction_id: refund.transactionId,
+    transaction_id: refund.transactionId ?? null,
     created: refund.createdAt.toDate().toISOString(),
+    livemode: isLiveObject(refund),
+  };
+}
+
+interface RefundPlan {
+  amount: number;
+  feeReturned: number;
+  /** What the merchant hands back: the refund less the platform's share of the fee. */
+  fromMerchant: number;
+  newTotal: number;
+  feeRefundedTotal: number;
+  /** This refund's number on the charge, 1-based. */
+  n: number;
+}
+
+/** Work out a refund of `requested` (or whatever is left) against a paid charge. */
+function planRefund(charge: ApiCharge, requested: number | undefined): RefundPlan {
+  const refundedSoFar = charge.amountRefunded ?? 0;
+  const remaining = charge.amount - refundedSoFar;
+  if (remaining <= 0) {
+    throw conflict("charge_already_refunded", "This charge has already been fully refunded");
+  }
+  const amount = requested ?? remaining;
+  if (amount > remaining) {
+    throw badRequest(
+      "amount_too_large",
+      `amount exceeds the ${remaining} cents left to refund on this charge`,
+      "amount"
+    );
+  }
+
+  const fee = charge.feeCents ?? 0;
+  const feeRefundedSoFar = charge.feeRefunded ?? 0;
+  const newTotal = refundedSoFar + amount;
+  const feeReturned = Math.min(
+    amount,
+    Math.max(0, cumulativeFeeReturned(fee, charge.amount, newTotal) - feeRefundedSoFar)
+  );
+  return {
+    amount,
+    feeReturned,
+    fromMerchant: amount - feeReturned,
+    newTotal,
+    feeRefundedTotal: feeRefundedSoFar + feeReturned,
+    n: (charge.refundCount ?? 0) + 1,
   };
 }
 
@@ -83,7 +133,7 @@ export async function createRefund(
   idempotencyKey: string
 ): Promise<{ id: string; refund: ApiRefund; replayed: boolean }> {
   // 404 for an unknown or someone else's charge, before anything else.
-  await getOwnCharge(caller.merchantId, chargeId);
+  await getOwnCharge(caller.merchantId, chargeId, caller.livemode);
 
   const requested = body.amount === undefined || body.amount === null ? undefined : parseAmount(body.amount);
   const reason = body.reason;
@@ -96,7 +146,7 @@ export async function createRefund(
   const chargeRef = db.collection(API_CHARGES_COLLECTION).doc(chargeId);
   const idemRef = db
     .collection(API_IDEMPOTENCY_COLLECTION)
-    .doc(idempotencyDocId(caller.merchantId, "refund", idempotencyKey));
+    .doc(idempotencyDocId(caller.merchantId, "refund", idempotencyKey, caller.livemode));
   const requestHash = requestFingerprint({ chargeId, amount: requested ?? null, reason: trimmedReason ?? null });
   const refundRef = db.collection(API_REFUNDS_COLLECTION).doc(`re_${crypto.randomBytes(18).toString("base64url")}`);
   const refundTxId = db.collection("transactions").doc().id;
@@ -116,6 +166,43 @@ export async function createRefund(
       }
 
       const charge = (await tx.get(chargeRef)).data() as ApiCharge;
+      // Checked before the transaction too; this is the authoritative copy. A
+      // test refund on a live charge would mark real money returned that wasn't.
+      if (isLiveObject(charge) !== caller.livemode) throw notFound("charge");
+      const now = admin.firestore.Timestamp.now();
+      const record: ApiIdempotencyRecord = {
+        merchantId: caller.merchantId,
+        scope: "refund",
+        requestHash,
+        objectId: refundRef.id,
+        createdAt: now,
+      };
+
+      if (!caller.livemode) {
+        if (charge.status !== "succeeded") {
+          throw conflict("charge_not_succeeded", "Only a charge that has been paid can be refunded");
+        }
+        const plan = planRefund(charge, requested);
+        const refund: ApiRefund = {
+          chargeId,
+          merchantId: charge.merchantId,
+          livemode: false,
+          amount: plan.amount,
+          feeReturned: plan.feeReturned,
+          ...(trimmedReason ? { reason: trimmedReason } : {}),
+          keyId: caller.keyId,
+          createdAt: now,
+        };
+        tx.create(refundRef, refund);
+        tx.update(chargeRef, {
+          amountRefunded: plan.newTotal,
+          feeRefunded: plan.feeRefundedTotal,
+          refundCount: plan.n,
+        });
+        tx.create(idemRef, record);
+        return { refund, charge };
+      }
+
       if (charge.status !== "succeeded" || !charge.paidBy || !charge.transactionId) {
         throw conflict("charge_not_succeeded", "Only a charge that has been paid can be refunded");
       }
@@ -124,32 +211,12 @@ export async function createRefund(
       // some other way must not be refunded again here.
       const paymentRef = db.collection("transactions").doc(charge.transactionId);
       const payment = (await tx.get(paymentRef)).data() as Transaction | undefined;
-      const refundedSoFar = charge.amountRefunded ?? 0;
       if (payment?.refundedAt && !payment.apiChargeId) {
         throw conflict("charge_already_refunded", "This charge has already been refunded");
       }
 
-      const remaining = charge.amount - refundedSoFar;
-      if (remaining <= 0) {
-        throw conflict("charge_already_refunded", "This charge has already been fully refunded");
-      }
-      const amount = requested ?? remaining;
-      if (amount > remaining) {
-        throw badRequest(
-          "amount_too_large",
-          `amount exceeds the ${remaining} cents left to refund on this charge`,
-          "amount"
-        );
-      }
-
-      const fee = charge.feeCents ?? 0;
-      const feeRefundedSoFar = charge.feeRefunded ?? 0;
-      const newTotal = refundedSoFar + amount;
-      const feeReturned = Math.min(
-        amount,
-        Math.max(0, cumulativeFeeReturned(fee, charge.amount, newTotal) - feeRefundedSoFar)
-      );
-      const fromMerchant = amount - feeReturned;
+      const { amount, feeReturned, fromMerchant, newTotal, feeRefundedTotal, n } =
+        planRefund(charge, requested);
 
       // Merchant hands back what they netted on this share, the platform its
       // fee on it; the customer gets the whole share back.
@@ -163,7 +230,6 @@ export async function createRefund(
         lines.push({ account: PLATFORM_FEES, debit: feeReturned, credit: 0 });
       }
 
-      const n = (charge.refundCount ?? 0) + 1;
       const journalEntryId = refundEntryId(chargeId, n);
       const pending = await prepareJournalEntry(tx, {
         entryId: journalEntryId,
@@ -185,12 +251,12 @@ export async function createRefund(
         throw conflict("refund_conflict", "Could not number this refund. Retry the request.");
       }
 
-      const now = admin.firestore.Timestamp.now();
       pending.write(tx);
 
       const refund: ApiRefund = {
         chargeId,
         merchantId: charge.merchantId,
+        livemode: true,
         customerId: charge.paidBy,
         amount,
         feeReturned,
@@ -224,7 +290,7 @@ export async function createRefund(
 
       tx.update(chargeRef, {
         amountRefunded: newTotal,
-        feeRefunded: feeRefundedSoFar + feeReturned,
+        feeRefunded: feeRefundedTotal,
         refundCount: n,
       });
 
@@ -234,13 +300,6 @@ export async function createRefund(
         ...(newTotal >= charge.amount ? { refundedAt: now, refundTransactionId: refundTxId } : {}),
       });
 
-      const record: ApiIdempotencyRecord = {
-        merchantId: caller.merchantId,
-        scope: "refund",
-        requestHash,
-        objectId: refundRef.id,
-        createdAt: now,
-      };
       tx.create(idemRef, record);
 
       return { refund, charge };
@@ -264,6 +323,7 @@ export async function createRefund(
   }
 
   const { refund } = outcome;
+  if (!refund.customerId) return { id: refundRef.id, refund, replayed: false };
   notifyUser(
     refund.customerId,
     "refund_issued",

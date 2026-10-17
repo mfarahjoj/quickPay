@@ -12,6 +12,10 @@
     Served at /checkout/{chargeId} by a Hosting rewrite. Reads only the public
     charge endpoint (/v1/public/charges/{id}); the money moves when the customer
     approves in the Zapp Pay app, never from this page.
+
+    A test-mode charge (livemode: false, raised with a zpk_test_ key) shows a
+    "Simulate successful payment" button instead, which POSTs
+    /v1/public/charges/{id}/test_payment. That endpoint refuses live charges.
   -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -164,7 +168,18 @@
     .skeleton { height: 16px; border-radius: 8px; background: rgba(255,255,255,0.07); margin: 10px auto; animation: shimmer 1.2s ease-in-out infinite; }
     @keyframes shimmer { 50% { opacity: 0.5; } }
 
-    .notice { margin-top: 12px; font-size: 13px; color: var(--amber); min-height: 18px; }
+    .notice { margin-top: 12px; font-size: 13px; color: var(--amber); min-height: 18px; text-align: center; line-height: 1.5; }
+
+    .test-banner {
+      display: inline-flex; align-items: center; gap: 8px;
+      margin: -6px auto 18px;
+      padding: 6px 12px; border-radius: 999px;
+      background: rgba(245,184,75,0.14); border: 1px solid rgba(245,184,75,0.35);
+      color: var(--amber); font-size: 12px; font-weight: 700; letter-spacing: 0.2px;
+    }
+    .test-note { color: var(--dim); font-size: 14px; line-height: 1.5; margin: 0 auto 18px; max-width: 320px; }
+    .btn-test { background: var(--amber); color: var(--ink); }
+    .btn[disabled] { opacity: 0.6; cursor: default; }
 
     @media (prefers-reduced-motion: reduce) {
       .pulse::after, .skeleton { animation: none; }
@@ -229,7 +244,13 @@
         notFoundTitle: 'Payment link not found',
         notFoundBody: 'Check the link, or ask the merchant for a new one.',
         offline: 'Connection lost — retrying…',
-        secured: 'Secured by Zapp Pay. You approve every payment in the app with your PIN.'
+        secured: 'Secured by Zapp Pay. You approve every payment in the app with your PIN.',
+        appDidntOpen: 'Zapp Pay didn’t open? Install or update the Zapp Pay app, then tap the button again.',
+        testBanner: 'Test mode — no real money moves',
+        testNote: 'This payment was made with a developer’s test key. It can’t be paid in the Zapp Pay app.',
+        simulatePay: 'Simulate successful payment',
+        simulating: 'Simulating…',
+        simulateFailed: 'Couldn’t simulate the payment. Try again.'
       },
       so: {
         docTitle: 'Ku bixi Zapp Pay',
@@ -257,7 +278,13 @@
         notFoundTitle: 'Linkiga lacag bixinta lama helin',
         notFoundBody: 'Hubi linkiga, ama ganacsadaha ka codso mid cusub.',
         offline: 'Xiriirka ayaa go’ay — mar kale ayaa la isku dayayaa…',
-        secured: 'Waxaa sugaya Zapp Pay. Lacag bixin kasta waxaad app-ka ku oggolaataa PIN-kaaga.'
+        secured: 'Waxaa sugaya Zapp Pay. Lacag bixin kasta waxaad app-ka ku oggolaataa PIN-kaaga.',
+        appDidntOpen: 'Zapp Pay ma furmin? Ku rakib ama cusbooneysii app-ka Zapp Pay, kadibna mar kale taabo badhanka.',
+        testBanner: 'Hab tijaabo — lacag dhab ah ma dhaqaaqdo',
+        testNote: 'Lacag-bixintan waxaa lagu sameeyay fure tijaabo oo horumariye leeyahay. Laguma bixin karo app-ka Zapp Pay.',
+        simulatePay: 'Ku dayo lacag-bixin guulaysatay',
+        simulating: 'Waa la ku dayanayaa…',
+        simulateFailed: 'Lacag-bixinta lama ku dayan karin. Mar kale isku day.'
       },
       ar: {
         docTitle: 'الدفع عبر Zapp Pay',
@@ -285,7 +312,13 @@
         notFoundTitle: 'رابط الدفع غير موجود',
         notFoundBody: 'تحقق من الرابط، أو اطلب من التاجر رابطًا جديدًا.',
         offline: 'انقطع الاتصال — جارٍ إعادة المحاولة…',
-        secured: 'محمي بواسطة Zapp Pay. توافق على كل دفعة في التطبيق برمز PIN الخاص بك.'
+        secured: 'محمي بواسطة Zapp Pay. توافق على كل دفعة في التطبيق برمز PIN الخاص بك.',
+        appDidntOpen: 'لم يُفتح Zapp Pay؟ ثبّت تطبيق Zapp Pay أو حدّثه، ثم اضغط على الزر مرة أخرى.',
+        testBanner: 'وضع الاختبار — لا تُنقل أموال حقيقية',
+        testNote: 'أُنشئت هذه الدفعة بمفتاح اختبار خاص بمطوّر. لا يمكن دفعها في تطبيق Zapp Pay.',
+        simulatePay: 'محاكاة دفعة ناجحة',
+        simulating: 'جارٍ المحاكاة…',
+        simulateFailed: 'تعذّرت محاكاة الدفعة. حاول مرة أخرى.'
       }
     };
 
@@ -304,9 +337,20 @@
     var tickTimer = null;
     var failures = 0;
     var redirectTimer = null;
+    var simulating = false;
+    var openAppTimer = null;
+    // How long to wait for the app to take over after "Open Zapp Pay" before
+    // suggesting it may be missing or too old to know our links.
+    var OPEN_APP_GRACE_MS = 2500;
 
     var card = document.getElementById('card');
     var notice = document.getElementById('notice');
+    var noticeKey = null;       // which message the notice line holds, so each is cleared by its own cause
+
+    function showNotice(key) {
+      noticeKey = key;
+      notice.textContent = key ? t(key) : '';
+    }
 
     function pickLanguage() {
       try {
@@ -352,6 +396,7 @@
       Array.prototype.forEach.call(document.querySelectorAll('[data-t]'), function (el) {
         el.textContent = t(el.getAttribute('data-t'));
       });
+      showNotice(noticeKey);
       render();
     }
 
@@ -362,9 +407,12 @@
       return qr.createSvgTag({ cellSize: 6, margin: 0, scalable: true });
     }
 
+    function isTest() { return charge && charge.livemode === false; }
+
     function header() {
       var name = charge.merchant_name || 'Merchant';
       return (
+        (isTest() ? '<div class="test-banner">' + esc(t('testBanner')) + '</div>' : '') +
         '<div class="merchant-row">' +
           '<div class="avatar" aria-hidden="true">' + esc(name.charAt(0).toUpperCase()) + '</div>' +
           '<div class="pay-to">' + t('payTo', { merchant: '<strong>' + esc(name) + '</strong>' }) + '</div>' +
@@ -397,6 +445,7 @@
     function render() {
       if (state === 'loading') return;
       clearInterval(tickTimer);
+      if (state !== 'pending' && noticeKey === 'appDidntOpen') showNotice(null);
 
       if (state === 'not_found') {
         card.innerHTML = resultView('warn', t('notFoundTitle'), t('notFoundBody'));
@@ -429,8 +478,24 @@
         return;
       }
 
+      // pending, test mode: no app can pay this, so offer the simulated payment
+      if (isTest()) {
+        card.innerHTML =
+          header() +
+          '<div class="divider"></div>' +
+          '<p class="test-note">' + esc(t('testNote')) + '</p>' +
+          '<button type="button" class="btn btn-test" id="simulate"' + (simulating ? ' disabled' : '') + '>' +
+            esc(t(simulating ? 'simulating' : 'simulatePay')) +
+          '</button>' +
+          '<div class="timer" id="timer"></div>' +
+          (cancelUrl ? '<a class="btn btn-ghost" href="' + esc(cancelUrl) + '">' + esc(t('cancelLink', { merchant: merchant })) + '</a>' : '');
+        document.getElementById('simulate').addEventListener('click', simulate);
+        startTimer();
+        return;
+      }
+
       // pending
-      var openBtn = '<a class="btn btn-primary" href="' + esc(charge.deep_link) + '">' + esc(t('openApp')) + '</a>';
+      var openBtn = '<a class="btn btn-primary" id="open-app" href="' + esc(charge.deep_link) + '">' + esc(t('openApp')) + '</a>';
       var qrToggle = isTouch
         ? '<button type="button" class="btn btn-ghost" id="qr-toggle" aria-expanded="' + qrVisible + '">' + esc(t(qrVisible ? 'hideQr' : 'showQr')) + '</button>'
         : '';
@@ -452,6 +517,13 @@
       var toggle = document.getElementById('qr-toggle');
       if (toggle) toggle.addEventListener('click', function () { qrVisible = !qrVisible; render(); });
 
+      var openApp = document.getElementById('open-app');
+      if (openApp) openApp.addEventListener('click', watchAppOpened);
+
+      startTimer();
+    }
+
+    function startTimer() {
       var timerEl = document.getElementById('timer');
       var tick = function () {
         var left = timeLeft();
@@ -461,6 +533,52 @@
       };
       tick();
       tickTimer = setInterval(tick, 1000);
+    }
+
+    // If the app takes over, this page is hidden within a moment. If it is
+    // still showing, the app is missing or too old to know zapppay:// links —
+    // the browser either did nothing or showed an "invalid address" alert.
+    function watchAppOpened() {
+      clearTimeout(openAppTimer);
+      if (noticeKey === 'appDidntOpen') showNotice(null);
+      openAppTimer = setTimeout(function () {
+        if (!document.hidden && state === 'pending') showNotice('appDidntOpen');
+      }, OPEN_APP_GRACE_MS);
+    }
+
+    function simulate() {
+      if (simulating) return;
+      simulating = true;
+      showNotice(null);
+      render();
+      fetch('/v1/public/charges/' + encodeURIComponent(chargeId) + '/test_payment', {
+        method: 'POST',
+        cache: 'no-store',
+        credentials: 'omit',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}'
+      })
+        .then(function (res) {
+          return res.json().then(function (body) { return { ok: res.ok, body: body }; });
+        })
+        .then(function (out) {
+          simulating = false;
+          if (out.ok) {
+            charge = out.body;
+            state = out.body.status;
+          } else {
+            showNotice('simulateFailed');
+          }
+          render();
+          // Whatever happened, the next poll shows the charge as it now stands
+          // (e.g. expired while we waited).
+          poll();
+        })
+        .catch(function () {
+          simulating = false;
+          showNotice('simulateFailed');
+          render();
+        });
     }
 
     function schedule() {
@@ -479,7 +597,7 @@
         })
         .then(function (body) {
           failures = 0;
-          notice.textContent = '';
+          if (noticeKey === 'offline') showNotice(null);
           if (body.notFound) { state = 'not_found'; render(); return; }
           var changed = !charge || body.status !== charge.status || state === 'loading';
           charge = body;
@@ -489,7 +607,7 @@
         })
         .catch(function () {
           failures++;
-          if (failures >= 2) notice.textContent = t('offline');
+          if (failures >= 2) showNotice('offline');
           schedule();
         });
     }
@@ -497,7 +615,11 @@
     Array.prototype.forEach.call(document.querySelectorAll('.langs button'), function (b) {
       b.addEventListener('click', function () { setLanguage(b.getAttribute('data-lang')); });
     });
-    document.addEventListener('visibilitychange', function () { if (!document.hidden) poll(); });
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) clearTimeout(openAppTimer);
+      else poll();
+    });
+    window.addEventListener('pagehide', function () { clearTimeout(openAppTimer); });
 
     setLanguage(lang);
     if (!chargeId) {

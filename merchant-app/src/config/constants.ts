@@ -18,3 +18,12 @@ export const PIN_LENGTH = 6;
 
 /** Maximum amount (USD) allowed per top-up transaction */
 export const MAX_TOPUP_AMOUNT = 1000;
+
+/**
+ * What this build understands, as one number. Raise it in a release that
+ * starts relying on something older builds lack (a new link scheme, a changed
+ * callable); once that release is in the stores, raise `minCompatLevel` in
+ * Firestore `config/app_client` to match, and older installs show "Update
+ * Zapp Pay" instead of failing in ways nobody can explain. See useUpdateGate.
+ */
+export const APP_COMPAT_LEVEL = 1;

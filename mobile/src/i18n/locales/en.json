@@ -1028,5 +1028,10 @@
   "cashout.keepCode": "Keep code",
   "cashout.cancelledTitle": "Cash-out cancelled",
   "cashout.cancelledBody": "The money is back in your wallet.",
-  "cashout.cancelFailed": "Couldn't cancel"
+  "cashout.cancelFailed": "Couldn't cancel",
+  "update.title": "Update Zapp Pay",
+  "update.message": "This version of Zapp Pay is out of date. Update to keep paying and receiving money safely.",
+  "update.button": "Update now",
+  "update.noLink": "Get the latest version from the App Store or Google Play.",
+  "payments.approve.testCharge": "This is a test payment from a developer. It can't be paid, and nothing was charged."
 }

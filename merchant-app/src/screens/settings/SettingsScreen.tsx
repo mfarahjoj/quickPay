@@ -49,6 +49,9 @@ export default function SettingsScreen() {
 
   const isAgent =
     profile?.accountType === 'topup_agent' || profile?.accountType === 'agent_merchant';
+  // API keys are for accounts that take payments (isMerchantAccount on the server).
+  const takesPayments =
+    profile?.accountType === 'merchant' || profile?.accountType === 'agent_merchant';
 
   const handleLogout = () => {
     Alert.alert(t('settings.signOutConfirmTitle'), t('settings.signOutConfirmMessage'), [
@@ -106,6 +109,19 @@ export default function SettingsScreen() {
         </>
       )}
 
+      {/* Developers */}
+      {takesPayments && (
+        <>
+          <Text style={styles.sectionLabel}>{t('settings.section.developers')}</Text>
+          <GlassCard style={[styles.sectionCard, { paddingHorizontal: 16 }]}>
+            <TappableRow
+              label={t('settings.apiKeys')}
+              onPress={() => navigation.navigate('Developers')}
+            />
+          </GlassCard>
+        </>
+      )}
+
       {/* App */}
       <Text style={styles.sectionLabel}>{t('settings.section.app')}</Text>
       <GlassCard style={styles.sectionCard}>
@@ -114,6 +130,14 @@ export default function SettingsScreen() {
 
       <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.8}>
         <Text style={styles.logoutText}>{t('settings.signOut')}</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.deleteBtn}
+        onPress={() => navigation.navigate('DeleteAccount')}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.deleteText}>{t('settings.deleteAccount')}</Text>
       </TouchableOpacity>
     </DarkScreen>
   );
@@ -230,6 +254,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#FF6961',
+  },
+  deleteBtn: {
+    alignSelf: 'center',
+    marginTop: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  deleteText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'rgba(255,105,97,0.75)',
   },
   rowChevron: {
     fontSize: 20,

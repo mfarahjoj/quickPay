@@ -25,6 +25,7 @@ import {
   ApiCharge,
   ApiChargeStatus,
   ApiIdempotencyRecord,
+  isLiveObject,
 } from "./types";
 
 export const CHARGE_ID_PATTERN = /^ch_[A-Za-z0-9_-]{16,64}$/;
@@ -44,14 +45,14 @@ export function newChargeId(): string {
 }
 
 /**
- * Where the hosted checkout lives. Derived from the project so staging links
- * point at staging; `ZAPP_CHECKOUT_BASE_URL` overrides it once a custom
- * domain is in front.
+ * Where the hosted checkout lives. Prod uses zapppay.web.app; staging keeps
+ * the project default. `ZAPP_CHECKOUT_BASE_URL` overrides either (custom domain).
  */
 export function checkoutBaseUrl(): string {
   const configured = process.env.ZAPP_CHECKOUT_BASE_URL;
   if (configured) return configured.replace(/\/+$/, "");
   const project = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || "quickpay-485417";
+  if (project === "quickpay-485417") return "https://zapppay.web.app";
   return `https://${project}.web.app`;
 }
 
@@ -99,7 +100,7 @@ export function serializeCharge(id: string, charge: ApiCharge, now = Date.now())
     succeeded_at: iso(charge.succeededAt),
     canceled_at: iso(charge.canceledAt),
     expired_at: iso(charge.expiredAt) ?? (isLapsed(charge, now) ? iso(charge.expiresAt) : null),
-    livemode: true,
+    livemode: isLiveObject(charge),
   };
 }
 
@@ -122,6 +123,8 @@ export function serializePublicCharge(id: string, charge: ApiCharge, now = Date.
     qr_payload: checkoutUrl(id),
     success_url: charge.successUrl ?? null,
     cancel_url: charge.cancelUrl ?? null,
+    // The checkout page offers a simulated payment instead of the app for these.
+    livemode: isLiveObject(charge),
   };
 }
 
@@ -278,7 +281,7 @@ export async function createCharge(
   const db = admin.firestore();
   const idemRef = db
     .collection(API_IDEMPOTENCY_COLLECTION)
-    .doc(idempotencyDocId(caller.merchantId, "charge", idempotencyKey));
+    .doc(idempotencyDocId(caller.merchantId, "charge", idempotencyKey, caller.livemode));
   const requestHash = requestFingerprint(input);
 
   // Answer a retry before doing any other work, so it costs one read.
@@ -287,9 +290,14 @@ export async function createCharge(
     return replayCharge(prior.data() as ApiIdempotencyRecord, requestHash);
   }
 
+  // A test charge is never addressed to a real person: no lookup, no push.
+  // Developers type real-looking numbers, and a stranger must not be asked to
+  // approve a payment that cannot be paid.
   const [merchantName, customerId, rates] = await Promise.all([
     merchantDisplayName(caller.merchantId, caller.merchant),
-    input.customerPhone ? findPayer(input.customerPhone, caller.merchantId) : Promise.resolve(undefined),
+    input.customerPhone && caller.livemode
+      ? findPayer(input.customerPhone, caller.merchantId)
+      : Promise.resolve(undefined),
     getRates(),
   ]);
 
@@ -300,6 +308,7 @@ export async function createCharge(
   // Firestore rejects undefined values; attach optional fields only when set.
   const charge: ApiCharge = {
     merchantId: caller.merchantId,
+    livemode: caller.livemode,
     merchantName,
     keyId: caller.keyId,
     amount: input.amount,
@@ -372,12 +381,22 @@ async function replayCharge(
   return { id: snap.id, charge: snap.data() as ApiCharge, replayed: true };
 }
 
-/** Read a charge the caller owns. Someone else's charge is indistinguishable from none. */
-export async function getOwnCharge(merchantId: string, chargeId: string): Promise<ApiCharge> {
+/**
+ * Read a charge the caller owns, in the caller's mode. Someone else's charge,
+ * and your own from the other mode, are indistinguishable from none — so a
+ * live integration can never read a simulated success as a real one.
+ */
+export async function getOwnCharge(
+  merchantId: string,
+  chargeId: string,
+  livemode: boolean
+): Promise<ApiCharge> {
   if (!CHARGE_ID_PATTERN.test(chargeId)) throw notFound("charge");
   const snap = await admin.firestore().collection(API_CHARGES_COLLECTION).doc(chargeId).get();
   const charge = snap.data() as ApiCharge | undefined;
-  if (!snap.exists || charge?.merchantId !== merchantId) throw notFound("charge");
+  if (!snap.exists || charge?.merchantId !== merchantId || isLiveObject(charge) !== livemode) {
+    throw notFound("charge");
+  }
   return charge;
 }
 
@@ -388,7 +407,11 @@ export async function getPublicCharge(chargeId: string): Promise<ApiCharge> {
   return snap.data() as ApiCharge;
 }
 
-export async function listCharges(merchantId: string, query: Record<string, unknown>) {
+export async function listCharges(
+  merchantId: string,
+  livemode: boolean,
+  query: Record<string, unknown>
+) {
   const rawLimit = query.limit === undefined ? 10 : Number(query.limit);
   if (!Number.isInteger(rawLimit) || rawLimit < 1 || rawLimit > MAX_LIST_LIMIT) {
     throw badRequest("parameter_invalid", `limit must be between 1 and ${MAX_LIST_LIMIT}`, "limit");
@@ -401,7 +424,8 @@ export async function listCharges(merchantId: string, query: Record<string, unkn
   const db = admin.firestore();
   let q: FirebaseFirestore.Query = db
     .collection(API_CHARGES_COLLECTION)
-    .where("merchantId", "==", merchantId);
+    .where("merchantId", "==", merchantId)
+    .where("livemode", "==", livemode);
   if (status) q = q.where("status", "==", status);
   q = q.orderBy("createdAt", "desc");
 
@@ -411,7 +435,8 @@ export async function listCharges(merchantId: string, query: Record<string, unkn
       throw badRequest("parameter_invalid", "starting_after must be a charge id", "starting_after");
     }
     const cursor = await db.collection(API_CHARGES_COLLECTION).doc(startingAfter).get();
-    if (!cursor.exists || cursor.data()?.merchantId !== merchantId) {
+    const cursorCharge = cursor.data() as ApiCharge | undefined;
+    if (!cursorCharge || cursorCharge.merchantId !== merchantId || isLiveObject(cursorCharge) !== livemode) {
       throw badRequest("parameter_invalid", "starting_after must be one of your charges", "starting_after");
     }
     q = q.startAfter(cursor);
@@ -435,8 +460,8 @@ export async function listCharges(merchantId: string, query: Record<string, unkn
  * the other — never both. Cancelling something already over is not an error
  * unless it succeeded: then the till has to know, because money moved.
  */
-export async function cancelCharge(merchantId: string, chargeId: string) {
-  await getOwnCharge(merchantId, chargeId);
+export async function cancelCharge(merchantId: string, chargeId: string, livemode: boolean) {
+  await getOwnCharge(merchantId, chargeId, livemode);
   const db = admin.firestore();
   const ref = db.collection(API_CHARGES_COLLECTION).doc(chargeId);
 

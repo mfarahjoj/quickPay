@@ -13,6 +13,10 @@
  * Each request carries `Zapp-Signature: t={unix},v1={hex}` where v1 is
  * HMAC-SHA256 of `{t}.{raw body}` under the endpoint's secret. Merchants
  * should verify it and reject a `t` more than five minutes old.
+ *
+ * Endpoints have a mode, set by the key that registered them: a test charge's
+ * events go only to test endpoints and a live charge's only to live ones, so a
+ * simulated payment can never reach the server that ships real orders.
  */
 
 import * as admin from "firebase-admin";
@@ -33,6 +37,7 @@ import {
   WebhookDelivery,
   WebhookEndpoint,
   WebhookEventType,
+  isLiveObject,
 } from "./types";
 
 const MAX_ENDPOINTS_PER_MERCHANT = 5;
@@ -142,19 +147,31 @@ export function serializeEndpoint(id: string, endpoint: WebhookEndpoint, secret?
     enabled_events: WEBHOOK_EVENT_TYPES,
     status: endpoint.enabled ? "enabled" : "disabled",
     created: endpoint.createdAt.toDate().toISOString(),
+    livemode: isLiveObject(endpoint),
     // Shown once, at creation. Only the encrypted form is stored.
     ...(secret ? { secret } : {}),
   };
 }
 
-export async function createEndpoint(merchantId: string, body: Record<string, unknown>) {
-  const url = validateWebhookUrl(body.url);
-  const db = admin.firestore();
-  const existing = await db
+/** The merchant's enabled endpoints in one mode. */
+function enabledEndpoints(merchantId: string, livemode: boolean) {
+  return admin
+    .firestore()
     .collection(WEBHOOK_ENDPOINTS_COLLECTION)
     .where("merchantId", "==", merchantId)
     .where("enabled", "==", true)
+    .where("livemode", "==", livemode)
     .get();
+}
+
+export async function createEndpoint(
+  merchantId: string,
+  livemode: boolean,
+  body: Record<string, unknown>
+) {
+  const url = validateWebhookUrl(body.url);
+  const db = admin.firestore();
+  const existing = await enabledEndpoints(merchantId, livemode);
   if (existing.size >= MAX_ENDPOINTS_PER_MERCHANT) {
     throw conflict(
       "endpoint_limit",
@@ -165,6 +182,7 @@ export async function createEndpoint(merchantId: string, body: Record<string, un
   const secret = `whsec_${crypto.randomBytes(24).toString("base64url")}`;
   const endpoint: WebhookEndpoint = {
     merchantId,
+    livemode,
     url,
     secretEnc: encrypt(secret),
     enabled: true,
@@ -175,13 +193,8 @@ export async function createEndpoint(merchantId: string, body: Record<string, un
   return serializeEndpoint(ref.id, endpoint, secret);
 }
 
-export async function listEndpoints(merchantId: string) {
-  const snap = await admin
-    .firestore()
-    .collection(WEBHOOK_ENDPOINTS_COLLECTION)
-    .where("merchantId", "==", merchantId)
-    .where("enabled", "==", true)
-    .get();
+export async function listEndpoints(merchantId: string, livemode: boolean) {
+  const snap = await enabledEndpoints(merchantId, livemode);
   return {
     object: "list",
     data: snap.docs.map((d) => serializeEndpoint(d.id, d.data() as WebhookEndpoint)),
@@ -190,12 +203,17 @@ export async function listEndpoints(merchantId: string) {
 }
 
 /** Disabled rather than deleted, so past deliveries still name a real endpoint. */
-export async function deleteEndpoint(merchantId: string, endpointId: string) {
+export async function deleteEndpoint(merchantId: string, livemode: boolean, endpointId: string) {
   if (!ENDPOINT_ID_PATTERN.test(endpointId)) throw notFound("webhook endpoint");
   const ref = admin.firestore().collection(WEBHOOK_ENDPOINTS_COLLECTION).doc(endpointId);
   const snap = await ref.get();
   const endpoint = snap.data() as WebhookEndpoint | undefined;
-  if (!snap.exists || endpoint?.merchantId !== merchantId || !endpoint.enabled) {
+  if (
+    !snap.exists ||
+    endpoint?.merchantId !== merchantId ||
+    !endpoint.enabled ||
+    isLiveObject(endpoint) !== livemode
+  ) {
     throw notFound("webhook endpoint");
   }
   await ref.update({ enabled: false, disabledAt: admin.firestore.Timestamp.now() });
@@ -227,18 +245,21 @@ export function eventsForChange(
   return events;
 }
 
-async function recordEvent(
+/** Exported for tests; the trigger below is the only caller. */
+export async function recordEvent(
   chargeId: string,
   charge: ApiCharge,
   pending: PendingEvent
 ): Promise<string[]> {
   const db = admin.firestore();
   const now = admin.firestore.Timestamp.now();
+  const livemode = isLiveObject(charge);
   const payload = JSON.stringify({
     id: pending.eventId,
     object: "event",
     type: pending.type,
     created: now.toDate().toISOString(),
+    livemode,
     data: { object: serializeCharge(chargeId, charge, now.toMillis()) },
   });
   const event: ApiEvent = {
@@ -249,11 +270,7 @@ async function recordEvent(
     createdAt: now,
   };
 
-  const endpoints = await db
-    .collection(WEBHOOK_ENDPOINTS_COLLECTION)
-    .where("merchantId", "==", charge.merchantId)
-    .where("enabled", "==", true)
-    .get();
+  const endpoints = await enabledEndpoints(charge.merchantId, livemode);
 
   const deliveryIds: string[] = [];
   await db.runTransaction(async (tx) => {

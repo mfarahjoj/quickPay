@@ -4,6 +4,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Alert, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import AppNavigator, { navigationRef } from './navigation/AppNavigator';
+import { UpdateRequired } from './components/UpdateRequired';
+import { useUpdateGate } from './hooks/useUpdateGate';
 import { ToastProvider } from './components/auth';
 import { LanguageSync } from './i18n/useLanguageSync';
 import { messaging, auth } from './services/firebase.config';
@@ -20,12 +22,14 @@ function AppContent() {
     try {
       const provider = firebase.appCheck().newReactNativeFirebaseAppCheckProvider();
       provider.configure({
-        // Debug token must be registered in Firebase Console → App Check →
-        // QuickPay Merchant iOS app → Manage debug tokens.
+        // Debug tokens must be registered in Firebase Console → App Check →
+        // the merchant iOS / Android app → Manage debug tokens.
         apple: __DEV__
           ? { provider: 'debug', debugToken: 'ACB49DE0-2AE8-48A8-92DC-3EF16B02FDC9' }
           : { provider: 'appAttestWithDeviceCheckFallback' },
-        android: { provider: __DEV__ ? 'debug' : 'playIntegrity' },
+        android: __DEV__
+          ? { provider: 'debug', debugToken: '2D05C996-017D-4B9A-976C-AB191AA7DF0A' }
+          : { provider: 'playIntegrity' },
       });
       firebase.appCheck().initializeAppCheck({ provider, isTokenAutoRefreshEnabled: true });
     } catch {
@@ -69,12 +73,19 @@ function AppContent() {
     };
   }, []);
 
+  // After the App Check setup above: the gate's first read should carry a token.
+  const updateGate = useUpdateGate();
+
   return (
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
         <ToastProvider>
           <LanguageSync />
-          <AppNavigator />
+          {updateGate.required ? (
+            <UpdateRequired updateUrl={updateGate.updateUrl} />
+          ) : (
+            <AppNavigator />
+          )}
         </ToastProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

@@ -158,3 +158,5 @@ export {
   adminIssueApiKey,
   adminRevokeApiKey,
 } from "./admin/apiKeys";
+// Merchants' own keys (live and test), from the merchant app's Developers screen.
+export { listMyApiKeys, createMyApiKey, revokeMyApiKey } from "./merchants/apiKeys";

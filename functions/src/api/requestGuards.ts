@@ -82,10 +82,18 @@ function sha256(text: string): string {
 
 /**
  * Scoped to the merchant, so two merchants choosing the same key (both
- * starting their order numbers at 1001) can never see each other's objects.
+ * starting their order numbers at 1001) can never see each other's objects —
+ * and to the mode, so a test run that reuses live order numbers can never be
+ * answered with a live charge. Live IDs keep the shape they had before test
+ * mode existed.
  */
-export function idempotencyDocId(merchantId: string, scope: string, key: string): string {
-  return sha256(`${merchantId}\n${scope}\n${key}`);
+export function idempotencyDocId(
+  merchantId: string,
+  scope: string,
+  key: string,
+  livemode = true
+): string {
+  return sha256(livemode ? `${merchantId}\n${scope}\n${key}` : `${merchantId}\ntest\n${scope}\n${key}`);
 }
 
 /** JSON with sorted keys, so field order in the request never changes the hash. */

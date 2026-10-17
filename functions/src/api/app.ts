@@ -10,11 +10,15 @@
  *   POST   /v1/webhook_endpoints          add an endpoint; the secret is shown once
  *   GET    /v1/webhook_endpoints          list
  *   DELETE /v1/webhook_endpoints/:id      remove
+ *   POST   /v1/test_helpers/charges/:id/succeed   test mode: settle as paid
+ *   POST   /v1/test_helpers/charges/:id/expire    test mode: settle as expired
  *   GET    /v1/public/charges/:id         unauthenticated; the hosted checkout's view
+ *   POST   /v1/public/charges/:id/test_payment    unauthenticated; test charges only
  *
  * No route here moves money on its own: a charge is paid only when the
  * customer approves it in the app (approveApiCharge), and a refund only ever
- * returns a customer's own payment.
+ * returns a customer's own payment. A `zpk_test_` key reaches the same routes
+ * and sees only test objects, which no customer can pay.
  */
 
 import * as crypto from "crypto";
@@ -46,6 +50,7 @@ import {
 } from "./charges";
 import { createRefund, serializeRefund } from "./refunds";
 import { createEndpoint, deleteEndpoint, listEndpoints } from "./webhooks";
+import { TestOutcome, settleTestCharge, testModeOnly } from "./testHelpers";
 
 interface Ctx {
   req: Request;
@@ -68,20 +73,22 @@ const authed = compileRoutes<Ctx>([
     method: "GET",
     path: "/v1/charges",
     handler: async ({ req, caller }) => ({
-      body: await listCharges(caller.merchantId, req.query as Record<string, unknown>),
+      body: await listCharges(caller.merchantId, caller.livemode, req.query as Record<string, unknown>),
     }),
   },
   {
     method: "GET",
     path: "/v1/charges/:id",
     handler: async ({ caller }, { id }) => ({
-      body: serializeCharge(id, await getOwnCharge(caller.merchantId, id)),
+      body: serializeCharge(id, await getOwnCharge(caller.merchantId, id, caller.livemode)),
     }),
   },
   {
     method: "POST",
     path: "/v1/charges/:id/cancel",
-    handler: async ({ caller }, { id }) => ({ body: await cancelCharge(caller.merchantId, id) }),
+    handler: async ({ caller }, { id }) => ({
+      body: await cancelCharge(caller.merchantId, id, caller.livemode),
+    }),
   },
   {
     method: "POST",
@@ -98,19 +105,30 @@ const authed = compileRoutes<Ctx>([
     path: "/v1/webhook_endpoints",
     handler: async ({ req, caller }) => ({
       status: 201,
-      body: await createEndpoint(caller.merchantId, bodyOf(req)),
+      body: await createEndpoint(caller.merchantId, caller.livemode, bodyOf(req)),
     }),
   },
   {
     method: "GET",
     path: "/v1/webhook_endpoints",
-    handler: async ({ caller }) => ({ body: await listEndpoints(caller.merchantId) }),
+    handler: async ({ caller }) => ({ body: await listEndpoints(caller.merchantId, caller.livemode) }),
   },
   {
     method: "DELETE",
     path: "/v1/webhook_endpoints/:id",
-    handler: async ({ caller }, { id }) => ({ body: await deleteEndpoint(caller.merchantId, id) }),
+    handler: async ({ caller }, { id }) => ({
+      body: await deleteEndpoint(caller.merchantId, caller.livemode, id),
+    }),
   },
+  ...(["succeed", "expire"] as const).map((action) => ({
+    method: "POST" as const,
+    path: `/v1/test_helpers/charges/:id/${action}`,
+    handler: async ({ caller }: Ctx, { id }: Record<string, string>) => {
+      if (caller.livemode) throw testModeOnly();
+      const outcome: TestOutcome = action === "succeed" ? "succeeded" : "expired";
+      return { body: serializeCharge(id, await settleTestCharge(id, outcome, caller.merchantId)) };
+    },
+  })),
 ] as Route<Ctx>[]);
 
 const publicRoutes = compileRoutes<{ req: Request }>([
@@ -118,6 +136,13 @@ const publicRoutes = compileRoutes<{ req: Request }>([
     method: "GET",
     path: "/v1/public/charges/:id",
     handler: async (_ctx, { id }) => ({ body: serializePublicCharge(id, await getPublicCharge(id)) }),
+  },
+  {
+    method: "POST",
+    path: "/v1/public/charges/:id/test_payment",
+    handler: async (_ctx, { id }) => ({
+      body: serializePublicCharge(id, await settleTestCharge(id, "succeeded")),
+    }),
   },
 ]);
 

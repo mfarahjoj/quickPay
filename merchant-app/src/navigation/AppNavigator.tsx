@@ -45,6 +45,8 @@ type MerchantStackParamList = {
   AgentProfileEdit: undefined;
   Payroll: undefined;
   Payout: undefined;
+  Developers: undefined;
+  DeleteAccount: undefined;
 };
 
 type TabParamList = {
@@ -246,6 +248,16 @@ function MainStackNavigator() {
       <MainStack.Screen
         name="Payroll"
         getComponent={() => require('../screens/payroll/PayrollScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="Developers"
+        getComponent={() => require('../screens/settings/DevelopersScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="DeleteAccount"
+        getComponent={() => require('../screens/settings/DeleteAccountScreen').default}
         options={{ headerShown: false }}
       />
     </MainStack.Navigator>

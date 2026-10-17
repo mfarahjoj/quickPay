@@ -489,6 +489,46 @@
       ]
     },
     {
+      "collectionGroup": "api_charges",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "merchantId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "livemode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "api_charges",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "merchantId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "livemode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "cashOutRequests",
       "queryScope": "COLLECTION",
       "fields": [

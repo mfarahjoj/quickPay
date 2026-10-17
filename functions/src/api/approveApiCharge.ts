@@ -30,7 +30,7 @@ import {
 } from "../ledger";
 import { CHARGE_ID_PATTERN, effectiveStatus, isLapsed } from "./charges";
 import { isMerchantAccount } from "./keys";
-import { API_CHARGES_COLLECTION, ApiCharge, ApiChargeStatus } from "./types";
+import { API_CHARGES_COLLECTION, ApiCharge, ApiChargeStatus, isLiveObject } from "./types";
 
 export function apiChargeEntryId(chargeId: string): string {
   return `apicharge_${chargeId}`;
@@ -48,8 +48,18 @@ function alreadyResolved(status: ApiChargeStatus): string {
   return `Request is already ${status === "succeeded" ? "paid" : status === "canceled" ? "cancelled" : status}`;
 }
 
-/** A charge addressed to one customer is refused to everyone else. */
+/**
+ * A test charge is refused to everyone — it settles only through the test
+ * helpers, never with money. A charge addressed to one customer is refused to
+ * everyone else.
+ */
 function assertPayableBy(charge: ApiCharge, customerId: string): void {
+  if (!isLiveObject(charge)) {
+    throw new https.HttpsError(
+      "failed-precondition",
+      "This is a test payment request from a developer. It can't be paid with Zapp Pay."
+    );
+  }
   if (charge.customerId && charge.customerId !== customerId) {
     throw new https.HttpsError(
       "permission-denied",

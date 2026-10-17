@@ -69,7 +69,7 @@ One-time, to create and map the second Hosting site:
 ```bash
 firebase hosting:sites:create zapp-admin
 firebase target:apply hosting admin zapp-admin
-firebase target:apply hosting public quickpay-485417
+firebase target:apply hosting zapppay zapppay
 ```
 
 Then:

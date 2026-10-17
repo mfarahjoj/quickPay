@@ -6,6 +6,10 @@
  * audited in the same transaction. The key itself is returned exactly once;
  * only its hash is stored (see api/keys.ts), so a lost key is revoked and
  * replaced, never recovered.
+ *
+ * The console issues live keys. Merchants can also make their own, live and
+ * test, from the merchant app (merchants/apiKeys.ts); the console still lists
+ * and revokes every key, whoever made it.
  */
 
 import * as admin from "firebase-admin";
@@ -14,34 +18,19 @@ import { requireAdmin, requireRecentAdminAuth, requireReason } from "./guard";
 import { stageAuditEntry } from "./audit";
 import { ApiResponse, User } from "../types";
 import { isAccountActive } from "../utils/accountStatus";
-import { apiKeyHint, generateApiKey, hashApiKey, isMerchantAccount } from "../api/keys";
+import {
+  ApiKeyRow,
+  KEY_ID_PATTERN,
+  MAX_ACTIVE_KEYS_PER_MODE,
+  activeKeyCount,
+  isMerchantAccount,
+  listKeysFor,
+  mintApiKey,
+  toApiKeyRow,
+} from "../api/keys";
 import { API_KEYS_COLLECTION, MerchantApiKey } from "../api/types";
 
-/** A merchant rotating keys needs two live at once; more than a few is a smell. */
-const MAX_ACTIVE_KEYS = 5;
-const KEY_ID_PATTERN = /^[0-9a-f]{64}$/;
-
-export interface ApiKeyRow {
-  keyId: string;
-  label: string;
-  hint: string;
-  revoked: boolean;
-  createdAt: string;
-  lastUsedAt?: string;
-  revokedAt?: string;
-}
-
-function toRow(keyId: string, key: MerchantApiKey): ApiKeyRow {
-  return {
-    keyId,
-    label: key.label,
-    hint: key.hint,
-    revoked: key.revoked,
-    createdAt: key.createdAt.toDate().toISOString(),
-    ...(key.lastUsedAt ? { lastUsedAt: key.lastUsedAt.toDate().toISOString() } : {}),
-    ...(key.revokedAt ? { revokedAt: key.revokedAt.toDate().toISOString() } : {}),
-  };
-}
+export type { ApiKeyRow };
 
 export const adminListApiKeys = https.onCall(
   { enforceAppCheck: true },
@@ -54,16 +43,7 @@ export const adminListApiKeys = https.onCall(
       throw new https.HttpsError("invalid-argument", "merchantId is required");
     }
 
-    const snap = await admin
-      .firestore()
-      .collection(API_KEYS_COLLECTION)
-      .where("merchantId", "==", merchantId)
-      .get();
-
-    const keys = snap.docs
-      .map((d) => toRow(d.id, d.data() as MerchantApiKey))
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    return { success: true, data: { keys } };
+    return { success: true, data: { keys: await listKeysFor(merchantId) } };
   }
 );
 
@@ -110,28 +90,20 @@ export const adminIssueApiKey = https.onCall(
       throw new https.HttpsError("failed-precondition", "This account is not active");
     }
 
-    const active = await db
-      .collection(API_KEYS_COLLECTION)
-      .where("merchantId", "==", merchantId)
-      .where("revoked", "==", false)
-      .get();
-    if (active.size >= MAX_ACTIVE_KEYS) {
+    if ((await activeKeyCount(merchantId, "live")) >= MAX_ACTIVE_KEYS_PER_MODE) {
       throw new https.HttpsError(
         "failed-precondition",
-        `This merchant already has ${MAX_ACTIVE_KEYS} active keys. Revoke one first.`
+        `This merchant already has ${MAX_ACTIVE_KEYS_PER_MODE} active live keys. Revoke one first.`
       );
     }
 
-    const apiKey = generateApiKey();
-    const keyId = hashApiKey(apiKey);
-    const record: MerchantApiKey = {
+    const { apiKey, keyId, record } = mintApiKey({
       merchantId,
       label,
-      hint: apiKeyHint(apiKey),
-      revoked: false,
-      createdAt: admin.firestore.Timestamp.now(),
+      mode: "live",
       createdBy: actor.uid,
-    };
+      createdVia: "console",
+    });
 
     await db.runTransaction(async (tx) => {
       tx.create(db.collection(API_KEYS_COLLECTION).doc(keyId), record);
@@ -144,7 +116,7 @@ export const adminIssueApiKey = https.onCall(
       });
     });
 
-    return { success: true, data: { ...toRow(keyId, record), apiKey } };
+    return { success: true, data: { ...toApiKeyRow(keyId, record), apiKey } };
   }
 );
 
@@ -170,7 +142,7 @@ export const adminRevokeApiKey = https.onCall(
         throw new https.HttpsError("not-found", "API key not found");
       }
       const key = snap.data() as MerchantApiKey;
-      if (key.revoked) return toRow(keyId, key);
+      if (key.revoked) return toApiKeyRow(keyId, key);
 
       const now = admin.firestore.Timestamp.now();
       tx.update(ref, { revoked: true, revokedAt: now, revokedBy: actor.uid });
@@ -182,7 +154,7 @@ export const adminRevokeApiKey = https.onCall(
         before: { revoked: false },
         after: { revoked: true, merchantId: key.merchantId, label: key.label },
       });
-      return toRow(keyId, { ...key, revoked: true, revokedAt: now });
+      return toApiKeyRow(keyId, { ...key, revoked: true, revokedAt: now });
     });
 
     return { success: true, data: row };

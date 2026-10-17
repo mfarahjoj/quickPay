@@ -186,6 +186,10 @@ export default function ApprovePaymentScreen() {
           if (e?.code === 'functions/not-found') {
             setChargeLoaded(true);
             showResult('closed', t('payments.approve.chargeNotFound'), t('payments.approve.unavailableTitle'));
+          } else if (/test payment request/i.test(message)) {
+            // Raised with a developer's zpk_test_ key: nothing can be paid.
+            setChargeLoaded(true);
+            showResult('closed', t('payments.approve.testCharge'), t('payments.approve.unavailableTitle'));
           } else if (/different customer/i.test(message)) {
             setChargeLoaded(true);
             showResult('closed', t('payments.approve.chargeForSomeoneElse'), t('payments.approve.unavailableTitle'));

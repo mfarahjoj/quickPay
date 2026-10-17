@@ -5,6 +5,8 @@ import { Alert, Linking, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from 'react-i18next';
 import AppNavigator, { navigationRef } from './navigation/AppNavigator';
+import { UpdateRequired } from './components/UpdateRequired';
+import { useUpdateGate } from './hooks/useUpdateGate';
 import { ToastProvider } from './components/auth';
 import { LanguageSync } from './i18n/useLanguageSync';
 import { messaging, auth } from './services/firebase.config';
@@ -159,12 +161,19 @@ function AppContent() {
     return () => sub.remove();
   }, []);
 
+  // After the App Check setup above: the gate's first read should carry a token.
+  const updateGate = useUpdateGate();
+
   return (
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
         <ToastProvider>
           <LanguageSync />
-          <AppNavigator />
+          {updateGate.required ? (
+            <UpdateRequired updateUrl={updateGate.updateUrl} />
+          ) : (
+            <AppNavigator />
+          )}
         </ToastProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

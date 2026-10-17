@@ -26,10 +26,17 @@ export interface MerchantApiKey {
   label: string;
   /** `zpk_live_abcd…wxyz`, for telling keys apart in the console. */
   hint: string;
+  /**
+   * False for a `zpk_test_` key. Absent on keys issued before test mode
+   * existed, which are all live — read it through `isLiveObject`.
+   */
+  livemode?: boolean;
   revoked: boolean;
   createdAt: FirebaseFirestore.Timestamp;
-  /** Admin uid who issued the key. */
+  /** Uid that made the key: an ops admin, or the merchant themselves. */
   createdBy: string;
+  /** Where the key was made. Absent on keys from before self-serve (all console). */
+  createdVia?: "console" | "merchant_app";
   revokedAt?: FirebaseFirestore.Timestamp;
   revokedBy?: string;
   lastUsedAt?: FirebaseFirestore.Timestamp;
@@ -45,6 +52,12 @@ export type ApiChargeStatus = "pending" | "succeeded" | "expired" | "canceled";
 
 export interface ApiCharge {
   merchantId: string;
+  /**
+   * False when a test key raised it: no customer can pay it, it settles only
+   * through the test helpers, and live keys cannot see it. Absent on charges
+   * from before test mode, which are all live — read it through `isLiveObject`.
+   */
+  livemode?: boolean;
   /** Denormalised for the hosted checkout page and the approval screen. */
   merchantName: string;
   /** Key hash that raised the charge. */
@@ -83,15 +96,23 @@ export interface ApiCharge {
 export interface ApiRefund {
   chargeId: string;
   merchantId: string;
-  customerId: string;
+  livemode?: boolean;
+  /** The customer refunded. Absent in test mode, where nobody paid. */
+  customerId?: string;
   amount: number;
   /** Platform fee handed back with this refund. */
   feeReturned: number;
   reason?: string;
-  journalEntryId: string;
-  transactionId: string;
+  /** Absent in test mode: a test refund posts nothing. */
+  journalEntryId?: string;
+  transactionId?: string;
   keyId: string;
   createdAt: FirebaseFirestore.Timestamp;
+}
+
+/** Objects stored before test mode have no `livemode` and are all live. */
+export function isLiveObject(obj: { livemode?: boolean }): boolean {
+  return obj.livemode !== false;
 }
 
 /** Maps a merchant's Idempotency-Key to the object its first request made. */
@@ -119,6 +140,8 @@ export const WEBHOOK_EVENT_TYPES: readonly WebhookEventType[] = [
 
 export interface WebhookEndpoint {
   merchantId: string;
+  /** Test endpoints hear only test charges, live only live. Absent = live. */
+  livemode?: boolean;
   url: string;
   /** Signing secret, encrypted with ENCRYPTION_KEY (utils/encryption). */
   secretEnc: string;

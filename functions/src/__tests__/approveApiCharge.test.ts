@@ -209,6 +209,14 @@ describe("approveApiCharge", () => {
     await expect(call()).rejects.toThrow(/different customer/);
   });
 
+  it("never lets a customer pay a test charge, and posts nothing", async () => {
+    const db = seed(pendingCharge({ livemode: false }));
+    await expect(call()).rejects.toThrow(/test payment request/);
+    expect(db.get(`journal_entries/${ENTRY}`)).toBeUndefined();
+    expect(db.get(`wallets/${CUSTOMER}`)!.balance).toBe(10_000);
+    expect(db.get(`api_charges/${CHARGE}`)!.status).toBe("pending");
+  });
+
   it("does not let a merchant pay their own charge", async () => {
     seed(pendingCharge());
     await expect(call({}, MERCHANT)).rejects.toThrow(/Cannot pay yourself/);
@@ -256,6 +264,13 @@ describe("approveApiCharge", () => {
       await expect(
         getCharge({ data: { chargeId: CHARGE }, auth: { uid: CUSTOMER } })
       ).rejects.toThrow(/different customer/);
+    });
+
+    it("tells the customer a test charge can't be paid", async () => {
+      seed(pendingCharge({ livemode: false }));
+      await expect(
+        getCharge({ data: { chargeId: CHARGE }, auth: { uid: CUSTOMER } })
+      ).rejects.toThrow(/test payment request/);
     });
   });
 });

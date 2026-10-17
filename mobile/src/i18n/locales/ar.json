@@ -1028,5 +1028,10 @@
   "cashout.keepCode": "احتفظ بالرمز",
   "cashout.cancelledTitle": "تم إلغاء السحب",
   "cashout.cancelledBody": "عادت الأموال إلى محفظتك.",
-  "cashout.cancelFailed": "تعذّر الإلغاء"
+  "cashout.cancelFailed": "تعذّر الإلغاء",
+  "update.title": "حدّث Zapp Pay",
+  "update.message": "هذا الإصدار من Zapp Pay قديم. حدّثه لمواصلة الدفع واستلام الأموال بأمان.",
+  "update.button": "حدّث الآن",
+  "update.noLink": "احصل على أحدث إصدار من App Store أو Google Play.",
+  "payments.approve.testCharge": "هذه دفعة تجريبية من مطوّر. لا يمكن دفعها، ولم يُخصم منك أي مبلغ."
 }

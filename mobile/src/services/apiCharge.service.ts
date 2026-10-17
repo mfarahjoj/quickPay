@@ -45,6 +45,8 @@ export function parseChargeLink(raw: string): string | null {
 
 function isCheckoutHost(host: string): boolean {
   return (
+    host === 'zapppay.web.app' ||
+    // Legacy prod host — still accept QR / deep links issued before the cutover.
     host === 'quickpay-485417.web.app' ||
     host === 'quickpay-485417.firebaseapp.com' ||
     host === 'quickpay-staging.web.app' ||

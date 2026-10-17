@@ -212,6 +212,14 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Minimum app versions (the apps' update gate). Public on purpose: the
+    // gate runs before sign-in, and the doc holds nothing but version levels
+    // and store links. Written from the console or a script, never a client.
+    match /config/app_client {
+      allow read: if true;
+      allow write: if false;
+    }
+
     // Default deny all other access
     match /{document=**} {
       allow read, write: if false;

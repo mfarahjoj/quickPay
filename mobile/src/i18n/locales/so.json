@@ -1028,5 +1028,10 @@
   "cashout.keepCode": "Hay koodhka",
   "cashout.cancelledTitle": "Lacag-qaadashada waa la joojiyay",
   "cashout.cancelledBody": "Lacagtii waxay ku soo noqotay jeebkaaga.",
-  "cashout.cancelFailed": "Lama joojin karo"
+  "cashout.cancelFailed": "Lama joojin karo",
+  "update.title": "Cusbooneysii Zapp Pay",
+  "update.message": "Noocan Zapp Pay waa duugoobay. Cusbooneysii si aad u sii wado inaad si ammaan ah lacag u bixiso oo u hesho.",
+  "update.button": "Hadda cusbooneysii",
+  "update.noLink": "Ka soo dejiso nooca ugu dambeeyay App Store ama Google Play.",
+  "payments.approve.testCharge": "Kani waa lacag-bixin tijaabo ah oo ka timid horumariye. Lama bixin karo, wax lacag ah lagaama jarin."
 }
