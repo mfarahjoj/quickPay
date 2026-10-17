@@ -11,7 +11,8 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useFocusEffect } from '@react-navigation/native';
-import { Camera, useCameraDevice, useCodeScanner } from 'react-native-vision-camera';
+import { Camera, useCameraDevice } from 'react-native-vision-camera';
+import { requestCameraPermission, useQrScannerOutputs } from '../../hooks/useQrScannerOutputs';
 import LinearGradient from 'react-native-linear-gradient';
 import { scanCustomerToken, createPaymentRequest, ScanTokenResult } from '../../services/customerToken.service';
 import { firestore } from '../../services/firebase.config';
@@ -45,9 +46,9 @@ export default function MerchantScanScreen({ navigation }: Props) {
 
   useEffect(() => {
     (async () => {
-      const status = await Camera.requestCameraPermission();
-      setHasPermission(status === 'granted');
-      if (status !== 'granted') {
+      const granted = await requestCameraPermission().catch(() => false);
+      setHasPermission(granted);
+      if (!granted) {
         Alert.alert(
           t('merchant.scan.permissionTitle'),
           t('merchant.scan.permissionMessage'),
@@ -73,13 +74,8 @@ export default function MerchantScanScreen({ navigation }: Props) {
     }, [step])
   );
 
-  const codeScanner = useCodeScanner({
-    codeTypes: ['qr'],
-    onCodeScanned: (codes) => {
-      if (!isScanning || codes.length === 0) return;
-      const qrData = codes[0].value;
-      if (qrData) handleQRScanned(qrData);
-    },
+  const outputs = useQrScannerOutputs((qrData) => {
+    if (isScanning) handleQRScanned(qrData);
   });
 
   const handleQRScanned = async (tokenData: string) => {
@@ -174,8 +170,8 @@ export default function MerchantScanScreen({ navigation }: Props) {
           style={StyleSheet.absoluteFill}
           device={device}
           isActive={true}
-          codeScanner={codeScanner}
-          torch={torchOn ? 'on' : 'off'}
+          outputs={outputs}
+          torchMode={torchOn ? 'on' : 'off'}
         />
 
         <View style={styles.topBar}>

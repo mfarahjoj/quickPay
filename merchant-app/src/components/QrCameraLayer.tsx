@@ -1,10 +1,13 @@
 import React from 'react';
-import { NativeModules, StyleSheet } from 'react-native';
-import { Camera, useCameraDevice, useCodeScanner } from 'react-native-vision-camera';
+import { StyleSheet } from 'react-native';
+import { Camera, useCameraDevice } from 'react-native-vision-camera';
+import {
+  CAMERA_NATIVE_AVAILABLE,
+  requestCameraPermission,
+  useQrScannerOutputs,
+} from '../hooks/useQrScannerOutputs';
 
-// VisionCamera v3 crashes at module level on the simulator — guard before hooks.
-export const CAMERA_NATIVE_AVAILABLE =
-  !!NativeModules.VisionCameraProxy || !!NativeModules.CameraDevicesManager;
+export { CAMERA_NATIVE_AVAILABLE };
 
 interface CameraLayerProps {
   isActive: boolean;
@@ -17,24 +20,14 @@ export function CameraLayer({ isActive, onScan, onPermission }: CameraLayerProps
   const device = useCameraDevice('back');
 
   React.useEffect(() => {
-    (async () => {
-      try {
-        const status = await Camera.requestCameraPermission();
-        onPermission(status === 'granted');
-      } catch {
-        onPermission(false);
-      }
-    })();
+    requestCameraPermission()
+      .then(onPermission)
+      .catch(() => onPermission(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const codeScanner = useCodeScanner({
-    codeTypes: ['qr'],
-    onCodeScanned: (codes) => {
-      if (!isActive || codes.length === 0) return;
-      const value = codes[0].value;
-      if (value) onScan(value);
-    },
+  const outputs = useQrScannerOutputs((value) => {
+    if (isActive) onScan(value);
   });
 
   if (!device) return null;
@@ -44,7 +37,7 @@ export function CameraLayer({ isActive, onScan, onPermission }: CameraLayerProps
       style={StyleSheet.absoluteFill}
       device={device}
       isActive={isActive}
-      codeScanner={codeScanner}
+      outputs={outputs}
     />
   );
 }

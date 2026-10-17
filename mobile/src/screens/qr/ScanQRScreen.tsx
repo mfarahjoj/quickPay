@@ -10,7 +10,8 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useFocusEffect } from '@react-navigation/native';
-import { Camera, useCameraDevice, useCodeScanner } from 'react-native-vision-camera';
+import { Camera, useCameraDevice } from 'react-native-vision-camera';
+import { requestCameraPermission, useQrScannerOutputs } from '../../hooks/useQrScannerOutputs';
 import { validateQRCode } from '../../services/qr.service';
 import { parseChargeLink } from '../../services/apiCharge.service';
 import { colors, typography, spacing, borderRadius } from '../../theme';
@@ -30,9 +31,9 @@ export default function ScanQRScreen({ navigation }: Props) {
   React.useEffect(() => {
     (async () => {
       try {
-        const status = await Camera.requestCameraPermission();
-        setHasPermission(status === 'granted');
-        if (status !== 'granted') {
+        const granted = await requestCameraPermission();
+        setHasPermission(granted);
+        if (!granted) {
           Alert.alert(
             t('qr.scan.permissionTitle'),
             t('qr.scan.permissionMessage'),
@@ -56,18 +57,8 @@ export default function ScanQRScreen({ navigation }: Props) {
     }, [])
   );
 
-  const codeScanner = useCodeScanner({
-    codeTypes: ['qr'],
-    onCodeScanned: (codes) => {
-      if (!isScanning || codes.length === 0) {
-        return;
-      }
-
-      const qrData = codes[0].value;
-      if (qrData) {
-        handleQRScanned(qrData);
-      }
-    },
+  const outputs = useQrScannerOutputs((qrData) => {
+    if (isScanning) handleQRScanned(qrData);
   });
 
   const handleQRScanned = async (qrData: string) => {
@@ -137,8 +128,8 @@ export default function ScanQRScreen({ navigation }: Props) {
         style={StyleSheet.absoluteFill}
         device={device}
         isActive={true}
-        codeScanner={codeScanner}
-        torch={torchOn ? 'on' : 'off'}
+        outputs={outputs}
+        torchMode={torchOn ? 'on' : 'off'}
       />
 
       <View style={styles.topBar}>

@@ -8,21 +8,22 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Vibration,
-  NativeModules,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { Camera, useCameraDevice, useCodeScanner } from 'react-native-vision-camera';
+import { Camera, useCameraDevice } from 'react-native-vision-camera';
+import {
+  CAMERA_NATIVE_AVAILABLE,
+  requestCameraPermission,
+  useQrScannerOutputs,
+} from '../../hooks/useQrScannerOutputs';
 import { scanCustomerToken } from '../../services/scan.service';
 import { GlassCard, PillButton } from '../../components';
 import { ScanIcon } from '../../components/icons/AuthIcons';
 
 const ACCENT_COLOR = '#FF5043';
-
-// VisionCamera v3 crashes at module level on simulator — guard before any hook call.
-const CAMERA_NATIVE_AVAILABLE = !!NativeModules.VisionCameraProxy || !!NativeModules.CameraDevicesManager;
 
 // ─── Camera layer — only rendered when native module exists ───────────────────
 interface CameraLayerProps {
@@ -38,14 +39,9 @@ function CameraLayer({ isActive, torchOn, onScan, onDeviceReady, onPermission }:
   const notifiedDevice = useRef(false);
 
   React.useEffect(() => {
-    (async () => {
-      try {
-        const status = await Camera.requestCameraPermission();
-        onPermission(status === 'granted');
-      } catch {
-        onPermission(false);
-      }
-    })();
+    requestCameraPermission()
+      .then(onPermission)
+      .catch(() => onPermission(false));
   }, []);
 
   React.useEffect(() => {
@@ -55,13 +51,8 @@ function CameraLayer({ isActive, torchOn, onScan, onDeviceReady, onPermission }:
     }
   }, [device]);
 
-  const codeScanner = useCodeScanner({
-    codeTypes: ['qr'],
-    onCodeScanned: (codes) => {
-      if (!isActive || codes.length === 0) return;
-      const value = codes[0].value;
-      if (value) onScan(value);
-    },
+  const outputs = useQrScannerOutputs((value) => {
+    if (isActive) onScan(value);
   });
 
   if (!device) return null;
@@ -71,8 +62,8 @@ function CameraLayer({ isActive, torchOn, onScan, onDeviceReady, onPermission }:
       style={StyleSheet.absoluteFill}
       device={device}
       isActive={isActive}
-      codeScanner={codeScanner}
-      torch={torchOn ? 'on' : 'off'}
+      outputs={outputs}
+      torchMode={torchOn ? 'on' : 'off'}
     />
   );
 }
