@@ -13,7 +13,7 @@ money ships to prod without explicit per-deploy authorization (CLAUDE.md).
 | #1 Self top-up mint | 1 | hotfix committed 2026-10-03 (`utils/agentGuards.ts`, 11 tests); deployed to prod 2026-10-03 (hash bc9ab2b4, from `0ac145e`). Retirement of `manualTopup` waits on D2 |
 | M Business-level monitors | 1 | committed 2026-10-03 (`ledger/activityMonitor.ts`, 17 tests, Ledger Desk section); deployed to prod 2026-10-03 (functions hash 29796837, hosting:admin); admin App Check site key still blank, so the console cannot call it yet |
 | #2 Commission round-trip | 1 | blocked on D1 |
-| #3 Unauthenticated name lookup | 2 | blocked on D4 |
+| #3 Unauthenticated name lookup | 2 | committed 2026-10-17 on `fix/wallet-phase1`: `createWebTopup` answers 503 (D4 taken as "disable now"; the form was already gone), not deployed |
 | #4 Lockout races | 2 | deployed 2026-10-04 (`7296f76`, prod hash 39217c09) except `customerCashOut`/`agentConfirmCashOut`, held back with the cash-out hold rollout |
 | #5 Missing App Check | 2 | deployed 2026-10-04 (`3f06704`, 22 callables); `appCheckCoverage.test.ts` guards it in CI. Verified: `loginWithPin` without a token → 401 |
 | #6 Referral farming | 3 | blocked on D3 |

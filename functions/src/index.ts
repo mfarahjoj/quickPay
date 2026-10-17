@@ -94,6 +94,9 @@ export { getReferralStats } from "./referral/getReferralStats";
 //
 // Re-export only when the credit comes from the verified webhook and is matched
 // to the stored intent id and amount.
+//
+// createWebTopup answers 503 to everything (it was a public phone→name
+// lookup). Exported so a deploy replaces the live one rather than orphaning it.
 export { createWebTopup } from "./remittance/createWebTopup";
 export { stripeWebhook } from "./remittance/stripeWebhook";
 
