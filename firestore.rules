@@ -17,12 +17,17 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isAuthenticated() && isOwner(userId);
       allow create: if false; // Created by setupPin Cloud Function only
+      // Merchants and agents can't rename themselves: customers check that
+      // name before paying, so it changes only through adminRenameMerchant.
       allow update: if isAuthenticated() && isOwner(userId) &&
                        request.resource.data.diff(resource.data).affectedKeys()
                          .hasOnly(['fullName', 'email', 'dateOfBirth', 'gender',
                                    'address', 'preferredLanguage',
                                    'notificationPreferences', 'lastLoginAt',
-                                   'updatedAt']);
+                                   'updatedAt']) &&
+                       (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['fullName']) ||
+                        !(resource.data.get('accountType', 'customer') in
+                          ['merchant', 'topup_agent', 'agent_merchant']));
       allow delete: if false; // Never allow user deletion from client
       
       // KYC subcollection. Read-only for the owner: submitKYC is the only
@@ -96,7 +101,10 @@ service cloud.firestore {
     // Merchant profiles
     match /merchantProfiles/{userId} {
       allow read: if isAuthenticated() && isOwner(userId);
-      allow write: if isAuthenticated() && isOwner(userId);
+      // Server-only. The business name here is what customers see when they
+      // pay, so it changes through registerMerchant, role approval or
+      // adminRenameMerchant, never a client. Neither app writes this doc.
+      allow write: if false;
     }
     
     // Notifications - users can read and mark as read their own notifications

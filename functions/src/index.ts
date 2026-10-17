@@ -103,6 +103,8 @@ export { ledgerInvariantCheck } from "./ledger/invariantCheck";
 // Admin console (see ADMIN_CONSOLE_PLAN.md). Every callable here is gated by
 // custom claims in admin/guard.ts and writes to the admin_audit log.
 export { adminSetAccountStatus } from "./admin/setAccountStatus";
+// Business names are locked to ops once an account is a merchant or agent.
+export { adminRenameMerchant } from "./admin/renameMerchant";
 export {
   adminListRoleRequests,
   adminReviewRoleRequest,

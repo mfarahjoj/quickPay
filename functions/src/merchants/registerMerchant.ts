@@ -68,9 +68,9 @@ export const registerMerchant = https.onCall(
 
       // Business details only — the `merchant` role itself is granted by an
       // admin reviewing the role request below, never by this call. Writing
-      // the profile here is not an escalation (clients may already write
-      // their own merchantProfiles doc) and gives the reviewer something to
-      // check against.
+      // the profile here is not an escalation (the caller isn't a merchant
+      // yet, checked above, so their name isn't locked) and gives the
+      // reviewer something to check against.
       await userRef.update({
         merchantCategoryCode: merchantCategoryCode || "",
         updatedAt: admin.firestore.Timestamp.now(),

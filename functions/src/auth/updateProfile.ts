@@ -1,6 +1,7 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { requireAuth, sanitizeString, validateEmail } from "../utils/validation";
+import { assertNameChangeAllowed } from "../utils/nameLock";
 import {
   ApiResponse,
   UserAddress,
@@ -131,9 +132,14 @@ export const updateProfile = https.onCall(
     updates.updatedAt = admin.firestore.Timestamp.now();
 
     try {
-      await admin.firestore().collection("users").doc(userId).update(updates);
+      const userRef = admin.firestore().collection("users").doc(userId);
+      if (updates.fullName !== undefined) {
+        assertNameChangeAllowed((await userRef.get()).data(), updates.fullName);
+      }
+      await userRef.update(updates);
       return { success: true, message: "Profile updated" };
     } catch (error: any) {
+      if (error instanceof https.HttpsError) throw error;
       console.error("Error updating profile:", error);
       throw new https.HttpsError(
         "internal",

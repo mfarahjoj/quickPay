@@ -17,7 +17,7 @@ money ships to prod without explicit per-deploy authorization (CLAUDE.md).
 | #4 Lockout races | 2 | deployed 2026-10-04 (`7296f76`, prod hash 39217c09) except `customerCashOut`/`agentConfirmCashOut`, held back with the cash-out hold rollout |
 | #5 Missing App Check | 2 | deployed 2026-10-04 (`3f06704`, 22 callables); `appCheckCoverage.test.ts` guards it in CI. Verified: `loginWithPin` without a token → 401 |
 | #6 Referral farming | 3 | blocked on D3 |
-| #7 Merchant profile rename | 3 | open |
+| #7 Merchant profile rename | 3 | committed 2026-10-17 on `fix/wallet-phase1` (`utils/nameLock.ts`, `adminRenameMerchant`, rules checked in the emulator), not deployed. Console has no rename button yet |
 | #8 Float maker-checker structuring | 3 | open |
 | #9 Refunds on P2P/payroll | 3 | open |
 | #10 PIN in Keychain | 3 | open (needs design pass) |

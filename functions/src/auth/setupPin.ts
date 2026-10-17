@@ -6,6 +6,7 @@ import { validatePin, requireAuth, hasStoredPinHash } from "../utils/validation"
 import { ApiResponse } from "../types";
 import { prepareJournalEntry, userAccount, PLATFORM_PROMO } from "../ledger";
 import { isPrivilegedRole } from "../utils/roles";
+import { assertNameChangeAllowed } from "../utils/nameLock";
 import { ensureRoleRequest } from "../merchants/requestRole";
 
 interface SetupPinRequest {
@@ -158,6 +159,10 @@ export const setupPin = https.onCall(
       const userDoc = await userRef.get();
       const userData = userDoc.exists ? userDoc.data() : undefined;
       const hasExistingPin = hasStoredPinHash(userData?.pinHash);
+
+      // Both branches below write fullName, so re-running setup must not be
+      // a way round the business-name lock.
+      assertNameChangeAllowed(userData, fullName);
 
       if (hasExistingPin) {
         await userRef.update({
