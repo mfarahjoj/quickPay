@@ -9,6 +9,11 @@ jest.mock("../utils/encryption", () => ({
   verifyPin: jest.fn(async (pin: string) => pin === "246810"),
 }));
 
+jest.mock("../utils/notifications", () => ({
+  notifyUser: jest.fn().mockResolvedValue(undefined),
+}));
+import { notifyUser } from "../utils/notifications";
+
 const HASH = "p1$$2b$12$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ01234";
 const DAY = 24 * 60 * 60 * 1000;
 const { Timestamp } = admin.firestore;
@@ -26,6 +31,7 @@ describe("trusted devices", () => {
     register = test.wrap((await import("../auth/trustedDevice")).registerTrustedDevice);
     login = test.wrap((await import("../auth/trustedDevice")).loginWithPin);
     authSpy = jest.spyOn(admin, "auth").mockReturnValue({
+      revokeRefreshTokens: jest.fn().mockResolvedValue(undefined),
       getUser: jest.fn().mockResolvedValue({ uid: "u1" }),
       createCustomToken: jest.fn().mockResolvedValue("token"),
     } as any);
@@ -96,5 +102,41 @@ describe("trusted devices", () => {
     seed({ "trustedDevices/d1": { uid: "u1", secretHash, lastUsedAt: ago(10 * DAY) } });
     const res = await login({ data: { deviceId: "d1", deviceSecret: "secret", pin: "246810" } });
     expect(res.data.token).toBe("token");
+  });
+
+  it("alerts the owner when a phone is trusted", async () => {
+    seed();
+    await register({ data: { platform: "ios", pin: "246810", name: "iPhone" }, auth });
+    expect(notifyUser).toHaveBeenCalledWith("u1", "new_device", expect.any(String), expect.stringContaining("iPhone"), expect.anything());
+  });
+
+  describe("the owner's list (review C9)", () => {
+    const call = async (name: string, data: any, uid = "u1") =>
+      test.wrap((await import("../auth/trustedDevice") as any)[name])({ data, auth: { uid, token: {} } });
+
+    it("lists live phones, newest use first, without secrets", async () => {
+      seed({
+        "trustedDevices/a": { uid: "u1", name: "Old", platform: "ios", secretHash: "x", lastUsedAt: ago(9 * DAY) },
+        "trustedDevices/b": { uid: "u1", name: "New", platform: "android", secretHash: "x", lastUsedAt: ago(1 * DAY) },
+        "trustedDevices/c": { uid: "u1", secretHash: "x", lastUsedAt: ago(200 * DAY) },
+        "trustedDevices/z": { uid: "someone-else", secretHash: "x", lastUsedAt: ago(1 * DAY) },
+      });
+      const res = await call("listMyDevices", {});
+      expect(res.data.devices.map((d: any) => d.deviceId)).toEqual(["b", "a"]);
+      expect(JSON.stringify(res.data)).not.toContain("secretHash");
+    });
+
+    it("renames and removes only your own", async () => {
+      const db = seed({
+        "trustedDevices/a": { uid: "u1", name: "Old" },
+        "trustedDevices/z": { uid: "someone-else" },
+      });
+      await call("renameMyDevice", { deviceId: "a", name: "Shop phone" });
+      expect(db.get("trustedDevices/a")!.name).toBe("Shop phone");
+      await expect(call("removeMyDevice", { deviceId: "z" })).rejects.toMatchObject({ code: "not-found" });
+      expect(db.store.has("trustedDevices/z")).toBe(true);
+      await call("removeMyDevice", { deviceId: "a" });
+      expect(db.store.has("trustedDevices/a")).toBe(false);
+    });
   });
 });

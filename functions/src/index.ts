@@ -16,6 +16,9 @@ export {
   registerTrustedDevice,
   loginWithPin,
   revokeTrustedDevices,
+  listMyDevices,
+  removeMyDevice,
+  renameMyDevice,
 } from "./auth/trustedDevice";
 export { updateProfile } from "./auth/updateProfile";
 export { submitKYC } from "./auth/submitKYC";

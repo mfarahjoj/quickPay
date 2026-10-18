@@ -330,6 +330,12 @@ export default function SecurityScreen({ navigation }: Props) {
         </View>
 
         <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t('devices.title')}</Text>
+          <Text style={styles.sectionDesc}>{t('devices.securityDesc')}</Text>
+          <Button title={t('devices.manage')} onPress={() => navigation.navigate('Devices')} variant="darkGhost" />
+        </View>
+
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('profile.security.freezeTitle')}</Text>
           <Text style={styles.sectionDesc}>{t('profile.security.freezeDesc')}</Text>
           {frozenNow ? (

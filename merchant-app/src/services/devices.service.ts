@@ -1,0 +1,30 @@
+import { functions } from './firebase.config';
+import { adoptSessionToken } from './auth.service';
+
+/**
+ * A phone trusted for PIN sign-in on this account (review C9). The merchant
+ * app itself signs in by SMS, so these are phones using the same account
+ * in the Zapp Pay app.
+ */
+export interface TrustedDevice {
+  deviceId: string;
+  name: string | null;
+  platform: string;
+  createdAt: string | null;
+  lastUsedAt: string | null;
+}
+
+export async function listMyDevices(): Promise<TrustedDevice[]> {
+  const result = await functions().httpsCallable('listMyDevices')({});
+  return (result.data as { data?: { devices?: TrustedDevice[] } }).data?.devices ?? [];
+}
+
+/** Forget one phone; every other session ends and this one signs back in. */
+export async function removeMyDevice(deviceId: string): Promise<void> {
+  const result = await functions().httpsCallable('removeMyDevice')({ deviceId });
+  await adoptSessionToken(result.data);
+}
+
+export async function renameMyDevice(deviceId: string, name: string): Promise<void> {
+  await functions().httpsCallable('renameMyDevice')({ deviceId, name });
+}

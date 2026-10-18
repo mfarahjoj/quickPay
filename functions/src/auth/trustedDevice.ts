@@ -8,6 +8,7 @@ import { verifyUserPin } from "./validatePin";
 import { readAuth } from "./pinStore";
 import { ApiResponse } from "../types";
 import { getRates } from "../config/rates";
+import { notifyUser } from "../utils/notifications";
 
 /**
  * Trusted-device PIN login.
@@ -126,6 +127,16 @@ export const registerTrustedDevice = https.onCall(
       secretLockedUntil: null,
     });
     await batch.commit();
+
+    // New-device alert (review C9): every phone on the account hears about it,
+    // so the owner notices a phone they don't recognise.
+    notifyUser(
+      uid,
+      "new_device",
+      "A new phone can now sign in",
+      `${name ?? (platform === "ios" ? "An iPhone" : "A phone")} was trusted for PIN sign-in. If this wasn't you, remove it in Security and change your PIN.`,
+      { type: "new_device", deviceId }
+    ).catch((err) => console.error("Failed to send new-device alert:", err));
 
     // Returned exactly once. The server keeps only the hash — if the client
     // loses this, the device has to re-verify by SMS.
@@ -260,5 +271,85 @@ export const revokeTrustedDevices = https.onCall(
     // A lost phone may still be signed in; end that too (review A5).
     const sessionToken = await endSessions(uid, { keepCaller: true });
     return { success: true, data: { revoked: snap.size, sessionToken } };
+  }
+);
+
+export interface DeviceRow {
+  deviceId: string;
+  name: string | null;
+  platform: string;
+  createdAt: string | null;
+  lastUsedAt: string | null;
+}
+
+const iso = (t: unknown) => (t && typeof (t as admin.firestore.Timestamp).toDate === "function" ? (t as admin.firestore.Timestamp).toDate().toISOString() : null);
+
+/** The signed-in owner's trusted phones, most recently used first (review C9). */
+export const listMyDevices = https.onCall(
+  { enforceAppCheck: true },
+  async (request: https.CallableRequest<unknown>): Promise<ApiResponse<{ devices: DeviceRow[] }>> => {
+    requireAuth(request);
+    const uid = request.auth!.uid;
+    const { trustedDeviceIdleDays } = await getRates();
+    const nowMs = Date.now();
+    const snap = await admin.firestore().collection(DEVICES).where("uid", "==", uid).get();
+    const devices = snap.docs
+      .filter((d) => !isDeviceExpired(d.data(), trustedDeviceIdleDays, nowMs))
+      .map((d) => {
+        const data = d.data();
+        return {
+          deviceId: d.id,
+          name: (data.name as string | null | undefined) ?? null,
+          platform: (data.platform as string | undefined) ?? "unknown",
+          createdAt: iso(data.createdAt),
+          lastUsedAt: iso(data.lastUsedAt),
+        };
+      })
+      .sort((a, b) => (b.lastUsedAt ?? "").localeCompare(a.lastUsedAt ?? ""));
+    return { success: true, data: { devices } };
+  }
+);
+
+async function ownDevice(uid: string, deviceId: unknown): Promise<FirebaseFirestore.DocumentReference> {
+  if (typeof deviceId !== "string" || !deviceId) {
+    throw new https.HttpsError("invalid-argument", "deviceId is required");
+  }
+  const ref = admin.firestore().collection(DEVICES).doc(deviceId);
+  const snap = await ref.get();
+  // Someone else's device looks exactly like a missing one.
+  if (!snap.exists || snap.data()?.uid !== uid) {
+    throw new https.HttpsError("not-found", "Device not found");
+  }
+  return ref;
+}
+
+/**
+ * Forget one trusted phone. It can't sign in with the PIN any more, and every
+ * session ends so a phone still signed in is cut off too; this one signs
+ * straight back in with the returned token.
+ */
+export const removeMyDevice = https.onCall(
+  { enforceAppCheck: true },
+  async (request: https.CallableRequest<{ deviceId: string }>): Promise<ApiResponse<{ sessionToken?: string }>> => {
+    requireAuth(request);
+    const uid = request.auth!.uid;
+    const ref = await ownDevice(uid, request.data?.deviceId);
+    await ref.delete();
+    const sessionToken = await endSessions(uid, { keepCaller: true });
+    return { success: true, data: { sessionToken } };
+  }
+);
+
+/** Rename a trusted phone, as the owner sees it in their list. */
+export const renameMyDevice = https.onCall(
+  { enforceAppCheck: true },
+  async (request: https.CallableRequest<{ deviceId: string; name: string }>): Promise<ApiResponse> => {
+    requireAuth(request);
+    const uid = request.auth!.uid;
+    const name = typeof request.data?.name === "string" ? request.data.name.trim().slice(0, 40) : "";
+    if (!name) throw new https.HttpsError("invalid-argument", "name is required");
+    const ref = await ownDevice(uid, request.data?.deviceId);
+    await ref.update({ name });
+    return { success: true };
   }
 );

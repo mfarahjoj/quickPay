@@ -68,6 +68,7 @@ type MainStackParamList = {
   Disputes: undefined;
   DisputeDetail: { disputeId: string; justOpened?: boolean };
   Security: undefined;
+  Devices: undefined;
   MyQR: undefined;
   // Exactly one of requestId (a shop's in-person charge) or chargeId (a
   // charge raised through the Zapp API: online checkout or a till).
@@ -327,6 +328,11 @@ function MainStackNavigator() {
         name="Security"
         getComponent={() => require('../screens/profile/SecurityScreen').default}
         options={{ title: t('nav.screen.security') }}
+      />
+      <MainStack.Screen
+        name="Devices"
+        getComponent={() => require('../screens/profile/DevicesScreen').default}
+        options={{ headerShown: false }}
       />
       <MainStack.Screen
         name="MyQR"

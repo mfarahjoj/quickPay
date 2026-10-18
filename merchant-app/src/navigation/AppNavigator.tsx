@@ -55,6 +55,7 @@ type MerchantStackParamList = {
   Statement: undefined;
   MoveToFloat: undefined;
   Security: undefined;
+  Devices: undefined;
   ChangePin: undefined;
   ResetPin: undefined;
 };
@@ -298,6 +299,11 @@ function MainStackNavigator() {
       <MainStack.Screen
         name="Security"
         getComponent={() => require('../screens/settings/SecurityScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="Devices"
+        getComponent={() => require('../screens/settings/DevicesScreen').default}
         options={{ headerShown: false }}
       />
       <MainStack.Screen
