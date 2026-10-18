@@ -176,6 +176,8 @@ export function UserDetail({ userId, canAdjust = false }: { userId: string; canA
                 ? ` · ${detail.pinFailedAttempts} wrong in a row`
                 : ""}
           </dd>
+          <dt>Device check</dt>
+          <dd>{deviceRiskText(profile.deviceRisk)}</dd>
           <dt>Trusted devices</dt>
           <dd>{detail.trustedDeviceCount}</dd>
           <dt>uid</dt>
@@ -307,4 +309,13 @@ export function UserDetail({ userId, canAdjust = false }: { userId: string; canA
       )}
     </div>
   );
+}
+
+/** The app's latest root/jailbreak report (review E14): a signal, not a block. */
+function deviceRiskText(risk: unknown): string {
+  const r = risk as { flagged?: boolean; rooted?: boolean; hooked?: boolean; platform?: string } | undefined;
+  if (!r) return "—";
+  if (!r.flagged) return `clean (${r.platform ?? "?"})`;
+  const what = [r.rooted && "rooted / jailbroken", r.hooked && "hooking tools"].filter(Boolean).join(", ");
+  return `⚠ ${what} (${r.platform ?? "?"})`;
 }

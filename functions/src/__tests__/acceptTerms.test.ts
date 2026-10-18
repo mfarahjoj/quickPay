@@ -31,3 +31,25 @@ describe("acceptTerms", () => {
     });
   });
 });
+
+describe("reportDeviceRisk (review E14)", () => {
+  let restore: () => void;
+  afterEach(() => restore?.());
+  const call = async (data: any) =>
+    test.wrap((await import("../auth/deviceRisk")).reportDeviceRisk)({ data, auth: { uid: "u1", token: {} } });
+
+  it("flags a rooted or hooked phone without blocking anything", async () => {
+    const db = fakeFirestore({ "users/u1": {} });
+    restore = useFakeFirestore(db);
+    await expect(call({ rooted: true, platform: "android", app: "customer" })).resolves.toMatchObject({ success: true });
+    expect(db.get("users/u1")!.deviceRisk).toMatchObject({ rooted: true, flagged: true });
+    expect([...db.store.keys()].some((k) => k.startsWith("deviceRiskReports/"))).toBe(true);
+  });
+
+  it("records a clean phone as unflagged", async () => {
+    const db = fakeFirestore({ "users/u1": {} });
+    restore = useFakeFirestore(db);
+    await call({ platform: "ios" });
+    expect(db.get("users/u1")!.deviceRisk.flagged).toBe(false);
+  });
+});

@@ -27,6 +27,7 @@ export { getAccountLimits } from "./auth/getAccountLimits";
 // The holder stops money leaving their own account; support unfreezes.
 export { freezeMyAccount } from "./auth/freezeMyAccount";
 export { acceptTerms } from "./auth/acceptTerms";
+export { reportDeviceRisk } from "./auth/deviceRisk";
 export { startPhoneChange, completePhoneChange } from "./auth/changePhone";
 export { expireIdleSessions } from "./auth/sessions";
 export {

@@ -45,4 +45,26 @@
 #endif
 }
 
+// The app-switcher snapshot is taken as the app goes inactive. Cover the
+// window first so it never shows a PIN, a code or a balance (review B6, E14).
+static const NSInteger kPrivacyCoverTag = 0x5A505031;
+
+- (void)applicationWillResignActive:(UIApplication *)application
+{
+  if (self.window == nil || [self.window viewWithTag:kPrivacyCoverTag] != nil) {
+    return;
+  }
+  UIVisualEffectView *cover =
+      [[UIVisualEffectView alloc] initWithEffect:[UIBlurEffect effectWithStyle:UIBlurEffectStyleDark]];
+  cover.frame = self.window.bounds;
+  cover.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+  cover.tag = kPrivacyCoverTag;
+  [self.window addSubview:cover];
+}
+
+- (void)applicationDidBecomeActive:(UIApplication *)application
+{
+  [[self.window viewWithTag:kPrivacyCoverTag] removeFromSuperview];
+}
+
 @end

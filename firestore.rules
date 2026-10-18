@@ -35,6 +35,9 @@ service cloud.firestore {
       allow read: if isAuthenticated() && isOwner(userId);
       allow write: if false;
     }
+    match /deviceRiskReports/{reportId} {
+      allow read, write: if false;
+    }
     match /biometricKeys/{keyId} {
       allow read, write: if false;
     }
