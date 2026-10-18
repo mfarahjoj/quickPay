@@ -14,14 +14,14 @@ money ships to prod without explicit per-deploy authorization (CLAUDE.md).
 | M Business-level monitors | 1 | committed 2026-10-03 (`ledger/activityMonitor.ts`, 17 tests, Ledger Desk section); deployed to prod 2026-10-03 (functions hash 29796837, hosting:admin); admin App Check site key still blank, so the console cannot call it yet |
 | #2 Commission round-trip | 1 | blocked on D1 |
 | #3 Unauthenticated name lookup | 2 | deployed 2026-10-18 from `fadb515`: `createWebTopup` answers 503 (D4 taken as "disable now"; the form was already gone) |
-| #4 Lockout races | 2 | deployed 2026-10-04 (`7296f76`, prod hash 39217c09) except `customerCashOut`/`agentConfirmCashOut`, held back with the cash-out hold rollout |
+| #4 Lockout races | 2 | deployed 2026-10-04 (`7296f76`); `customerCashOut`/`agentConfirmCashOut` followed with the cash-out hold rollout on 2026-10-18 (`8add088`). Before that deploy, `platform:cashout_hold` held $15.00 from one request of 2026-10-03 that never expired; `expireAgentRequests` returned it to the customer at 06:58 UTC and the hold is $0 |
 | #5 Missing App Check | 2 | deployed 2026-10-04 (`3f06704`, 22 callables); `appCheckCoverage.test.ts` guards it in CI. Verified: `loginWithPin` without a token → 401 |
 | #6 Referral farming | 3 | blocked on D3 |
 | #7 Merchant profile rename | 3 | deployed 2026-10-18 from `fadb515` (`utils/nameLock.ts`, `adminRenameMerchant`, rules checked in the emulator). Console has no rename button yet |
 | #8 Float maker-checker structuring | 3 | deployed 2026-10-18 from `fadb515` (`utils/rollingTotal.ts`: float per agent+direction, payouts per merchant, last 24h). Index deployed first |
 | #9 Refunds on P2P/payroll | 3 | deployed 2026-10-18 from `fadb515` (refundable = `qr_payment`/`customer_qr_payment` journal entries, `refundWindowDays` default 30 in `config/rates`) |
 | #10 PIN in Keychain | 3 | open (needs design pass) |
-| #11 Currency mixing | 3 | deployed 2026-10-18 from `fadb515` (`CurrencyMismatchError` in `prepareJournalEntry`, callables USD-only); not yet in the held-back cash-out group (`customerCashOut`, `agentConfirmCashOut`, `cancelCashOut`, `expireAgentRequests`, `agentConfirmTopup`), which still run older ledger code |
+| #11 Currency mixing | 3 | deployed 2026-10-18 from `fadb515` (`CurrencyMismatchError` in `prepareJournalEntry`, callables USD-only); the cash-out group followed on 2026-10-18 (`8add088`), so every function now runs it |
 | Phase 4 lows, W3 rules tests | 4 | open |
 
 ## Phase 0 — one source for prod, before any deploy
@@ -38,8 +38,10 @@ jobs for `merchant-app` and `admin`.
 
 ### Phase 0 follow-ups
 
-- **Cash-out holds in prod.** Prod's `customerCashOut` hash can't be tied to a
-  commit. If it is the hold version (money moves to `platform:cashout_hold` at
+- **Cash-out holds in prod.** *Done 2026-10-18:* checked before the rollout
+  (one $15.00 hold with a matching `cashouthold_` entry, never released),
+  then deployed; the expiry job returned it. Original note: prod's
+  `customerCashOut` hash can't be tied to a commit. If it is the hold version (money moves to `platform:cashout_hold` at
   request time), unclaimed holds have no expiry path until `cancelCashOut` and
   `expireAgentRequests` deploy. Check `ledger_balances/platform:cashout_hold`
   and pending `cashOutRequests` in the console before the next deploy.
