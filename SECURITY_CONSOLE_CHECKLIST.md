@@ -58,10 +58,10 @@ Tick each one off when it's done in the console.
 
 ## 3. Firebase Authentication (B8)
 
-- [ ] **SMS region policy (O4).** Authentication → Settings → SMS region policy → **Allow only**:
+- [ ] **SMS region policy (O4: Somalia and the UK only).** Authentication → Settings → SMS region policy → **Allow only**:
   - `SO` (+252, Somalia and Somaliland).
   - `GB` (+44): the apps already offer it at sign-in.
-  - **Diaspora countries: to be decided.** None have been named yet. Likely candidates to confirm: US, CA, SE, NO, NL, DK, FI, DE, KE, ET, DJ, AE, SA, QA. Add only the countries you serve: each allowed country is a country SMS pumping can bill you from.
+  - Nothing else (decided 2026-10-18). Every other country is blocked, so SMS pumping can't bill you from anywhere else. To serve another country later, add it here and to the sign-in screens' country list.
 
   The sign-in screens offer +252 and +44 (UK), so keep `GB` in the list. Whatever the apps offer, this policy is what stops someone calling the Auth API directly. Number changes (`startPhoneChange`) accept any international number, so the region policy is also what limits those.
 - [ ] **App Check for Authentication.** App Check → APIs → Authentication → Monitor for a few days, then **Enforce**. Every callable already enforces App Check; this extends it to the SMS sending itself.

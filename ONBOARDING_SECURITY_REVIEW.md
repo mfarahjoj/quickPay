@@ -14,7 +14,7 @@
 - O1: hard lock at 10.
 - O2: sign out after 30 days.
 - O3: 5 phones, forgotten after 180 days.
-- O4: +252 and +44 for now. The diaspora list is still to decide.
+- O4: Somalia (+252) and the UK (+44) only.
 - O5: role approval counts as verified ID.
 
 O1–O3 are editable in the console under "Sign-in and devices". Before and after deploying, follow SECURITY_CONSOLE_CHECKLIST.md: the PIN_PEPPER secret, the Token Creator grant, and the PIN-secrets migration.
@@ -140,7 +140,7 @@ Already done well:
 | O1 | Hard-lock threshold | 10 wrong PINs in a row |
 | O2 | Session lifetime without use | 30 days |
 | O3 | Devices per account | 5, expiring after 180 days unused |
-| O4 | SMS countries allowed | +252, and the diaspora countries you name |
+| O4 | SMS countries allowed | +252, and the diaspora countries you name. **Decided:** Somalia (+252) and the UK (+44) only |
 | O5 | Merchant forgot-PIN identity | Role approval counts as verified ID |
 
 ## References
