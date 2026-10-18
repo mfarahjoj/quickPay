@@ -10,6 +10,7 @@
 
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
+import { endSessions } from "../auth/sessions";
 import { ApiResponse, AccountStatus } from "../types";
 import { requireAdmin, requireRecentAdminAuth, requireReason } from "./guard";
 import { stageAuditEntry } from "./audit";
@@ -102,6 +103,8 @@ export const adminSetAccountStatus = https.onCall(
 
         return { previousStatus, auditId };
       });
+
+      if (status === "frozen") await endSessions(userId, { keepCaller: false });
 
       console.log(
         `Account ${userId} set to ${status} by ${actor.uid} (${actor.email})`

@@ -79,6 +79,9 @@ export function fakeFirestore(seed: Record<string, Data> = {}): FakeDb {
       if (!store.has(path)) throw new Error(`NOT_FOUND ${path}`);
       store.set(path, applyTransforms(store.get(path), d));
     },
+    delete: (path: string) => {
+      store.delete(path);
+    },
   };
 
   function ref(col: string, id?: string): any {
@@ -91,6 +94,7 @@ export function fakeFirestore(seed: Record<string, Data> = {}): FakeDb {
       set: async (d: Data, opts?: { merge?: boolean }) => write.set(path, d, opts),
       create: async (d: Data) => write.create(path, d),
       update: async (d: Data) => write.update(path, d),
+      delete: async () => write.delete(path),
       collection: (sub: string) => collection(`${path}/${sub}`),
     };
   }
@@ -168,6 +172,7 @@ export function fakeFirestore(seed: Record<string, Data> = {}): FakeDb {
       set: (r: any, d: Data, opts?: { merge?: boolean }) => staged.push(() => write.set(r.path, d, opts)),
       create: (r: any, d: Data) => staged.push(() => write.create(r.path, d)),
       update: (r: any, d: Data) => staged.push(() => write.update(r.path, d)),
+      delete: (r: any) => staged.push(() => write.delete(r.path)),
     };
     const result = await fn(tx);
     staged.forEach((w) => w());
@@ -180,6 +185,7 @@ export function fakeFirestore(seed: Record<string, Data> = {}): FakeDb {
     return {
       set: (r: any, d: Data, opts?: { merge?: boolean }) => staged.push(() => write.set(r.path, d, opts)),
       update: (r: any, d: Data) => staged.push(() => write.update(r.path, d)),
+      delete: (r: any) => staged.push(() => write.delete(r.path)),
       commit: async () => staged.forEach((w) => w()),
     };
   };

@@ -15,6 +15,7 @@
 
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
+import { endSessions } from "./sessions";
 import { ApiResponse } from "../types";
 import { requireAuth } from "../utils/validation";
 import { verifyUserPin } from "./validatePin";
@@ -61,6 +62,9 @@ export const freezeMyAccount = https.onCall(
       return true;
     });
 
+    // Whoever has the lost phone is signed out too (review A5).
+    const sessionToken = await endSessions(uid, { keepCaller: true });
+
     if (changed) {
       notifyUser(
         uid,
@@ -70,6 +74,10 @@ export const freezeMyAccount = https.onCall(
         { type: "account_frozen" }
       ).catch((err) => console.error("Failed to notify self-freeze:", err));
     }
-    return { success: true, message: changed ? "Account frozen" : "Account already frozen" };
+    return {
+      success: true,
+      message: changed ? "Account frozen" : "Account already frozen",
+      data: { sessionToken },
+    };
   }
 );

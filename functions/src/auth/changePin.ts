@@ -1,5 +1,7 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
+import { endSessions } from "./sessions";
+import { notifyUser } from "../utils/notifications";
 import { assertStrongPin } from "../utils/weakPin";
 import { requireAuth, validatePin } from "../utils/validation";
 import { hashPin } from "../utils/encryption";
@@ -55,7 +57,17 @@ export const changePin = https.onCall(
       batch.update(db.collection("users").doc(userId), { updatedAt: admin.firestore.Timestamp.now() });
       await batch.commit();
 
-      return { success: true, message: "PIN changed successfully" };
+      // Every other phone signs in again; this one carries on (review A5).
+      const sessionToken = await endSessions(userId, { keepCaller: true });
+      notifyUser(
+        userId,
+        "pin_changed",
+        "Your Zapp Pay PIN was changed",
+        "If this wasn't you, reset your PIN now and contact support.",
+        { type: "pin_changed" }
+      ).catch((err) => console.error("Failed to notify PIN change:", err));
+
+      return { success: true, message: "PIN changed successfully", data: { sessionToken } };
     } catch (error: any) {
       if (error instanceof https.HttpsError) throw error;
       console.error("Error changing PIN:", error);

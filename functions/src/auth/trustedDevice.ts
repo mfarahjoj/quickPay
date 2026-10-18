@@ -1,5 +1,6 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
+import { endSessions } from "./sessions";
 import * as crypto from "crypto";
 import * as bcrypt from "bcrypt";
 import { requireAuth, validatePin } from "../utils/validation";
@@ -194,7 +195,7 @@ export const loginWithPin = https.onCall(
 export const revokeTrustedDevices = https.onCall(
   { enforceAppCheck: true },
   async (request: https.CallableRequest<unknown>):
-    Promise<ApiResponse<{ revoked: number }>> => {
+    Promise<ApiResponse<{ revoked: number; sessionToken?: string }>> => {
     requireAuth(request);
     const uid = request.auth!.uid;
 
@@ -205,6 +206,8 @@ export const revokeTrustedDevices = https.onCall(
     snap.docs.forEach((doc) => batch.delete(doc.ref));
     await batch.commit();
 
-    return { success: true, data: { revoked: snap.size } };
+    // A lost phone may still be signed in; end that too (review A5).
+    const sessionToken = await endSessions(uid, { keepCaller: true });
+    return { success: true, data: { revoked: snap.size, sessionToken } };
   }
 );

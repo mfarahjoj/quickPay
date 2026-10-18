@@ -444,7 +444,9 @@ export interface Notification {
     | "dispute_updated"
     | "dispute_resolved"
     | "account_frozen"
-    | "agent_flagged";
+    | "agent_flagged"
+    | "pin_changed"
+    | "new_device";
   title: string;
   body: string;
   data?: Record<string, string>;

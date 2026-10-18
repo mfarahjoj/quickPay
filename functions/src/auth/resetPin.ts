@@ -1,5 +1,6 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
+import { endSessions } from "./sessions";
 import { assertStrongPin } from "../utils/weakPin";
 import * as bcrypt from "bcrypt";
 import { hashPin } from "../utils/encryption";
@@ -23,6 +24,8 @@ interface ResetPinResult {
   cooldownUntil: string;
   /** What may still be spent at shops in total before then, in cents. */
   allowanceCents: number;
+  /** Signs this phone back in after every session was ended (auth/sessions.ts). */
+  sessionToken?: string;
 }
 
 // The caller must have completed phone verification this recently, on a
@@ -154,6 +157,8 @@ export const resetPin = https.onCall(
         .map((doc) => doc.ref.delete())
     );
 
+    const sessionToken = await endSessions(userId, { keepCaller: true });
+
     const { pinResetCooldownHours, pinResetCooldownAllowanceCents } = await getRates();
     const cooldownUntil = new Date(now.toMillis() + pinResetCooldownHours * 60 * 60 * 1000);
 
@@ -174,6 +179,7 @@ export const resetPin = https.onCall(
       data: {
         cooldownUntil: cooldownUntil.toISOString(),
         allowanceCents: pinResetCooldownAllowanceCents,
+        sessionToken,
       },
     };
   }

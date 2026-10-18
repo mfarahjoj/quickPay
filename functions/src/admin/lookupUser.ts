@@ -11,6 +11,7 @@
  */
 
 import * as admin from "firebase-admin";
+import { endSessions } from "../auth/sessions";
 import { AUTH_FIELDS, readAuth, writeAuth, isStoredPinHash } from "../auth/pinStore";
 import { https } from "firebase-functions/v2";
 import { ApiResponse } from "../types";
@@ -276,6 +277,7 @@ export const adminRevokeUserDevices = https.onCall(
     const batch = db.batch();
     snap.docs.forEach((doc) => batch.delete(doc.ref));
     await batch.commit();
+    await endSessions(userId, { keepCaller: false });
 
     const auditId = await writeAuditEntry({
       actor,

@@ -13,7 +13,7 @@ import { Header } from '../../components/Header';
 import { Button } from '../../components/Button';
 import { PinInput } from '../../components/PinInput';
 import { colors, typography, spacing } from '../../theme';
-import { validatePin, PinLockoutError, pinLockoutMessage } from '../../services/auth.service';
+import { validatePin, PinLockoutError, pinLockoutMessage, adoptSessionToken } from '../../services/auth.service';
 import { functions } from '../../services/firebase.config';
 import { isWeakPin } from '../../components/auth/CodeInput';
 import {
@@ -81,7 +81,8 @@ export default function SecurityScreen({ navigation }: Props) {
     if (freezePin.length !== 6) return;
     setLoading(true);
     try {
-      await functions().httpsCallable('freezeMyAccount')({ pin: freezePin });
+      const result = await functions().httpsCallable('freezeMyAccount')({ pin: freezePin });
+      await adoptSessionToken(result.data);
       setFreezing(false);
       setFrozenNow(true);
       Alert.alert(t('profile.security.frozenTitle'), t('profile.security.frozenMessage'));
@@ -181,6 +182,7 @@ export default function SecurityScreen({ navigation }: Props) {
         });
         const data = result.data as { success?: boolean; error?: string };
         if (data.success !== false) {
+          await adoptSessionToken(data);
           Alert.alert(t('common.success'), t('profile.security.pinChangeSuccess'));
           setChangingPin(false);
           setCurrentPin('');

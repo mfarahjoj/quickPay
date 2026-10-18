@@ -151,6 +151,22 @@ export interface ResetPinResult {
 }
 
 /**
+ * After a PIN reset or change, a device revoke or a freeze, the server ends
+ * every session on the account (review A5) and hands this phone a token to
+ * sign straight back in with. Without one (the server couldn't mint it) this
+ * phone is signed out within the hour like the rest. Never throws.
+ */
+export async function adoptSessionToken(data: unknown): Promise<void> {
+  const token = (data as { data?: { sessionToken?: string } } | undefined)?.data?.sessionToken;
+  if (!token) return;
+  try {
+    await auth().signInWithCustomToken(token);
+  } catch (err) {
+    logger.warn('Could not renew the session:', err);
+  }
+}
+
+/**
  * On a phone that has been this account's trusted device for a week, the SMS
  * code is enough; anywhere else the server also asks for `idLast4`. Errors
  * keep their `details.reason` so the screen can take the next step.
@@ -175,6 +191,7 @@ export async function resetPin(newPin: string, idLast4?: string): Promise<ResetP
     if (!responseData.success) {
       throw new Error(responseData.error || 'Failed to reset PIN');
     }
+    await adoptSessionToken(responseData);
     return responseData.data;
   } catch (error: any) {
     logger.error('Reset PIN error:', error);
@@ -273,7 +290,8 @@ export async function loginWithPin(pin: string): Promise<void> {
 export async function revokeTrustedDevices(): Promise<void> {
   try {
     const fn = functions().httpsCallable('revokeTrustedDevices');
-    await fn({});
+    const result = await fn({});
+    await adoptSessionToken(result.data);
   } finally {
     await clearDeviceCredential();
   }
