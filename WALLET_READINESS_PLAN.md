@@ -133,7 +133,7 @@ Each phase ends with a deploy that Mahamed authorises per target, as `CLAUDE.md`
 ### Phase 2: Corrections and disputes
 *Goal: every "something went wrong" has a path, a record and an owner.*
 
-**Status 2026-10-18:** 2.1–2.5 committed on `fix/wallet-phase1`, not deployed: backend, customer app, merchant app and console desk. The screens are typechecked but not yet driven on a device or a signed-in console. 2.6 (agent flags) and 2.7 (self-freeze) not started.
+**Status 2026-10-18:** 2.1–2.5 deployed to prod (backend) on 2026-10-18 from `8add088`; the app and console screens ship with the next builds. 2.6 (agent standing, `listAgents`) and 2.7 (`freezeMyAccount`, support links) committed, not deployed. The SMS "lock my account" link isn't possible: Firebase Auth sends the sign-in SMS, so there is no way to add a link to it.
 
 **2.1 Adjustment desk (fixes F10, and is the base for everything else in this phase)**
 - Add `adminPostAdjustment(account, counterAccount, amount, reason, disputeId?)`. It posts a balanced `adjustment` journal entry. The default counter account is `platform:fees` or `platform:promo`, never a hidden balance edit.
@@ -173,6 +173,8 @@ Each phase ends with a deploy that Mahamed authorises per target, as `CLAUDE.md`
 
 ### Phase 3: Refunds and settlement done properly
 *Goal: merchants control their money and customers can see what happened.*
+
+**Status 2026-10-18:** 3.1 (transaction kinds), 3.2 (refund requests, built as a dispute claim) and 3.3 (partial refunds) committed on `fix/wallet-phase1`, not deployed. 3.4 is covered by the D8 reserve: a refund the merchant can't cover becomes a dispute, and an upheld one reserves the amount until they can pay. 3.5 and 3.6 wait on D10 and D11.
 
 **3.1 Transaction kinds (F19)**
 - Add `kind` to every `transactions` writer: `merchant_payment`, `p2p`, `payroll`, `topup`, `cashout`, `payout`, `refund`, `adjustment`, `referral`.
@@ -224,6 +226,8 @@ Each phase ends with a deploy that Mahamed authorises per target, as `CLAUDE.md`
 | D7 | **Decided 2026-10-18:** other party replies within 3 days or the dispute goes to ops; ops resolve within 7 days of opening | 2.2 |
 | D8 | **Decided 2026-10-18: wait for funds.** An upheld dispute the other party can't cover is settled when their balance allows; until then that amount is reserved in their wallet | 2.2, 3.4 |
 | D9 *(new)* | Remove merchant features from the customer app (recommended) | 4.1 |
+| D10 *(new)* | Agent-merchant float vs sales: which incoming money counts as float (only float desk issues and cash-in commissions?) and whether payouts may ever draw on float | 3.5 |
+| D11 *(new)* | Settlement: the payout time you commit to merchants, whether to offer automatic daily payouts (and above what balance), and the statement format (CSV share, PDF, or both) | 3.6 |
 
 ## 5. Suggested order
 
