@@ -763,5 +763,14 @@
   "devices.remove": "Remove",
   "devices.removeTitle": "Remove {{name}}?",
   "devices.removeMessage": "It will need an SMS code to sign in again. Every other phone is signed out too.",
-  "devices.removeFailed": "Couldn't remove it. Try again."
+  "devices.removeFailed": "Couldn't remove it. Try again.",
+  "consent.title": "Before you start",
+  "consent.body": "To use Zapp Pay, please read and accept our Terms of Service and Privacy Policy. They explain how your money and your information are handled.",
+  "consent.updatedTitle": "We've updated our terms",
+  "consent.updatedBody": "Please read the updated Terms of Service and Privacy Policy and accept them to keep using Zapp Pay.",
+  "consent.readTerms": "Read the Terms of Service",
+  "consent.readPrivacy": "Read the Privacy Policy",
+  "consent.accept": "I agree",
+  "consent.failed": "Couldn't save that. Check your connection and try again.",
+  "consent.updateApp": "These terms have changed again. Update the app to see the latest version."
 }

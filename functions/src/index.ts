@@ -26,6 +26,7 @@ export { requestAccountDeletion } from "./auth/deleteAccount";
 export { getAccountLimits } from "./auth/getAccountLimits";
 // The holder stops money leaving their own account; support unfreezes.
 export { freezeMyAccount } from "./auth/freezeMyAccount";
+export { acceptTerms } from "./auth/acceptTerms";
 export { expireIdleSessions } from "./auth/sessions";
 export {
   registerBiometricKey,

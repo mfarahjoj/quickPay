@@ -763,5 +763,14 @@
   "devices.remove": "حذف",
   "devices.removeTitle": "حذف {{name}}؟",
   "devices.removeMessage": "سيحتاج إلى رمز SMS لتسجيل الدخول مجددًا. وسيتم تسجيل خروج جميع الهواتف الأخرى أيضًا.",
-  "devices.removeFailed": "تعذّر الحذف. حاول مرة أخرى."
+  "devices.removeFailed": "تعذّر الحذف. حاول مرة أخرى.",
+  "consent.title": "قبل أن تبدأ",
+  "consent.body": "لاستخدام Zapp Pay، يرجى قراءة شروط الخدمة وسياسة الخصوصية والموافقة عليهما. فهما توضحان كيفية التعامل مع أموالك ومعلوماتك.",
+  "consent.updatedTitle": "قمنا بتحديث شروطنا",
+  "consent.updatedBody": "يرجى قراءة شروط الخدمة وسياسة الخصوصية المحدّثتين والموافقة عليهما لمواصلة استخدام Zapp Pay.",
+  "consent.readTerms": "قراءة شروط الخدمة",
+  "consent.readPrivacy": "قراءة سياسة الخصوصية",
+  "consent.accept": "أوافق",
+  "consent.failed": "تعذّر الحفظ. تحقق من اتصالك وحاول مرة أخرى.",
+  "consent.updateApp": "تغيّرت هذه الشروط مرة أخرى. حدّث التطبيق لرؤية أحدث نسخة."
 }

@@ -763,5 +763,14 @@
   "devices.remove": "Ka saar",
   "devices.removeTitle": "Ka saar {{name}}?",
   "devices.removeMessage": "Wuxuu u baahan doonaa koodh SMS ah si uu mar kale u galo. Taleefannada kale oo dhan sidoo kale waa laga saarayaa.",
-  "devices.removeFailed": "Lama saari karin. Isku day mar kale."
+  "devices.removeFailed": "Lama saari karin. Isku day mar kale.",
+  "consent.title": "Kahor intaadan bilaabin",
+  "consent.body": "Si aad u isticmaasho Zapp Pay, fadlan akhri oo aqbal Shuruudaha Adeegga iyo Siyaasadda Arrimaha Gaarka ah. Waxay sharxayaan sida lacagtaada iyo xogtaada loo maareeyo.",
+  "consent.updatedTitle": "Waxaan cusboonaysiinay shuruudahayaga",
+  "consent.updatedBody": "Fadlan akhri Shuruudaha Adeegga iyo Siyaasadda Arrimaha Gaarka ah ee la cusboonaysiiyay oo aqbal si aad u sii isticmaasho Zapp Pay.",
+  "consent.readTerms": "Akhri Shuruudaha Adeegga",
+  "consent.readPrivacy": "Akhri Siyaasadda Arrimaha Gaarka ah",
+  "consent.accept": "Waan oggolahay",
+  "consent.failed": "Lama kaydin karin. Hubi xiriirkaaga oo isku day mar kale.",
+  "consent.updateApp": "Shuruudahan mar kale ayay isbeddeleen. Cusboonaysii app-ka si aad u aragto nuqulka ugu dambeeyay."
 }

@@ -21,6 +21,12 @@ service cloud.firestore {
     }
 
     // Face ID public keys and their one-time challenges (auth/biometricKeys.ts).
+    // Consent records (auth/acceptTerms.ts): readable by the owner, written
+    // only by the server.
+    match /users/{userId}/consents/{consentId} {
+      allow read: if isAuthenticated() && isOwner(userId);
+      allow write: if false;
+    }
     match /biometricKeys/{keyId} {
       allow read, write: if false;
     }

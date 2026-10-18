@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { TERMS_URL, PRIVACY_URL } from '../../utils/legal';
 import {
   View,
   Text,
@@ -58,8 +59,6 @@ const COUNTRIES: Country[] = [
   },
 ];
 
-const TERMS_URL = 'https://quickpay.app/terms';
-const PRIVACY_URL = 'https://quickpay.app/privacy';
 
 const CORAL = colors.dark.accent;
 

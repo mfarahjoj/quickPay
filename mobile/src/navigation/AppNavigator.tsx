@@ -5,6 +5,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useAuth } from '../hooks/useAuth';
 import { useIdleSignOut } from '../hooks/useIdleSignOut';
+import { ConsentGate } from '../components/legal/ConsentGate';
 import { usePinSetupDone } from '../hooks/usePinSetupDone';
 import { useBiometricSetupDone } from '../hooks/useBiometricSetupDone';
 import { usePinVerifiedThisInstall } from '../hooks/usePinVerifiedThisInstall';
@@ -586,7 +587,7 @@ export default function AppNavigator() {
     );
   }
 
-  return (
+  const app = (
     <NavigationContainer ref={navigationRef} onReady={() => setNavReadyTick((n) => n + 1)}>
       <RootStack.Navigator screenOptions={{ headerShown: false }}>
         {user ? (
@@ -597,6 +598,8 @@ export default function AppNavigator() {
       </RootStack.Navigator>
     </NavigationContainer>
   );
+  // Terms and privacy, recorded with versions (review E12).
+  return user ? <ConsentGate uid={user.uid}>{app}</ConsentGate> : app;
 }
 
 // ─── Styles ─────────────────────────────────────────────────

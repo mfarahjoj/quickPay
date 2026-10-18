@@ -10,6 +10,7 @@ import RoleReviewPendingScreen from '../screens/auth/RoleReviewPendingScreen';
 import { confirmSignOut } from '../utils/confirmSignOut';
 import { AppLockGate } from '../components/security/AppLockGate';
 import { useIdleSignOut } from '../hooks/useIdleSignOut';
+import { ConsentGate } from '../components/legal/ConsentGate';
 import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import { colors } from '../theme';
 import {
@@ -396,7 +397,14 @@ export default function AppNavigator() {
 
   // Signed in and approved: the app lock covers it (review A3). Keyed by uid
   // so a different account never inherits an unlocked state.
-  return user ? <AppLockGate key={user.uid}>{app}</AppLockGate> : app;
+  return user ? (
+    <AppLockGate key={user.uid}>
+      {/* Terms and privacy, recorded with versions (review E12). */}
+      <ConsentGate uid={user.uid}>{app}</ConsentGate>
+    </AppLockGate>
+  ) : (
+    app
+  );
 }
 
 const styles = StyleSheet.create({
