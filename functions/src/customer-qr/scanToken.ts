@@ -2,7 +2,7 @@ import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { requireAuth } from "../utils/validation";
 import { decrypt } from "../utils/encryption";
-import { ENCRYPTION_KEY } from "../config/secrets";
+import { ENCRYPTION_KEY, PIN_PEPPER } from "../config/secrets";
 import { ApiResponse, CustomerToken, User } from "../types";
 
 interface ScanTokenRequest {
@@ -17,7 +17,7 @@ interface ScanTokenResponse {
 }
 
 export const scanCustomerToken = https.onCall(
-  { enforceAppCheck: true, secrets: [ENCRYPTION_KEY] },
+  { enforceAppCheck: true, secrets: [ENCRYPTION_KEY, PIN_PEPPER] },
   async (
     request: https.CallableRequest<ScanTokenRequest>
   ): Promise<ApiResponse<ScanTokenResponse>> => {

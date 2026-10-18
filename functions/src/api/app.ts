@@ -25,7 +25,7 @@ import * as crypto from "crypto";
 import { https } from "firebase-functions/v2";
 import type { Request } from "firebase-functions/v2/https";
 import type { Response } from "express";
-import { ENCRYPTION_KEY } from "../config/secrets";
+import { ENCRYPTION_KEY, PIN_PEPPER } from "../config/secrets";
 import { getRates } from "../config/rates";
 import {
   ApiError,
@@ -205,7 +205,7 @@ export async function handleApiRequest(req: Request, res: Response): Promise<voi
 export const api = https.onRequest(
   {
     // ENCRYPTION_KEY encrypts webhook signing secrets at rest.
-    secrets: [ENCRYPTION_KEY],
+    secrets: [ENCRYPTION_KEY, PIN_PEPPER],
     cors: false,
     // /v1/public/charges/:id is unauthenticated (the checkout page polls it),
     // so cap what a flood of requests can cost. At the default concurrency of

@@ -23,7 +23,7 @@ import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
-import { ENCRYPTION_KEY } from "../config/secrets";
+import { ENCRYPTION_KEY, PIN_PEPPER } from "../config/secrets";
 import { decrypt, encrypt } from "../utils/encryption";
 import { badRequest, conflict, notFound } from "./http";
 import { serializeCharge } from "./charges";
@@ -391,7 +391,7 @@ export async function attemptDelivery(id: string): Promise<void> {
 // ─── Functions ─────────────────────────────────────────────────────────────
 
 export const onApiChargeWritten = onDocumentWritten(
-  { document: `api_charges/{chargeId}`, secrets: [ENCRYPTION_KEY] },
+  { document: `api_charges/{chargeId}`, secrets: [ENCRYPTION_KEY, PIN_PEPPER] },
   async (event) => {
     const chargeId = event.params.chargeId;
     const before = event.data?.before.data() as ApiCharge | undefined;
@@ -407,7 +407,7 @@ export const onApiChargeWritten = onDocumentWritten(
 );
 
 export const retryWebhookDeliveries = onSchedule(
-  { schedule: "every 5 minutes", secrets: [ENCRYPTION_KEY] },
+  { schedule: "every 5 minutes", secrets: [ENCRYPTION_KEY, PIN_PEPPER] },
   async () => {
     const due = await admin
       .firestore()

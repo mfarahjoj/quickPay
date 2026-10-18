@@ -1,4 +1,6 @@
 import * as admin from "firebase-admin";
+// Must come before any function definition.
+import "./globalOptions";
 
 // Initialize Firebase Admin
 admin.initializeApp();

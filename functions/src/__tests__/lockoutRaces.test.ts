@@ -9,6 +9,8 @@ const GOOD_PIN = "246810";
 jest.mock("../utils/encryption", () => ({
   ...jest.requireActual("../utils/encryption"),
   verifyPin: jest.fn(async (pin: string) => pin === "246810"),
+  // The pepper upgrade after a correct PIN (cost-12 bcrypt) isn't under test.
+  hashPin: jest.fn(async () => "p1$upgraded"),
 }));
 jest.mock("../utils/notifications", () => ({
   notifyUser: jest.fn().mockResolvedValue(undefined),

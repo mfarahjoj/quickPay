@@ -1,7 +1,7 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
-import { verifyPin } from "../utils/encryption";
-import { readAuth, writeAuth } from "./pinStore";
+import { verifyPin, hashPin, pinHashNeedsUpgrade } from "../utils/encryption";
+import { AuthSecrets, readAuth, writeAuth } from "./pinStore";
 import { validatePin, requireAuth } from "../utils/validation";
 import { ApiResponse } from "../types";
 
@@ -125,9 +125,25 @@ export async function verifyUserPin(
 
   const isValid = await verifyPin(pin, pinHash);
   if (isValid) {
-    const batch = db.batch();
-    writeAuth(batch, userId, { pinFailedAttempts: 0, pinLockedUntil: null }, { hasPin: true });
-    await batch.commit();
+    const cleared: Partial<AuthSecrets> = { pinFailedAttempts: 0, pinLockedUntil: null };
+    // A pre-pepper hash is re-hashed now, while the PIN is in hand (A2).
+    // Only if nothing changed it meanwhile (a reset or change racing this).
+    let upgrade: string | null = null;
+    if (pinHashNeedsUpgrade(pinHash)) {
+      upgrade = await hashPin(pin).catch((err) => {
+        console.error("PIN pepper upgrade skipped:", err?.message);
+        return null;
+      });
+    }
+    await db.runTransaction(async (tx) => {
+      const current = await readAuth(userId, tx);
+      writeAuth(
+        tx,
+        userId,
+        upgrade && current.pinHash === pinHash ? { ...cleared, pinHash: upgrade } : cleared,
+        { hasPin: true }
+      );
+    });
   }
   return isValid;
 }
