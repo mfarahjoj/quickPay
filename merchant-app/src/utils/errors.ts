@@ -60,6 +60,8 @@ export function pinActionErrorKey(error: any): string {
   const message: string = typeof error?.message === 'string' ? error.message : '';
 
   if (isWrongPin(error)) return 'errors.wrongPin';
+  const reason = error?.details?.reason;
+  if (reason === 'pin_reset_cooldown' || reason === 'phone_change_cooldown') return 'errors.sendingPaused';
 
   switch (code) {
     case 'functions/resource-exhausted':

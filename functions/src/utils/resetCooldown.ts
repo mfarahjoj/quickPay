@@ -27,19 +27,29 @@ export async function assertResetCooldownAllows(
   kind: OutgoingKind,
   amountCents: number
 ): Promise<void> {
-  const resetAt = (await readAuth(userId)).pinResetAt;
-  if (!resetAt) return;
+  // The same pause follows a phone-number change (review E13), for the
+  // same reason: it's exactly what a SIM-swap thief would do next.
+  const userSnap = await admin.firestore().collection("users").doc(userId).get();
+  const resetAt = (await readAuth(userId, undefined, userSnap.data())).pinResetAt;
+  const phoneChangedAt = userSnap.data()?.phoneChangedAt as admin.firestore.Timestamp | undefined;
 
-  const { pinResetCooldownHours, pinResetCooldownAllowanceCents } = await getRates();
-  const untilMs = resetAt.toMillis() + pinResetCooldownHours * 60 * 60 * 1000;
+  const { pinResetCooldownHours, pinResetCooldownAllowanceCents, phoneChangeCooldownDays } = await getRates();
+  const resetUntil = resetAt ? resetAt.toMillis() + pinResetCooldownHours * 60 * 60 * 1000 : 0;
+  const phoneUntil = phoneChangedAt ? phoneChangedAt.toMillis() + phoneChangeCooldownDays * 24 * 60 * 60 * 1000 : 0;
+  const untilMs = Math.max(resetUntil, phoneUntil);
   if (Date.now() >= untilMs) return;
+  const reason = phoneUntil >= resetUntil ? "phone_change_cooldown" : "pin_reset_cooldown";
+  // Spending since whichever change started this pause counts.
+  const since = reason === "phone_change_cooldown" ? phoneChangedAt! : resetAt!;
 
   const refuse = (): never => {
     throw new https.HttpsError(
       "failed-precondition",
-      "Sending money is paused for a while after a PIN reset.",
+      reason === "phone_change_cooldown"
+        ? "Sending money is paused for a while after a phone number change."
+        : "Sending money is paused for a while after a PIN reset.",
       {
-        reason: "pin_reset_cooldown",
+        reason,
         until: new Date(untilMs).toISOString(),
         allowanceCents: pinResetCooldownAllowanceCents,
       }
@@ -54,7 +64,7 @@ export async function assertResetCooldownAllows(
     .firestore()
     .collection("transactions")
     .where("fromUserId", "==", userId)
-    .where("createdAt", ">=", resetAt)
+    .where("createdAt", ">=", since)
     .get();
   const spent = sent.docs.reduce(
     (sum: number, doc: FirebaseFirestore.QueryDocumentSnapshot) => sum + ((doc.data().amount as number) ?? 0),

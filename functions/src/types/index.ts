@@ -446,7 +446,8 @@ export interface Notification {
     | "account_frozen"
     | "agent_flagged"
     | "pin_changed"
-    | "new_device";
+    | "new_device"
+    | "phone_changed";
   title: string;
   body: string;
   data?: Record<string, string>;

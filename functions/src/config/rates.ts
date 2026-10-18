@@ -46,6 +46,7 @@ export interface Rates {
   maxTrustedDevices: number;
   trustedDeviceIdleDays: number;
   sessionIdleDays: number;
+  phoneChangeCooldownDays: number;
 }
 
 export type RateGroup =
@@ -356,6 +357,16 @@ export const RATE_FIELDS: { [K in keyof Rates]: RateFieldSpec } = {
     default: 30,
     min: 7,
     max: 180,
+    unit: "days",
+  },
+  phoneChangeCooldownDays: {
+    group: "Sign-in and devices",
+    label: "Pause after a phone number change",
+    help: "Sending money is paused this long after the account moves to a new number, with the same shop allowance as after a PIN reset.",
+    kind: "int",
+    default: 7,
+    min: 1,
+    max: 30,
     unit: "days",
   },
 };

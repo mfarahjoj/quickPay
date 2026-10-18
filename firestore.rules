@@ -27,6 +27,14 @@ service cloud.firestore {
       allow read: if isAuthenticated() && isOwner(userId);
       allow write: if false;
     }
+    // Approved phone-number changes and their history (auth/changePhone.ts).
+    match /phoneChanges/{uid} {
+      allow read, write: if false;
+    }
+    match /users/{userId}/phoneHistory/{entryId} {
+      allow read: if isAuthenticated() && isOwner(userId);
+      allow write: if false;
+    }
     match /biometricKeys/{keyId} {
       allow read, write: if false;
     }

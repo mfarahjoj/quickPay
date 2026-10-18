@@ -12,8 +12,9 @@ export function formatUntil(iso: string): string {
  */
 export function cooldownMessage(error: any, t: TFunction): string | null {
   const details = error?.details;
-  if (details?.reason !== 'pin_reset_cooldown' || !details.until) return null;
-  return t('payments.cooldown', {
+  const phone = details?.reason === 'phone_change_cooldown';
+  if ((details?.reason !== 'pin_reset_cooldown' && !phone) || !details.until) return null;
+  return t(phone ? 'payments.phoneCooldown' : 'payments.cooldown', {
     time: formatUntil(details.until),
     amount: `$${((details.allowanceCents ?? 0) / 100).toFixed(2)}`,
   });

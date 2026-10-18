@@ -59,6 +59,15 @@ export default function SecurityScreen() {
         />
       </GlassCard>
 
+      <Text style={styles.sectionLabel}>{t('changePhone.title')}</Text>
+      <GlassCard style={styles.card}>
+        <LinkRow
+          label={t('changePhone.title')}
+          hint={t('changePhone.securityDesc')}
+          onPress={() => navigation.navigate('ChangePhone')}
+        />
+      </GlassCard>
+
       <Text style={styles.sectionLabel}>{t('security.section.app')}</Text>
       <GlassCard style={styles.card}>
         <View style={styles.row}>

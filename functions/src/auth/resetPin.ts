@@ -226,7 +226,8 @@ async function knownDevice(
  * On a phone we don't know, the caller must match their admin-verified ID.
  * Throws with a `reason` the app turns into the next step.
  */
-async function checkIdAnswer(
+/** Also used by the phone-number change (changePhone.ts), sharing its lockout. */
+export async function checkIdAnswer(
   userRef: FirebaseFirestore.DocumentReference,
   userId: string,
   user: FirebaseFirestore.DocumentData,
