@@ -79,6 +79,9 @@ export interface UserDetail {
   profile: Record<string, unknown>;
   accountStatus: string;
   hasPin: boolean;
+  /** Locked after too many wrong PINs; a reset or Clear lockouts opens it. */
+  pinHardLocked?: boolean;
+  pinFailedAttempts?: number;
   wallet: { balance?: number; currency?: string; frozen?: boolean } | null;
   kyc: Record<string, unknown> | null;
   trustedDeviceCount: number;

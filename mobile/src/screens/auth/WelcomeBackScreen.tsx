@@ -20,7 +20,7 @@ import {
   validatePin,
   signOut,
   getCurrentUser,
-  PinLockoutError,
+  PinLockoutError, pinLockoutMessage,
 } from '../../services/auth.service';
 import {
   isBiometricAvailable,
@@ -119,7 +119,7 @@ export default function WelcomeBackScreen({ onComplete }: Props) {
       }
     } catch (err) {
       if (err instanceof PinLockoutError) {
-        setPinError(t('pin.lockedOut', { seconds: err.secondsLeft ?? 60 }));
+        setPinError(pinLockoutMessage(err, t));
       } else {
         setPinError(t('auth.appLock.verifyError'));
       }

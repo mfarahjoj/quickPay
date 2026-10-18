@@ -1122,5 +1122,6 @@
   "invite.subtitleCashIn": "Share your code: you both get {{amount}} after their first top-up of {{min}} or more.",
   "invite.subtitleKyc": "Share your code: you both get {{amount}} once their ID is verified.",
   "cashout.free": "No fee",
-  "cashout.feeLine": "Fee {{fee}} · {{total}} leaves your wallet"
+  "cashout.feeLine": "Fee {{fee}} · {{total}} leaves your wallet",
+  "pin.hardLocked": "Your PIN is locked after too many wrong tries. Use Forgot PIN to set a new one."
 }

@@ -27,7 +27,7 @@ const ACTION_COPY: Record<
   clearLockouts: {
     title: "Clear lockouts",
     description:
-      "Resets failed PIN and agent-code counters so the customer can try again straight away.",
+      "Resets failed PIN and agent-code counters so the customer can try again straight away. This also opens a PIN that locked after too many wrong tries, so only do it once you've confirmed who you're talking to, in person or against their ID.",
     confirm: "Clear lockouts",
   },
   revokeDevices: {
@@ -168,7 +168,14 @@ export function UserDetail({ userId, canAdjust = false }: { userId: string; canA
               : "—"}
           </dd>
           <dt>PIN set</dt>
-          <dd>{detail.hasPin ? "yes" : "no"}</dd>
+          <dd>
+            {detail.hasPin ? "yes" : "no"}
+            {detail.pinHardLocked
+              ? " · locked after too many wrong PINs"
+              : detail.pinFailedAttempts
+                ? ` · ${detail.pinFailedAttempts} wrong in a row`
+                : ""}
+          </dd>
           <dt>Trusted devices</dt>
           <dd>{detail.trustedDeviceCount}</dd>
           <dt>uid</dt>

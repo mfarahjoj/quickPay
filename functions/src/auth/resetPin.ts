@@ -132,6 +132,7 @@ export const resetPin = https.onCall(
           pinHash,
           pinFailedAttempts: 0,
           pinLockedUntil: null,
+          pinHardLocked: false,
           pinResetAt: now,
           pinResetHistory: [...freshHistory, now].slice(-HISTORY_KEPT),
           resetIdFailedAttempts: 0,

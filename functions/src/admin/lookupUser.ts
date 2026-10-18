@@ -161,7 +161,7 @@ export const adminGetUser = https.onCall(
         userId,
         profile: scrub(userData),
         accountStatus: resolveAccountStatus(userData),
-        hasPin: isStoredPinHash((await readAuth(userId, undefined, userData)).pinHash),
+        ...(await pinStateOf(userId, userData)),
         wallet: walletSnap.exists ? walletSnap.data() : null,
         kyc: kycSnap.exists ? kycSnap.data() : null,
         trustedDeviceCount: deviceSnap.size,
@@ -170,6 +170,16 @@ export const adminGetUser = https.onCall(
     };
   }
 );
+
+/** What support needs to see about a PIN, never the hash. */
+async function pinStateOf(userId: string, userData: FirebaseFirestore.DocumentData) {
+  const auth = await readAuth(userId, undefined, userData);
+  return {
+    hasPin: isStoredPinHash(auth.pinHash),
+    pinHardLocked: auth.pinHardLocked === true,
+    pinFailedAttempts: auth.pinFailedAttempts ?? 0,
+  };
+}
 
 interface SupportActionRequest {
   userId: string;
@@ -208,7 +218,8 @@ export const adminClearLockouts = https.onCall(
       const auth = await readAuth(userId, tx, snap.data());
       const before: FirebaseFirestore.DocumentData = { ...snap.data()!, ...auth };
 
-      writeAuth(tx, userId, { ...auth, pinFailedAttempts: 0, pinLockedUntil: null });
+      // A support visit (review A3): clears the hard lock too, with the reason audited.
+      writeAuth(tx, userId, { ...auth, pinFailedAttempts: 0, pinLockedUntil: null, pinHardLocked: false });
       tx.update(userRef, {
         agentOtpFailedAttempts: 0,
         agentOtpLockedUntil: null,
@@ -223,6 +234,7 @@ export const adminClearLockouts = https.onCall(
         before: {
           pinFailedAttempts: before.pinFailedAttempts ?? 0,
           pinLockedUntil: before.pinLockedUntil ?? null,
+          pinHardLocked: before.pinHardLocked === true,
           agentOtpFailedAttempts: before.agentOtpFailedAttempts ?? 0,
         },
         after: { pinFailedAttempts: 0, pinLockedUntil: null, agentOtpFailedAttempts: 0 },

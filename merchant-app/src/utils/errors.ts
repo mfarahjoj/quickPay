@@ -63,6 +63,7 @@ export function pinActionErrorKey(error: any): string {
 
   switch (code) {
     case 'functions/resource-exhausted':
+      if (error?.details?.hardLocked) return 'errors.pinHardLocked';
       if (/pin/i.test(message)) return 'errors.pinLocked';
       if (/code/i.test(message)) return 'errors.codeLocked';
       break;

@@ -1122,5 +1122,6 @@
   "invite.subtitleCashIn": "La wadaag koodhkaaga: labadiinuba waxaad helaysaan {{amount}} kadib lacag-shubiddooda ugu horreysa ee {{min}} ama ka badan.",
   "invite.subtitleKyc": "La wadaag koodhkaaga: labadiinuba waxaad helaysaan {{amount}} marka aqoonsigooda la xaqiijiyo.",
   "cashout.free": "Khidmad lacag la'aan",
-  "cashout.feeLine": "Khidmad {{fee}} · {{total}} ayaa boorsadaada ka baxaysa"
+  "cashout.feeLine": "Khidmad {{fee}} · {{total}} ayaa boorsadaada ka baxaysa",
+  "pin.hardLocked": "PIN-kaaga waa la xiray kadib isku day khaldan oo badan. Riix «Ma illowday PIN-ka?» si aad u dejiso mid cusub."
 }

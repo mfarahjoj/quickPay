@@ -21,7 +21,7 @@ import {
   isBiometricAvailable,
   isBiometricEnabled,
 } from '../../services/biometric.service';
-import { validatePin, signOut, PinLockoutError } from '../../services/auth.service';
+import { validatePin, signOut, PinLockoutError, pinLockoutMessage } from '../../services/auth.service';
 import { markPinVerifiedThisInstall } from '../../hooks/usePinVerifiedThisInstall';
 import { colors, typography, spacing } from '../../theme';
 import { Springs } from '../../constants/springs';
@@ -125,7 +125,7 @@ export default function AppLockScreen({ onUnlock }: Props) {
       }
     } catch (err) {
       if (err instanceof PinLockoutError) {
-        setPinError(t('pin.lockedOut', { seconds: err.secondsLeft ?? 60 }));
+        setPinError(pinLockoutMessage(err, t));
       } else {
         setPinError(t('auth.appLock.verifyError'));
       }

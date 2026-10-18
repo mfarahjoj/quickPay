@@ -701,5 +701,6 @@
   "moveToFloat.hint": "Lacagta wakiilka waxaa dib loogu celin karaa lacag caddaan ah kaliya miiska lacagta wakiilka ee Zapp Pay, sidaas darteed wareeji kaliya inta aad u isticmaali doonto lacag-shubidda.",
   "moveToFloat.pinSubtitle": "Si aad {{amount}} ugu wareejiso lacagta wakiilka.",
   "moveToFloat.done": "{{amount}} hadda waxay ku jirtaa lacagtaada wakiilka.",
-  "moveToFloat.notEnough": "Ma haysid inta oo diyaar ah oo ka mid ah iibka iyo dakhliga."
+  "moveToFloat.notEnough": "Ma haysid inta oo diyaar ah oo ka mid ah iibka iyo dakhliga.",
+  "errors.pinHardLocked": "PIN-kaaga waa la xiray kadib isku day khaldan oo badan. Dib uga deji Dejinta, Amniga, ama la xiriir taageerada Zapp Pay."
 }

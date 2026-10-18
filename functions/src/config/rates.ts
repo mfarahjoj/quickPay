@@ -42,9 +42,17 @@ export interface Rates {
   disputeResolutionHours: number;
   agentFlagUpheldDisputes: number;
   agentFlagWindowDays: number;
+  pinHardLockAttempts: number;
 }
 
-export type RateGroup = "Pricing" | "Agents" | "Referrals" | "Payouts" | "Limits and safety" | "Refunds and disputes";
+export type RateGroup =
+  | "Pricing"
+  | "Agents"
+  | "Referrals"
+  | "Payouts"
+  | "Limits and safety"
+  | "Refunds and disputes"
+  | "Sign-in and devices";
 
 interface BaseField {
   group: RateGroup;
@@ -306,6 +314,16 @@ export const RATE_FIELDS: { [K in keyof Rates]: RateFieldSpec } = {
     min: 1,
     max: 365,
     unit: "days",
+  },
+  pinHardLockAttempts: {
+    group: "Sign-in and devices",
+    label: "Wrong PINs before the PIN locks",
+    help: "In a row. Short timed locks start at 5; at this many the PIN stays locked until it is reset (SMS plus a trusted phone or ID) or support clears it.",
+    kind: "int",
+    default: 10,
+    min: 6,
+    max: 20,
+    unit: "attempts",
   },
 };
 

@@ -13,7 +13,7 @@ import { Header } from '../../components/Header';
 import { Button } from '../../components/Button';
 import { PinInput } from '../../components/PinInput';
 import { colors, typography, spacing } from '../../theme';
-import { validatePin, PinLockoutError } from '../../services/auth.service';
+import { validatePin, PinLockoutError, pinLockoutMessage } from '../../services/auth.service';
 import { functions } from '../../services/firebase.config';
 import {
   isBiometricEnabled,
@@ -136,7 +136,7 @@ export default function SecurityScreen({ navigation }: Props) {
       setBiometricPin('');
     } catch (err: any) {
       if (err instanceof PinLockoutError) {
-        Alert.alert(t('common.error'), t('pin.lockedOut', { seconds: err.secondsLeft ?? 60 }));
+        Alert.alert(t('common.error'), pinLockoutMessage(err, t));
       } else {
         Alert.alert(t('common.error'), err.message ?? t('profile.security.failedEnableBiometrics'));
       }
@@ -200,7 +200,7 @@ export default function SecurityScreen({ navigation }: Props) {
       }
     } catch (err: any) {
       if (err instanceof PinLockoutError) {
-        Alert.alert(t('common.error'), t('pin.lockedOut', { seconds: err.secondsLeft ?? 60 }));
+        Alert.alert(t('common.error'), pinLockoutMessage(err, t));
       } else {
         Alert.alert(t('common.error'), err.message ?? t('profile.security.failedChangePin'));
       }

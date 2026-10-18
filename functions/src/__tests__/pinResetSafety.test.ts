@@ -168,6 +168,8 @@ describe("PIN reset safety", () => {
 
       expect(result.success).toBe(true);
       expect(db.store.get(`users/${UID}/private/auth`).pinHash).toBe("new-hash");
+      // A reset is what opens a hard-locked PIN (review A3).
+      expect(db.store.get(`users/${UID}/private/auth`).pinHardLocked).toBe(false);
       // The phone-readable doc keeps only the flag and the placeholder.
       expect(db.store.get(`users/${UID}`).pinHash).toBe(LEGACY_PIN_PLACEHOLDER);
       expect(db.store.get(`users/${UID}`).hasPin).toBe(true);

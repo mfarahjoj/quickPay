@@ -6,7 +6,7 @@ import {
   loginWithPin,
   DeviceNotTrustedError,
   IncorrectPinError,
-  PinLockoutError,
+  PinLockoutError, pinLockoutMessage,
 } from '../../services/auth.service';
 import { markPinVerifiedThisInstall } from '../../hooks/usePinVerifiedThisInstall';
 import { logger } from '../../utils/logger';
@@ -44,7 +44,7 @@ export default function PinLoginScreen({ onUseCode, onBack }: Props) {
       // Signed in — the navigator's auth gate swaps this screen out.
     } catch (err) {
       if (err instanceof PinLockoutError) {
-        setError(t('pin.lockedOut', { seconds: err.secondsLeft ?? 60 }));
+        setError(pinLockoutMessage(err, t));
       } else if (err instanceof IncorrectPinError) {
         setError(t('auth.pinLogin.invalidPin'));
       } else if (err instanceof DeviceNotTrustedError) {

@@ -4,6 +4,7 @@ import { verifyPin, hashPin, pinHashNeedsUpgrade } from "../utils/encryption";
 import { AuthSecrets, readAuth, writeAuth } from "./pinStore";
 import { validatePin, requireAuth } from "../utils/validation";
 import { ApiResponse } from "../types";
+import { getRates } from "../config/rates";
 
 interface ValidatePinRequest {
   pin: string;
@@ -11,7 +12,9 @@ interface ValidatePinRequest {
 
 // Lockout policy shared by every PIN surface (app unlock, payments, changePin,
 // account deletion): 5 straight failures lock for 60s, doubling per additional
-// failure, capped at 15 minutes. Counter resets on any successful check.
+// failure, capped at 15 minutes. At `pinHardLockAttempts` (default 10, O1) the
+// PIN locks for good: only a PIN reset or support clears it (review A3).
+// The counter resets on any successful check.
 const MAX_ATTEMPTS_BEFORE_LOCK = 5;
 const BASE_LOCK_SECONDS = 60;
 const MAX_LOCK_SECONDS = 15 * 60;
@@ -78,6 +81,7 @@ export async function verifyUserPin(
   const db = admin.firestore();
   const userRef = db.collection("users").doc(userId);
 
+  const { pinHardLockAttempts: hardLockAt } = await getRates();
   const pinHash = await db.runTransaction(async (tx) => {
     const userDoc = await tx.get(userRef);
     if (!userDoc.exists) {
@@ -90,6 +94,14 @@ export async function verifyUserPin(
       throw new https.HttpsError(
         "failed-precondition",
         "PIN not set up. Please set up your PIN first."
+      );
+    }
+
+    if (auth.pinHardLocked) {
+      throw new https.HttpsError(
+        "resource-exhausted",
+        "Your PIN is locked after too many wrong attempts. Reset your PIN to unlock it.",
+        { hardLocked: true }
       );
     }
 
@@ -109,7 +121,10 @@ export async function verifyUserPin(
     // Reserve this attempt as a failure; a correct PIN clears it below.
     const attempts = (auth.pinFailedAttempts ?? 0) + 1;
     const updates: Record<string, unknown> = { pinFailedAttempts: attempts };
-    if (attempts >= MAX_ATTEMPTS_BEFORE_LOCK) {
+    if (attempts >= hardLockAt) {
+      updates.pinHardLocked = true;
+      updates.pinLockedUntil = null;
+    } else if (attempts >= MAX_ATTEMPTS_BEFORE_LOCK) {
       const lockSeconds = Math.min(
         BASE_LOCK_SECONDS * 2 ** (attempts - MAX_ATTEMPTS_BEFORE_LOCK),
         MAX_LOCK_SECONDS

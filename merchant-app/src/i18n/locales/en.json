@@ -701,5 +701,6 @@
   "moveToFloat.hint": "Float can only be turned back into cash through Zapp Pay's float desk, so move only what you'll use for cash-ins.",
   "moveToFloat.pinSubtitle": "To move {{amount}} into your float.",
   "moveToFloat.done": "{{amount}} is now in your float.",
-  "moveToFloat.notEnough": "You don't have that much available in sales and earnings."
+  "moveToFloat.notEnough": "You don't have that much available in sales and earnings.",
+  "errors.pinHardLocked": "Your PIN is locked after too many wrong tries. Reset it from Settings, Security, or ask Zapp Pay support."
 }

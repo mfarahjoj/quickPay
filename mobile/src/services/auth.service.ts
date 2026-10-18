@@ -84,12 +84,20 @@ export async function setupPin(data: SetupPinData): Promise<{ alreadyHasPin: boo
  */
 export class PinLockoutError extends Error {
   secondsLeft?: number;
+  /** Locked until the PIN is reset, not for a while (review A3). */
+  hardLocked: boolean;
 
-  constructor(message: string, secondsLeft?: number) {
+  constructor(message: string, secondsLeft?: number, hardLocked = false) {
     super(message);
     this.name = 'PinLockoutError';
     this.secondsLeft = secondsLeft;
+    this.hardLocked = hardLocked;
   }
+}
+
+/** The lockout explained in the customer's language. */
+export function pinLockoutMessage(err: PinLockoutError, t: (key: string, opts?: any) => string): string {
+  return err.hardLocked ? t('pin.hardLocked') : t('pin.lockedOut', { seconds: err.secondsLeft ?? 60 });
 }
 
 /**
@@ -123,7 +131,7 @@ export async function validatePin(pin: string): Promise<boolean> {
     return data.data?.valid || false;
   } catch (error: any) {
     if (error?.code === 'functions/resource-exhausted') {
-      throw new PinLockoutError(error.message, error?.details?.secondsLeft);
+      throw new PinLockoutError(error.message, error?.details?.secondsLeft, error?.details?.hardLocked === true);
     }
     logger.error('Validate PIN error:', error);
     return false;
@@ -240,7 +248,7 @@ export async function loginWithPin(pin: string): Promise<void> {
     if (error instanceof DeviceNotTrustedError) throw error;
 
     if (error?.code === 'functions/resource-exhausted') {
-      throw new PinLockoutError(error.message, error?.details?.secondsLeft);
+      throw new PinLockoutError(error.message, error?.details?.secondsLeft, error?.details?.hardLocked === true);
     }
     // The server can't tell us apart from an unknown device on purpose, so a
     // rejection here means: stop trusting this credential, use SMS instead.

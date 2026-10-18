@@ -317,6 +317,8 @@ export default function ApprovePaymentScreen() {
         showResult('error', t('auth.pinLogin.invalidPin'));
       } else if (cooldownMessage(e, t)) {
         showResult('error', cooldownMessage(e, t)!);
+      } else if (e?.code === 'functions/resource-exhausted' && e?.details?.hardLocked) {
+        showResult('error', t('pin.hardLocked'));
       } else if (e?.code === 'functions/resource-exhausted' && e?.details?.secondsLeft) {
         showResult('error', t('pin.lockedOut', { seconds: e.details.secondsLeft }));
       } else {

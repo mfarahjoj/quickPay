@@ -1122,5 +1122,6 @@
   "invite.subtitleCashIn": "شارك رمزك: يحصل كل منكما على {{amount}} بعد أول شحن لهم بقيمة {{min}} أو أكثر.",
   "invite.subtitleKyc": "شارك رمزك: يحصل كل منكما على {{amount}} بعد التحقق من هويتهم.",
   "cashout.free": "بدون رسوم",
-  "cashout.feeLine": "رسوم {{fee}} · يخرج {{total}} من محفظتك"
+  "cashout.feeLine": "رسوم {{fee}} · يخرج {{total}} من محفظتك",
+  "pin.hardLocked": "تم قفل رمز PIN بعد محاولات خاطئة كثيرة. استخدم «نسيت رمز PIN» لتعيين رمز جديد."
 }

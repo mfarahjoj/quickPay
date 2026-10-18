@@ -121,3 +121,36 @@ describe("PIN secrets live server-only", () => {
     });
   });
 });
+
+describe("hard lock (review A3)", () => {
+  let restore: (() => void) | undefined;
+  beforeAll(() => {
+    if (!admin.apps.length) admin.initializeApp();
+  });
+  afterEach(() => {
+    restore?.();
+    restore = undefined;
+  });
+
+  it("locks for good at the tenth wrong PIN in a row, even for the right PIN", async () => {
+    const db = fakeFirestore({ "users/u1": {}, "users/u1/private/auth": { pinHash: HASH, pinFailedAttempts: 9 } });
+    restore = useFakeFirestore(db);
+
+    await expect(verifyUserPin("u1", "000000")).resolves.toBe(false);
+    expect(db.get("users/u1/private/auth")).toMatchObject({ pinHardLocked: true, pinFailedAttempts: 10 });
+
+    await expect(verifyUserPin("u1", "246810")).rejects.toMatchObject({
+      code: "resource-exhausted",
+      details: { hardLocked: true },
+    });
+  });
+
+  it("keeps timed locks below the threshold", async () => {
+    const db = fakeFirestore({ "users/u1": {}, "users/u1/private/auth": { pinHash: HASH, pinFailedAttempts: 4 } });
+    restore = useFakeFirestore(db);
+    await expect(verifyUserPin("u1", "000000")).resolves.toBe(false);
+    const auth = db.get("users/u1/private/auth")!;
+    expect(auth.pinHardLocked).toBeUndefined();
+    expect(auth.pinLockedUntil.toMillis()).toBeGreaterThan(Date.now());
+  });
+});
