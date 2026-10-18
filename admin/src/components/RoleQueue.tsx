@@ -14,6 +14,7 @@ export function RoleQueue() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
+  const [idNumber, setIdNumber] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -35,7 +36,13 @@ export function RoleQueue() {
 
   const decide = async (reason: string) => {
     if (!pending) return;
-    await api.reviewRoleRequest(pending.request.requestId, pending.decision, reason);
+    await api.reviewRoleRequest(
+      pending.request.requestId,
+      pending.decision,
+      reason,
+      pending.decision === "approve" ? idNumber.trim() : undefined
+    );
+    setIdNumber("");
     setNotice(
       `${pending.request.applicantName || pending.request.userId} — ${
         pending.decision === "approve" ? "approved" : "rejected"
@@ -142,7 +149,23 @@ export function RoleQueue() {
           danger={pending.decision === "reject"}
           onConfirm={decide}
           onCancel={() => setPending(null)}
-        />
+        >
+          {pending.decision === "approve" && (
+            <label className="stack" style={{ marginBottom: 12 }}>
+              <span className="muted">ID number you checked (optional)</span>
+              <input
+                value={idNumber}
+                onChange={(e) => setIdNumber(e.target.value)}
+                autoComplete="off"
+                placeholder="e.g. SL-99AB1234"
+              />
+              <span className="muted">
+                Lets them reset a forgotten PIN in the app with its last 4 characters. Without it, a forgotten PIN means
+                a visit to support.
+              </span>
+            </label>
+          )}
+        </ReasonPrompt>
       )}
     </div>
   );

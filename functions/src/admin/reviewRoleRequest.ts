@@ -80,6 +80,12 @@ interface ReviewRoleRequestRequest {
   requestId: string;
   decision: "approve" | "reject";
   reason: string;
+  /**
+   * The ID number the reviewer checked in person, on approval. Kept
+   * server-only (users/{uid}/private/identity) so a merchant can later reset
+   * a forgotten PIN with its last four, as with a verified KYC ID (review O5).
+   */
+  idNumber?: string;
 }
 
 /** Callable: approve or reject an application. */
@@ -102,6 +108,12 @@ export const adminReviewRoleRequest = https.onCall(
         "invalid-argument",
         "decision must be 'approve' or 'reject'"
       );
+    }
+    const rawId = request.data?.idNumber;
+    const idNumber =
+      decision === "approve" && typeof rawId === "string" ? rawId.replace(/[^A-Za-z0-9]/g, "").toUpperCase() : "";
+    if (rawId !== undefined && rawId !== "" && idNumber.length < 4) {
+      throw new https.HttpsError("invalid-argument", "The ID number needs at least 4 letters or digits");
     }
 
     const db = admin.firestore();
@@ -153,6 +165,14 @@ export const adminReviewRoleRequest = https.onCall(
           accountType: roleRequest.requestedRole,
           updatedAt: now,
         });
+        if (idNumber) {
+          tx.set(userRef.collection("private").doc("identity"), {
+            idNumber,
+            source: "role_review",
+            recordedBy: actor.uid,
+            recordedAt: now,
+          });
+        }
       } else if (previousAccountType === roleRequest.requestedRole) {
         // Rejecting an account that already holds the role demotes it. This is
         // how the migration closes: accounts that self-selected a role before

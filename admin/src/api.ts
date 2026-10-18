@@ -449,11 +449,12 @@ export const api = {
   reviewRoleRequest: (
     requestId: string,
     decision: "approve" | "reject",
-    reason: string
+    reason: string,
+    idNumber?: string
   ) =>
-    call<{ requestId: string; decision: string; reason: string }, unknown>(
+    call<{ requestId: string; decision: string; reason: string; idNumber?: string }, unknown>(
       "adminReviewRoleRequest",
-      { requestId, decision, reason }
+      { requestId, decision, reason, ...(idNumber ? { idNumber } : {}) }
     ),
 
   ledgerHealth: () => call<void, LedgerHealth>("adminGetLedgerHealth"),

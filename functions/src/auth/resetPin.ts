@@ -234,8 +234,19 @@ async function checkIdAnswer(
   nowMs: number
 ): Promise<void> {
   // Only a reviewed ID counts: an unreviewed submission could be the caller's
-  // own, typed in to answer this very question.
-  if (user.kycStatus !== "verified") {
+  // own, typed in to answer this very question. That's a verified KYC ID, or
+  // for a merchant or agent, the ID ops checked in person when approving
+  // their role (review O5).
+  let stored = "";
+  if (user.kycStatus === "verified") {
+    const kyc = await userRef.collection("kyc").doc("latest").get();
+    stored = normaliseId(String(kyc.data()?.idNumber ?? ""));
+  }
+  if (stored.length < 4 && user.roleRequestStatus === "approved") {
+    const identity = await userRef.collection("private").doc("identity").get();
+    stored = normaliseId(String(identity.data()?.idNumber ?? ""));
+  }
+  if (stored.length < 4) {
     throw new https.HttpsError(
       "failed-precondition",
       "Reset your PIN with an agent or support, and bring your ID.",
@@ -248,16 +259,6 @@ async function checkIdAnswer(
       "failed-precondition",
       "Enter the last 4 characters of your ID.",
       { reason: "reset_needs_id" }
-    );
-  }
-
-  const kyc = await userRef.collection("kyc").doc("latest").get();
-  const stored = normaliseId(String(kyc.data()?.idNumber ?? ""));
-  if (stored.length < 4) {
-    throw new https.HttpsError(
-      "failed-precondition",
-      "Reset your PIN with an agent or support, and bring your ID.",
-      { reason: "reset_needs_agent" }
     );
   }
 

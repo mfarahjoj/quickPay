@@ -8,6 +8,7 @@ import { useMerchantOnboardingGate } from '../hooks/useMerchantOnboardingGate';
 import MerchantOnboardingNavigator from './MerchantOnboardingNavigator';
 import RoleReviewPendingScreen from '../screens/auth/RoleReviewPendingScreen';
 import { confirmSignOut } from '../utils/confirmSignOut';
+import { AppLockGate } from '../components/security/AppLockGate';
 import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import { colors } from '../theme';
 import {
@@ -53,6 +54,8 @@ type MerchantStackParamList = {
   AutoPayout: undefined;
   Statement: undefined;
   MoveToFloat: undefined;
+  ChangePin: undefined;
+  ResetPin: undefined;
 };
 
 type TabParamList = {
@@ -292,6 +295,16 @@ function MainStackNavigator() {
         options={{ headerShown: false }}
       />
       <MainStack.Screen
+        name="ChangePin"
+        getComponent={() => require('../screens/settings/ChangePinScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="ResetPin"
+        getComponent={() => require('../screens/settings/ResetPinScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
         name="ReportProblem"
         getComponent={() => require('../screens/disputes/ReportProblemScreen').default}
         options={{ headerShown: false }}
@@ -350,7 +363,7 @@ export default function AppNavigator() {
     return <AgentProfileSetupScreen navigation={{ goBack: () => confirmSignOut(t) }} />;
   }
 
-  return (
+  const app = (
     <NavigationContainer ref={navigationRef}>
       <RootStack.Navigator
         screenOptions={{
@@ -366,6 +379,10 @@ export default function AppNavigator() {
       </RootStack.Navigator>
     </NavigationContainer>
   );
+
+  // Signed in and approved: the app lock covers it (review A3). Keyed by uid
+  // so a different account never inherits an unlocked state.
+  return user ? <AppLockGate key={user.uid}>{app}</AppLockGate> : app;
 }
 
 const styles = StyleSheet.create({

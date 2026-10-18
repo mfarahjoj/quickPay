@@ -214,6 +214,20 @@ describe("PIN reset safety", () => {
       expect(db.store.has("trustedDevices/dev-stranger")).toBe(false);
     });
 
+    it("takes the ID ops checked at role approval for a merchant (O5)", async () => {
+      useDb({
+        [`users/${UID}`]: { pinHash: "old-hash", kycStatus: "pending", roleRequestStatus: "approved" },
+        [`users/${UID}/private/identity`]: { idNumber: "SL77XY5678", source: "role_review" },
+      });
+      await expect(call()).rejects.toMatchObject({ details: { reason: "reset_needs_id" } });
+      await expect(call({ idLast4: "5678" })).resolves.toMatchObject({ success: true });
+    });
+
+    it("sends an approved merchant with no recorded ID to support", async () => {
+      useDb({ [`users/${UID}`]: { pinHash: "old-hash", kycStatus: "pending", roleRequestStatus: "approved" } });
+      await expect(call({ idLast4: "5678" })).rejects.toMatchObject({ details: { reason: "reset_needs_agent" } });
+    });
+
     it("locks after three wrong answers, even before a right one", async () => {
       const db = useDb(verifiedId());
 

@@ -123,3 +123,82 @@ export async function completeMerchantSetup(data: {
     throw new Error(error.message || 'Failed to complete registration');
   }
 }
+
+/**
+ * The PIN is locked: for a while (`secondsLeft`), or until it's reset
+ * (`hardLocked`, review A3).
+ */
+export class PinLockoutError extends Error {
+  secondsLeft?: number;
+  hardLocked: boolean;
+
+  constructor(message: string, secondsLeft?: number, hardLocked = false) {
+    super(message);
+    this.name = 'PinLockoutError';
+    this.secondsLeft = secondsLeft;
+    this.hardLocked = hardLocked;
+  }
+}
+
+function lockoutFrom(error: any): PinLockoutError | null {
+  if (error?.code !== 'functions/resource-exhausted') return null;
+  return new PinLockoutError(error.message, error?.details?.secondsLeft, error?.details?.hardLocked === true);
+}
+
+/**
+ * After a PIN reset or change, a device revoke or a freeze, the server ends
+ * every session on the account (review A5) and hands this phone a token to
+ * sign straight back in with. Without one this phone is signed out within
+ * the hour like the rest. Never throws.
+ */
+export async function adoptSessionToken(data: unknown): Promise<void> {
+  const token = (data as { data?: { sessionToken?: string } } | undefined)?.data?.sessionToken;
+  if (!token) return;
+  try {
+    await auth().signInWithCustomToken(token);
+  } catch (err) {
+    logger.warn('Could not renew the session:', err);
+  }
+}
+
+/** Check the PIN, for the app lock. Throws PinLockoutError while locked. */
+export async function validatePin(pin: string): Promise<boolean> {
+  try {
+    const result = await functions().httpsCallable('validateUserPin')({ pin });
+    return (result.data as { data?: { valid?: boolean } }).data?.valid === true;
+  } catch (error: any) {
+    throw lockoutFrom(error) ?? error;
+  }
+}
+
+/** Change the PIN. Throws PinLockoutError, or the callable's error. */
+export async function changePin(currentPin: string, newPin: string): Promise<void> {
+  try {
+    const result = await functions().httpsCallable('changePin')({ currentPin, newPin });
+    await adoptSessionToken(result.data);
+  } catch (error: any) {
+    throw lockoutFrom(error) ?? error;
+  }
+}
+
+export interface ResetPinResult {
+  /** Sending money is paused until then. */
+  cooldownUntil: string;
+  allowanceCents: number;
+}
+
+/**
+ * Reset a forgotten PIN after a fresh SMS code. Merchants have no trusted
+ * phone yet, so the server asks for the last 4 of the ID ops checked when
+ * approving the account (`details.reason` says which step comes next).
+ */
+export async function resetPin(newPin: string, idLast4?: string): Promise<ResetPinResult> {
+  // Force-refresh so the callable sees the post-SMS auth_time.
+  await auth().currentUser?.getIdToken(true);
+  const result = await functions().httpsCallable('resetPin')({
+    newPin,
+    ...(idLast4 ? { idLast4 } : {}),
+  });
+  await adoptSessionToken(result.data);
+  return (result.data as { data: ResetPinResult }).data;
+}
