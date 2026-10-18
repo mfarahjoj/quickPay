@@ -174,7 +174,7 @@ Each phase ends with a deploy that Mahamed authorises per target, as `CLAUDE.md`
 ### Phase 3: Refunds and settlement done properly
 *Goal: merchants control their money and customers can see what happened.*
 
-**Status 2026-10-18:** 3.1 (transaction kinds), 3.2 (refund requests, built as a dispute claim) and 3.3 (partial refunds) deployed to prod 2026-10-18 from `824c2c8`; their app screens need customer build 63+ and merchant build 14+. 3.4 is covered by the D8 reserve: a refund the merchant can't cover becomes a dispute, and an upheld one reserves the amount until they can pay. 3.6 (payout time, automatic daily payouts, CSV statements) committed, not deployed. 3.5 waits on a yes to the D10 recommendation (`AGENT_FLOAT_SEPARATION.md`).
+**Status 2026-10-18:** 3.1 (transaction kinds), 3.2 (refund requests, built as a dispute claim) and 3.3 (partial refunds) deployed to prod 2026-10-18 from `824c2c8`; their app screens need customer build 63+ and merchant build 14+. 3.4 is covered by the D8 reserve: a refund the merchant can't cover becomes a dispute, and an upheld one reserves the amount until they can pay. 3.6 (payout time, automatic daily payouts, CSV statements) committed, not deployed. 3.5 (agent float in its own `agent:{uid}` account, Move to float, migration) committed, not deployed; see `AGENT_FLOAT_SEPARATION.md` for the deploy steps.
 
 **3.1 Transaction kinds (F19)**
 - Add `kind` to every `transactions` writer: `merchant_payment`, `p2p`, `payroll`, `topup`, `cashout`, `payout`, `refund`, `adjustment`, `referral`.
@@ -226,7 +226,7 @@ Each phase ends with a deploy that Mahamed authorises per target, as `CLAUDE.md`
 | D7 | **Decided 2026-10-18:** other party replies within 3 days or the dispute goes to ops; ops resolve within 7 days of opening | 2.2 |
 | D8 | **Decided 2026-10-18: wait for funds.** An upheld dispute the other party can't cover is settled when their balance allows; until then that amount is reserved in their wallet | 2.2, 3.4 |
 | D9 *(new)* | Remove merchant features from the customer app (recommended) | 4.1 |
-| D10 | **Analysed 2026-10-18** in `AGENT_FLOAT_SEPARATION.md`: separate `agent:{uid}` float account as M-Pesa and regulators do; payouts only from sales; sales → float self-service, float → sales only via ops. Needs a yes before building | 3.5 |
+| D10 | **Decided 2026-10-18:** separate `agent:{uid}` float account as recommended in `AGENT_FLOAT_SEPARATION.md`. Built in 3.5 | 3.5 |
 | D11 | **Decided 2026-10-18: yes.** Payout time shown to merchants (`payoutTargetHours`, console); opt-in automatic daily payouts above a kept balance (`autoPayoutMinCents`); monthly CSV statements. Done in 3.6 | 3.6 |
 
 ## 5. Suggested order

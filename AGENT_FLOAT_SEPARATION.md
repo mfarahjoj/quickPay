@@ -1,7 +1,9 @@
 # Agent float vs shop sales (decision D10)
 
 **Date:** 2026-10-18
-**Status:** Recommendation. Nothing is built yet; it needs a yes before the ledger changes.
+**Status:** Approved and built 2026-10-18 on `fix/wallet-phase1`, not deployed.
+
+**Deploying it:** deploy every function together (the ledger itself changed), then straight away open the console's float desk, preview "Separate agent float from wallets", check each agent, and have a super admin apply it. Until an agent is migrated their float account is empty and their cash-ins are refused. On 2026-10-18 prod had one agent (the founder's test agent-merchant), whose journal shows $0 of float; its $100 wallet came from an opening balance, so decide in the preview whether any of it is float.
 **Question:** an `agent_merchant` runs a shop *and* does cash-in and cash-out. Today both live in one wallet, `user:{uid}`. Which money is float, which is sales, and may payouts ever draw on float?
 
 ---
