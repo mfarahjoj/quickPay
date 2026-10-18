@@ -45,6 +45,7 @@ export interface Rates {
   pinHardLockAttempts: number;
   maxTrustedDevices: number;
   trustedDeviceIdleDays: number;
+  sessionIdleDays: number;
 }
 
 export type RateGroup =
@@ -345,6 +346,16 @@ export const RATE_FIELDS: { [K in keyof Rates]: RateFieldSpec } = {
     default: 180,
     min: 30,
     max: 730,
+    unit: "days",
+  },
+  sessionIdleDays: {
+    group: "Sign-in and devices",
+    label: "Sign out after this long unused",
+    help: "Days without a PIN check. Then every session on the account ends, and signing back in needs an SMS code, or a trusted phone and the PIN.",
+    kind: "int",
+    default: 30,
+    min: 7,
+    max: 180,
     unit: "days",
   },
 };

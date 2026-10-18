@@ -9,6 +9,7 @@ import MerchantOnboardingNavigator from './MerchantOnboardingNavigator';
 import RoleReviewPendingScreen from '../screens/auth/RoleReviewPendingScreen';
 import { confirmSignOut } from '../utils/confirmSignOut';
 import { AppLockGate } from '../components/security/AppLockGate';
+import { useIdleSignOut } from '../hooks/useIdleSignOut';
 import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import { colors } from '../theme';
 import {
@@ -329,6 +330,7 @@ export default function AppNavigator() {
   const { t } = useTranslation();
   const { user } = useAuth();
   const { loading, state, requestedRole, rejectionReason } = useMerchantOnboardingGate();
+  useIdleSignOut(!!user);
 
   // A rejected applicant who chooses to try again is sent back through
   // onboarding. Local because there is nothing to persist: submitting writes a

@@ -88,3 +88,40 @@ describe("ending sessions", () => {
     expect(res.data.sessionToken).toBeUndefined();
   });
 });
+
+describe("idle sign-out (review C10)", () => {
+  let restore: (() => void) | undefined;
+  const revoke = jest.fn().mockResolvedValue(undefined);
+  let authSpy: jest.SpyInstance;
+  const DAY = 24 * 60 * 60 * 1000;
+  const ago = (ms: number) => admin.firestore.Timestamp.fromMillis(Date.now() - ms);
+
+  beforeAll(() => {
+    if (!admin.apps.length) admin.initializeApp();
+    authSpy = jest.spyOn(admin, "auth").mockReturnValue({ revokeRefreshTokens: revoke } as any);
+  });
+  afterEach(() => restore?.());
+  afterAll(() => authSpy.mockRestore());
+
+  it("ends sessions once for accounts unused past 30 days", async () => {
+    const db = fakeFirestore({
+      "users/idle": { lastActiveAt: ago(31 * DAY) },
+      "users/done": { lastActiveAt: ago(40 * DAY), sessionsRevokedAt: ago(35 * DAY) },
+      "users/fresh": { lastActiveAt: ago(2 * DAY) },
+    });
+    restore = useFakeFirestore(db);
+    const { expireIdleSessionsNow } = await import("../auth/sessions");
+    await expect(expireIdleSessionsNow()).resolves.toBe(1);
+    expect(revoke).toHaveBeenCalledTimes(1);
+    expect(revoke).toHaveBeenCalledWith("idle");
+    await expect(expireIdleSessionsNow()).resolves.toBe(0);
+  });
+
+  it("counts a correct PIN as use", async () => {
+    const db = fakeFirestore({ "users/u1": {}, "users/u1/private/auth": { pinHash: HASH } });
+    restore = useFakeFirestore(db);
+    const { verifyUserPin } = await import("../auth/validatePin");
+    await verifyUserPin("u1", "246810");
+    expect(db.get("users/u1")!.lastActiveAt.toMillis()).toBeGreaterThan(Date.now() - 60_000);
+  });
+});

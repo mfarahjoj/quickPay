@@ -4,6 +4,7 @@ import { NavigationContainer, createNavigationContainerRef } from '@react-naviga
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useAuth } from '../hooks/useAuth';
+import { useIdleSignOut } from '../hooks/useIdleSignOut';
 import { usePinSetupDone } from '../hooks/usePinSetupDone';
 import { useBiometricSetupDone } from '../hooks/useBiometricSetupDone';
 import { usePinVerifiedThisInstall } from '../hooks/usePinVerifiedThisInstall';
@@ -415,6 +416,7 @@ function BootstrapLoading() {
 
 export default function AppNavigator() {
   const { user, loading: authLoading } = useAuth();
+  useIdleSignOut(!!user);
   const { done: pinSetupDone, markDone: markPinSetupDone } = usePinSetupDone();
   const { done: biometricSetupDone, markDone: markBiometricSetupDone } = useBiometricSetupDone();
   const { done: pinVerified, refresh: refreshPinVerified, markDone: markPinVerified } =

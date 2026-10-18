@@ -86,7 +86,7 @@ export function writeAuth(
   tx: FirebaseFirestore.Transaction | FirebaseFirestore.WriteBatch,
   uid: string,
   fields: Partial<AuthSecrets>,
-  opts: { hasPin?: boolean } = {}
+  opts: { hasPin?: boolean; active?: boolean } = {}
 ): void {
   (tx as FirebaseFirestore.Transaction).set(authRef(uid), fields, { merge: true });
   const userUpdate: Record<string, unknown> = Object.fromEntries(
@@ -94,6 +94,8 @@ export function writeAuth(
   );
   // A write that carries the hash also settles `hasPin`.
   const hasPin = opts.hasPin ?? (isStoredPinHash(fields.pinHash) ? true : undefined);
+  // A correct PIN is what counts as using the account (C10, sessions.ts).
+  if (opts.active) userUpdate.lastActiveAt = admin.firestore.Timestamp.now();
   if (hasPin !== undefined) {
     userUpdate.hasPin = hasPin;
     if (hasPin) userUpdate.pinHash = LEGACY_PIN_PLACEHOLDER;

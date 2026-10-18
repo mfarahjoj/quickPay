@@ -156,7 +156,7 @@ export async function verifyUserPin(
         tx,
         userId,
         upgrade && current.pinHash === pinHash ? { ...cleared, pinHash: upgrade } : cleared,
-        { hasPin: true }
+        { hasPin: true, active: true }
       );
     });
   }
