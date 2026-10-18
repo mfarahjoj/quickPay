@@ -10,6 +10,15 @@
 
 **Fix the leak before the next deploy.**
 
+**Status (2026-10-18):** items 1–15 are built on `fix/wallet-phase1`, one commit each, and **not deployed**. Decisions used the suggested defaults:
+- O1: hard lock at 10.
+- O2: sign out after 30 days.
+- O3: 5 phones, forgotten after 180 days.
+- O4: +252 and +44 for now. The diaspora list is still to decide.
+- O5: role approval counts as verified ID.
+
+O1–O3 are editable in the console under "Sign-in and devices". Before and after deploying, follow SECURITY_CONSOLE_CHECKLIST.md: the PIN_PEPPER secret, the Token Creator grant, and the PIN-secrets migration.
+
 ---
 
 ## 1. How it works today
