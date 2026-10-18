@@ -32,9 +32,12 @@ import { rollingWindowStart, sumStandingCents } from "../utils/rollingTotal";
 import { isAgentRole } from "../utils/roles";
 import { resolveAccountStatus } from "../utils/accountStatus";
 import { notifyUser } from "../utils/notifications";
+import { floatRef } from "../agents/float";
 import {
   prepareJournalEntry,
   userAccount,
+  agentAccount,
+  agentIdOf,
   floatAccountForRoute,
   isFloatRoute,
   type FloatRoute,
@@ -245,7 +248,9 @@ export const adminApproveFloat = https.onCall(
       const journalEntryId = `${entryPrefix}_${issuanceId}`;
       const transactionId = journalEntryId;
       const floatAccount = floatAccountForRoute(issuance.route as FloatRoute);
-      const agentLedgerAccount = userAccount(issuance.agentId);
+      // Float is issued into, and withdrawn from, the agent's float account,
+      // never their own wallet (AGENT_FLOAT_SEPARATION.md).
+      const agentLedgerAccount = agentAccount(issuance.agentId);
 
       const lines =
         issuance.direction === "issue"
@@ -454,6 +459,8 @@ interface AgentPosition {
   accountType?: string;
   accountStatus: string;
   balanceCents: number;
+  /** The agent's own wallet: commission and, for an agent-merchant, sales. */
+  walletCents: number;
 }
 
 /**
@@ -478,12 +485,13 @@ export const adminListAgentFloat = https.onCall(
 
     if (agentsSnap.empty) return { success: true, data: [] };
 
-    const wallets = await db.getAll(
-      ...agentsSnap.docs.map((d) => db.collection("wallets").doc(d.id))
-    );
-    const balanceById = new Map(
-      wallets.map((w) => [w.id, (w.data()?.balance as number) ?? 0])
-    );
+    const [wallets, floats] = await Promise.all([
+      db.getAll(...agentsSnap.docs.map((d) => db.collection("wallets").doc(d.id))),
+      db.getAll(...agentsSnap.docs.map((d) => floatRef(d.id))),
+    ]);
+    const walletById = new Map(wallets.map((w) => [w.id, (w.data()?.balance as number) ?? 0]));
+    // Float docs are keyed agent:{uid}; map them back to the uid.
+    const floatById = new Map(floats.map((f) => [agentIdOf(f.id), (f.data()?.balance as number) ?? 0]));
 
     const positions: AgentPosition[] = agentsSnap.docs.map((doc) => {
       const data = doc.data();
@@ -493,7 +501,8 @@ export const adminListAgentFloat = https.onCall(
         phoneNumber: data.phoneNumber,
         accountType: data.accountType,
         accountStatus: resolveAccountStatus(data),
-        balanceCents: balanceById.get(doc.id) ?? 0,
+        balanceCents: floatById.get(doc.id) ?? 0,
+        walletCents: walletById.get(doc.id) ?? 0,
       };
     });
 

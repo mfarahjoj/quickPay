@@ -10,11 +10,13 @@ import { enforceVelocity } from "../utils/velocity";
 import { isAgentRole } from "../utils/roles";
 import { notifyTopupCompleted } from "../utils/notifications";
 import { maybeUnlockReferral } from "../referral/referralBonus";
+import { readFloatCents } from "../agents/float";
 import { ApiResponse, Wallet, Transaction } from "../types";
 import { getRates, computeCommission } from "../config/rates";
 import {
   prepareJournalEntry,
   userAccount,
+  agentAccount,
   JournalLine,
   PLATFORM_FEES,
 } from "../ledger";
@@ -146,21 +148,14 @@ export const manualTopup = https.onCall(
           throw new Error("User wallet not found");
         }
 
-        // Float model: the top-up is funded from the agent's pre-purchased
-        // float, so agents can never credit value they haven't paid for.
-        const agentWalletRef = db.collection("wallets").doc(agentId);
-        const agentWalletDoc = await transaction.get(agentWalletRef);
-        if (!agentWalletDoc.exists) {
+        // Float model: the top-up is funded from the agent's float, held apart
+        // from their own wallet in agent:{uid} (AGENT_FLOAT_SEPARATION.md).
+        const floatCents = await readFloatCents(agentId, transaction);
+        if (floatCents < amountCents) {
           throw new https.HttpsError(
             "failed-precondition",
-            "Agent float wallet not found. Purchase float before topping up customers."
-          );
-        }
-        const agentWallet = agentWalletDoc.data() as Wallet;
-        if (agentWallet.balance < amountCents) {
-          throw new https.HttpsError(
-            "failed-precondition",
-            `Insufficient float. This top-up needs $${amount.toFixed(2)} but your float balance is $${(agentWallet.balance / 100).toFixed(2)}.`
+            `Insufficient float. This top-up needs $${amount.toFixed(2)} but your float is $${(floatCents / 100).toFixed(2)}.`,
+            { reason: "insufficient_float", floatCents }
           );
         }
 
@@ -169,7 +164,7 @@ export const manualTopup = https.onCall(
         // Agent float funds the customer's credit; commission is credited
         // back to the agent, funded by the platform.
         const lines: JournalLine[] = [
-          { account: userAccount(agentId), debit: amountCents, credit: 0 },
+          { account: agentAccount(agentId), debit: amountCents, credit: 0 },
           { account: userAccount(userId), debit: 0, credit: amountCents },
         ];
         if (commissionCents > 0) {

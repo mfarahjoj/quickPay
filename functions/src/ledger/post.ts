@@ -19,7 +19,7 @@
 import * as admin from "firebase-admin";
 import { Wallet } from "../types";
 import { JournalEntryDoc, JournalEntryInput, JournalRefs } from "./types";
-import { enforcesNonNegative, isUserAccount, userIdOf } from "./accounts";
+import { enforcesNonNegative, isUserAccount, userIdOf, isAgentAccount, agentIdOf } from "./accounts";
 import { AccountDelta, aggregateDeltas, validateEntry } from "./validate";
 
 export const JOURNAL_COLLECTION = "journal_entries";
@@ -158,6 +158,29 @@ export async function prepareJournalEntry(
     resultingBalances.set(d.account, newBalance);
   });
 
+  // Agent float accounts are read too: unlike platform accounts they can't
+  // go negative, and a frozen agent can't spend their float. The wallet is
+  // read for its frozen flag; the float lives in ledger_balances.
+  const agentDeltas = deltas.filter((d) => isAgentAccount(d.account));
+  const agentSnaps = await Promise.all(
+    agentDeltas.map((d) => tx.get(db.collection(LEDGER_BALANCES_COLLECTION).doc(d.account)))
+  );
+  const agentWalletSnaps = await Promise.all(
+    agentDeltas.map((d) => tx.get(db.collection("wallets").doc(agentIdOf(d.account))))
+  );
+  agentDeltas.forEach((d, i) => {
+    const current = (agentSnaps[i].data()?.balance as number | undefined) ?? 0;
+    const frozen = agentWalletSnaps[i].data()?.frozen === true;
+    if (d.debits > 0 && frozen && input.allowFrozenDebit !== true) {
+      throw new FrozenAccountError(d.account);
+    }
+    const newBalance = current + d.delta;
+    if (newBalance < 0) {
+      throw new InsufficientBalanceError(d.account);
+    }
+    resultingBalances.set(d.account, newBalance);
+  });
+
   const writeEntry = (transaction: FirebaseFirestore.Transaction) => {
     const now = admin.firestore.Timestamp.now();
 
@@ -189,8 +212,17 @@ export async function prepareJournalEntry(
       });
     });
 
+    // Float is read-modify-write, like a wallet, so its check above holds.
+    agentDeltas.forEach((d) => {
+      transaction.set(
+        db.collection(LEDGER_BALANCES_COLLECTION).doc(d.account),
+        { account: d.account, balance: resultingBalances.get(d.account), currency: input.currency, updatedAt: now },
+        { merge: true }
+      );
+    });
+
     for (const d of deltas) {
-      if (isUserAccount(d.account)) continue;
+      if (isUserAccount(d.account) || isAgentAccount(d.account)) continue;
       writeNonUserProjection(transaction, d, input.currency, now);
     }
   };

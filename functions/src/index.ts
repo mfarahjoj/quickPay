@@ -68,6 +68,9 @@ export { mobileMoneyWebhook } from "./topup/mobileMoneyWebhook";
 export { lookupUserByPhone } from "./users/lookupUser";
 // Find Agent, and agent standing after upheld disputes (plan 2.6).
 export { listAgents, adminClearAgentFlag } from "./agents/standing";
+// Agent float in its own account (AGENT_FLOAT_SEPARATION.md)
+export { moveToFloat } from "./agents/moveToFloat";
+export { adminMigrateAgentFloat } from "./admin/floatMigration";
 // Customers' Send money lookup: masked name, business flag, per-caller budget.
 export { lookupRecipient } from "./users/lookupRecipient";
 

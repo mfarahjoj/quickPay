@@ -11,6 +11,7 @@ import { getRates, computeCommission } from "../config/rates";
 import {
   prepareJournalEntry,
   userAccount,
+  agentAccount,
   JournalLine,
   PLATFORM_FEES,
   CASHOUT_HOLD,
@@ -229,7 +230,8 @@ export const agentConfirmCashOut = https.onCall(
 
       const lines: JournalLine[] = [
         { account: CASHOUT_HOLD, debit: cashOut.amount + feeCents, credit: 0 },
-        { account: userAccount(agentId), debit: 0, credit: cashOut.amount },
+        // The cash the agent handed over comes back to them as float.
+        { account: agentAccount(agentId), debit: 0, credit: cashOut.amount },
       ];
       if (feeCents > 0) {
         lines.push({ account: PLATFORM_FEES, debit: 0, credit: feeCents });

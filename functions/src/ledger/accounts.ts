@@ -86,6 +86,26 @@ export function userAccount(uid: string): string {
   return `user:${uid}`;
 }
 
+/**
+ * An agent's float (AGENT_FLOAT_SEPARATION.md): e-value held against the
+ * cash in their drawer, kept apart from their own wallet (`user:{uid}`),
+ * which holds commission and shop sales. Cash-in, cash-out and the float
+ * desk move it; payouts never can. Projects onto
+ * `ledger_balances/agent:{uid}` and, like a wallet, can't go negative.
+ */
+export function agentAccount(uid: string): string {
+  return `agent:${uid}`;
+}
+
+export function isAgentAccount(account: string): boolean {
+  return account.startsWith("agent:");
+}
+
+/** The uid behind an `agent:{uid}` account. */
+export function agentIdOf(account: string): string {
+  return account.slice("agent:".length);
+}
+
 export function isUserAccount(account: string): boolean {
   return account.startsWith("user:");
 }
@@ -96,14 +116,14 @@ export function userIdOf(account: string): string {
 }
 
 /**
- * User accounts are liabilities and can never go negative (no overdrafts).
+ * User and agent-float accounts are liabilities and can never go negative.
  * Platform/float/clearing accounts may swing negative (e.g. promo deficit).
  */
 export function enforcesNonNegative(account: string): boolean {
-  return isUserAccount(account);
+  return isUserAccount(account) || isAgentAccount(account);
 }
 
-const ACCOUNT_RE = /^(user|platform|float|external):[A-Za-z0-9_-]+$/;
+const ACCOUNT_RE = /^(user|agent|platform|float|external):[A-Za-z0-9_-]+$/;
 
 export function isValidAccount(account: string): boolean {
   return ACCOUNT_RE.test(account);

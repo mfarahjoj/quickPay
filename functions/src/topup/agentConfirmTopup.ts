@@ -9,10 +9,12 @@ import { notifyUser } from "../utils/notifications";
 import { reserveOtpAttempt, clearOtpFailures } from "../utils/otpGuard";
 import { ApiResponse, AgentTopupRequest, Wallet, Transaction, User } from "../types";
 import { maybeUnlockReferral } from "../referral/referralBonus";
+import { readFloatCents } from "../agents/float";
 import { getRates, computeCommission } from "../config/rates";
 import {
   prepareJournalEntry,
   userAccount,
+  agentAccount,
   JournalLine,
   PLATFORM_FEES,
 } from "../ledger";
@@ -150,23 +152,16 @@ export const agentConfirmTopup = https.onCall(
       }
       const wallet = walletSnap.data() as Wallet;
 
-      // Float model: the agent pre-purchases e-money float, and every top-up
-      // is funded from it — the agent can never distribute value they haven't
-      // already paid the platform for. The cash they collect replaces the
-      // float they spend, exactly like Zaad/eDahab agent economics.
-      const agentWalletRef = db.collection("wallets").doc(agentId);
-      const agentWalletSnap = await tx.get(agentWalletRef);
-      if (!agentWalletSnap.exists) {
+      // Float model: the agent pre-purchases e-money float, held apart from
+      // their own wallet in agent:{uid} (AGENT_FLOAT_SEPARATION.md), and every
+      // top-up is funded from it. Shop sales and commission can't be handed
+      // out as cash-ins; the agent moves them into float first.
+      const floatCents = await readFloatCents(agentId, tx);
+      if (floatCents < topup.amount) {
         throw new https.HttpsError(
           "failed-precondition",
-          "Agent float wallet not found. Purchase float before confirming top-ups."
-        );
-      }
-      const agentWallet = agentWalletSnap.data() as Wallet;
-      if (agentWallet.balance < topup.amount) {
-        throw new https.HttpsError(
-          "failed-precondition",
-          `Insufficient float. This top-up needs ${topup.currency} ${(topup.amount / 100).toFixed(2)} but your float balance is ${topup.currency} ${(agentWallet.balance / 100).toFixed(2)}.`
+          `Insufficient float. This top-up needs ${topup.currency} ${(topup.amount / 100).toFixed(2)} but your float is ${topup.currency} ${(floatCents / 100).toFixed(2)}.`,
+          { reason: "insufficient_float", floatCents }
         );
       }
 
@@ -174,7 +169,7 @@ export const agentConfirmTopup = https.onCall(
       // the agent by the platform. Entry ID derives from the top-up request,
       // which completes exactly once.
       const lines: JournalLine[] = [
-        { account: userAccount(agentId), debit: topup.amount, credit: 0 },
+        { account: agentAccount(agentId), debit: topup.amount, credit: 0 },
         { account: userAccount(topup.customerId), debit: 0, credit: topup.amount },
       ];
       if (commissionCents > 0) {

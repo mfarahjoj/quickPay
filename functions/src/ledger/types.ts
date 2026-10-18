@@ -35,6 +35,12 @@ export type JournalEntryType =
   | "payout_settled"
   /** Payout refused or withdrawn: the hold returns to the merchant. */
   | "payout_cancelled"
+  /**
+   * An agent moves their own sales or earnings into their float
+   * (user:{uid} → agent:{uid}), or the one-off migration that first split
+   * float out of agents' wallets.
+   */
+  | "float_move"
   | "opening_balance"
   | "adjustment";
 

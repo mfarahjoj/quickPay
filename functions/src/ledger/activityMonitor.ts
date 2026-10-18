@@ -29,7 +29,7 @@
 
 import * as admin from "firebase-admin";
 import { JournalEntryDoc, JournalLine } from "./types";
-import { CASHOUT_HOLD, PLATFORM_FEES, isUserAccount } from "./accounts";
+import { CASHOUT_HOLD, PLATFORM_FEES, isUserAccount, isAgentAccount, agentIdOf, userAccount } from "./accounts";
 import { JOURNAL_COLLECTION } from "./post";
 
 export type ActivityKind = "self_dealing" | "agent_commission" | "round_trip" | "fees_net";
@@ -158,10 +158,20 @@ function pushId(map: Map<string, string[]>, key: string, id: string) {
  * unit-testable on hand-built entries.
  */
 export function analyzeActivity(
-  entries: MonitoredEntry[],
+  rawEntries: MonitoredEntry[],
   thresholds: MonitorThresholds = DEFAULT_MONITOR_THRESHOLDS
 ): ActivityFinding[] {
   const findings: ActivityFinding[] = [];
+
+  // An agent's float (agent:{uid}) and wallet (user:{uid}) are one person
+  // for every rule here: a cash-in debits the float and pays commission to
+  // the wallet, and the rules were written for the days both were one
+  // account. Moving one's own sales into float nets to zero, so it never
+  // reads as self-dealing.
+  const entries = rawEntries.map((e) => ({
+    ...e,
+    lines: e.lines.map((l) => (isAgentAccount(l.account) ? { ...l, account: userAccount(agentIdOf(l.account)) } : l)),
+  }));
 
   // self_dealing — per entry
   for (const entry of entries) {
@@ -253,14 +263,17 @@ export function analyzeActivity(
     if (entry.type !== "agent_cashout" || !entry.customer) continue;
     const hold = entry.lines.find((l) => l.account === CASHOUT_HOLD && l.debit > 0);
     if (!hold) continue;
+    // With a cash-out fee the hold carries cash + fee, and the fee goes to
+    // platform:fees; the agent is credited the cash part.
+    const feeIn = entry.lines.find((l) => l.account === PLATFORM_FEES && l.credit > 0)?.credit ?? 0;
     const agentLine = entry.lines.find(
-      (l) => isUserAccount(l.account) && l.credit === hold.debit
+      (l) => isUserAccount(l.account) && l.credit === hold.debit - feeIn
     );
     const customer = entry.customer;
     if (!agentLine) continue;
     const key = `${agentLine.account}|${customer}`;
     if (!cashedIn.has(key)) continue;
-    add(returned, key, hold.debit);
+    add(returned, key, hold.debit - feeIn);
     pushId(pairIds, key, entry.id);
   }
   cashedIn.forEach((inCents, key) => {

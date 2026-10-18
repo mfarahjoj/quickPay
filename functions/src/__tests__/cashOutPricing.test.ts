@@ -89,7 +89,9 @@ describe("cash-out pricing and the round-trip guard", () => {
 
     const done = await confirmAs(db, res.data.cashOutId);
     expect(done.data.commission).toBe(100);
-    expect(db.get(`wallets/${AGENT}`)!.balance).toBe(5_100);
+    // The cash comes back as float; the commission is the agent's earnings.
+    expect(db.get(`ledger_balances/agent:${AGENT}`)!.balance).toBe(5_000);
+    expect(db.get(`wallets/${AGENT}`)!.balance).toBe(100);
     expect(db.get("ledger_balances/platform:cashout_hold")!.balance).toBe(0);
   });
 
@@ -100,7 +102,8 @@ describe("cash-out pricing and the round-trip guard", () => {
     expect(db.get(`wallets/${CUSTOMER}`)!.balance).toBe(10_000 - 5_050);
 
     await confirmAs(db, res.data.cashOutId);
-    expect(db.get(`wallets/${AGENT}`)!.balance).toBe(5_000 + 100);
+    expect(db.get(`ledger_balances/agent:${AGENT}`)!.balance).toBe(5_000);
+    expect(db.get(`wallets/${AGENT}`)!.balance).toBe(100);
     // +50 fee in, -100 commission out.
     expect(db.get("ledger_balances/platform:fees")!.balance).toBe(50 - 100);
     expect(db.get("ledger_balances/platform:cashout_hold")!.balance).toBe(0);
@@ -124,7 +127,8 @@ describe("cash-out pricing and the round-trip guard", () => {
     const res = await ask(5_000);
     const done = await confirmAs(db, res.data.cashOutId);
     expect(done.data).toMatchObject({ commission: 0, commissionWithheld: "round_trip" });
-    expect(db.get(`wallets/${AGENT}`)!.balance).toBe(5_000);
+    expect(db.get(`ledger_balances/agent:${AGENT}`)!.balance).toBe(5_000);
+    expect(db.get(`wallets/${AGENT}`)!.balance).toBe(0);
     expect(db.get(`transactions/${db.get(`cashOutRequests/${res.data.cashOutId}`)!.transactionId}`)!.commissionWithheld).toBe(
       "round_trip"
     );

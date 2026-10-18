@@ -1,4 +1,6 @@
 import * as admin from "firebase-admin";
+import { isAgentRole } from "../utils/roles";
+import { readFloatCents } from "../agents/float";
 import { https } from "firebase-functions/v2";
 import { requireAuth } from "../utils/validation";
 import { centsToDollars } from "../utils/validation";
@@ -11,6 +13,8 @@ interface BalanceResponse {
   totalReceived: number;
   totalSent: number;
   lastTransactionAt: Date | null;
+  /** Agents only: float in agent:{uid}, apart from this wallet. */
+  floatCents?: number;
 }
 
 /**
@@ -37,6 +41,8 @@ export const getBalance = https.onCall(
       }
 
       const wallet = walletDoc.data() as Wallet;
+      const user = (await db.collection("users").doc(userId).get()).data();
+      const floatCents = isAgentRole(user?.accountType) ? await readFloatCents(userId) : undefined;
 
       return {
         success: true,
@@ -47,6 +53,7 @@ export const getBalance = https.onCall(
           totalReceived: centsToDollars(wallet.totalReceived),
           totalSent: centsToDollars(wallet.totalSent),
           lastTransactionAt: wallet.lastTransactionAt?.toDate() || null,
+          ...(floatCents !== undefined ? { floatCents } : {}),
         },
       };
     } catch (error: any) {

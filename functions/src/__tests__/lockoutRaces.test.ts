@@ -199,7 +199,9 @@ describe("lockouts hold under parallel requests", () => {
         auth: { uid: "a0" },
       });
       expect(db.get("cashOutRequests/co1")!.status).toBe("completed");
-      expect(db.get("wallets/a0")!.balance).toBe(5_000 + 100);
+      // The cash comes back as float; the commission is the agent's earnings.
+      expect(db.get("ledger_balances/agent:a0")!.balance).toBe(5_000);
+      expect(db.get("wallets/a0")!.balance).toBe(100);
     });
   });
 });

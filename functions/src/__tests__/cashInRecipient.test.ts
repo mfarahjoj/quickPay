@@ -64,6 +64,9 @@ describe("cash-in recipient rules", () => {
       [`users/${FROZEN}`]: { accountType: "customer", fullName: "Frozen", accountStatus: "frozen" },
       [`wallets/${AGENT}`]: wallet(FLOAT),
       [`wallets/${AGENT_2}`]: wallet(FLOAT),
+      // Float lives in agent:{uid}, apart from the agent's own wallet.
+      [`ledger_balances/agent:${AGENT}`]: { account: `agent:${AGENT}`, balance: FLOAT, currency: "USD" },
+      [`ledger_balances/agent:${AGENT_2}`]: { account: `agent:${AGENT_2}`, balance: FLOAT, currency: "USD" },
       [`wallets/${MERCHANT}`]: wallet(FLOAT),
       [`wallets/${CUSTOMER}`]: wallet(0),
       [`wallets/${FROZEN}`]: wallet(0),
@@ -141,7 +144,9 @@ describe("cash-in recipient rules", () => {
 
       // 2% default commission on $50 = 100 cents, paid by the platform.
       expect(db.get(`wallets/${CUSTOMER}`)!.balance).toBe(5_000);
-      expect(db.get(`wallets/${AGENT}`)!.balance).toBe(FLOAT - 5_000 + 100);
+      // Float pays for the cash-in; commission lands in the agent's own wallet.
+      expect(db.get(`ledger_balances/agent:${AGENT}`)!.balance).toBe(FLOAT - 5_000);
+      expect(db.get(`wallets/${AGENT}`)!.balance).toBe(FLOAT + 100);
       expect(db.get("ledger_balances/platform:fees")!.balance).toBe(-100);
 
       const [entry] = journalEntries(db);
