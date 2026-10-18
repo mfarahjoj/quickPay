@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, Linking } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -137,6 +137,19 @@ export default function SettingsScreen() {
           </GlassCard>
         </>
       )}
+
+      {/* Help */}
+      <Text style={styles.sectionLabel}>{t('settings.section.help')}</Text>
+      <GlassCard style={[styles.sectionCard, { paddingHorizontal: 16 }]}>
+        <TappableRow
+          label={t('settings.supportPage')}
+          onPress={() => Linking.openURL('https://zapppay.web.app/support').catch(() => {})}
+        />
+        <TappableRow
+          label={t('settings.emailSupport')}
+          onPress={() => Linking.openURL('mailto:support@zapppay.so').catch(() => {})}
+        />
+      </GlassCard>
 
       {/* App */}
       <Text style={styles.sectionLabel}>{t('settings.section.app')}</Text>

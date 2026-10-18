@@ -665,5 +665,8 @@
   "transactions.refund.partialSuccess": "Refunded {{amount}}. {{left}} can still be refunded.",
   "transactions.refund.amountTooHigh": "Only {{amount}} is left to refund.",
   "transactions.refund.refundedLabel": "Refunded",
-  "transactions.refund.refundedOf": "{{refunded}} of {{total}}"
+  "transactions.refund.refundedOf": "{{refunded}} of {{total}}",
+  "settings.section.help": "HELP",
+  "settings.supportPage": "Help & support",
+  "settings.emailSupport": "Email support@zapppay.so"
 }

@@ -665,5 +665,8 @@
   "transactions.refund.partialSuccess": "{{amount}} waa la celiyay. {{left}} weli waa la celin karaa.",
   "transactions.refund.amountTooHigh": "Kaliya {{amount}} ayaa ka hadhay oo la celin karo.",
   "transactions.refund.refundedLabel": "La celiyay",
-  "transactions.refund.refundedOf": "{{refunded}} ka mid ah {{total}}"
+  "transactions.refund.refundedOf": "{{refunded}} ka mid ah {{total}}",
+  "settings.section.help": "CAAWIMAAD",
+  "settings.supportPage": "Caawimaad iyo taageero",
+  "settings.emailSupport": "Iimayl u dir support@zapppay.so"
 }
