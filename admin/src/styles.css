@@ -1079,3 +1079,14 @@ td.diff { color: var(--danger); font-weight: 600; }
     scroll-behavior: auto !important;
   }
 }
+
+/* Dispute threads */
+.thread-msg {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--fill);
+  line-height: 1.45;
+}
+.thread-msg .muted { font-size: 12.5px; margin-bottom: 2px; }
+.thread-msg[data-role="counterparty"] { margin-left: 24px; }
+.thread-msg[data-role="ops"] { background: var(--accent-soft); }

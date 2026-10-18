@@ -4,6 +4,7 @@ import { Icon } from "./Icon";
 import { ReasonPrompt } from "./ReasonPrompt";
 import { Avatar, EmptyState, Loading } from "./ui";
 import { ApiKeysPanel } from "./ApiKeysPanel";
+import { AdjustModal } from "./AdjustModal";
 
 type PendingAction = "freeze" | "unfreeze" | "clearLockouts" | "revokeDevices";
 
@@ -77,12 +78,14 @@ function statusTone(status?: string) {
   }
 }
 
-export function UserDetail({ userId }: { userId: string }) {
+/** `canAdjust`: ops and super may correct balances (adminPostAdjustment). */
+export function UserDetail({ userId, canAdjust = false }: { userId: string; canAdjust?: boolean }) {
   const [detail, setDetail] = useState<Detail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [action, setAction] = useState<PendingAction | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [adjusting, setAdjusting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -215,6 +218,11 @@ export function UserDetail({ userId }: { userId: string }) {
           >
             Revoke devices ({detail.trustedDeviceCount})
           </button>
+          {canAdjust && (
+            <button onClick={() => setAdjusting(true)} disabled={!detail.wallet}>
+              Adjust balance
+            </button>
+          )}
         </div>
         {closed && (
           <p className="hint" style={{ marginTop: 12 }}>
@@ -266,6 +274,19 @@ export function UserDetail({ userId }: { userId: string }) {
           </div>
         )}
       </div>
+
+      {adjusting && (
+        <AdjustModal
+          userId={detail.userId}
+          name={profile.fullName || "this customer"}
+          onCancel={() => setAdjusting(false)}
+          onDone={async (message) => {
+            setAdjusting(false);
+            setNotice(message);
+            await load();
+          }}
+        />
+      )}
 
       {action && (
         <ReasonPrompt

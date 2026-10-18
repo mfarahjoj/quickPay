@@ -17,10 +17,11 @@ import { KycQueue } from "./components/KycQueue";
 import { PayoutDesk } from "./components/PayoutDesk";
 import { LedgerBanner } from "./components/LedgerBanner";
 import { LedgerDesk } from "./components/LedgerDesk";
+import { DisputeDesk } from "./components/DisputeDesk";
 import { Icon, type IconName } from "./components/Icon";
 import { Avatar, BrandMark, EmptyState, Loading } from "./components/ui";
 
-type Tab = "users" | "roles" | "kyc" | "float" | "payouts" | "ledger";
+type Tab = "users" | "roles" | "kyc" | "float" | "payouts" | "disputes" | "ledger";
 
 /** `short` is what the phone tab bar shows; the sidebar uses `label`. */
 const TABS: Record<
@@ -56,6 +57,12 @@ const TABS: Record<
     short: "Payouts",
     icon: "send",
     subtitle: "Send each payout on its rail first, then record the reference here.",
+  },
+  disputes: {
+    label: "Disputes",
+    short: "Disputes",
+    icon: "flag",
+    subtitle: "Claims that a payment, top-up or cash-out went wrong. Decide the ones waiting on Zapp, oldest deadline first.",
   },
   ledger: {
     label: "Ledger",
@@ -163,7 +170,7 @@ export default function App() {
 
   const visibleTabs: Tab[] = ["users"];
   if (canReviewRoles) visibleTabs.push("roles", "kyc");
-  if (canRunFloatDesk) visibleTabs.push("float", "payouts", "ledger");
+  if (canRunFloatDesk) visibleTabs.push("float", "payouts", "disputes", "ledger");
 
   return (
     <div className="app">
@@ -238,7 +245,7 @@ export default function App() {
               <div className="split">
                 <UserSearch selectedId={selectedId} onSelect={setSelectedId} />
                 {selectedId ? (
-                  <UserDetail key={selectedId} userId={selectedId} />
+                  <UserDetail key={selectedId} userId={selectedId} canAdjust={canRunFloatDesk} />
                 ) : (
                   <div className="panel">
                     <EmptyState icon="search" title="No customer selected">
@@ -256,6 +263,8 @@ export default function App() {
             {tab === "float" && canRunFloatDesk && <FloatDesk adminUid={user.uid} />}
 
             {tab === "payouts" && canRunFloatDesk && <PayoutDesk />}
+
+            {tab === "disputes" && canRunFloatDesk && <DisputeDesk />}
 
             {tab === "ledger" && canRunFloatDesk && <LedgerDesk />}
           </div>

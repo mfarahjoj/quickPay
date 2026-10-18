@@ -22,7 +22,9 @@ export type IconName =
   | "alert"
   | "ledger"
   | "check"
-  | "close";
+  | "close"
+  | "flag"
+  | "scale";
 
 const PATHS: Record<IconName, ReactNode> = {
   user: (
@@ -112,6 +114,18 @@ const PATHS: Record<IconName, ReactNode> = {
   ),
   check: <path d="m5.5 12.5 4.2 4.2L18.5 7.8" />,
   close: <path d="M6.5 6.5l11 11M17.5 6.5l-11 11" />,
+  flag: (
+    <>
+      <path d="M5.5 21V4.5" />
+      <path d="M5.5 4.8c2.6-1.4 5-1.4 7.2 0s4.6 1.4 6.8 0v8.6c-2.2 1.4-4.6 1.4-6.8 0s-4.6-1.4-7.2 0" />
+    </>
+  ),
+  scale: (
+    <>
+      <path d="M12 4v16M8 20h8M5 7.5h14" />
+      <path d="M5 7.5 2.8 13a2.6 2.6 0 0 0 4.4 0L5 7.5ZM19 7.5 16.8 13a2.6 2.6 0 0 0 4.4 0L19 7.5Z" />
+    </>
+  ),
 };
 
 export function Icon({ name, size = 20 }: { name: IconName; size?: number }) {

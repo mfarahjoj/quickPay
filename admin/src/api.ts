@@ -299,6 +299,68 @@ export interface LedgerTrace {
   summary: { completed: number; completedUnposted: number; completedUnpostedAmount: number };
 }
 
+export type DisputeStatus = "open" | "under_review" | "awaiting_funds" | "resolved" | "withdrawn";
+
+export interface DisputeMessage {
+  by: string;
+  role: "raiser" | "counterparty" | "ops";
+  text: string;
+  /** Epoch ms. */
+  at: number | null;
+}
+
+/** Timestamps are epoch milliseconds (null when absent). */
+export interface DisputeRow {
+  id: string;
+  transactionId?: string;
+  agentTopupRequestId?: string;
+  disputedKind: string;
+  kind: string;
+  status: DisputeStatus;
+  raisedBy: string;
+  against: string | null;
+  amountCents: number;
+  transactionAmountCents: number;
+  messages: DisputeMessage[];
+  createdAt: number | null;
+  respondBy: number | null;
+  resolveBy: number | null;
+  owedCents?: number;
+  resolution?: {
+    outcome: "upheld" | "rejected";
+    amountCents: number;
+    remedy: "refund" | "adjustment" | "none";
+    payFrom: "counterparty" | "platform" | null;
+    reason: string;
+    decidedBy: string;
+    decidedAt: number | null;
+    settledAt: number | null;
+    journalEntryId?: string;
+  };
+}
+
+export interface DisputeParty {
+  uid: string;
+  fullName: string | null;
+  phoneNumber: string | null;
+  accountType: string | null;
+  balanceCents: number | null;
+  reservedCents: number;
+}
+
+export interface DisputeDetail {
+  dispute: DisputeRow;
+  transaction: (Record<string, unknown> & { createdAt: number | null }) | null;
+  raiser: DisputeParty | null;
+  against: DisputeParty | null;
+}
+
+export interface AdjustmentResult {
+  adjustmentId: string;
+  journalEntryId: string;
+  alreadyPosted: boolean;
+}
+
 export const api = {
   searchUsers: (query: string) =>
     call<{ query: string }, UserSummary[]>("adminSearchUsers", { query }),
@@ -431,6 +493,35 @@ export const api = {
       "adminAcknowledgeLedgerAlert",
       { alertId, reason }
     ),
+
+  listDisputes: (status?: DisputeStatus) =>
+    call<{ status?: string }, { disputes: DisputeRow[] }>("adminListDisputes", {
+      status,
+    }).then((body) => body.disputes),
+
+  getDispute: (disputeId: string) =>
+    call<{ disputeId: string }, DisputeDetail>("adminGetDispute", { disputeId }),
+
+  resolveDispute: (payload: {
+    disputeId: string;
+    outcome: "upheld" | "rejected";
+    reason: string;
+    amountCents?: number;
+    payFrom?: "counterparty" | "platform";
+  }) =>
+    call<
+      typeof payload,
+      { status: DisputeStatus; remedy: string; journalEntryId?: string; owedCents?: number }
+    >("adminResolveDispute", payload),
+
+  /** `idempotencyKey` must stay the same across retries of one correction. */
+  postAdjustment: (payload: {
+    debitAccount: string;
+    creditAccount: string;
+    amountCents: number;
+    reason: string;
+    idempotencyKey: string;
+  }) => call<typeof payload, AdjustmentResult>("adminPostAdjustment", payload),
 
   // A full journal replay can outlast the SDK's 70s default.
   runLedgerCheck: (reason: string) =>
