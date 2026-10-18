@@ -99,6 +99,12 @@ export default function SettingsScreen() {
         ) : null}
       </GlassCard>
 
+      {/* Security */}
+      <Text style={styles.sectionLabel}>{t('settings.section.security')}</Text>
+      <GlassCard style={[styles.sectionCard, { paddingHorizontal: 16 }]}>
+        <TappableRow label={t('security.title')} onPress={() => navigation.navigate('Security')} />
+      </GlassCard>
+
       {/* Agent profile */}
       {isAgent && (
         <>

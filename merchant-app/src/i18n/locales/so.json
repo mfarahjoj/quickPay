@@ -737,5 +737,13 @@
   "security.lock.title": "Geli PIN-kaaga",
   "security.lock.subtitle": "Si aad u furto Zapp Pay Merchant.",
   "security.lock.lockedFor": "PIN khaldan oo badan. Isku day mar kale {{seconds}} ilbiriqsi kadib.",
-  "security.lock.checkFailed": "PIN-ka lama hubin karin. Hubi xiriirkaaga oo isku day mar kale."
+  "security.lock.checkFailed": "PIN-ka lama hubin karin. Hubi xiriirkaaga oo isku day mar kale.",
+  "settings.section.security": "Amniga",
+  "security.title": "PIN-ka iyo amniga",
+  "security.section.pin": "PIN",
+  "security.section.app": "Taleefankan",
+  "security.resetHint": "Koodh SMS ah iyo aqoonsigaaga.",
+  "security.appLock": "Qufulka app-ka",
+  "security.appLockHint": "Weydii PIN-kaaga marka app-ka la furo, iyo kadib daqiiqad aad ka maqnayd.",
+  "security.footnote": "Zapp Pay weligeed PIN-kaaga kuuma weydiin doonto taleefan, SMS ama shakhsi ahaan. Haddii qof sidaas sameeyo, waa khiyaano."
 }

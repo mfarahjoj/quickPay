@@ -737,5 +737,13 @@
   "security.lock.title": "Enter your PIN",
   "security.lock.subtitle": "To open Zapp Pay Merchant.",
   "security.lock.lockedFor": "Too many wrong PINs. Try again in {{seconds}} seconds.",
-  "security.lock.checkFailed": "Couldn't check your PIN. Check your connection and try again."
+  "security.lock.checkFailed": "Couldn't check your PIN. Check your connection and try again.",
+  "settings.section.security": "Security",
+  "security.title": "PIN and security",
+  "security.section.pin": "PIN",
+  "security.section.app": "This phone",
+  "security.resetHint": "With an SMS code and your ID.",
+  "security.appLock": "App lock",
+  "security.appLockHint": "Ask for your PIN when the app opens, and after a minute away.",
+  "security.footnote": "Zapp Pay will never ask for your PIN by phone, SMS or in person. If someone does, it's a scam."
 }

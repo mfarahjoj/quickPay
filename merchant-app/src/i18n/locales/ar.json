@@ -737,5 +737,13 @@
   "security.lock.title": "أدخل رمز PIN",
   "security.lock.subtitle": "لفتح Zapp Pay Merchant.",
   "security.lock.lockedFor": "رموز خاطئة كثيرة. حاول مرة أخرى بعد {{seconds}} ثانية.",
-  "security.lock.checkFailed": "تعذّر التحقق من رمز PIN. تحقق من اتصالك وحاول مرة أخرى."
+  "security.lock.checkFailed": "تعذّر التحقق من رمز PIN. تحقق من اتصالك وحاول مرة أخرى.",
+  "settings.section.security": "الأمان",
+  "security.title": "رمز PIN والأمان",
+  "security.section.pin": "رمز PIN",
+  "security.section.app": "هذا الهاتف",
+  "security.resetHint": "برمز SMS وهويتك.",
+  "security.appLock": "قفل التطبيق",
+  "security.appLockHint": "اطلب رمز PIN عند فتح التطبيق، وبعد دقيقة من الابتعاد.",
+  "security.footnote": "لن تطلب Zapp Pay رمز PIN منك أبدًا عبر الهاتف أو الرسائل أو شخصيًا. إذا طلبه أحد، فهو احتيال."
 }

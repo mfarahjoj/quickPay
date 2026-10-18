@@ -54,6 +54,7 @@ type MerchantStackParamList = {
   AutoPayout: undefined;
   Statement: undefined;
   MoveToFloat: undefined;
+  Security: undefined;
   ChangePin: undefined;
   ResetPin: undefined;
 };
@@ -292,6 +293,11 @@ function MainStackNavigator() {
       <MainStack.Screen
         name="Statement"
         getComponent={() => require('../screens/payouts/StatementScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="Security"
+        getComponent={() => require('../screens/settings/SecurityScreen').default}
         options={{ headerShown: false }}
       />
       <MainStack.Screen
