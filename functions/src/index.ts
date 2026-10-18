@@ -71,6 +71,7 @@ export { listAgents, adminClearAgentFlag } from "./agents/standing";
 // Agent float in its own account (AGENT_FLOAT_SEPARATION.md)
 export { moveToFloat } from "./agents/moveToFloat";
 export { adminMigrateAgentFloat } from "./admin/floatMigration";
+export { adminMigrateAuthSecrets } from "./admin/authSecretsMigration";
 // Customers' Send money lookup: masked name, business flag, per-caller budget.
 export { lookupRecipient } from "./users/lookupRecipient";
 

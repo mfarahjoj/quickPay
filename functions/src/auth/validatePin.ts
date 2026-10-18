@@ -1,6 +1,7 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { verifyPin } from "../utils/encryption";
+import { readAuth, writeAuth } from "./pinStore";
 import { validatePin, requireAuth } from "../utils/validation";
 import { ApiResponse } from "../types";
 
@@ -82,9 +83,10 @@ export async function verifyUserPin(
     if (!userDoc.exists) {
       throw new https.HttpsError("not-found", "User not found");
     }
-
-    const userData = userDoc.data()!;
-    if (!userData.pinHash) {
+    // PIN secrets live server-only (pinStore.ts); legacy copies on the user
+    // doc are read once and moved by the write below.
+    const auth = await readAuth(userId, tx, userDoc.data());
+    if (!auth.pinHash) {
       throw new https.HttpsError(
         "failed-precondition",
         "PIN not set up. Please set up your PIN first."
@@ -92,10 +94,7 @@ export async function verifyUserPin(
     }
 
     const now = admin.firestore.Timestamp.now();
-    const lockedUntil = userData.pinLockedUntil as
-      | admin.firestore.Timestamp
-      | null
-      | undefined;
+    const lockedUntil = auth.pinLockedUntil;
     if (lockedUntil && lockedUntil.toMillis() > now.toMillis()) {
       const secondsLeft = Math.ceil(
         (lockedUntil.toMillis() - now.toMillis()) / 1000
@@ -108,7 +107,7 @@ export async function verifyUserPin(
     }
 
     // Reserve this attempt as a failure; a correct PIN clears it below.
-    const attempts = (userData.pinFailedAttempts ?? 0) + 1;
+    const attempts = (auth.pinFailedAttempts ?? 0) + 1;
     const updates: Record<string, unknown> = { pinFailedAttempts: attempts };
     if (attempts >= MAX_ATTEMPTS_BEFORE_LOCK) {
       const lockSeconds = Math.min(
@@ -119,13 +118,16 @@ export async function verifyUserPin(
         now.toMillis() + lockSeconds * 1000
       );
     }
-    tx.update(userRef, updates);
-    return userData.pinHash as string;
+    // Carry the whole record across on an account's first verify after the move.
+    writeAuth(tx, userId, { ...auth, ...updates }, { hasPin: true });
+    return auth.pinHash as string;
   });
 
   const isValid = await verifyPin(pin, pinHash);
   if (isValid) {
-    await userRef.update({ pinFailedAttempts: 0, pinLockedUntil: null });
+    const batch = db.batch();
+    writeAuth(batch, userId, { pinFailedAttempts: 0, pinLockedUntil: null }, { hasPin: true });
+    await batch.commit();
   }
   return isValid;
 }

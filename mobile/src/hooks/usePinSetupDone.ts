@@ -18,7 +18,7 @@ export function usePinSetupDone() {
     let cancelled = false;
 
     // The SERVER is authoritative: a PIN is only "set up" if the user doc
-    // actually holds a pinHash. Trusting the local flag alone traps users
+    // actually has a PIN (`hasPin`; older accounts still carry `pinHash`). Trusting the local flag alone traps users
     // whose Firestore doc is missing/incomplete (e.g. account never finished
     // setup, or data was wiped) on the "enter PIN" screen, where every PIN
     // reads as wrong because validateUserPin throws "User not found". We fall
@@ -26,7 +26,7 @@ export function usePinSetupDone() {
     (async () => {
       try {
         const doc = await firestore().collection('users').doc(user.uid).get();
-        const hasPin = doc.exists && !!doc.data()?.pinHash;
+        const hasPin = doc.exists && (doc.data()?.hasPin === true || !!doc.data()?.pinHash);
         if (cancelled) return;
         await AsyncStorage.setItem(PIN_SETUP_DONE_KEY, hasPin ? 'true' : 'false').catch(() => {});
         setDone(hasPin);

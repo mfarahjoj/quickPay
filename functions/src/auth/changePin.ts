@@ -3,6 +3,7 @@ import { https } from "firebase-functions/v2";
 import { requireAuth, validatePin } from "../utils/validation";
 import { hashPin } from "../utils/encryption";
 import { verifyUserPin } from "./validatePin";
+import { writeAuth } from "./pinStore";
 import { ApiResponse } from "../types";
 
 interface ChangePinRequest {
@@ -47,10 +48,10 @@ export const changePin = https.onCall(
 
       const newPinHash = await hashPin(newPin);
 
-      await db.collection("users").doc(userId).update({
-        pinHash: newPinHash,
-        updatedAt: admin.firestore.Timestamp.now(),
-      });
+      const batch = db.batch();
+      writeAuth(batch, userId, { pinHash: newPinHash }, { hasPin: true });
+      batch.update(db.collection("users").doc(userId), { updatedAt: admin.firestore.Timestamp.now() });
+      await batch.commit();
 
       return { success: true, message: "PIN changed successfully" };
     } catch (error: any) {

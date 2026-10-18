@@ -11,6 +11,7 @@
  */
 
 import * as admin from "firebase-admin";
+import { AUTH_FIELDS, readAuth, writeAuth, isStoredPinHash } from "../auth/pinStore";
 import { https } from "firebase-functions/v2";
 import { ApiResponse } from "../types";
 import { requireAdmin, requireRecentAdminAuth, requireReason } from "./guard";
@@ -18,7 +19,7 @@ import { stageAuditEntry, writeAuditEntry } from "./audit";
 import { resolveAccountStatus } from "../utils/accountStatus";
 import { probeSpendIndex } from "../utils/limits";
 
-const SENSITIVE_FIELDS = ["pinHash"];
+const SENSITIVE_FIELDS: readonly string[] = AUTH_FIELDS;
 
 function scrub(data: FirebaseFirestore.DocumentData): Record<string, unknown> {
   const copy = { ...data };
@@ -160,7 +161,7 @@ export const adminGetUser = https.onCall(
         userId,
         profile: scrub(userData),
         accountStatus: resolveAccountStatus(userData),
-        hasPin: typeof userData.pinHash === "string" && userData.pinHash.length > 0,
+        hasPin: isStoredPinHash((await readAuth(userId, undefined, userData)).pinHash),
         wallet: walletSnap.exists ? walletSnap.data() : null,
         kyc: kycSnap.exists ? kycSnap.data() : null,
         trustedDeviceCount: deviceSnap.size,
@@ -204,11 +205,11 @@ export const adminClearLockouts = https.onCall(
       if (!snap.exists) {
         throw new https.HttpsError("not-found", "User not found");
       }
-      const before = snap.data()!;
+      const auth = await readAuth(userId, tx, snap.data());
+      const before: FirebaseFirestore.DocumentData = { ...snap.data()!, ...auth };
 
+      writeAuth(tx, userId, { ...auth, pinFailedAttempts: 0, pinLockedUntil: null });
       tx.update(userRef, {
-        pinFailedAttempts: 0,
-        pinLockedUntil: null,
         agentOtpFailedAttempts: 0,
         agentOtpLockedUntil: null,
         updatedAt: admin.firestore.Timestamp.now(),

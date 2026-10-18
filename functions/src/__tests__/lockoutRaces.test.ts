@@ -72,15 +72,17 @@ describe("lockouts hold under parallel requests", () => {
       expect(mockedCompare).toHaveBeenCalledTimes(5);
       expect(result.fulfilled).toEqual([false, false, false, false, false]);
       expect(result.exhausted).toBe(PARALLEL - 5);
-      expect(db.get("users/u1")!.pinFailedAttempts).toBe(5);
-      expect(db.get("users/u1")!.pinLockedUntil.toMillis()).toBeGreaterThan(Date.now());
+      expect(db.get("users/u1/private/auth")!.pinFailedAttempts).toBe(5);
+      expect(db.get("users/u1/private/auth")!.pinLockedUntil.toMillis()).toBeGreaterThan(Date.now());
+      // Moved off the doc the phone can read.
+      expect(db.get("users/u1")!.pinFailedAttempts).toBeUndefined();
     });
 
     it("gives the reservation back on a correct PIN", async () => {
       const db = seed({ "users/u1": { pinHash: "h", pinFailedAttempts: 3 } });
       await expect(verifyUserPin("u1", GOOD_PIN)).resolves.toBe(true);
-      expect(db.get("users/u1")!.pinFailedAttempts).toBe(0);
-      expect(db.get("users/u1")!.pinLockedUntil).toBeNull();
+      expect(db.get("users/u1/private/auth")!.pinFailedAttempts).toBe(0);
+      expect(db.get("users/u1/private/auth")!.pinLockedUntil).toBeNull();
     });
 
     it("still refuses, without a compare, while locked", async () => {

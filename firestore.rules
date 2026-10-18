@@ -14,6 +14,12 @@ service cloud.firestore {
     // Users collection. Docs are created by Cloud Functions (setupPin) and all
     // privileged fields (accountType, kycStatus, pinHash, limits, lockout
     // counters) are function-managed — clients may only touch profile fields.
+    // PIN hash, lockout counters and reset state (functions/src/auth/pinStore.ts).
+    // Only Cloud Functions touch these; the phone must never see the hash.
+    match /users/{userId}/private/{doc} {
+      allow read, write: if false;
+    }
+
     match /users/{userId} {
       allow read: if isAuthenticated() && isOwner(userId);
       allow create: if false; // Created by setupPin Cloud Function only

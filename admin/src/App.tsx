@@ -18,6 +18,7 @@ import { PayoutDesk } from "./components/PayoutDesk";
 import { LedgerBanner } from "./components/LedgerBanner";
 import { LedgerDesk } from "./components/LedgerDesk";
 import { DisputeDesk } from "./components/DisputeDesk";
+import { AuthMigrationPanel } from "./components/AuthMigrationPanel";
 import { PricingPanel } from "./components/PricingPanel";
 import { Icon, type IconName } from "./components/Icon";
 import { Avatar, BrandMark, EmptyState, Loading } from "./components/ui";
@@ -277,6 +278,7 @@ export default function App() {
             {tab === "ledger" && canRunFloatDesk && <LedgerDesk />}
 
             {tab === "pricing" && <PricingPanel canEdit={claims.adminRoles.includes("super")} />}
+            {tab === "pricing" && canRunFloatDesk && <AuthMigrationPanel isSuper={claims.adminRoles.includes("super")} />}
           </div>
         </div>
       </main>

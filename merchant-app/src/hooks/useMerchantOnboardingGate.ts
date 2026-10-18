@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import firestore from '@react-native-firebase/firestore';
 import { useAuth } from './useAuth';
 import { logger } from '../utils/logger';
-import { hasStoredPinHash } from '../utils/pinHash';
+import { userHasPin } from '../utils/pinHash';
 
 type MerchantRole = 'merchant' | 'topup_agent' | 'agent_merchant';
 
@@ -64,7 +64,7 @@ export function useMerchantOnboardingGate(): MerchantOnboardingGate {
     const unsub = ref.onSnapshot(
       (docSnap) => {
         const data = docSnap.data();
-        const hasPin = hasStoredPinHash(data?.pinHash);
+        const hasPin = userHasPin(data);
         const accountType = data?.accountType;
         const roleRequestStatus = data?.roleRequestStatus;
 

@@ -2,11 +2,12 @@ import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 import { https } from "firebase-functions/v2";
 import { hashPin } from "../utils/encryption";
-import { validatePin, requireAuth, hasStoredPinHash } from "../utils/validation";
+import { validatePin, requireAuth } from "../utils/validation";
 import { ApiResponse } from "../types";
 import { prepareJournalEntry, userAccount, PLATFORM_PROMO } from "../ledger";
 import { isPrivilegedRole } from "../utils/roles";
 import { assertNameChangeAllowed } from "../utils/nameLock";
+import { readAuth, writeAuth, isStoredPinHash } from "./pinStore";
 import { recordReferral } from "../referral/referralBonus";
 import { ensureRoleRequest } from "../merchants/requestRole";
 
@@ -62,7 +63,7 @@ export const setupPin = https.onCall(
       const userRef = db.collection("users").doc(userId);
       const userDoc = await userRef.get();
       const userData = userDoc.exists ? userDoc.data() : undefined;
-      const hasExistingPin = hasStoredPinHash(userData?.pinHash);
+      const hasExistingPin = isStoredPinHash((await readAuth(userId, undefined, userData)).pinHash);
 
       // Both branches below write fullName, so re-running setup must not be
       // a way round the business-name lock.
@@ -108,9 +109,13 @@ export const setupPin = https.onCall(
 
       const pinHash = await hashPin(pin);
 
+      // The hash goes to the server-only auth doc (pinStore.ts), never here.
+      const authBatch = db.batch();
+      writeAuth(authBatch, userId, { pinHash, pinFailedAttempts: 0, pinLockedUntil: null }, { hasPin: true });
+      await authBatch.commit();
+
       await userRef.set(
         {
-          pinHash,
           fullName: fullName.trim(),
           phoneNumber: request.auth!.token.phone_number || "",
           updatedAt: admin.firestore.Timestamp.now(),

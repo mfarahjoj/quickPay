@@ -24,7 +24,7 @@ export const onUserCreate = auth.user().onCreate(async (user) => {
       phoneNumber,
       fullName: "", // To be updated by user
       accountType: "customer", // Default to customer
-      pinHash: "", // To be set during onboarding
+      hasPin: false, // The PIN itself lives in users/{uid}/private/auth (pinStore.ts)
       kycStatus: "pending",
       createdAt: admin.firestore.Timestamp.now(),
       isActive: true,

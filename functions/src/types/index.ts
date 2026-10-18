@@ -47,17 +47,11 @@ export interface User {
   address?: UserAddress;
   preferredLanguage: PreferredLanguage;
   accountType: "customer" | "merchant" | "topup_agent" | "agent_merchant";
-  pinHash: string;
-  /** Consecutive failed PIN attempts (reset on success / resetPin) */
-  pinFailedAttempts?: number;
-  /** PIN checks rejected until this time after too many failures */
-  pinLockedUntil?: FirebaseFirestore.Timestamp | null;
-  pinResetAt?: FirebaseFirestore.Timestamp;
-  /** Recent PIN resets, newest last, for the reset rate limit. */
-  pinResetHistory?: FirebaseFirestore.Timestamp[];
-  /** Wrong ID answers to the new-phone reset check, and the lock they earn. */
-  resetIdFailedAttempts?: number;
-  resetIdLockedUntil?: FirebaseFirestore.Timestamp | null;
+  /**
+   * Whether a PIN is set. The PIN hash, lockout counters and reset state live
+   * server-only in users/{uid}/private/auth (auth/pinStore.ts).
+   */
+  hasPin?: boolean;
   /** Consecutive failed top-up/cash-out code guesses (agents only) */
   agentOtpFailedAttempts?: number;
   /** Code guesses rejected until this time after too many failures */

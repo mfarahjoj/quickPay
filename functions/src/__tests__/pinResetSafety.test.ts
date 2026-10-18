@@ -13,6 +13,7 @@ jest.mock("../utils/notifications", () => ({
 
 import { notifyUser } from "../utils/notifications";
 import { assertResetCooldownAllows } from "../utils/resetCooldown";
+import { LEGACY_PIN_PLACEHOLDER } from "../auth/pinStore";
 
 const mockedNotify = notifyUser as jest.MockedFunction<typeof notifyUser>;
 
@@ -27,6 +28,14 @@ const ago = (ms: number) => Timestamp.fromMillis(Date.now() - ms);
  */
 function fakeDb(seed: Record<string, any>) {
   const store = new Map<string, any>(Object.entries(seed));
+  const merge = (base: any, patch: any) => {
+    const out = { ...(base ?? {}) };
+    for (const [k, v] of Object.entries(patch)) {
+      if ((v as any)?.constructor?.name === "DeleteTransform") delete out[k];
+      else out[k] = v;
+    }
+    return out;
+  };
   const snap = (path: string) => ({
     exists: store.has(path),
     id: path.split("/").pop(),
@@ -38,8 +47,8 @@ function fakeDb(seed: Record<string, any>) {
       id: path.split("/").pop(),
       path,
       get: async () => snap(path),
-      update: async (d: any) => store.set(path, { ...store.get(path), ...d }),
-      set: async (d: any) => store.set(path, d),
+      update: async (d: any) => store.set(path, merge(store.get(path), d)),
+      set: async (d: any, opts?: { merge?: boolean }) => store.set(path, opts?.merge ? merge(store.get(path), d) : d),
       delete: async () => store.delete(path),
       collection: (col: string) => collection(`${path}/${col}`),
     };
@@ -81,12 +90,23 @@ function fakeDb(seed: Record<string, any>) {
     const tx = {
       get: (r: any) => r.get(),
       update: (r: any, d: any) => staged.push(() => r.update(d)),
+      set: (r: any, d: any, opts?: any) => staged.push(() => r.set(d, opts)),
     };
     const result = await fn(tx);
     for (const write of staged) await write();
     return result;
   }
-  return { store, collection, runTransaction } as any;
+  function batch() {
+    const staged: Array<() => Promise<void>> = [];
+    return {
+      set: (r: any, d: any, opts?: any) => staged.push(() => r.set(d, opts)),
+      update: (r: any, d: any) => staged.push(() => r.update(d)),
+      commit: async () => {
+        for (const write of staged) await write();
+      },
+    };
+  }
+  return { store, collection, runTransaction, batch } as any;
 }
 
 describe("PIN reset safety", () => {
@@ -147,7 +167,10 @@ describe("PIN reset safety", () => {
       const result = await call(onKnownPhone);
 
       expect(result.success).toBe(true);
-      expect(db.store.get(`users/${UID}`).pinHash).toBe("new-hash");
+      expect(db.store.get(`users/${UID}/private/auth`).pinHash).toBe("new-hash");
+      // The phone-readable doc keeps only the flag and the placeholder.
+      expect(db.store.get(`users/${UID}`).pinHash).toBe(LEGACY_PIN_PLACEHOLDER);
+      expect(db.store.get(`users/${UID}`).hasPin).toBe(true);
       expect(db.store.has("trustedDevices/dev-old")).toBe(true);
       expect(db.store.has("trustedDevices/dev-other")).toBe(false);
       expect(mockedNotify).toHaveBeenCalledWith(
@@ -212,7 +235,7 @@ describe("PIN reset safety", () => {
 
       expect(reasons.filter((r) => r === "reset_id_wrong")).toHaveLength(2);
       expect(reasons.filter((r) => r === "reset_id_locked")).toHaveLength(18);
-      expect(db.store.get(`users/${UID}`).resetIdFailedAttempts).toBe(3);
+      expect(db.store.get(`users/${UID}/private/auth`).resetIdFailedAttempts).toBe(3);
       expect(db.store.get(`users/${UID}`).pinHash).toBe("old-hash");
     });
   });
@@ -221,7 +244,7 @@ describe("PIN reset safety", () => {
     const db = useDb({ ...user(), ...device("dev-old", 30 * DAY) });
     const settled = await Promise.allSettled([call(onKnownPhone), call(onKnownPhone)]);
     expect(settled.filter((r) => r.status === "fulfilled")).toHaveLength(1);
-    expect(db.store.get(`users/${UID}`).pinResetHistory).toHaveLength(1);
+    expect(db.store.get(`users/${UID}/private/auth`).pinResetHistory).toHaveLength(1);
   });
 
   it("allows one reset a day", async () => {

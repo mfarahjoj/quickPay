@@ -4,6 +4,7 @@ import * as crypto from "crypto";
 import * as bcrypt from "bcrypt";
 import { requireAuth, validatePin } from "../utils/validation";
 import { verifyUserPin } from "./validatePin";
+import { readAuth } from "./pinStore";
 import { ApiResponse } from "../types";
 
 /**
@@ -60,7 +61,7 @@ export const registerTrustedDevice = https.onCall(
     // The account must already have a PIN. Trusting a device before one exists
     // would mint a credential whose second factor doesn't exist yet.
     const userDoc = await db.collection("users").doc(uid).get();
-    if (!userDoc.exists || !userDoc.data()?.pinHash) {
+    if (!userDoc.exists || !(await readAuth(uid, undefined, userDoc.data())).pinHash) {
       throw new https.HttpsError(
         "failed-precondition",
         "Set up your PIN before trusting this device."

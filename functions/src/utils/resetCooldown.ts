@@ -1,4 +1,5 @@
 import * as admin from "firebase-admin";
+import { readAuth } from "../auth/pinStore";
 import { https } from "firebase-functions/v2";
 import { getRates } from "../config/rates";
 
@@ -26,11 +27,7 @@ export async function assertResetCooldownAllows(
   kind: OutgoingKind,
   amountCents: number
 ): Promise<void> {
-  const db = admin.firestore();
-  const userSnap = await db.collection("users").doc(userId).get();
-  const resetAt = userSnap.data()?.pinResetAt as
-    | admin.firestore.Timestamp
-    | undefined;
+  const resetAt = (await readAuth(userId)).pinResetAt;
   if (!resetAt) return;
 
   const { pinResetCooldownHours, pinResetCooldownAllowanceCents } = await getRates();
@@ -53,13 +50,14 @@ export async function assertResetCooldownAllows(
 
   // Everything this account has sent since the reset counts against the
   // allowance, whichever screen it went through.
-  const sent = await db
+  const sent = await admin
+    .firestore()
     .collection("transactions")
     .where("fromUserId", "==", userId)
     .where("createdAt", ">=", resetAt)
     .get();
   const spent = sent.docs.reduce(
-    (sum, doc) => sum + ((doc.data().amount as number) ?? 0),
+    (sum: number, doc: FirebaseFirestore.QueryDocumentSnapshot) => sum + ((doc.data().amount as number) ?? 0),
     0
   );
   if (spent + amountCents > pinResetCooldownAllowanceCents) refuse();

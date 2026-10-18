@@ -34,7 +34,8 @@ export type AuditTargetType =
   | "api_key"
   | "adjustment"
   | "dispute"
-  | "rates";
+  | "rates"
+  | "migration";
 
 /**
  * One immutable record of an admin action. Written in the same transaction as

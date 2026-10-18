@@ -3,7 +3,7 @@ import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { colors } from '../../theme';
 import { auth, firestore } from '../../services/firebase.config';
-import { hasStoredPinHash } from '../../utils/pinHash';
+import { userHasPin } from '../../utils/pinHash';
 import type { MerchantOnboardingParamList } from '../../navigation/MerchantOnboardingNavigator';
 
 type Nav = StackNavigationProp<MerchantOnboardingParamList, 'MerchantOnboardingEntry'>;
@@ -19,7 +19,7 @@ export default function MerchantOnboardingEntryScreen({ navigation }: { navigati
       try {
         const snap = await firestore().collection('users').doc(uid).get();
         const d = snap.data();
-        const hasPin = hasStoredPinHash(d?.pinHash);
+        const hasPin = userHasPin(d);
         const name = typeof d?.fullName === 'string' ? d.fullName : '';
         if (cancelled) {
           return;

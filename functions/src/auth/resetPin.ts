@@ -2,6 +2,7 @@ import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import * as bcrypt from "bcrypt";
 import { hashPin } from "../utils/encryption";
+import { readAuth, writeAuth } from "./pinStore";
 import { requireAuth, validatePin } from "../utils/validation";
 import { notifyUser } from "../utils/notifications";
 import { getRates } from "../config/rates";
@@ -104,12 +105,13 @@ export const resetPin = https.onCall(
     const user = userDoc.data()!;
     const nowMs = Date.now();
 
-    assertResetLimit(user.pinResetHistory ?? [], nowMs);
+    const auth = await readAuth(userId, undefined, user);
+    assertResetLimit(auth.pinResetHistory ?? [], nowMs);
 
     const knownDeviceId = await knownDevice(db, userId, deviceId, deviceSecret, nowMs);
 
     if (!knownDeviceId) {
-      await checkIdAnswer(userRef, user, idLast4, nowMs);
+      await checkIdAnswer(userRef, userId, user, idLast4, nowMs);
     }
 
     const pinHash = await hashPin(newPin);
@@ -119,19 +121,25 @@ export const resetPin = https.onCall(
     // Two resets racing each other both pass a check made before either
     // writes, so the history is re-read and appended under a transaction.
     await db.runTransaction(async (tx) => {
-      const fresh = (await tx.get(userRef)).data() ?? {};
+      const fresh = await readAuth(userId, tx);
       const freshHistory: admin.firestore.Timestamp[] = fresh.pinResetHistory ?? [];
       assertResetLimit(freshHistory, nowMs);
-      tx.update(userRef, {
-        pinHash,
-        pinFailedAttempts: 0,
-        pinLockedUntil: null,
-        pinResetAt: now,
-        pinResetHistory: [...freshHistory, now].slice(-HISTORY_KEPT),
-        resetIdFailedAttempts: 0,
-        resetIdLockedUntil: null,
-        updatedAt: now,
-      });
+      writeAuth(
+        tx,
+        userId,
+        {
+          ...fresh,
+          pinHash,
+          pinFailedAttempts: 0,
+          pinLockedUntil: null,
+          pinResetAt: now,
+          pinResetHistory: [...freshHistory, now].slice(-HISTORY_KEPT),
+          resetIdFailedAttempts: 0,
+          resetIdLockedUntil: null,
+        },
+        { hasPin: true }
+      );
+      tx.update(userRef, { updatedAt: now });
     });
 
     // Whoever held the old trust — another phone, or the one this reset is
@@ -211,6 +219,7 @@ async function knownDevice(
  */
 async function checkIdAnswer(
   userRef: FirebaseFirestore.DocumentReference,
+  userId: string,
   user: FirebaseFirestore.DocumentData,
   idLast4: unknown,
   nowMs: number
@@ -250,8 +259,8 @@ async function checkIdAnswer(
   // last four are only 10,000 possibilities. A correct answer clears the
   // counter when the reset is saved.
   const attempts = await admin.firestore().runTransaction(async (tx) => {
-    const fresh = (await tx.get(userRef)).data() ?? {};
-    const lockedUntil = fresh.resetIdLockedUntil as admin.firestore.Timestamp | null | undefined;
+    const fresh = await readAuth(userId, tx);
+    const lockedUntil = fresh.resetIdLockedUntil;
     if (lockedUntil && lockedUntil.toMillis() > nowMs) {
       throw new https.HttpsError(
         "resource-exhausted",
@@ -260,7 +269,8 @@ async function checkIdAnswer(
       );
     }
     const n = (fresh.resetIdFailedAttempts ?? 0) + 1;
-    tx.update(userRef, {
+    writeAuth(tx, userId, {
+      ...fresh,
       resetIdFailedAttempts: n,
       ...(n >= MAX_ID_ATTEMPTS
         ? { resetIdLockedUntil: admin.firestore.Timestamp.fromMillis(nowMs + ID_LOCK_MS) }

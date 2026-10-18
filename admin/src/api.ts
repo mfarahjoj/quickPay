@@ -161,6 +161,14 @@ export interface AgentPosition {
   walletCents?: number;
 }
 
+export interface AuthMigrationResult {
+  applied: boolean;
+  scanned: number;
+  toMove: number;
+  withPin: number;
+  moved: number;
+}
+
 export interface FloatMigrationRow {
   agentId: string;
   fullName: string | null;
@@ -537,6 +545,13 @@ export const api = {
       { apply: boolean; reason: string; overrides?: Record<string, number> },
       { applied: boolean; rows: FloatMigrationRow[] }
     >("adminMigrateAgentFloat", { apply, reason, overrides }, 5 * 60 * 1000),
+
+  migrateAuthSecrets: (apply: boolean, reason: string) =>
+    call<{ apply: boolean; reason: string }, AuthMigrationResult>(
+      "adminMigrateAuthSecrets",
+      { apply, reason },
+      9 * 60 * 1000
+    ),
 
   listDisputes: (status?: DisputeStatus) =>
     call<{ status?: string }, { disputes: DisputeRow[] }>("adminListDisputes", {
