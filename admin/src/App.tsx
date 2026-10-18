@@ -268,7 +268,7 @@ export default function App() {
 
             {tab === "kyc" && canReviewRoles && <KycQueue />}
 
-            {tab === "float" && canRunFloatDesk && <FloatDesk adminUid={user.uid} />}
+            {tab === "float" && canRunFloatDesk && <FloatDesk adminUid={user.uid} isSuper={claims.adminRoles.includes("super")} />}
 
             {tab === "payouts" && canRunFloatDesk && <PayoutDesk />}
 

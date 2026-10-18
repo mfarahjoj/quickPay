@@ -3,6 +3,7 @@ import { api, type AgentPosition, type FloatIssuanceRow } from "../api";
 import { FloatRequestModal } from "./FloatRequestModal";
 import { Icon } from "./Icon";
 import { ReasonPrompt } from "./ReasonPrompt";
+import { FloatMigrationPanel } from "./FloatMigrationPanel";
 import { EmptyState, Loading } from "./ui";
 
 interface Decision {
@@ -16,7 +17,7 @@ function money(cents: number) {
 
 const LOW_FLOAT_CENTS = 5000; // $50 — an agent below this can barely serve anyone
 
-export function FloatDesk({ adminUid }: { adminUid: string }) {
+export function FloatDesk({ adminUid, isSuper = false }: { adminUid: string; isSuper?: boolean }) {
   const [agents, setAgents] = useState<AgentPosition[]>([]);
   const [queue, setQueue] = useState<FloatIssuanceRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,6 +68,7 @@ export function FloatDesk({ adminUid }: { adminUid: string }) {
 
   return (
     <div className="stack-lg">
+      <FloatMigrationPanel isSuper={isSuper} onApplied={load} />
       {notice && <div className="banner ok">{notice}</div>}
       {error && <div className="banner error">{error}</div>}
 
@@ -169,6 +171,7 @@ export function FloatDesk({ adminUid }: { adminUid: string }) {
                   <th>Phone</th>
                   <th>Role</th>
                   <th className="num">Float</th>
+                  <th className="num">Wallet</th>
                   <th />
                 </tr>
               </thead>
@@ -199,6 +202,7 @@ export function FloatDesk({ adminUid }: { adminUid: string }) {
                         )}
                         {money(a.balanceCents)}
                       </td>
+                      <td className="num muted">{a.walletCents === undefined ? "—" : money(a.walletCents)}</td>
                       <td className="actions">
                         <button
                           onClick={() => setRequesting(a)}

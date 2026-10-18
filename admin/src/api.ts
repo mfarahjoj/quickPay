@@ -155,7 +155,21 @@ export interface AgentPosition {
   phoneNumber?: string;
   accountType?: string;
   accountStatus: string;
+  /** Float, in agent:{uid}. */
   balanceCents: number;
+  /** Their own wallet: commission and, for an agent-merchant, sales. */
+  walletCents?: number;
+}
+
+export interface FloatMigrationRow {
+  agentId: string;
+  fullName: string | null;
+  computedCents: number;
+  walletCents: number;
+  floatCents: number;
+  moveCents: number;
+  alreadyMigrated: boolean;
+  shortfallCents: number;
 }
 
 export interface FloatIssuanceRow {
@@ -516,6 +530,13 @@ export const api = {
       "adminUpdateRates",
       { changes, reason }
     ),
+
+  /** Preview (apply false) or apply the one-off float split. */
+  migrateAgentFloat: (apply: boolean, reason: string, overrides?: Record<string, number>) =>
+    call<
+      { apply: boolean; reason: string; overrides?: Record<string, number> },
+      { applied: boolean; rows: FloatMigrationRow[] }
+    >("adminMigrateAgentFloat", { apply, reason, overrides }, 5 * 60 * 1000),
 
   listDisputes: (status?: DisputeStatus) =>
     call<{ status?: string }, { disputes: DisputeRow[] }>("adminListDisputes", {
