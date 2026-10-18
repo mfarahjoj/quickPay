@@ -719,6 +719,8 @@
   "payments.userNotFound": "لا يوجد مستخدم Zapp Pay بهذا الرقم",
   "payments.linkNotice": "بدأت هذه الدفعة من رابط. تحقّق من الاسم والمبلغ قبل الدفع.",
   "payments.lookupFailed": "فشل البحث عن المستخدم",
+  "payments.cannotSendToSelf": "هذا رقمك أنت. أدخل رقم الشخص الذي ترسل إليه.",
+  "payments.lookupLimit": "لقد بحثت عن أرقام كثيرة. حاول مرة أخرى بعد قليل.",
   "payments.transferFailed": "فشل التحويل",
   "payments.failedGenerateQr": "فشل إنشاء QR",
   "payments.receiptShareTitle": "إيصال Zapp Pay",

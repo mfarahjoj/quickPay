@@ -219,6 +219,11 @@ service cloud.firestore {
     match /webhook_deliveries/{deliveryId} {
       allow read, write: if false;
     }
+    // lookupRecipient's per-caller budget counters. Server-only, or a client
+    // could reset its own count.
+    match /recipient_lookups/{counterId} {
+      allow read, write: if false;
+    }
 
     // Minimum app versions (the apps' update gate). Public on purpose: the
     // gate runs before sign-in, and the doc holds nothing but version levels

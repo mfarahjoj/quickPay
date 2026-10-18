@@ -745,6 +745,8 @@
   "payments.userNotFound": "No Zapp Pay user found with this number",
   "payments.linkNotice": "This payment was started by a link. Check the name and amount before you pay.",
   "payments.lookupFailed": "Failed to look up user",
+  "payments.cannotSendToSelf": "That is your own number. Enter the number of the person you are sending to.",
+  "payments.lookupLimit": "You have looked up a lot of numbers. Try again in a little while.",
   "payments.transferFailed": "Transfer failed",
   "payments.failedGenerateQr": "Failed to generate QR",
   "payments.receiptShareTitle": "Zapp Pay Receipt",

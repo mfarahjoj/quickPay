@@ -51,10 +51,15 @@ type SendStep = 'phone' | 'amount' | 'review' | 'pin' | 'success';
 const MAX_RECEIVE_AUTO_FETCHES = 4;
 
 interface RecipientInfo {
-  uid: string;
+  /** Masked by the server ("Amina Y."), so it is safe to show and share. */
   fullName: string;
   phoneNumber: string;
 }
+
+/** What `lookupRecipient` answers. */
+type LookupResult =
+  | { found: false; reason: 'not_found' | 'self' }
+  | { found: true; phoneNumber: string; displayName: string; isBusiness: boolean };
 
 interface Props {
   route?: { params?: { mode?: PaymentTab; prefill?: PaymentLink } };
@@ -312,17 +317,35 @@ export default function PaymentsScreen({ route }: Props) {
     const phoneNumber = input.startsWith('+') ? input : `${PHONE_PREFIX}${input}`;
     try {
       setLookingUp(true);
-      const lookupFn = functions().httpsCallable('lookupUserByPhone');
+      // lookupUserByPhone is for agents and merchants and refuses customers;
+      // this one answers anyone, with a masked name.
+      const lookupFn = functions().httpsCallable('lookupRecipient');
       const result = await lookupFn({ phoneNumber });
-      const data = result.data as { success: boolean; data?: RecipientInfo; error?: string };
-      if (!data.success || !data.data) {
-        Alert.alert(t('common.notFound'), t('payments.userNotFound'));
+      const data = result.data as { success: boolean; data?: LookupResult };
+      const found = data.data;
+      if (!data.success || !found || !found.found) {
+        Alert.alert(
+          t('common.notFound'),
+          found && !found.found && found.reason === 'self'
+            ? t('payments.cannotSendToSelf')
+            : t('payments.userNotFound')
+        );
         return;
       }
-      setRecipient(data.data);
+      // A shop is paid by its QR; sendP2P would refuse the transfer anyway.
+      if (found.isBusiness) {
+        Alert.alert(found.displayName, t('payments.recipientIsBusiness'));
+        return;
+      }
+      setRecipient({ fullName: found.displayName, phoneNumber: found.phoneNumber });
       setStep('amount');
     } catch (err: any) {
-      Alert.alert(t('common.error'), err.message || t('payments.lookupFailed'));
+      Alert.alert(
+        t('common.error'),
+        err?.details?.reason === 'lookup_limit'
+          ? t('payments.lookupLimit')
+          : t('payments.lookupFailed')
+      );
     } finally {
       setLookingUp(false);
     }

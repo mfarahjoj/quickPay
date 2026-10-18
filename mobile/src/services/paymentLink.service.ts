@@ -2,7 +2,7 @@
  * Payment links: `zapppay://send?to=%2B252634120987&amount=4.70&note=Ridy%20ride`
  *
  * A link only PRE-FILLS the send flow. The recipient is still resolved by
- * phone through `lookupUserByPhone`, so the payer sees the real account name;
+ * phone through `lookupRecipient`, so the payer sees the account's name;
  * the payer still reviews the amount and enters their PIN; and `sendP2P` still
  * runs every server-side check. A link can never move money on its own —
  * which matters, because any app or web page can open one.

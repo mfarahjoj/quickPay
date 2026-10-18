@@ -719,6 +719,8 @@
   "payments.userNotFound": "Isticmaale Zapp Pay ah lama helin lambarkan",
   "payments.linkNotice": "Lacag-bixintan waxaa bilaabay link. Hubi magaca iyo lacagta ka hor intaadan bixin.",
   "payments.lookupFailed": "Waa fashilmay raadinta isticmaalaha",
+  "payments.cannotSendToSelf": "Kani waa lambarkaaga. Geli lambarka qofka aad lacagta u diraysid.",
+  "payments.lookupLimit": "Lambaro badan ayaad raadisay. Mar kale isku day wax yar kadib.",
   "payments.transferFailed": "Wareejintu waa fashilantay",
   "payments.failedGenerateQr": "Waa fashilmay sameynta QR",
   "payments.receiptShareTitle": "Rasiidka Zapp Pay",

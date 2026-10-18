@@ -64,6 +64,8 @@ export { mobileMoneyWebhook } from "./topup/mobileMoneyWebhook";
 
 // User lookup (for agents)
 export { lookupUserByPhone } from "./users/lookupUser";
+// Customers' Send money lookup: masked name, business flag, per-caller budget.
+export { lookupRecipient } from "./users/lookupRecipient";
 
 // Customer QR token functions
 export { generateCustomerToken } from "./customer-qr/generateToken";
