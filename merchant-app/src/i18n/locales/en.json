@@ -643,5 +643,20 @@
   "disputes.error.kindNotAllowed": "That option doesn't fit this transaction.",
   "disputes.error.closed": "This dispute is closed.",
   "disputes.error.notUncredited": "This top-up is still open or was credited.",
-  "disputes.error.generic": "Something went wrong. Please try again."
+  "disputes.error.generic": "Something went wrong. Please try again.",
+  "transactions.kindLabel.merchant_payment": "Shop payment",
+  "transactions.kindLabel.online_payment": "Online payment",
+  "transactions.kindLabel.p2p": "Transfer",
+  "transactions.kindLabel.payroll": "Salary",
+  "transactions.kindLabel.cash_in": "Cash top-up",
+  "transactions.kindLabel.cash_out": "Cash withdrawal",
+  "transactions.kindLabel.payout": "Payout",
+  "transactions.kindLabel.refund": "Refund",
+  "transactions.kindLabel.adjustment": "Correction",
+  "transactions.kindLabel.referral": "Referral bonus",
+  "transactions.kindLabel.float": "Agent float",
+  "transactions.kindLabel.card_topup": "Card top-up",
+  "transactions.kindLabel.mobile_money_topup": "Mobile money top-up",
+  "transactions.kindLabel.mobile_money_cashout": "Mobile money withdrawal",
+  "transactions.kindLabel.remittance": "Remittance"
 }

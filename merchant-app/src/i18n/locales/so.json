@@ -643,5 +643,20 @@
   "disputes.error.kindNotAllowed": "Doorashadaas kuma habboona macaamilkan.",
   "disputes.error.closed": "Cabashadan waa la xiray.",
   "disputes.error.notUncredited": "Lacag-shubiddan weli way furan tahay ama waa la shubay.",
-  "disputes.error.generic": "Wax ayaa qaldamay. Fadlan mar kale isku day."
+  "disputes.error.generic": "Wax ayaa qaldamay. Fadlan mar kale isku day.",
+  "transactions.kindLabel.merchant_payment": "Lacag-bixin dukaan",
+  "transactions.kindLabel.online_payment": "Lacag-bixin online",
+  "transactions.kindLabel.p2p": "Lacag wareejin",
+  "transactions.kindLabel.payroll": "Mushahar",
+  "transactions.kindLabel.cash_in": "Lacag-shub caddaan",
+  "transactions.kindLabel.cash_out": "Lacag-bixin caddaan",
+  "transactions.kindLabel.payout": "Lacag-siin",
+  "transactions.kindLabel.refund": "Lacag celin",
+  "transactions.kindLabel.adjustment": "Sixitaan",
+  "transactions.kindLabel.referral": "Abaalmarin casuumaad",
+  "transactions.kindLabel.float": "Lacagta wakiilka",
+  "transactions.kindLabel.card_topup": "Lacag-shub kaar",
+  "transactions.kindLabel.mobile_money_topup": "Lacag-shub mobile money",
+  "transactions.kindLabel.mobile_money_cashout": "Lacag-bixin mobile money",
+  "transactions.kindLabel.remittance": "Xawaalad"
 }

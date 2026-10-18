@@ -643,5 +643,20 @@
   "disputes.error.kindNotAllowed": "هذا الخيار لا يناسب هذه المعاملة.",
   "disputes.error.closed": "هذا النزاع مغلق.",
   "disputes.error.notUncredited": "عملية الشحن هذه ما زالت مفتوحة أو تمت إضافتها.",
-  "disputes.error.generic": "حدث خطأ ما. يرجى المحاولة مرة أخرى."
+  "disputes.error.generic": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
+  "transactions.kindLabel.merchant_payment": "دفع في متجر",
+  "transactions.kindLabel.online_payment": "دفع عبر الإنترنت",
+  "transactions.kindLabel.p2p": "تحويل",
+  "transactions.kindLabel.payroll": "راتب",
+  "transactions.kindLabel.cash_in": "شحن نقدي",
+  "transactions.kindLabel.cash_out": "سحب نقدي",
+  "transactions.kindLabel.payout": "صرف مستحقات",
+  "transactions.kindLabel.refund": "استرداد",
+  "transactions.kindLabel.adjustment": "تصحيح",
+  "transactions.kindLabel.referral": "مكافأة دعوة",
+  "transactions.kindLabel.float": "رصيد الوكيل",
+  "transactions.kindLabel.card_topup": "شحن بالبطاقة",
+  "transactions.kindLabel.mobile_money_topup": "شحن عبر المال المتنقل",
+  "transactions.kindLabel.mobile_money_cashout": "سحب عبر المال المتنقل",
+  "transactions.kindLabel.remittance": "حوالة"
 }
