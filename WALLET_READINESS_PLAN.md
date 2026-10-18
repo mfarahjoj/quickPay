@@ -133,7 +133,7 @@ Each phase ends with a deploy that Mahamed authorises per target, as `CLAUDE.md`
 ### Phase 2: Corrections and disputes
 *Goal: every "something went wrong" has a path, a record and an owner.*
 
-**Status 2026-10-18:** 2.1 and 2.2 (backend) committed on `fix/wallet-phase1`, not deployed. 2.3–2.7 (apps, console, agent flags, self-freeze) not started.
+**Status 2026-10-18:** 2.1–2.5 committed on `fix/wallet-phase1`, not deployed: backend, customer app, merchant app and console desk. The screens are typechecked but not yet driven on a device or a signed-in console. 2.6 (agent flags) and 2.7 (self-freeze) not started.
 
 **2.1 Adjustment desk (fixes F10, and is the base for everything else in this phase)**
 - Add `adminPostAdjustment(account, counterAccount, amount, reason, disputeId?)`. It posts a balanced `adjustment` journal entry. The default counter account is `platform:fees` or `platform:promo`, never a hidden balance edit.
