@@ -248,7 +248,14 @@ export interface Wallet {
 }
 
 // Transaction types
-export type TransactionType = "payment" | "topup" | "withdrawal" | "refund" | "referral";
+export type TransactionType =
+  | "payment"
+  | "topup"
+  | "withdrawal"
+  | "refund"
+  | "referral"
+  /** An ops correction or a dispute settlement (`adjustments`, `disputes`). */
+  | "adjustment";
 export type TransactionStatus = "pending" | "completed" | "failed" | "cancelled";
 
 export interface Transaction {
@@ -289,6 +296,10 @@ export interface Transaction {
   apiChargeId?: string;
   /** On an API payment: cents refunded so far, across partial refunds. */
   amountRefunded?: number;
+  /** On an adjustment row: the `adjustments` doc behind it. */
+  adjustmentId?: string;
+  /** Set on a transaction someone has disputed, and on the row that settled it. */
+  disputeId?: string;
   createdAt: FirebaseFirestore.Timestamp;
   completedAt?: FirebaseFirestore.Timestamp;
   errorMessage?: string;
@@ -392,7 +403,11 @@ export interface Notification {
     | "kyc_rejected"
     | "pin_reset"
     | "cashout_completed"
-    | "cashout_returned";
+    | "cashout_returned"
+    | "adjustment_posted"
+    | "dispute_opened"
+    | "dispute_updated"
+    | "dispute_resolved";
   title: string;
   body: string;
   data?: Record<string, string>;

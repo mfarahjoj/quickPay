@@ -60,6 +60,10 @@ export interface JournalRefs {
   apiChargeId?: string;
   /** API refund (`api_refunds`) behind a partial or full API refund. */
   apiRefundId?: string;
+  /** Ops correction (`adjustments`) behind an adjustment entry. */
+  adjustmentId?: string;
+  /** Dispute whose resolution posted this entry. */
+  disputeId?: string;
 }
 
 export interface JournalEntryInput {
@@ -76,6 +80,12 @@ export interface JournalEntryInput {
   description: string;
   /** uid of the initiating user, or "system". */
   postedBy: string;
+  /**
+   * Let this entry debit a frozen wallet. Only for ops corrections: freezing
+   * stops a suspect account spending, but ops must still be able to take back
+   * value it should never have had. Not stored on the entry.
+   */
+  allowFrozenDebit?: boolean;
 }
 
 /** Shape of a `journal_entries` document. Append-only; never updated. */

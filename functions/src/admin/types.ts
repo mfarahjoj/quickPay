@@ -31,7 +31,9 @@ export type AuditTargetType =
   | "payout"
   | "ledger_alert"
   | "ledger_check"
-  | "api_key";
+  | "api_key"
+  | "adjustment"
+  | "dispute";
 
 /**
  * One immutable record of an admin action. Written in the same transaction as

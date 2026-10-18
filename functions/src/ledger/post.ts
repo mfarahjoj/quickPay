@@ -139,8 +139,9 @@ export async function prepareJournalEntry(
       throw new CurrencyMismatchError(d.account, walletCurrency, input.currency);
     }
 
-    // Frozen accounts may still receive (see FrozenAccountError) but never spend.
-    if (d.debits > 0 && wallet.frozen === true) {
+    // Frozen accounts may still receive (see FrozenAccountError) but never
+    // spend, except when ops take back value through an adjustment.
+    if (d.debits > 0 && wallet.frozen === true && input.allowFrozenDebit !== true) {
       throw new FrozenAccountError(d.account);
     }
 

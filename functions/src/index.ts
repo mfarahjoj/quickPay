@@ -141,6 +141,8 @@ export {
   adminAcknowledgeLedgerAlert,
   adminRunLedgerCheck,
 } from "./admin/ledgerDesk";
+// Corrections: a balanced `adjustment` entry, never a balance edit
+export { adminPostAdjustment, adminListAdjustments } from "./admin/adjustments";
 
 // Merchant settlement: the merchant asks, ops sends the transfer and records it
 export { requestPayout } from "./payouts/requestPayout";

@@ -224,6 +224,10 @@ service cloud.firestore {
     match /recipient_lookups/{counterId} {
       allow read, write: if false;
     }
+    // Ops corrections. Server-only; the console reads them through callables.
+    match /adjustments/{adjustmentId} {
+      allow read, write: if false;
+    }
 
     // Minimum app versions (the apps' update gate). Public on purpose: the
     // gate runs before sign-in, and the doc holds nothing but version levels
