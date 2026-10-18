@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { trustThisDeviceWithPin } from '../services/auth.service';
 
 // Set after the user proves knowledge of their account PIN on THIS install —
 // creating it (SetupPin), verifying it (WelcomeBack), resetting it (ResetPin),
@@ -8,7 +9,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // what routes them through the welcome-back verification.
 const PIN_VERIFIED_KEY = '@quickpay_pin_verified_this_install';
 
-export async function markPinVerifiedThisInstall(): Promise<void> {
+/**
+ * Pass the PIN when it's in hand: trusting this phone for PIN sign-in needs
+ * it (services/auth.service.ts, trustThisDeviceWithPin).
+ */
+export async function markPinVerifiedThisInstall(pin?: string): Promise<void> {
+  if (pin) trustThisDeviceWithPin(pin);
   try {
     await AsyncStorage.setItem(PIN_VERIFIED_KEY, 'true');
   } catch {

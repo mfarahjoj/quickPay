@@ -7,6 +7,7 @@ import { requireAuth, validatePin } from "../utils/validation";
 import { verifyUserPin } from "./validatePin";
 import { readAuth } from "./pinStore";
 import { ApiResponse } from "../types";
+import { getRates } from "../config/rates";
 
 /**
  * Trusted-device PIN login.
@@ -33,6 +34,18 @@ const SECRET_LOCK_SECONDS = 15 * 60;
 
 interface RegisterRequest {
   platform?: string;
+  /** Required (review C8): a stolen session alone can't trust a new phone. */
+  pin?: string;
+  /** What the owner sees in their device list, e.g. "iPhone 14". */
+  name?: string;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Past the idle limit, a device can't sign in and is forgotten (O3). */
+export function isDeviceExpired(device: FirebaseFirestore.DocumentData, idleDays: number, nowMs: number): boolean {
+  const last = (device.lastUsedAt ?? device.createdAt) as admin.firestore.Timestamp | undefined;
+  return !!last && nowMs - last.toMillis() > idleDays * DAY_MS;
 }
 
 interface LoginRequest {
@@ -56,6 +69,10 @@ export const registerTrustedDevice = https.onCall(
       typeof request.data?.platform === "string" ?
         request.data.platform.slice(0, 32) :
         "unknown";
+    const name =
+      typeof request.data?.name === "string" && request.data.name.trim() ?
+        request.data.name.trim().slice(0, 40) :
+        null;
 
     const db = admin.firestore();
 
@@ -69,19 +86,46 @@ export const registerTrustedDevice = https.onCall(
       );
     }
 
+    // And the caller must know it: a session alone (a stolen token, a phone
+    // left signed in) must not be able to mint a credential that outlives it.
+    const pin = request.data?.pin;
+    if (typeof pin !== "string" || !validatePin(pin)) {
+      throw new https.HttpsError("failed-precondition", "Enter your PIN to trust this phone.", {
+        reason: "pin_required",
+      });
+    }
+    if (!(await verifyUserPin(uid, pin))) {
+      throw new https.HttpsError("permission-denied", "Invalid PIN");
+    }
+
+    // Forget phones past the idle limit, then make room under the cap by
+    // dropping the least recently used (O3: 5 phones, 180 days).
+    const { maxTrustedDevices, trustedDeviceIdleDays } = await getRates();
+    const nowMs = Date.now();
+    const existing = await db.collection(DEVICES).where("uid", "==", uid).get();
+    const live = existing.docs.filter((d) => !isDeviceExpired(d.data(), trustedDeviceIdleDays, nowMs));
+    const lastUsed = (d: FirebaseFirestore.QueryDocumentSnapshot) =>
+      ((d.data().lastUsedAt ?? d.data().createdAt) as admin.firestore.Timestamp | undefined)?.toMillis() ?? 0;
+    const evicted = [...live].sort((a, b) => lastUsed(a) - lastUsed(b)).slice(0, Math.max(0, live.length - maxTrustedDevices + 1));
+    const drop = [...existing.docs.filter((d) => !live.includes(d)), ...evicted];
+
     const deviceId = crypto.randomUUID();
     const deviceSecret = crypto.randomBytes(SECRET_BYTES).toString("hex");
     const secretHash = await bcrypt.hash(deviceSecret, SALT_ROUNDS);
 
-    await db.collection(DEVICES).doc(deviceId).set({
+    const batch = db.batch();
+    drop.forEach((d) => batch.delete(d.ref));
+    batch.set(db.collection(DEVICES).doc(deviceId), {
       uid,
       secretHash,
       platform,
+      name,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       lastUsedAt: admin.firestore.FieldValue.serverTimestamp(),
       secretFailedAttempts: 0,
       secretLockedUntil: null,
     });
+    await batch.commit();
 
     // Returned exactly once. The server keeps only the hash — if the client
     // loses this, the device has to re-verify by SMS.
@@ -135,6 +179,13 @@ export const loginWithPin = https.onCall(
       | null
       | undefined;
     if (lockedUntil && lockedUntil.toMillis() > now.toMillis()) {
+      throw denied();
+    }
+
+    // Unused for too long: forget it, and send them to SMS (O3).
+    const { trustedDeviceIdleDays } = await getRates();
+    if (isDeviceExpired(device, trustedDeviceIdleDays, now.toMillis())) {
+      await deviceRef.delete().catch(() => undefined);
       throw denied();
     }
 

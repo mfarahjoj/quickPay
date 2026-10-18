@@ -200,17 +200,44 @@ export async function resetPin(newPin: string, idLast4?: string): Promise<ResetP
 }
 
 /**
+ * The server only trusts a phone when it's sent the PIN (review C8). The
+ * screens that check the PIN hand it here; it's kept in memory only, for a
+ * few minutes, and dropped once used.
+ */
+const HELD_PIN_MS = 5 * 60 * 1000;
+let heldPin: { pin: string; at: number } | null = null;
+
+export function trustThisDeviceWithPin(pin: string): void {
+  heldPin = { pin, at: Date.now() };
+  if (auth().currentUser) registerTrustedDevice().catch(() => {});
+}
+
+function takeHeldPin(): string | null {
+  const held = heldPin;
+  heldPin = null;
+  return held && Date.now() - held.at < HELD_PIN_MS ? held.pin : null;
+}
+
+/** "iPhone" / "Android phone", shown in the owner's device list. */
+function deviceName(): string {
+  return Platform.OS === 'ios' ? 'iPhone' : 'Android phone';
+}
+
+/**
  * Mint and store this device's trusted-device credential, so the next sign-in
  * here can use the PIN instead of an SMS code. Safe to call repeatedly — it
- * no-ops once a credential exists. Never throws: failing to trust a device is
- * a downgrade to SMS login, not an error worth blocking entry over.
+ * no-ops once a credential exists, or when no PIN has been entered lately.
+ * Never throws: failing to trust a device is a downgrade to SMS login, not an
+ * error worth blocking entry over.
  */
 export async function registerTrustedDevice(): Promise<void> {
   try {
     if (await hasDeviceCredential()) return;
+    const pin = takeHeldPin();
+    if (!pin) return;
 
     const fn = functions().httpsCallable('registerTrustedDevice');
-    const result = await fn({ platform: Platform.OS });
+    const result = await fn({ platform: Platform.OS, pin, name: deviceName() });
 
     const responseData = result.data as {
       success: boolean;

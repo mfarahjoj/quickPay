@@ -96,7 +96,7 @@ export default function WelcomeBackScreen({ onComplete }: Props) {
   };
 
   const proceedVerified = async (verified: string) => {
-    await markPinVerifiedThisInstall();
+    await markPinVerifiedThisInstall(verified);
     if (bioAvailable) {
       setVerifiedPin(verified);
       setStep('biometric');

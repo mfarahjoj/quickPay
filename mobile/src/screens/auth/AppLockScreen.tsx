@@ -75,10 +75,10 @@ export default function AppLockScreen({ onUnlock }: Props) {
     opacity: glowOpacity.value,
   }));
 
-  const performUnlock = useCallback(() => {
+  const performUnlock = useCallback((pin?: string) => {
     // A successful unlock (PIN, or Face ID backed by the keychain PIN)
     // proves the PIN on this install.
-    markPinVerifiedThisInstall();
+    markPinVerifiedThisInstall(pin);
     glowScale.value = withSpring(1.5, Springs.celebration);
     glowOpacity.value = withTiming(0, { duration: 260 });
     setTimeout(onUnlock, 260);
@@ -118,7 +118,7 @@ export default function AppLockScreen({ onUnlock }: Props) {
       setPinError('');
       const valid = await validatePin(submittedPin);
       if (valid) {
-        performUnlock();
+        performUnlock(submittedPin);
       } else {
         setPinError(t('auth.appLock.invalidPinMessage'));
         setPin('');

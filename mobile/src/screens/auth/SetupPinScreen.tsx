@@ -90,7 +90,7 @@ export default function SetupPinScreen({ onComplete }: Props) {
         onComplete?.({ verified: false });
         return;
       }
-      await markPinVerifiedThisInstall();
+      await markPinVerifiedThisInstall(pin);
       // Hand the fresh PIN to the biometric setup screen so it isn't retyped.
       setPendingSetupPin(pin);
       onComplete?.({ verified: true });

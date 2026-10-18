@@ -43,6 +43,8 @@ export interface Rates {
   agentFlagUpheldDisputes: number;
   agentFlagWindowDays: number;
   pinHardLockAttempts: number;
+  maxTrustedDevices: number;
+  trustedDeviceIdleDays: number;
 }
 
 export type RateGroup =
@@ -324,6 +326,26 @@ export const RATE_FIELDS: { [K in keyof Rates]: RateFieldSpec } = {
     min: 6,
     max: 20,
     unit: "attempts",
+  },
+  maxTrustedDevices: {
+    group: "Sign-in and devices",
+    label: "Trusted phones per account",
+    help: "Phones that can sign in with the PIN instead of an SMS code. Trusting one more signs out the least recently used.",
+    kind: "int",
+    default: 5,
+    min: 1,
+    max: 20,
+    unit: "phones",
+  },
+  trustedDeviceIdleDays: {
+    group: "Sign-in and devices",
+    label: "Forget a trusted phone after",
+    help: "Days without a PIN sign-in. After that the phone needs an SMS code again.",
+    kind: "int",
+    default: 180,
+    min: 30,
+    max: 730,
+    unit: "days",
   },
 };
 

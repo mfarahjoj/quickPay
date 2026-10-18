@@ -121,7 +121,7 @@ export default function ResetPinScreen({ onDone, onCancel }: Props) {
           logger.warn('Keychain update after PIN reset failed:', err)
         );
       }
-      await markPinVerifiedThisInstall();
+      await markPinVerifiedThisInstall(pinValue);
       // Say why sending money will be refused for a while, before it is.
       Alert.alert(
         t('auth.resetPin.doneTitle'),
