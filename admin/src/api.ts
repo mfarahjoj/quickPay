@@ -46,6 +46,8 @@ export interface PayoutRow {
   note?: string;
   status: "requested" | "paid" | "rejected";
   requiresSeniorApproval: boolean;
+  /** Raised by the merchant's daily automatic payout, not by hand. */
+  auto?: boolean;
   externalReference?: string;
   createdAt?: { _seconds?: number; seconds?: number };
 }

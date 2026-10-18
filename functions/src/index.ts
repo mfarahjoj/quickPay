@@ -166,6 +166,9 @@ export {
 
 // Merchant settlement: the merchant asks, ops sends the transfer and records it
 export { requestPayout } from "./payouts/requestPayout";
+// Daily automatic payouts above a kept balance (plan 3.6, D11)
+export { setAutoPayout, runAutoPayouts } from "./payouts/autoPayout";
+export { getStatement } from "./payouts/statement";
 export {
   adminListPayouts,
   adminSettlePayout,

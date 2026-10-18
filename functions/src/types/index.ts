@@ -188,6 +188,8 @@ export interface PayoutRequest {
   status: PayoutStatus;
   /** Set when a second approver is needed because of the amount. */
   requiresSeniorApproval: boolean;
+  /** Raised by the daily automatic payout (D11), not by the merchant. */
+  auto?: boolean;
   createdAt: FirebaseFirestore.Timestamp;
   /** Journal entry for the hold taken when the merchant asked. */
   holdEntryId: string;

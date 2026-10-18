@@ -129,6 +129,7 @@ export function PayoutDesk() {
                   <tr key={row.id}>
                     <td className="wide">
                       {row.businessName || row.merchantName || row.merchantId}
+                      {row.auto && <div className="muted">automatic daily payout</div>}
                       {row.requiresSeniorApproval && view === "requested" && (
                         <div className="muted" style={{ color: "var(--warn)", fontWeight: 500 }}>
                           needs a senior admin

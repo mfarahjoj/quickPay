@@ -23,6 +23,7 @@ import { useWallet } from '../../hooks/useWallet';
 import { useExitGuard } from '../../hooks/useExitGuard';
 import { toCents, formatCents, sanitizeAmountInput } from '../../utils/money';
 import { isWrongPin, pinActionErrorKey } from '../../utils/errors';
+import { functions } from '../../services/firebase.config';
 
 type Step = 'form' | 'pin' | 'sent';
 
@@ -58,6 +59,14 @@ export default function PayoutScreen() {
   // The money leaves the balance the moment a payout is requested, so an
   // empty list that is really a dead listener reads as money gone missing.
   const [historyFailed, setHistoryFailed] = useState(false);
+  // The payout time Zapp commits to, set in the admin console (D11).
+  const [targetHours, setTargetHours] = useState<number | null>(null);
+  useEffect(() => {
+    functions()
+      .httpsCallable('getPricing')()
+      .then((r) => setTargetHours((r.data as any)?.data?.payoutTargetHours ?? null))
+      .catch(() => setTargetHours(null));
+  }, []);
 
   useEffect(
     () =>
@@ -252,7 +261,9 @@ export default function PayoutScreen() {
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        <Text style={styles.hint}>{t('payout.hint')}</Text>
+        <Text style={styles.hint}>
+          {targetHours ? t('payout.hintHours', { hours: targetHours }) : t('payout.hint')}
+        </Text>
 
         <PillButton
           label={t('payout.submit')}
@@ -305,6 +316,18 @@ export default function PayoutScreen() {
         {pending.length > 0 ? (
           <Text style={styles.hint}>{t('payout.pendingHint')}</Text>
         ) : null}
+
+        <GlassCard style={styles.linkCard}>
+          <TouchableOpacity style={styles.linkRow} onPress={() => navigation.navigate('AutoPayout')}>
+            <Text style={styles.linkText}>{t('payout.autoLink')}</Text>
+            <Text style={styles.linkArrow}>›</Text>
+          </TouchableOpacity>
+          <View style={styles.linkDivider} />
+          <TouchableOpacity style={styles.linkRow} onPress={() => navigation.navigate('Statement')}>
+            <Text style={styles.linkText}>{t('payout.statementLink')}</Text>
+            <Text style={styles.linkArrow}>›</Text>
+          </TouchableOpacity>
+        </GlassCard>
       </View>
     </DarkScreen>
   );
@@ -361,6 +384,11 @@ const styles = StyleSheet.create({
   routeText: { fontSize: 13, fontWeight: '600', color: TEXT_DIM },
   routeTextActive: { color: '#FFFFFF' },
   hint: { fontSize: 12, color: TEXT_FAINT, marginVertical: 12, lineHeight: 17 },
+  linkCard: { marginTop: 20, paddingHorizontal: 16 },
+  linkRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 16 },
+  linkText: { fontSize: 15, color: '#FFFFFF', fontWeight: '600' },
+  linkArrow: { fontSize: 20, color: TEXT_DIM },
+  linkDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.08)' },
   error: { fontSize: 13, color: '#FF6961', marginTop: 12 },
   historyCard: { padding: 14, marginBottom: 8, gap: 4 },
   historyRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

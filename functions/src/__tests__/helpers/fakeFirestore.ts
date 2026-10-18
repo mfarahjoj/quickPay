@@ -28,8 +28,14 @@ function applyTransforms(base: Data | undefined, patch: Data): Data {
 
 const comparable = (v: any) => (v && typeof v.toMillis === "function" ? v.toMillis() : v);
 
+/** Field values by dotted path ("autoPayout.enabled"), as Firestore reads them. */
+function fieldAt(doc: Data, field: string): any {
+  if (doc && field in doc) return doc[field];
+  return field.split(".").reduce((v: any, k) => (v == null ? undefined : v[k]), doc);
+}
+
 function matches(doc: Data, field: string, op: string, value: any): boolean {
-  const a = comparable(doc?.[field]);
+  const a = comparable(fieldAt(doc, field));
   const b = comparable(value);
   switch (op) {
     case "==": return a === b;

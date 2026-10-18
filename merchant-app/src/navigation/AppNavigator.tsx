@@ -50,6 +50,8 @@ type MerchantStackParamList = {
   DisputesInbox: undefined;
   DisputeDetail: { disputeId: string };
   ReportProblem: { transactionId: string };
+  AutoPayout: undefined;
+  Statement: undefined;
 };
 
 type TabParamList = {
@@ -271,6 +273,16 @@ function MainStackNavigator() {
       <MainStack.Screen
         name="DisputeDetail"
         getComponent={() => require('../screens/disputes/DisputeDetailScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="AutoPayout"
+        getComponent={() => require('../screens/payouts/AutoPayoutScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="Statement"
+        getComponent={() => require('../screens/payouts/StatementScreen').default}
         options={{ headerShown: false }}
       />
       <MainStack.Screen
