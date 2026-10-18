@@ -161,6 +161,25 @@ describe("agent float account", () => {
         ]),
       });
 
+    it("ignores the agent's entries as someone else's customer", () => {
+      // This agent cashing out at another agent: the hold debits them as a customer.
+      expect(
+        floatDeltaOf("agent_cashout", [
+          { account: A, debit: 1_500, credit: 0 },
+          { account: "platform:cashout_hold", debit: 0, credit: 1_500 },
+        ], AGENT)
+      ).toBe(0);
+      // This agent being cashed in by another agent.
+      expect(
+        floatDeltaOf("agent_topup", [
+          { account: "user:agent-2", debit: 2_000, credit: 0 },
+          { account: A, debit: 0, credit: 2_000 },
+        ], AGENT)
+      ).toBe(0);
+      // Pre-ledger opening balances aren't float.
+      expect(floatDeltaOf("opening_balance", [{ account: A, debit: 0, credit: 10_000 }], AGENT)).toBe(0);
+    });
+
     it("reads each entry's float part without the commission", () => {
       expect(
         floatDeltaOf("agent_topup", [

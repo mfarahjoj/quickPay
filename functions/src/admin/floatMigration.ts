@@ -29,6 +29,7 @@ import { stageAuditEntry } from "./audit";
 import {
   JOURNAL_COLLECTION,
   PLATFORM_FEES,
+  CASHOUT_HOLD,
   JournalLine,
   prepareJournalEntry,
   userAccount,
@@ -44,19 +45,39 @@ export function migrationEntryId(uid: string): string {
 }
 
 /**
- * The float part of one pre-split entry for this agent: their wallet's net
- * change, less any commission platform:fees paid them in the same entry.
+ * The float part of one pre-split entry for this agent. Only the agent's
+ * side of an agent flow counts; an agent can also be someone else's customer.
+ *
+ * - float_issue / float_withdraw: the wallet's net change.
+ * - agent_topup: what the agent gave (their debits). A credit is either
+ *   commission or this agent being cashed in by another agent; neither is float.
+ * - agent_cashout: only the settle step, where platform:cashout_hold pays the
+ *   agent; the agent's credits less the commission platform:fees paid them.
+ *   The hold step debits the *customer*, which may be this agent cashing out
+ *   at someone else.
  */
 export function floatDeltaOf(type: string, lines: JournalLine[], uid: string): number {
   const account = userAccount(uid);
   const mine = lines.filter((l) => l.account === account);
   if (mine.length === 0) return 0;
-  const net = mine.reduce((sum, l) => sum + l.credit - l.debit, 0);
-  if (type === "float_issue" || type === "float_withdraw") return net;
-  const commission = lines.find((l) => l.account === PLATFORM_FEES && l.debit > 0)?.debit ?? 0;
-  // Only count commission if it was this agent who received it.
-  const paidToMe = commission > 0 && mine.some((l) => l.credit === commission);
-  return net - (paidToMe ? commission : 0);
+  const debits = mine.reduce((sum, l) => sum + l.debit, 0);
+  const credits = mine.reduce((sum, l) => sum + l.credit, 0);
+  switch (type) {
+    case "float_issue":
+    case "float_withdraw":
+      return credits - debits;
+    case "agent_topup":
+      return debits === 0 ? 0 : -debits;
+    case "agent_cashout": {
+      const settle = lines.some((l) => l.account === CASHOUT_HOLD && l.debit > 0);
+      if (!settle) return 0;
+      const commission = lines.find((l) => l.account === PLATFORM_FEES && l.debit > 0)?.debit ?? 0;
+      const paidToMe = commission > 0 && mine.some((l) => l.credit === commission);
+      return credits - (paidToMe ? commission : 0);
+    }
+    default:
+      return 0;
+  }
 }
 
 export interface MigrationRow {
