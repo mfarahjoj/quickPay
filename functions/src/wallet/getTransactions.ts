@@ -1,7 +1,8 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { requireAuth, centsToDollars } from "../utils/validation";
-import { ApiResponse, Transaction, TransactionStatus } from "../types";
+import { ApiResponse, Transaction, TransactionKind, TransactionStatus } from "../types";
+import { kindOf } from "../utils/transactionKind";
 
 interface TransactionResponse {
   id: string;
@@ -23,6 +24,7 @@ interface TransactionResponse {
   refundedAt?: Date;
   refundOfTransactionId?: string;
   disputeId?: string;
+  kind: TransactionKind;
 }
 
 interface GetTransactionsRequest {
@@ -152,6 +154,7 @@ export const getTransactions = https.onCall(
           refundedAt: data.refundedAt?.toDate(),
           refundOfTransactionId: data.refundOfTransactionId,
           disputeId: data.disputeId,
+          kind: kindOf(data),
         };
       });
 

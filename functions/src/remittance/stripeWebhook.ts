@@ -92,6 +92,7 @@ export const stripeWebhook = https.onRequest(async (req, res) => {
 
       const txRecord: Transaction = {
         type: "topup",
+        kind: "card_topup",
         fromUserId: PLATFORM_ID,
         toUserId: topup.recipientId,
         participants: [PLATFORM_ID, topup.recipientId],

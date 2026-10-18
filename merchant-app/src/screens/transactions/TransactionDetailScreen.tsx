@@ -62,10 +62,17 @@ export default function TransactionDetailScreen({ route, navigation }: Props) {
   const incoming = transaction.isIncoming;
   const ss = statusStyle(transaction.status);
   const statusLabel = t(`transaction.status.${transaction.status}`, transaction.status);
-  const typeLabel = TYPE_KEYS[transaction.type] ? t(TYPE_KEYS[transaction.type]) : transaction.type;
+  // `kind` says what the row really is (a shop payment, P2P, payroll...);
+  // `type` is the coarse fallback for rows from before it existed.
+  const typeLabel = transaction.kind
+    ? t(`transactions.kindLabel.${transaction.kind}`)
+    : TYPE_KEYS[transaction.type]
+      ? t(TYPE_KEYS[transaction.type])
+      : transaction.type;
 
   const canRefund =
     transaction.type === 'payment' &&
+    (!transaction.kind || transaction.kind === 'merchant_payment') &&
     transaction.isIncoming &&
     transaction.status === 'completed' &&
     !refunded;

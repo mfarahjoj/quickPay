@@ -265,8 +265,32 @@ export type TransactionType =
   | "adjustment";
 export type TransactionStatus = "pending" | "completed" | "failed" | "cancelled";
 
+/**
+ * What a transaction row actually is (plan 3.1). `type` lumps shop payments,
+ * P2P and payroll together as "payment", so receipts and refunds couldn't
+ * tell them apart; `kind` can. Rows written before it existed are backfilled
+ * from their journal entry (scripts/backfill-transaction-kinds.js).
+ */
+export type TransactionKind =
+  | "merchant_payment"
+  | "online_payment"
+  | "p2p"
+  | "payroll"
+  | "cash_in"
+  | "cash_out"
+  | "payout"
+  | "refund"
+  | "adjustment"
+  | "referral"
+  | "float"
+  | "card_topup"
+  | "mobile_money_topup"
+  | "mobile_money_cashout"
+  | "remittance";
+
 export interface Transaction {
   type: TransactionType;
+  kind: TransactionKind;
   fromUserId: string;
   toUserId: string;
   /** [fromUserId, toUserId] — enables a single array-contains query per user. */

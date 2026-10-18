@@ -186,6 +186,7 @@ export const payrollPayout = https.onCall(
 
           const txRecord: Transaction = {
             type: "payment",
+            kind: "payroll",
             fromUserId: merchantId,
             toUserId: recipientId,
             participants: [merchantId, recipientId],

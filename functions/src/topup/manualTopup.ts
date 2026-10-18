@@ -193,6 +193,7 @@ export const manualTopup = https.onCall(
         // Create transaction record
         const txRecord: Transaction = {
           type: "topup",
+          kind: "cash_in",
           fromUserId: agentId, // Agent who performed top-up
           toUserId: userId,
           participants: [agentId, userId],

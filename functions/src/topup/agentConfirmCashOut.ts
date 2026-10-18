@@ -235,6 +235,7 @@ export const agentConfirmCashOut = https.onCall(
       } else {
         tx.set(txRef, {
           type: "withdrawal",
+          kind: "cash_out",
           fromUserId: cashOut.customerId,
           amount: cashOut.amount,
           currency: cashOut.currency,

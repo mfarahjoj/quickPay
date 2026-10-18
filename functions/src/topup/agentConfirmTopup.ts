@@ -196,6 +196,7 @@ export const agentConfirmTopup = https.onCall(
       // Transaction record
       const txRecord: Transaction = {
         type: "topup",
+        kind: "cash_in",
         fromUserId: agentId,
         toUserId: topup.customerId,
         participants: [agentId, topup.customerId],

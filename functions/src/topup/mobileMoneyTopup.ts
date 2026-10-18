@@ -122,6 +122,7 @@ export const topupFromMobileMoney = https.onCall(
 
           const txRecord: Transaction = {
             type: "topup",
+            kind: "mobile_money_topup",
             fromUserId: userId,
             toUserId: userId,
             participants: [userId],
@@ -294,6 +295,7 @@ export const cashOutToMobileMoney = https.onCall(
 
           const txRecord: Transaction = {
             type: "withdrawal",
+            kind: "mobile_money_cashout",
             fromUserId: userId,
             toUserId: userId,
             participants: [userId],

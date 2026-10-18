@@ -270,6 +270,7 @@ export async function createRefund(
 
       const refundRecord: Transaction = {
         type: "refund",
+        kind: "refund",
         fromUserId: charge.merchantId,
         toUserId: charge.paidBy,
         participants: [charge.merchantId, charge.paidBy],

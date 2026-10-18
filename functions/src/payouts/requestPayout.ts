@@ -215,6 +215,7 @@ export const requestPayout = https.onCall(
         // row in their history now — not when ops gets round to sending it.
         const txRecord: Transaction = {
           type: "withdrawal",
+          kind: "payout",
           fromUserId: merchantId,
           toUserId: "system",
           participants: [merchantId],

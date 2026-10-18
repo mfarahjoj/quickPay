@@ -298,6 +298,7 @@ export const approveApiCharge = https.onCall(
 
         const txRecord: Transaction = {
           type: "payment",
+          kind: "online_payment",
           fromUserId: customerId,
           toUserId: charge.merchantId,
           participants: [customerId, charge.merchantId],

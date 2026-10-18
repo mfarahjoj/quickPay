@@ -281,6 +281,7 @@ export const adminApproveFloat = https.onCall(
 
       const txRecord: Transaction = {
         type: issuance.direction === "issue" ? "topup" : "withdrawal",
+        kind: "float",
         fromUserId: issuance.direction === "issue" ? "system" : issuance.agentId,
         toUserId: issuance.direction === "issue" ? issuance.agentId : "system",
         participants: [issuance.agentId],

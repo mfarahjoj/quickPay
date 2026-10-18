@@ -86,6 +86,7 @@ async function creditReferralBonus(
 
     tx.set(db.collection("transactions").doc(), {
       type: "referral",
+      kind: "referral",
       fromUserId: "system",
       toUserId: newUserId,
       participants: ["system", newUserId],
@@ -100,6 +101,7 @@ async function creditReferralBonus(
 
     tx.set(db.collection("transactions").doc(), {
       type: "referral",
+      kind: "referral",
       fromUserId: "system",
       toUserId: referrerId,
       participants: ["system", referrerId],

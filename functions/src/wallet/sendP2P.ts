@@ -150,6 +150,7 @@ export const sendP2P = https.onCall(
 
         const txRecord: Transaction = {
           type: "payment",
+          kind: "p2p",
           fromUserId: senderId,
           toUserId: recipientId,
           participants: [senderId, recipientId],

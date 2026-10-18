@@ -171,6 +171,7 @@ export async function prepareAdjustment(
       if (userIds.length > 0) {
         const row: Transaction = {
           type: "adjustment",
+          kind: "adjustment",
           fromUserId: isUserAccount(input.debitAccount) ? userIdOf(input.debitAccount) : "system",
           toUserId: isUserAccount(input.creditAccount) ? userIdOf(input.creditAccount) : "system",
           participants: userIds,

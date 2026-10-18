@@ -114,6 +114,7 @@ export async function prepareRefund(
       pending.write(t);
       const refundRecord: Transaction = {
         type: "refund",
+        kind: "refund",
         fromUserId: merchantId,
         toUserId: customerId,
         participants: [merchantId, customerId],

@@ -88,6 +88,7 @@ export const completeRemittance = https.onCall(
 
           const txRecord: Transaction = {
             type: "topup",
+            kind: "remittance",
             fromUserId: senderId,
             toUserId: recipientId,
             participants: [senderId, recipientId],

@@ -130,6 +130,7 @@ export const customerCashOut = https.onCall(
       // toUserId is filled in by the agent who claims it.
       const txRecord: Transaction = {
         type: "withdrawal",
+        kind: "cash_out",
         fromUserId: customerId,
         toUserId: "",
         participants: [customerId],

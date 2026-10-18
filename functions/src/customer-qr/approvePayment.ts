@@ -226,6 +226,7 @@ export const approvePaymentRequest = https.onCall(
 
       const txRecord: Transaction = {
         type: "payment",
+        kind: "merchant_payment",
         fromUserId: customerId,
         toUserId: approvedMerchantId,
         participants: [customerId, approvedMerchantId],
