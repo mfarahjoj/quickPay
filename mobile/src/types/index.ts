@@ -65,6 +65,11 @@ export interface Transaction {
   counterpartyPhone?: string | null;
   net?: number;
   fee?: number;
+  /** Set when the payment was refunded (getTransactions). */
+  refundedAt?: Date | string;
+  refundOfTransactionId?: string;
+  /** Set when someone disputed this transaction. */
+  disputeId?: string;
 }
 
 export interface QRCodeData {

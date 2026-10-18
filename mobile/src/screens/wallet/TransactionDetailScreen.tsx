@@ -5,6 +5,7 @@ import { Header, Button, Card } from '../../components';
 import { colors, typography, spacing, borderRadius } from '../../theme';
 import { CURRENCY_SYMBOL } from '../../config/constants';
 import { Transaction } from '../../types';
+import { useAuth } from '../../hooks/useAuth';
 
 interface Props {
   navigation: any;
@@ -14,6 +15,7 @@ interface Props {
 export default function TransactionDetailScreen({ navigation, route }: Props) {
   const { t } = useTranslation();
   const transaction = route.params?.transaction;
+  const { user } = useAuth();
 
   if (!transaction) {
     return (
@@ -38,6 +40,13 @@ export default function TransactionDetailScreen({ navigation, route }: Props) {
     ].join('\n');
     await Share.share({ message: receiptText, title: t('wallet.detail.receiptTitle') });
   };
+
+  // A disputed transaction carries its dispute's id. Other people's disputes
+  // on it aren't readable here, so RaiseDispute checks with the server first.
+  const openHelp = () =>
+    transaction.disputeId?.endsWith(`_${user?.uid}`)
+      ? navigation.navigate('DisputeDetail', { disputeId: transaction.disputeId })
+      : navigation.navigate('RaiseDispute', { transactionId: transaction.id });
 
   const statusLabel =
     transaction.status === 'completed'
@@ -68,6 +77,9 @@ export default function TransactionDetailScreen({ navigation, route }: Props) {
             {transaction.amount.toFixed(2)}
           </Text>
           <Text style={styles.status}>{statusLabel}</Text>
+          {transaction.refundedAt ? (
+            <Text style={styles.refunded}>{t('wallet.detail.refunded')}</Text>
+          ) : null}
           <Text style={styles.currency}>{transaction.currency}</Text>
         </Card>
 
@@ -101,6 +113,14 @@ export default function TransactionDetailScreen({ navigation, route }: Props) {
           fullWidth
           style={styles.shareButton}
         />
+
+        {/* Disputes: open the existing one, or raise one. */}
+        <TouchableOpacity style={styles.helpRow} onPress={openHelp} activeOpacity={0.7}>
+          <Text style={styles.helpText}>
+            {transaction.disputeId ? t('wallet.detail.viewDispute') : t('wallet.detail.getHelp')}
+          </Text>
+          <Text style={styles.helpArrow}>›</Text>
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );
@@ -157,6 +177,30 @@ const styles = StyleSheet.create({
   currency: {
     ...typography.caption,
     color: colors.text.muted,
+  },
+  refunded: {
+    ...typography.captionBold,
+    color: colors.dark.incoming,
+    marginBottom: spacing.xs,
+  },
+  helpRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.lg,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.dark.glass,
+    borderWidth: 1,
+    borderColor: colors.dark.glassBorder,
+  },
+  helpText: {
+    ...typography.bodySemibold,
+    color: colors.dark.text,
+  },
+  helpArrow: {
+    ...typography.bodySemibold,
+    color: colors.dark.textDim,
   },
   detailsCard: {
     marginBottom: spacing.lg,

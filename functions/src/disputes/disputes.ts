@@ -59,6 +59,87 @@ export function classifyTransaction(
   }
 }
 
+export interface Disputable {
+  disputedKind: DisputedKind;
+  side: "payer" | "payee";
+  against: string | null;
+  transactionAmountCents: number;
+  happenedAt: number | undefined;
+  /** One dispute per movement per person: this is its document id. */
+  disputeId: string;
+}
+
+/**
+ * What the caller would be disputing, which side of it they were on, and who
+ * would answer. Throws unless they were part of it.
+ */
+export async function describeDisputable(
+  db: FirebaseFirestore.Firestore,
+  uid: string,
+  target: { transactionId?: string; agentTopupRequestId?: string }
+): Promise<Disputable> {
+  const { transactionId, agentTopupRequestId } = target;
+  if (!!transactionId === !!agentTopupRequestId) {
+    throw new https.HttpsError(
+      "invalid-argument",
+      "Name the transaction, or for an uncredited cash-in the top-up request"
+    );
+  }
+
+  if (transactionId) {
+    const txSnap = await db.collection("transactions").doc(transactionId).get();
+    if (!txSnap.exists) throw new https.HttpsError("not-found", "Transaction not found");
+    const tx = txSnap.data() as Transaction;
+    const parties = tx.participants ?? [tx.fromUserId, tx.toUserId];
+    if (!parties.includes(uid)) {
+      throw new https.HttpsError("permission-denied", "You weren't part of this transaction");
+    }
+    const entryType = tx.journalEntryId
+      ? ((await db.collection(JOURNAL_COLLECTION).doc(tx.journalEntryId).get()).data()?.type as
+          | JournalEntryType
+          | undefined)
+      : undefined;
+    const side = tx.fromUserId === uid ? "payer" : "payee";
+    const other = side === "payer" ? tx.toUserId : tx.fromUserId;
+    return {
+      disputedKind: classifyTransaction(tx, entryType),
+      side,
+      against: other && other !== "system" && other !== uid ? other : null,
+      transactionAmountCents: tx.amount,
+      happenedAt: (tx.completedAt ?? tx.createdAt)?.toMillis?.(),
+      disputeId: `${transactionId}_${uid}`,
+    };
+  }
+
+  const reqSnap = await db.collection("agentTopupRequests").doc(agentTopupRequestId!).get();
+  if (!reqSnap.exists) throw new https.HttpsError("not-found", "Top-up request not found");
+  const req = reqSnap.data()!;
+  if (req.customerId !== uid) {
+    throw new https.HttpsError("permission-denied", "This isn't your top-up request");
+  }
+  // Completed requests were credited: that's a normal transaction to dispute.
+  const lapsed =
+    req.status === "expired" ||
+    req.status === "cancelled" ||
+    (req.status === "pending" && req.expiresAt?.toMillis?.() < Date.now());
+  if (!lapsed) {
+    throw new https.HttpsError(
+      "failed-precondition",
+      "This top-up is still open or was credited",
+      { reason: "not_uncredited" }
+    );
+  }
+  return {
+    disputedKind: "uncredited_cash_in",
+    side: "payee",
+    // Nobody confirmed it, so there is no known agent to answer.
+    against: null,
+    transactionAmountCents: req.amount,
+    happenedAt: req.createdAt?.toMillis?.(),
+    disputeId: `atr_${agentTopupRequestId}_${uid}`,
+  };
+}
+
 function requireText(value: unknown, field: string): string {
   const text = typeof value === "string" ? sanitizeString(value) : "";
   if (text.length < 3 || text.length > MAX_TEXT) {
@@ -102,71 +183,11 @@ export const openDispute = https.onCall(
     if (!DISPUTE_KINDS.includes(kind)) {
       throw new https.HttpsError("invalid-argument", "Unknown dispute kind");
     }
-    if (!!transactionId === !!agentTopupRequestId) {
-      throw new https.HttpsError(
-        "invalid-argument",
-        "Name the transaction, or for an uncredited cash-in the top-up request"
-      );
-    }
-
     const db = admin.firestore();
     const rates = await getRates();
 
-    // ── What is being disputed, and by whom ──
-    let disputedKind: DisputedKind;
-    let side: "payer" | "payee";
-    let against: string | null;
-    let transactionAmountCents: number;
-    let happenedAt: number | undefined;
-    let disputeId: string;
-
-    if (transactionId) {
-      const txSnap = await db.collection("transactions").doc(transactionId).get();
-      if (!txSnap.exists) throw new https.HttpsError("not-found", "Transaction not found");
-      const tx = txSnap.data() as Transaction;
-      const parties = tx.participants ?? [tx.fromUserId, tx.toUserId];
-      if (!parties.includes(uid)) {
-        throw new https.HttpsError("permission-denied", "You weren't part of this transaction");
-      }
-      const entryType = tx.journalEntryId
-        ? ((await db.collection(JOURNAL_COLLECTION).doc(tx.journalEntryId).get()).data()?.type as
-            | JournalEntryType
-            | undefined)
-        : undefined;
-      disputedKind = classifyTransaction(tx, entryType);
-      side = tx.fromUserId === uid ? "payer" : "payee";
-      const other = side === "payer" ? tx.toUserId : tx.fromUserId;
-      against = other && other !== "system" && other !== uid ? other : null;
-      transactionAmountCents = tx.amount;
-      happenedAt = (tx.completedAt ?? tx.createdAt)?.toMillis?.();
-      disputeId = `${transactionId}_${uid}`;
-    } else {
-      const reqSnap = await db.collection("agentTopupRequests").doc(agentTopupRequestId!).get();
-      if (!reqSnap.exists) throw new https.HttpsError("not-found", "Top-up request not found");
-      const req = reqSnap.data()!;
-      if (req.customerId !== uid) {
-        throw new https.HttpsError("permission-denied", "This isn't your top-up request");
-      }
-      // Completed requests were credited: that's a normal transaction to dispute.
-      const lapsed =
-        req.status === "expired" ||
-        req.status === "cancelled" ||
-        (req.status === "pending" && req.expiresAt?.toMillis?.() < Date.now());
-      if (!lapsed) {
-        throw new https.HttpsError(
-          "failed-precondition",
-          "This top-up is still open or was credited",
-          { reason: "not_uncredited" }
-        );
-      }
-      disputedKind = "uncredited_cash_in";
-      side = "payee";
-      // Nobody confirmed it, so there is no known agent to answer.
-      against = null;
-      transactionAmountCents = req.amount;
-      happenedAt = req.createdAt?.toMillis?.();
-      disputeId = `atr_${agentTopupRequestId}_${uid}`;
-    }
+    const { disputedKind, side, against, transactionAmountCents, happenedAt, disputeId } =
+      await describeDisputable(db, uid, { transactionId, agentTopupRequestId });
 
     if (!allowedKinds(disputedKind, side).includes(kind)) {
       throw new https.HttpsError(
@@ -340,5 +361,47 @@ export const withdrawDispute = https.onCall(
 
     notifyQuietly(against, "dispute_resolved", "Dispute withdrawn", "A dispute against you was withdrawn.", disputeId);
     return { success: true, message: "Dispute withdrawn" };
+  }
+);
+
+interface DisputeOptions {
+  /** Claims this caller may raise on this movement; always includes "other". */
+  allowedKinds: DisputeKind[];
+  /** Set when the caller already disputed it: open that one instead. */
+  existingDisputeId: string | null;
+  /** False once disputeWindowDays have passed. */
+  windowOpen: boolean;
+  disputeWindowDays: number;
+  /** Whether someone will be asked to answer, or it goes straight to ops. */
+  hasCounterparty: boolean;
+  transactionAmountCents: number;
+}
+
+/**
+ * What the app should offer before the caller types anything: which claims
+ * fit, whether they've already disputed it, whether it's too old. Read-only.
+ */
+export const getDisputeOptions = https.onCall(
+  { enforceAppCheck: true },
+  async (
+    request: https.CallableRequest<{ transactionId?: string; agentTopupRequestId?: string }>
+  ): Promise<ApiResponse<DisputeOptions>> => {
+    requireAuth(request);
+    const uid = request.auth!.uid;
+    const db = admin.firestore();
+    const d = await describeDisputable(db, uid, request.data ?? {});
+    const { disputeWindowDays } = await getRates();
+    const existing = await db.collection(DISPUTES_COLLECTION).doc(d.disputeId).get();
+    return {
+      success: true,
+      data: {
+        allowedKinds: allowedKinds(d.disputedKind, d.side),
+        existingDisputeId: existing.exists ? d.disputeId : null,
+        windowOpen: !!d.happenedAt && Date.now() - d.happenedAt <= disputeWindowDays * DAY_MS,
+        disputeWindowDays,
+        hasCounterparty: d.against !== null,
+        transactionAmountCents: d.transactionAmountCents,
+      },
+    };
   }
 );

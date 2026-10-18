@@ -145,7 +145,12 @@ export {
 export { adminPostAdjustment, adminListAdjustments } from "./admin/adjustments";
 
 // Disputes (WALLET_READINESS_PLAN.md 2.2): raised in the apps, decided by ops.
-export { openDispute, postDisputeMessage, withdrawDispute } from "./disputes/disputes";
+export {
+  openDispute,
+  postDisputeMessage,
+  withdrawDispute,
+  getDisputeOptions,
+} from "./disputes/disputes";
 export {
   adminListDisputes,
   adminGetDispute,

@@ -39,6 +39,8 @@ export default function AgentTopupScreen() {
   const [step, setStep] = useState<Step>('amount');
   const [amountText, setAmountText] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  /** The code ran out unconfirmed: offer the "I gave the agent cash" claim. */
+  const [lapsed, setLapsed] = useState(false);
   const [otpCode, setOtpCode] = useState('');
   const [requestId, setRequestId] = useState('');
   const [confirmationId, setConfirmationId] = useState('');
@@ -54,11 +56,16 @@ export default function AgentTopupScreen() {
     const tick = () => {
       const diff = Math.floor((expiresAt.getTime() - Date.now()) / 1000);
       setTimeLeft(Math.max(0, diff));
+      if (diff <= 0) {
+        setErrorMsg(t('topup.agent.expiredMessage'));
+        setLapsed(true);
+        setStep('error');
+      }
     };
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [expiresAt, step]);
+  }, [expiresAt, step, t]);
 
   // Live listener — the agent's confirmation updates the request doc, and we
   // reflect it instantly (backed up by a push notification).
@@ -76,6 +83,7 @@ export default function AgentTopupScreen() {
           setStep('done');
         } else if (data.status === 'expired' || data.status === 'cancelled') {
           setErrorMsg(t('topup.agent.expiredMessage'));
+          setLapsed(true);
           setStep('error');
         }
       });
@@ -128,6 +136,7 @@ export default function AgentTopupScreen() {
     setStep('amount');
     setAmountText('');
     setErrorMsg('');
+    setLapsed(false);
     setOtpCode('');
     setRequestId('');
     setConfirmationId('');
@@ -183,6 +192,14 @@ export default function AgentTopupScreen() {
           <TouchableOpacity style={styles.retryBtn} onPress={reset}>
             <Text style={styles.retryText}>{t('common.tryAgain')}</Text>
           </TouchableOpacity>
+          {lapsed && requestId ? (
+            <TouchableOpacity
+              style={styles.cashClaim}
+              onPress={() => navigation.navigate('RaiseDispute', { agentTopupRequestId: requestId })}
+            >
+              <Text style={styles.cashClaimText}>{t('topup.agent.gaveCashNotCredited')}</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       </View>
     );
@@ -374,5 +391,7 @@ const styles = StyleSheet.create({
   errorSub: { fontSize: 14, color: 'rgba(255,255,255,0.45)', textAlign: 'center', lineHeight: 21 },
   retryBtn: { marginTop: 28, paddingHorizontal: 32, paddingVertical: 14, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.08)' },
   retryText: { fontSize: 16, fontWeight: '600', color: '#FFFFFF' },
+  cashClaim: { marginTop: 18, padding: 8 },
+  cashClaimText: { fontSize: 14, fontWeight: '600', color: '#FF8A7A', textAlign: 'center' },
   processingText: { fontSize: 16, color: 'rgba(255,255,255,0.5)', marginTop: 20 },
 });

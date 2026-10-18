@@ -160,6 +160,11 @@ export default function ProfileScreen({ navigation }: Props) {
 
       <View style={styles.menu}>
         <MenuItem
+          icon={<InfoIcon size={22} color={colors.dark.textDim} />}
+          label={t('profile.helpAndDisputes')}
+          onPress={() => navigation.navigate('Disputes')}
+        />
+        <MenuItem
           icon={<ShieldIcon size={22} color={colors.dark.textDim} />}
           label={t('profile.security')}
           onPress={() => navigation.navigate('Security')}

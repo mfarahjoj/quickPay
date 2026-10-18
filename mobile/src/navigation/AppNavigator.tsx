@@ -62,6 +62,11 @@ type MainStackParamList = {
   CashOut: undefined;
   Notifications: undefined;
   TransactionDetail: { transaction: any };
+  // Exactly one of transactionId or agentTopupRequestId (cash handed to an
+  // agent for a top-up that was never credited).
+  RaiseDispute: { transactionId?: string; agentTopupRequestId?: string };
+  Disputes: undefined;
+  DisputeDetail: { disputeId: string; justOpened?: boolean };
   Security: undefined;
   MyQR: undefined;
   // Exactly one of requestId (a shop's in-person charge) or chargeId (a
@@ -302,6 +307,21 @@ function MainStackNavigator() {
         name="TransactionDetail"
         getComponent={() => require('../screens/wallet/TransactionDetailScreen').default}
         options={{ title: t('nav.screen.transactionDetails') }}
+      />
+      <MainStack.Screen
+        name="RaiseDispute"
+        getComponent={() => require('../screens/disputes/RaiseDisputeScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="Disputes"
+        getComponent={() => require('../screens/disputes/DisputesScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="DisputeDetail"
+        getComponent={() => require('../screens/disputes/DisputeDetailScreen').default}
+        options={{ headerShown: false }}
       />
       <MainStack.Screen
         name="Security"

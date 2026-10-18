@@ -372,3 +372,67 @@ describe("disputes", () => {
     });
   });
 });
+
+describe("getDisputeOptions", () => {
+  let options: any;
+  let openD: any;
+  let restore: (() => void) | undefined;
+  const { Timestamp } = admin.firestore;
+
+  beforeAll(async () => {
+    if (!admin.apps.length) admin.initializeApp();
+    const d = await import("../disputes/disputes");
+    options = test.wrap(d.getDisputeOptions);
+    openD = test.wrap(d.openDispute);
+  });
+
+  afterEach(() => {
+    restore?.();
+    restore = undefined;
+  });
+
+  const seedSmall = () => {
+    const db = fakeFirestore({
+      "journal_entries/qrpay_q1": { type: "qr_payment" },
+      "transactions/pay-1": {
+        type: "payment",
+        fromUserId: "cust-1",
+        toUserId: "shop-1",
+        participants: ["cust-1", "shop-1"],
+        amount: 1_000,
+        currency: "USD",
+        status: "completed",
+        journalEntryId: "qrpay_q1",
+        createdAt: Timestamp.fromMillis(Date.now() - 1000),
+      },
+    });
+    restore = useFakeFirestore(db);
+    return db;
+  };
+
+  it("offers the claims that fit, per side", async () => {
+    seedSmall();
+    const payer = await options({ data: { transactionId: "pay-1" }, auth: { uid: "cust-1" } });
+    expect(payer.data).toMatchObject({
+      allowedKinds: ["not_received", "wrong_amount", "unauthorised", "refund_not_given", "other"],
+      existingDisputeId: null,
+      windowOpen: true,
+      hasCounterparty: true,
+      transactionAmountCents: 1_000,
+    });
+    const payee = await options({ data: { transactionId: "pay-1" }, auth: { uid: "shop-1" } });
+    expect(payee.data.allowedKinds).toEqual(["other"]);
+  });
+
+  it("points at an existing dispute", async () => {
+    seedSmall();
+    await openD({ data: { transactionId: "pay-1", kind: "other", note: "Something is off" }, auth: { uid: "cust-1" } });
+    const res = await options({ data: { transactionId: "pay-1" }, auth: { uid: "cust-1" } });
+    expect(res.data.existingDisputeId).toBe("pay-1_cust-1");
+  });
+
+  it("refuses outsiders", async () => {
+    seedSmall();
+    await expect(options({ data: { transactionId: "pay-1" }, auth: { uid: "x" } })).rejects.toThrow(/weren't part/);
+  });
+});

@@ -22,6 +22,7 @@ interface TransactionResponse {
   counterpartyPhone: string | null;
   refundedAt?: Date;
   refundOfTransactionId?: string;
+  disputeId?: string;
 }
 
 interface GetTransactionsRequest {
@@ -150,6 +151,7 @@ export const getTransactions = https.onCall(
           counterpartyPhone: party?.phone ?? null,
           refundedAt: data.refundedAt?.toDate(),
           refundOfTransactionId: data.refundOfTransactionId,
+          disputeId: data.disputeId,
         };
       });
 
