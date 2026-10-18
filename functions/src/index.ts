@@ -145,6 +145,8 @@ export {
   adminAcknowledgeLedgerAlert,
   adminRunLedgerCheck,
 } from "./admin/ledgerDesk";
+// Pricing & rules (config/rates): every admin reads, super admins change
+export { adminGetRates, adminUpdateRates, getPricing } from "./admin/pricing";
 // Corrections: a balanced `adjustment` entry, never a balance edit
 export { adminPostAdjustment, adminListAdjustments } from "./admin/adjustments";
 

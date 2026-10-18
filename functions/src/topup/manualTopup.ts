@@ -127,8 +127,8 @@ export const manualTopup = https.onCall(
       // control in its own right.
       await enforceVelocity(agentId);
 
-      const { topupCommissionRate } = await getRates();
-      const commissionCents = computeCommission(amountCents, topupCommissionRate);
+      const { cashInCommissionRate } = await getRates();
+      const commissionCents = computeCommission(amountCents, cashInCommissionRate);
 
       // Create transaction ID
       const transactionId = db.collection("transactions").doc().id;

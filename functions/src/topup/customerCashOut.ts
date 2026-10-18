@@ -10,6 +10,7 @@ import { enforceVelocity } from "../utils/velocity";
 import { ApiResponse, Wallet, CashOutRequest, Transaction } from "../types";
 import { prepareJournalEntry, userAccount, CASHOUT_HOLD } from "../ledger";
 import { releaseCashOutHold } from "./cashOutHold";
+import { getRates, computePaymentFee } from "../config/rates";
 
 const CASHOUT_EXPIRY_MINUTES = 30;
 const MIN_CASHOUT_CENTS = 100; // $1 minimum
@@ -23,6 +24,8 @@ interface CustomerCashOutResponse {
   cashOutId: string;
   otpCode: string;
   amount: number;
+  /** Cash-out fee paid on top, in cents (0 when cash-out is free). */
+  feeCents: number;
   expiresAt: string;
 }
 
@@ -72,7 +75,11 @@ export const customerCashOut = https.onCall(
     }
 
     const wallet = walletDoc.data() as Wallet;
-    if (wallet.balance < amount) {
+    // The fee (0 by default: free cash-out, D1) is paid on top of the cash.
+    const { cashOutFeeRate } = await getRates();
+    const feeCents = computePaymentFee(amount, cashOutFeeRate);
+    const heldCents = amount + feeCents;
+    if (wallet.balance < heldCents) {
       throw new https.HttpsError("failed-precondition", "Insufficient balance");
     }
 
@@ -108,6 +115,7 @@ export const customerCashOut = https.onCall(
       createdAt: now,
       transactionId,
       failedAttempts: 0,
+      ...(feeCents > 0 ? { feeCents } : {}),
     };
 
     // Deduct balance immediately into the cash-out hold — released to the
@@ -118,8 +126,8 @@ export const customerCashOut = https.onCall(
         type: "agent_cashout",
         currency: wallet.currency as "USD" | "SLS",
         lines: [
-          { account: userAccount(customerId), debit: amount, credit: 0 },
-          { account: CASHOUT_HOLD, debit: 0, credit: amount },
+          { account: userAccount(customerId), debit: heldCents, credit: 0 },
+          { account: CASHOUT_HOLD, debit: 0, credit: heldCents },
         ],
         refs: { topupId: cashOutRef.id, transactionId },
         description: "Cash-out hold",
@@ -135,6 +143,7 @@ export const customerCashOut = https.onCall(
         toUserId: "",
         participants: [customerId],
         amount,
+        ...(feeCents > 0 ? { feeCents } : {}),
         currency: wallet.currency,
         status: "pending",
         description: "Cash-out — show your code to an agent",
@@ -151,6 +160,7 @@ export const customerCashOut = https.onCall(
         cashOutId: cashOutRef.id,
         otpCode,
         amount,
+        feeCents,
         expiresAt: expiresAt.toISOString(),
       },
     };

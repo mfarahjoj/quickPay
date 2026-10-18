@@ -56,8 +56,8 @@ export async function releaseCashOutHold(
       type: "adjustment",
       currency: cashOut.currency as "USD" | "SLS",
       lines: [
-        { account: CASHOUT_HOLD, debit: cashOut.amount, credit: 0 },
-        { account: userAccount(cashOut.customerId), debit: 0, credit: cashOut.amount },
+        { account: CASHOUT_HOLD, debit: cashOut.amount + (cashOut.feeCents ?? 0), credit: 0 },
+        { account: userAccount(cashOut.customerId), debit: 0, credit: cashOut.amount + (cashOut.feeCents ?? 0) },
       ],
       refs: { topupId: cashOutId, ...(cashOut.transactionId ? { transactionId: cashOut.transactionId } : {}) },
       description: RELEASE_COPY[reason],

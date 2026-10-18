@@ -130,8 +130,8 @@ export const agentConfirmTopup = https.onCall(
     assertCashInRecipient(agentId, topup.customerId, customerDoc.data());
     const customerName = customerDoc.data()?.fullName || "Customer";
 
-    const { topupCommissionRate } = await getRates();
-    const commissionCents = computeCommission(topup.amount, topupCommissionRate);
+    const { cashInCommissionRate } = await getRates();
+    const commissionCents = computeCommission(topup.amount, cashInCommissionRate);
     const now = admin.firestore.Timestamp.now();
     const transactionId = db.collection("transactions").doc().id;
     const confirmationId = transactionId;

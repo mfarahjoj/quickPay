@@ -302,6 +302,8 @@ export interface Transaction {
   netCents?: number;
   /** Agent commission earned on a top-up, in cents. */
   commissionCents?: number;
+  /** Set when an agent's commission was withheld, and why. */
+  commissionWithheld?: "round_trip";
   currency: string;
   status: TransactionStatus;
   qrCodeId?: string;
@@ -567,6 +569,11 @@ export interface CashOutRequest {
   completedAt?: FirebaseFirestore.Timestamp;
   /** The customer's history row, written as "pending" when the hold is taken. */
   transactionId?: string;
+  /**
+   * Cash-out fee the customer pays on top of `amount` (cashOutFeeRate, D1).
+   * Held with it, kept by Zapp on confirm, returned with it otherwise.
+   */
+  feeCents?: number;
   /**
    * Code attempts against this request, by any agent, counted before each
    * comparison (so a successful one is counted too). The fifth wrong one

@@ -34,6 +34,8 @@ interface AgentConfirmCashOutResponse {
   amount: number;
   customerName: string;
   commission: number;
+  /** Set when the commission was withheld on a round trip. */
+  commissionWithheld?: string;
 }
 
 /** "+252634…", "0634…", "634…", "00252…" → "+252634…". Other countries need their "+". */
@@ -71,6 +73,26 @@ const INVALID_CODE = "Invalid or expired code. Ask the customer to show their ca
  * (the agent's float grows by the cash they hand out), plus the commission
  * pair platform:fees → user:{agent}.
  */
+/** True when this agent cashed this customer in at or after `sinceMs`. */
+export async function cashedInWithAgentSince(
+  db: FirebaseFirestore.Firestore,
+  customerId: string,
+  agentId: string,
+  sinceMs: number
+): Promise<boolean> {
+  const snap = await db
+    .collection("transactions")
+    .where("toUserId", "==", customerId)
+    .where("fromUserId", "==", agentId)
+    .where("createdAt", ">=", admin.firestore.Timestamp.fromMillis(sinceMs))
+    .limit(20)
+    .get();
+  return snap.docs.some((d) => {
+    const t = d.data();
+    return t.type === "topup" && t.status === "completed";
+  });
+}
+
 export const agentConfirmCashOut = https.onCall(
   { enforceAppCheck: true },
   async (
@@ -184,8 +206,16 @@ export const agentConfirmCashOut = https.onCall(
     assertAccountActive(customerDoc.data(), "counterparty");
     const customerName = customerDoc.data()?.fullName || "Customer";
 
-    const { topupCommissionRate } = await getRates();
-    const commissionCents = computeCommission(cashOut.amount, topupCommissionRate);
+    const { cashOutCommissionRate, roundTripWindowHours } = await getRates();
+    const feeCents = cashOut.feeCents ?? 0;
+    // No commission on cash this customer cashed in with this same agent
+    // within the window: otherwise the pair could loop the same money and
+    // collect commission both ways (finding F1). The cash-out itself still
+    // goes through; only Zapp's payment for it is withheld.
+    const roundTrip =
+      roundTripWindowHours > 0 &&
+      (await cashedInWithAgentSince(db, cashOut.customerId, agentId, Date.now() - roundTripWindowHours * 3_600_000));
+    const commissionCents = roundTrip ? 0 : computeCommission(cashOut.amount, cashOutCommissionRate);
     const now = admin.firestore.Timestamp.now();
     const entryId = `cashout_${cashOutRef.id}`;
     // Requests from before history rows existed get one written now.
@@ -198,9 +228,12 @@ export const agentConfirmCashOut = https.onCall(
       }
 
       const lines: JournalLine[] = [
-        { account: CASHOUT_HOLD, debit: cashOut.amount, credit: 0 },
+        { account: CASHOUT_HOLD, debit: cashOut.amount + feeCents, credit: 0 },
         { account: userAccount(agentId), debit: 0, credit: cashOut.amount },
       ];
+      if (feeCents > 0) {
+        lines.push({ account: PLATFORM_FEES, debit: 0, credit: feeCents });
+      }
       if (commissionCents > 0) {
         lines.push({ account: PLATFORM_FEES, debit: commissionCents, credit: 0 });
         lines.push({ account: userAccount(agentId), debit: 0, credit: commissionCents });
@@ -223,6 +256,7 @@ export const agentConfirmCashOut = https.onCall(
         toUserId: agentId,
         participants: [cashOut.customerId, agentId],
         commissionCents,
+        ...(roundTrip ? { commissionWithheld: "round_trip" as const } : {}),
         status: "completed",
         description: "Agent cash-out",
         journalEntryId: entryId,
@@ -260,6 +294,7 @@ export const agentConfirmCashOut = https.onCall(
         amount: cashOut.amount,
         customerName,
         commission: commissionCents,
+        ...(roundTrip ? { commissionWithheld: "round_trip" } : {}),
       },
     };
   }
