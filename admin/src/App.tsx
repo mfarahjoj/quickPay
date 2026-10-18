@@ -18,10 +18,11 @@ import { PayoutDesk } from "./components/PayoutDesk";
 import { LedgerBanner } from "./components/LedgerBanner";
 import { LedgerDesk } from "./components/LedgerDesk";
 import { DisputeDesk } from "./components/DisputeDesk";
+import { PricingPanel } from "./components/PricingPanel";
 import { Icon, type IconName } from "./components/Icon";
 import { Avatar, BrandMark, EmptyState, Loading } from "./components/ui";
 
-type Tab = "users" | "roles" | "kyc" | "float" | "payouts" | "disputes" | "ledger";
+type Tab = "users" | "roles" | "kyc" | "float" | "payouts" | "disputes" | "ledger" | "pricing";
 
 /** `short` is what the phone tab bar shows; the sidebar uses `label`. */
 const TABS: Record<
@@ -63,6 +64,12 @@ const TABS: Record<
     short: "Disputes",
     icon: "flag",
     subtitle: "Claims that a payment, top-up or cash-out went wrong. Decide the ones waiting on Zapp, oldest deadline first.",
+  },
+  pricing: {
+    label: "Pricing & rules",
+    short: "Pricing",
+    icon: "scale",
+    subtitle: "Fees, agent commissions, referral rules, payout times and safety limits. Super admins change them; every change is audited.",
   },
   ledger: {
     label: "Ledger",
@@ -171,6 +178,7 @@ export default function App() {
   const visibleTabs: Tab[] = ["users"];
   if (canReviewRoles) visibleTabs.push("roles", "kyc");
   if (canRunFloatDesk) visibleTabs.push("float", "payouts", "disputes", "ledger");
+  visibleTabs.push("pricing");
 
   return (
     <div className="app">
@@ -267,6 +275,8 @@ export default function App() {
             {tab === "disputes" && canRunFloatDesk && <DisputeDesk />}
 
             {tab === "ledger" && canRunFloatDesk && <LedgerDesk />}
+
+            {tab === "pricing" && <PricingPanel canEdit={claims.adminRoles.includes("super")} />}
           </div>
         </div>
       </main>

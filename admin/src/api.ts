@@ -361,6 +361,18 @@ export interface AdjustmentResult {
   alreadyPosted: boolean;
 }
 
+export type RateFieldSpec =
+  | { kind: "rate"; group: string; label: string; help: string; default: number; max: number }
+  | { kind: "cents" | "int"; group: string; label: string; help: string; default: number; min: number; max: number; unit?: string }
+  | { kind: "enum"; group: string; label: string; help: string; default: string; options: { value: string; label: string }[] };
+
+export interface RateRow {
+  key: string;
+  spec: RateFieldSpec;
+  value: number | string;
+  overridden: boolean;
+}
+
 export const api = {
   searchUsers: (query: string) =>
     call<{ query: string }, UserSummary[]>("adminSearchUsers", { query }),
@@ -492,6 +504,15 @@ export const api = {
     call<{ alertId: string; reason: string }, { auditId: string }>(
       "adminAcknowledgeLedgerAlert",
       { alertId, reason }
+    ),
+
+  getRates: () => call<void, { rows: RateRow[]; updatedAt: number | null }>("adminGetRates"),
+
+  /** `null` puts a setting back to its default. Super admins only. */
+  updateRates: (changes: Record<string, number | string | null>, reason: string) =>
+    call<{ changes: Record<string, number | string | null>; reason: string }, { changed: string[]; auditId: string }>(
+      "adminUpdateRates",
+      { changes, reason }
     ),
 
   listDisputes: (status?: DisputeStatus) =>
