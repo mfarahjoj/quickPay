@@ -218,15 +218,15 @@ Each phase ends with a deploy that Mahamed authorises per target, as `CLAUDE.md`
 
 | | Decision | Blocks |
 |---|---|---|
-| D1 | Cash-out fee to the customer, and the cash-in vs cash-out commission split | 1.1 |
-| D3 | When the referral bonus unlocks: first cash-in ≥ $5, or KYC verified | 1.2 |
+| D1 | **Decided 2026-10-18:** cash-out free by default, priced in the console (`cashOutFeeRate`); split commissions with a round-trip guard. Done in 1.1 | 1.1 |
+| D3 | **Decided 2026-10-18:** set in the console (`referralUnlock`, bonus, minimum cash-in, monthly cap). Done in 1.2 | 1.2 |
 | D4 | **Decided 2026-10-17: disable now.** Done in 1.8, deployed 2026-10-18 | 1.8 |
 | D2 | Retire `manualTopup`, or keep it admin-only | cleanup |
 | D6 | **Decided 2026-10-18:** refund window 30 days, dispute filing window 60 days (both in `config/rates`) | 1.6, 2.2 |
 | D7 | **Decided 2026-10-18:** other party replies within 3 days or the dispute goes to ops; ops resolve within 7 days of opening | 2.2 |
 | D8 | **Decided 2026-10-18: wait for funds.** An upheld dispute the other party can't cover is settled when their balance allows; until then that amount is reserved in their wallet | 2.2, 3.4 |
 | D9 *(new)* | Remove merchant features from the customer app (recommended) | 4.1 |
-| D10 *(new)* | Agent-merchant float vs sales: which incoming money counts as float (only float desk issues and cash-in commissions?) and whether payouts may ever draw on float | 3.5 |
+| D10 | **Analysed 2026-10-18** in `AGENT_FLOAT_SEPARATION.md`: separate `agent:{uid}` float account as M-Pesa and regulators do; payouts only from sales; sales → float self-service, float → sales only via ops. Needs a yes before building | 3.5 |
 | D11 *(new)* | Settlement: the payout time you commit to merchants, whether to offer automatic daily payouts (and above what balance), and the statement format (CSV share, PDF, or both) | 3.6 |
 
 ## 5. Suggested order
