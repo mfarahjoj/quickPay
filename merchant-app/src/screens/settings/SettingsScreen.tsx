@@ -6,6 +6,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { signOut } from '../../services/auth.service';
 import { useMerchantProfile } from '../../hooks/useMerchantProfile';
 import { useAuth } from '../../hooks/useAuth';
+import { needsReply, useMyDisputes } from '../../services/dispute.service';
 import {
   LanguageSelector,
   DarkScreen,
@@ -46,6 +47,8 @@ export default function SettingsScreen() {
   const { user } = useAuth();
   const { profile } = useMerchantProfile();
   const navigation = useNavigation<StackNavigationProp<any>>();
+  const { disputes } = useMyDisputes();
+  const repliesDue = disputes.filter((d) => needsReply(d, user?.uid)).length;
 
   const isAgent =
     profile?.accountType === 'topup_agent' || profile?.accountType === 'agent_merchant';
@@ -108,6 +111,19 @@ export default function SettingsScreen() {
           </GlassCard>
         </>
       )}
+
+      {/* Disputes */}
+      <Text style={styles.sectionLabel}>{t('settings.section.disputes')}</Text>
+      <GlassCard style={[styles.sectionCard, { paddingHorizontal: 16 }]}>
+        <TappableRow
+          label={
+            repliesDue > 0
+              ? t('settings.disputesWithCount', { count: repliesDue })
+              : t('settings.disputes')
+          }
+          onPress={() => navigation.navigate('DisputesInbox')}
+        />
+      </GlassCard>
 
       {/* Developers */}
       {takesPayments && (

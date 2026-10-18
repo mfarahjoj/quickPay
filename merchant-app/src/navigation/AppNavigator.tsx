@@ -47,6 +47,9 @@ type MerchantStackParamList = {
   Payout: undefined;
   Developers: undefined;
   DeleteAccount: undefined;
+  DisputesInbox: undefined;
+  DisputeDetail: { disputeId: string };
+  ReportProblem: { transactionId: string };
 };
 
 type TabParamList = {
@@ -258,6 +261,21 @@ function MainStackNavigator() {
       <MainStack.Screen
         name="DeleteAccount"
         getComponent={() => require('../screens/settings/DeleteAccountScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="DisputesInbox"
+        getComponent={() => require('../screens/disputes/DisputesInboxScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="DisputeDetail"
+        getComponent={() => require('../screens/disputes/DisputeDetailScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="ReportProblem"
+        getComponent={() => require('../screens/disputes/ReportProblemScreen').default}
         options={{ headerShown: false }}
       />
     </MainStack.Navigator>

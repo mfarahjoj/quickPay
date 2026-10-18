@@ -69,6 +69,8 @@ export interface Transaction {
   counterpartyPhone: string | null;
   refundedAt?: Date;
   refundOfTransactionId?: string;
+  /** Latest dispute raised on this transaction, by either side. */
+  disputeId?: string;
 }
 
 export type SummaryPeriod = 'today' | 'week' | 'month';

@@ -110,12 +110,12 @@ export default function TransactionDetailScreen({ route, navigation }: Props) {
     }
   };
 
-  const reportProblem = () => {
-    Alert.alert(
-      t('transactions.report.title'),
-      t('transactions.report.message', { id: transaction.id })
-    );
-  };
+  // A disputed transaction carries the id of the latest dispute on it; the
+  // report screen checks with the server whether this shop already raised one.
+  const reportProblem = () =>
+    transaction.disputeId
+      ? navigation.navigate('DisputeDetail', { disputeId: transaction.disputeId })
+      : navigation.navigate('ReportProblem', { transactionId: transaction.id });
 
   const handleRefund = async (enteredPin: string) => {
     setRefundStep('processing');
@@ -279,7 +279,11 @@ export default function TransactionDetailScreen({ route, navigation }: Props) {
             }
           />
         )}
-        <ActionButton glyph="⚑" label={t('transactions.actions.report')} onPress={reportProblem} />
+        <ActionButton
+          glyph="⚑"
+          label={transaction.disputeId ? t('transactions.actions.viewDispute') : t('transactions.actions.report')}
+          onPress={reportProblem}
+        />
       </View>
     </DarkScreen>
   );

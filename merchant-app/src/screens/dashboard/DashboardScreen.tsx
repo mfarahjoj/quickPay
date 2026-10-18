@@ -15,6 +15,8 @@ import { useTranslation } from 'react-i18next';
 import { useWallet } from '../../hooks/useWallet';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useMerchantProfile } from '../../hooks/useMerchantProfile';
+import { useAuth } from '../../hooks/useAuth';
+import { needsReply, useMyDisputes } from '../../services/dispute.service';
 import { LanguageSelector } from '../../components/LanguageSelector';
 import {
   QrIcon,
@@ -94,6 +96,9 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
   const { wallet, loading: walletLoading, refreshBalance } = useWallet();
   const { transactions, loading: txLoading, refresh: refreshTx } = useTransactions(undefined, 6);
   const { profile } = useMerchantProfile();
+  const { user } = useAuth();
+  const { disputes } = useMyDisputes();
+  const repliesDue = disputes.filter((d) => needsReply(d, user?.uid)).length;
   const [refreshing, setRefreshing] = React.useState(false);
 
   const accountType = profile?.accountType ?? '';
@@ -209,6 +214,20 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
               <ActionButton key={a.key} action={a} onPress={() => navigation.navigate(a.route)} />
             ))}
           </View>
+
+          {/* Disputes waiting on this shop */}
+          {repliesDue > 0 && (
+            <TouchableOpacity
+              style={styles.disputeBanner}
+              onPress={() => navigation.navigate('DisputesInbox')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.disputeBannerText}>
+                {t('dashboard.disputesNeedReply', { count: repliesDue })}
+              </Text>
+              <Text style={styles.disputeBannerArrow}>›</Text>
+            </TouchableOpacity>
+          )}
 
           {/* Recent transactions */}
           <View style={styles.txHeader}>
@@ -431,6 +450,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     marginBottom: 12,
   },
+  disputeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,176,46,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,176,46,0.4)',
+  },
+  disputeBannerText: { flex: 1, fontSize: 14, fontWeight: '600', color: '#FFB02E' },
+  disputeBannerArrow: { fontSize: 20, color: '#FFB02E', marginLeft: 8 },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
