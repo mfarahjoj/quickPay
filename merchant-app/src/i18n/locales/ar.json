@@ -690,5 +690,16 @@
   "statement.truncatedTitle": "تم اختصار الكشف",
   "statement.truncated": "في هذا الشهر أكثر من 5,000 معاملة، لذا أُدرجت أول 5,000 فقط. تواصل مع الدعم للحصول على الملف كاملًا.",
   "statement.failed": "تعذر إعداد الكشف. تحقق من اتصالك.",
-  "statement.hint": "ملف CSV: افتحه في Excel أو Google Sheets أو Numbers. الإجماليات تشمل المعاملات المكتملة فقط."
+  "statement.hint": "ملف CSV: افتحه في Excel أو Google Sheets أو Numbers. الإجماليات تشمل المعاملات المكتملة فقط.",
+  "dashboard.balance.salesLabel": "المبيعات والأرباح",
+  "dashboard.float.label": "رصيد الوكيل",
+  "dashboard.float.hint": "لعمليات الشحن. هل يقترب من النفاد؟ حوّل جزءًا من مبيعاتك إليه.",
+  "dashboard.float.move": "تحويل إلى الرصيد",
+  "moveToFloat.title": "تحويل إلى رصيد الوكيل",
+  "moveToFloat.subtitle": "استخدم مبيعاتك لخدمة المزيد من عمليات الشحن",
+  "moveToFloat.amountLabel": "المبلغ المراد تحويله",
+  "moveToFloat.hint": "لا يمكن تحويل رصيد الوكيل إلى نقد إلا عبر مكتب الأرصدة في Zapp Pay، لذا حوّل فقط ما ستستخدمه في الشحن.",
+  "moveToFloat.pinSubtitle": "لتحويل {{amount}} إلى رصيد الوكيل.",
+  "moveToFloat.done": "أصبح {{amount}} في رصيد الوكيل.",
+  "moveToFloat.notEnough": "ليس لديك هذا المبلغ متاحًا في المبيعات والأرباح."
 }

@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { useWallet } from '../../hooks/useWallet';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useMerchantProfile } from '../../hooks/useMerchantProfile';
+import { useFloat } from '../../hooks/useFloat';
 import { useAuth } from '../../hooks/useAuth';
 import { needsReply, useMyDisputes } from '../../services/dispute.service';
 import { LanguageSelector } from '../../components/LanguageSelector';
@@ -104,6 +105,8 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
   const accountType = profile?.accountType ?? '';
   const isMerchantRole = accountType === 'merchant' || accountType === 'agent_merchant';
   const isAgentRole = accountType === 'topup_agent' || accountType === 'agent_merchant';
+  // Agents hold float apart from their sales and earnings.
+  const { floatCents } = useFloat(isAgentRole, wallet?.lastTransactionAt?.getTime());
 
   const actions: ActionDef[] = [
     ...(isMerchantRole ? [
@@ -183,7 +186,9 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
 
           {/* Balance */}
           <View style={styles.balanceBlock}>
-            <Text style={styles.balanceLabel}>{t('dashboard.balance.label')}</Text>
+            <Text style={styles.balanceLabel}>
+              {isAgentRole ? t('dashboard.balance.salesLabel') : t('dashboard.balance.label')}
+            </Text>
             {walletLoading && !wallet ? (
               <ActivityIndicator color="#FFFFFF" size="large" style={{ marginVertical: 14 }} />
             ) : (
@@ -207,6 +212,20 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
               </View>
             </View>
           </View>
+
+          {/* Agent float, apart from the balance above */}
+          {isAgentRole && (
+            <View style={styles.floatCard}>
+              <View style={styles.floatText}>
+                <Text style={styles.floatLabel}>{t('dashboard.float.label')}</Text>
+                <Text style={styles.floatAmount}>{floatCents === null ? '…' : money(floatCents / 100)}</Text>
+                <Text style={styles.floatHint}>{t('dashboard.float.hint')}</Text>
+              </View>
+              <TouchableOpacity style={styles.floatButton} onPress={() => navigation.navigate('MoveToFloat')} activeOpacity={0.8}>
+                <Text style={styles.floatButtonText}>{t('dashboard.float.move')}</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* Circular actions */}
           <View style={styles.actionsRow}>
@@ -450,6 +469,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     marginBottom: 12,
   },
+  floatCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 22,
+    padding: 16,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  floatText: { flex: 1, marginRight: 12 },
+  floatLabel: { fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.45)', letterSpacing: 1, textTransform: 'uppercase' },
+  floatAmount: { fontSize: 24, fontWeight: '800', color: '#FFFFFF', marginTop: 4, letterSpacing: -0.5 },
+  floatHint: { fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 4, lineHeight: 16 },
+  floatButton: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 999, backgroundColor: '#1A56FF' },
+  floatButtonText: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
   disputeBanner: {
     flexDirection: 'row',
     alignItems: 'center',

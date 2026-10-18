@@ -690,5 +690,16 @@
   "statement.truncatedTitle": "Statement shortened",
   "statement.truncated": "That month has more than 5,000 transactions, so only the first 5,000 are included. Contact support for the full file.",
   "statement.failed": "Couldn't make the statement. Check your connection.",
-  "statement.hint": "A CSV file: open it in Excel, Google Sheets or Numbers. Totals count completed transactions only."
+  "statement.hint": "A CSV file: open it in Excel, Google Sheets or Numbers. Totals count completed transactions only.",
+  "dashboard.balance.salesLabel": "Sales & earnings",
+  "dashboard.float.label": "Float",
+  "dashboard.float.hint": "For cash-ins. Running low? Move some of your sales in.",
+  "dashboard.float.move": "Move to float",
+  "moveToFloat.title": "Move to float",
+  "moveToFloat.subtitle": "Use your sales to serve more cash-ins",
+  "moveToFloat.amountLabel": "Amount to move",
+  "moveToFloat.hint": "Float can only be turned back into cash through Zapp Pay's float desk, so move only what you'll use for cash-ins.",
+  "moveToFloat.pinSubtitle": "To move {{amount}} into your float.",
+  "moveToFloat.done": "{{amount}} is now in your float.",
+  "moveToFloat.notEnough": "You don't have that much available in sales and earnings."
 }

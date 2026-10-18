@@ -690,5 +690,16 @@
   "statement.truncatedTitle": "Warbixinta waa la gaabiyay",
   "statement.truncated": "Bishaas waxaa ku jira in ka badan 5,000 macaamil, sidaas darteed kaliya 5,000-ka ugu horreeya ayaa lagu daray. La xiriir taageerada si aad u hesho faylka oo dhan.",
   "statement.failed": "Warbixinta lama samayn karin. Hubi xiriirkaaga.",
-  "statement.hint": "Fayl CSV ah: ku fur Excel, Google Sheets ama Numbers. Wadarta waxay tirisaa kaliya macaamilada dhammaystiran."
+  "statement.hint": "Fayl CSV ah: ku fur Excel, Google Sheets ama Numbers. Wadarta waxay tirisaa kaliya macaamilada dhammaystiran.",
+  "dashboard.balance.salesLabel": "Iibka iyo dakhliga",
+  "dashboard.float.label": "Lacagta wakiilka",
+  "dashboard.float.hint": "Waxaa loogu talagalay lacag-shubidda. Ma yaraanaysaa? Qayb iibkaaga ah u wareeji.",
+  "dashboard.float.move": "U wareeji lacagta wakiilka",
+  "moveToFloat.title": "U wareeji lacagta wakiilka",
+  "moveToFloat.subtitle": "Iibkaaga u isticmaal si aad u adeegto lacag-shubid badan",
+  "moveToFloat.amountLabel": "Lacagta la wareejinayo",
+  "moveToFloat.hint": "Lacagta wakiilka waxaa dib loogu celin karaa lacag caddaan ah kaliya miiska lacagta wakiilka ee Zapp Pay, sidaas darteed wareeji kaliya inta aad u isticmaali doonto lacag-shubidda.",
+  "moveToFloat.pinSubtitle": "Si aad {{amount}} ugu wareejiso lacagta wakiilka.",
+  "moveToFloat.done": "{{amount}} hadda waxay ku jirtaa lacagtaada wakiilka.",
+  "moveToFloat.notEnough": "Ma haysid inta oo diyaar ah oo ka mid ah iibka iyo dakhliga."
 }
