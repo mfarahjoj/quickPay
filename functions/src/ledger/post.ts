@@ -149,6 +149,12 @@ export async function prepareJournalEntry(
     if (newBalance < 0 && enforcesNonNegative(d.account)) {
       throw new InsufficientBalanceError(d.account);
     }
+    // Money owed on a lost dispute stays put until that dispute is settled.
+    // Only debits are checked: a wallet below its reserve must still receive.
+    const reserved = wallet.reservedCents ?? 0;
+    if (d.delta < 0 && reserved > 0 && newBalance < reserved && input.useReserved !== true) {
+      throw new InsufficientBalanceError(d.account);
+    }
     resultingBalances.set(d.account, newBalance);
   });
 

@@ -144,6 +144,15 @@ export {
 // Corrections: a balanced `adjustment` entry, never a balance edit
 export { adminPostAdjustment, adminListAdjustments } from "./admin/adjustments";
 
+// Disputes (WALLET_READINESS_PLAN.md 2.2): raised in the apps, decided by ops.
+export { openDispute, postDisputeMessage, withdrawDispute } from "./disputes/disputes";
+export {
+  adminListDisputes,
+  adminGetDispute,
+  adminResolveDispute,
+  disputeHousekeeping,
+} from "./disputes/resolve";
+
 // Merchant settlement: the merchant asks, ops sends the transfer and records it
 export { requestPayout } from "./payouts/requestPayout";
 export {

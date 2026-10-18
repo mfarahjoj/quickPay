@@ -48,6 +48,7 @@ export interface FakeDb {
   get(path: string): Data | undefined;
   collection(name: string): any;
   runTransaction: jest.Mock;
+  batch(): any;
 }
 
 export function fakeFirestore(seed: Record<string, Data> = {}): FakeDb {
@@ -167,11 +168,22 @@ export function fakeFirestore(seed: Record<string, Data> = {}): FakeDb {
     return result;
   }
 
+  /** Batched writes, applied together on commit. */
+  const batch = () => {
+    const staged: Array<() => void> = [];
+    return {
+      set: (r: any, d: Data, opts?: { merge?: boolean }) => staged.push(() => write.set(r.path, d, opts)),
+      update: (r: any, d: Data) => staged.push(() => write.update(r.path, d)),
+      commit: async () => staged.forEach((w) => w()),
+    };
+  };
+
   return {
     store,
     get: (path: string) => store.get(path),
     collection,
     runTransaction,
+    batch,
   };
 }
 

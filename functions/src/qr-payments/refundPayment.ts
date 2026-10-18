@@ -8,26 +8,14 @@ import { notifyUser } from "../utils/notifications";
 import { ApiResponse, Transaction } from "../types";
 import { getRates } from "../config/rates";
 import {
-  prepareJournalEntry,
-  userAccount,
-  JournalLine,
   JournalEntryType,
   JOURNAL_COLLECTION,
-  PLATFORM_FEES,
   InsufficientBalanceError,
   WalletNotFoundError,
 } from "../ledger";
-
-/**
- * The entries a merchant may refund from the app: payments a customer made
- * at their counter. P2P and payroll rows are typed `payment` too, so the row
- * type can't tell them apart; the journal entry behind the row can. Online
- * payments are refunded through the API instead (see the apiChargeId check).
- */
-const REFUNDABLE_ENTRY_TYPES: readonly JournalEntryType[] = [
-  "qr_payment",
-  "customer_qr_payment",
-];
+import { prepareRefund, REFUNDABLE_ENTRY_TYPES } from "./refundCore";
+import { DISPUTES_COLLECTION, DisputeDoc } from "../disputes/types";
+import { stageResolvedByRefund } from "../disputes/resolve";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -140,80 +128,28 @@ export const refundPayment = https.onCall(
 
       await requireActiveAccount(merchantId);
 
-      const customerId = original.fromUserId;
-      const gross = original.amount;
-      const fee = original.feeCents ?? 0;
-      const net = original.netCents ?? original.amount;
-      const currency = original.currency;
+      const disputeRef = original.disputeId
+        ? db.collection(DISPUTES_COLLECTION).doc(original.disputeId)
+        : null;
 
-      const refundTransactionId = db.collection("transactions").doc().id;
-
-      await db.runTransaction(async (tx) => {
-        // Re-read the original under lock to keep the refund idempotent.
-        const lockedOriginal = await tx.get(originalRef);
-        const lockedData = lockedOriginal.data() as Transaction;
-        if (lockedData.refundedAt) {
-          throw new https.HttpsError(
-            "failed-precondition",
-            "This payment has already been refunded"
-          );
-        }
-
-        // Exact reversal of the payment entry: merchant returns the net, the
-        // platform returns the fee, the customer gets the gross back. Entry ID
-        // derives from the original payment, so a payment can refund only once.
-        const lines: JournalLine[] = [
-          { account: userAccount(merchantId), debit: net, credit: 0 },
-          { account: userAccount(customerId), debit: 0, credit: gross },
-        ];
-        if (fee > 0) {
-          lines.push({ account: PLATFORM_FEES, debit: fee, credit: 0 });
-        }
-
-        const pending = await prepareJournalEntry(tx, {
-          entryId: `refund_${transactionId}`,
-          type: "refund",
-          currency: currency as "USD" | "SLS",
-          lines,
-          refs: {
-            transactionId: refundTransactionId,
-            refundOfEntryId: lockedData.journalEntryId,
-          },
-          description: "Refund",
-          postedBy: merchantId,
-        });
-
-        const now = admin.firestore.Timestamp.now();
-
-        pending.write(tx);
-
-        const refundRecord: Transaction = {
-          type: "refund",
-          fromUserId: merchantId,
-          toUserId: customerId,
-          participants: [merchantId, customerId],
-          amount: gross,
-          feeCents: fee,
-          netCents: net,
-          currency,
-          status: "completed",
-          description: "Refund",
-          reference: original.reference,
-          refundOfTransactionId: transactionId,
-          journalEntryId: `refund_${transactionId}`,
-          createdAt: now,
-          completedAt: now,
-        };
-        tx.set(
-          db.collection("transactions").doc(refundTransactionId),
-          refundRecord
-        );
-
-        tx.update(originalRef, {
-          refundedAt: now,
-          refundTransactionId,
-        });
+      const outcome = await db.runTransaction(async (tx) => {
+        // Reads first: the dispute, then the original under lock and the ledger.
+        const disputeSnap = disputeRef ? await tx.get(disputeRef) : null;
+        const refund = await prepareRefund(tx, transactionId, { postedBy: merchantId });
+        refund.write(tx);
+        // Refunding answers an open dispute on this payment.
+        const closedDispute =
+          disputeRef !== null &&
+          stageResolvedByRefund(tx, disputeRef, disputeSnap?.data() as DisputeDoc | undefined, {
+            refundTransactionId: refund.refundTransactionId,
+            gross: refund.gross,
+            merchantId,
+            journalEntryId: `refund_${transactionId}`,
+          });
+        return { refund, closedDispute };
       });
+
+      const { refundTransactionId, customerId, gross, currency } = outcome.refund;
 
       const amountFormatted = (gross / 100).toFixed(2);
       notifyUser(

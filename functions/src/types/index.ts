@@ -245,6 +245,13 @@ export interface Wallet {
    * a projection, like `balance`.
    */
   frozen?: boolean;
+  /**
+   * Cents owed on disputes this wallet lost and couldn't cover yet (D8). The
+   * ledger refuses any debit that would take the balance below it, so the
+   * money can't be spent before the dispute is settled. Raised and lowered
+   * only by dispute resolution (`disputes/`).
+   */
+  reservedCents?: number;
 }
 
 // Transaction types

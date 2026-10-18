@@ -86,6 +86,13 @@ export interface JournalEntryInput {
    * value it should never have had. Not stored on the entry.
    */
   allowFrozenDebit?: boolean;
+  /**
+   * Let this entry spend a wallet's `reservedCents` — money set aside for a
+   * dispute it lost and couldn't cover (decision D8). Only the settlement of
+   * that dispute uses it; every other debit must leave the reserve intact.
+   * Not stored on the entry.
+   */
+  useReserved?: boolean;
 }
 
 /** Shape of a `journal_entries` document. Append-only; never updated. */

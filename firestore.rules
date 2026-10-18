@@ -228,6 +228,13 @@ service cloud.firestore {
     match /adjustments/{adjustmentId} {
       allow read, write: if false;
     }
+    // Disputes: the raiser and the party it's against read their own, so the
+    // apps can follow the thread live. Every write is a callable (openDispute,
+    // postDisputeMessage, withdrawDispute, adminResolveDispute).
+    match /disputes/{disputeId} {
+      allow read: if isAuthenticated() && request.auth.uid in resource.data.participants;
+      allow write: if false;
+    }
 
     // Minimum app versions (the apps' update gate). Public on purpose: the
     // gate runs before sign-in, and the doc holds nothing but version levels

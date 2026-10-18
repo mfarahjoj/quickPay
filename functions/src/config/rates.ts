@@ -61,6 +61,14 @@ export interface Rates {
    * that period may already have been reconciled.
    */
   refundWindowDays: number;
+  /**
+   * Disputes (D6, D7): how many days after a transaction one may be opened,
+   * how long the other party has to reply before it goes to ops, and how
+   * long ops have to resolve it, counted from opening.
+   */
+  disputeWindowDays: number;
+  disputeResponseHours: number;
+  disputeResolutionHours: number;
 }
 
 export const DEFAULT_RATES: Rates = {
@@ -74,6 +82,9 @@ export const DEFAULT_RATES: Rates = {
   apiChargeTtlSeconds: 900, // 15 minutes
   apiRequestsPerMinute: 120,
   refundWindowDays: 30,
+  disputeWindowDays: 60,
+  disputeResponseHours: 72,
+  disputeResolutionHours: 168,
 };
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
@@ -179,6 +190,19 @@ export async function getRates(): Promise<Rates> {
         DEFAULT_RATES.refundWindowDays,
         1,
         365
+      ),
+      disputeWindowDays: coerceIntInRange(data.disputeWindowDays, DEFAULT_RATES.disputeWindowDays, 1, 365),
+      disputeResponseHours: coerceIntInRange(
+        data.disputeResponseHours,
+        DEFAULT_RATES.disputeResponseHours,
+        1,
+        720
+      ),
+      disputeResolutionHours: coerceIntInRange(
+        data.disputeResolutionHours,
+        DEFAULT_RATES.disputeResolutionHours,
+        1,
+        2160
       ),
     };
     cached = { rates, expiresAt: now + CACHE_TTL_MS };

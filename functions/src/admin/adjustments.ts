@@ -72,6 +72,8 @@ export interface AdjustmentInput {
   disputeId?: string;
   /** Shown to the user in their history. */
   description?: string;
+  /** Settling a lost dispute out of the reserve it created (D8). */
+  useReserved?: boolean;
 }
 
 export interface PreparedAdjustment {
@@ -139,6 +141,7 @@ export async function prepareAdjustment(
     description: input.description ?? "Correction by Zapp Pay",
     postedBy: input.postedBy,
     allowFrozenDebit: true,
+    ...(input.useReserved ? { useReserved: true } : {}),
   });
 
   return {
