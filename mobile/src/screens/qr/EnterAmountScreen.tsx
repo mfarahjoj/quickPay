@@ -17,7 +17,7 @@ import { payMerchant } from '../../services/merchant.service';
 import { newIdempotencyKey } from '../../utils/idempotency';
 import {
   isBiometricEnabled,
-  getPinFromKeychain,
+  getBiometricCredential,
   isBiometricAvailable,
 } from '../../services/biometric.service';
 import { colors, typography, spacing, borderRadius } from '../../theme';
@@ -129,7 +129,7 @@ export default function EnterAmountScreen({ navigation, route }: Props) {
 
   const handleBiometricPay = async () => {
     if (processing) return;
-    const storedPin = await getPinFromKeychain(
+    const storedPin = await getBiometricCredential(
       t('common.confirmPaymentAmount', { amount: `${CURRENCY_SYMBOL}${parsedAmount.toFixed(2)}` })
     );
     if (storedPin) {

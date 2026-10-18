@@ -11,7 +11,7 @@ import {
   isBiometricAvailable,
   authenticateWithBiometrics,
   setBiometricEnabled,
-  storePinInKeychain,
+  enableBiometricKey,
   consumePendingSetupPin,
 } from '../../services/biometric.service';
 import { validatePin, PinLockoutError } from '../../services/auth.service';
@@ -221,7 +221,7 @@ export default function BiometricSetupScreen({ onComplete }: Props) {
     if (pendingPin) {
       try {
         setLoading(true);
-        await storePinInKeychain(pendingPin);
+        await enableBiometricKey(pendingPin);
         await finishSetup(true);
         return;
       } catch (err) {
@@ -246,7 +246,7 @@ export default function BiometricSetupScreen({ onComplete }: Props) {
         setPin('');
         return;
       }
-      await storePinInKeychain(pinCode);
+      await enableBiometricKey(pinCode);
       await finishSetup(true);
     } catch (err: any) {
       if (err instanceof PinLockoutError) {
@@ -280,7 +280,7 @@ export default function BiometricSetupScreen({ onComplete }: Props) {
           // Face ID was already approved on the previous step; finish
           // enabling it with the freshly reset PIN.
           try {
-            await storePinInKeychain(newPin);
+            await enableBiometricKey(newPin);
             await finishSetup(true);
           } catch (err) {
             logger.warn('Keychain store after reset failed:', err);

@@ -26,7 +26,7 @@ import {
   isBiometricAvailable,
   authenticateWithBiometrics,
   setBiometricEnabled,
-  storePinInKeychain,
+  enableBiometricKey,
 } from '../../services/biometric.service';
 import { markPinVerifiedThisInstall } from '../../hooks/usePinVerifiedThisInstall';
 import { logger } from '../../utils/logger';
@@ -140,7 +140,7 @@ export default function WelcomeBackScreen({ onComplete }: Props) {
     }
     try {
       setLoading(true);
-      await storePinInKeychain(verifiedPin);
+      await enableBiometricKey(verifiedPin);
       await setBiometricEnabled(true);
     } catch (err) {
       // Keychain hiccups shouldn't block entry — user can enable in Security.

@@ -22,7 +22,7 @@ import {
 } from '../../services/auth.service';
 import {
   isBiometricEnabled,
-  storePinInKeychain,
+  enableBiometricKey,
 } from '../../services/biometric.service';
 import { markPinVerifiedThisInstall } from '../../hooks/usePinVerifiedThisInstall';
 import { logger } from '../../utils/logger';
@@ -117,7 +117,7 @@ export default function ResetPinScreen({ onDone, onCancel }: Props) {
       const result = await resetPin(pinValue, idAnswer);
       // Keep Face ID payments working with the new PIN if biometrics are on.
       if (await isBiometricEnabled()) {
-        await storePinInKeychain(pinValue).catch((err) =>
+        await enableBiometricKey(pinValue).catch((err) =>
           logger.warn('Keychain update after PIN reset failed:', err)
         );
       }

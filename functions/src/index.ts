@@ -27,6 +27,12 @@ export { getAccountLimits } from "./auth/getAccountLimits";
 // The holder stops money leaving their own account; support unfreezes.
 export { freezeMyAccount } from "./auth/freezeMyAccount";
 export { expireIdleSessions } from "./auth/sessions";
+export {
+  registerBiometricKey,
+  removeBiometricKey,
+  biometricChallenge,
+  approveBiometric,
+} from "./auth/biometricKeys";
 
 // Wallet functions
 export { getBalance } from "./wallet/getBalance";

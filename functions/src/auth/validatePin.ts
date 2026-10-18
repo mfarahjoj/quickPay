@@ -5,6 +5,7 @@ import { AuthSecrets, readAuth, writeAuth } from "./pinStore";
 import { validatePin, requireAuth } from "../utils/validation";
 import { ApiResponse } from "../types";
 import { getRates } from "../config/rates";
+import { consumeBiometricToken, isBiometricToken } from "./biometricKeys";
 
 interface ValidatePinRequest {
   pin: string;
@@ -80,6 +81,26 @@ export async function verifyUserPin(
 ): Promise<boolean> {
   const db = admin.firestore();
   const userRef = db.collection("users").doc(userId);
+
+  // A Face ID approval (auth/biometricKeys.ts) stands in for the PIN once.
+  // A hard-locked PIN stays locked for it too: only a reset opens it.
+  if (isBiometricToken(pin)) {
+    const auth = await readAuth(userId);
+    if (auth.pinHardLocked) {
+      throw new https.HttpsError(
+        "resource-exhausted",
+        "Your PIN is locked after too many wrong attempts. Reset your PIN to unlock it.",
+        { hardLocked: true }
+      );
+    }
+    const ok = await consumeBiometricToken(userId, pin);
+    if (ok) {
+      const batch = db.batch();
+      writeAuth(batch, userId, {}, { active: true });
+      await batch.commit();
+    }
+    return ok;
+  }
 
   const { pinHardLockAttempts: hardLockAt } = await getRates();
   const pinHash = await db.runTransaction(async (tx) => {

@@ -329,8 +329,8 @@ export async function revokeTrustedDevices(): Promise<void> {
  */
 export async function signOut(): Promise<void> {
   try {
-    const { clearPinFromKeychain } = await import('./biometric.service');
-    await clearPinFromKeychain().catch(() => {});
+    const { disableBiometricKey } = await import('./biometric.service');
+    await disableBiometricKey().catch(() => {});
     // Clear setup flags so user goes through full setup on next login.
     // biometric_enabled must go too — the keychain PIN it depends on was
     // just cleared, otherwise Security shows Face ID "on" with no PIN behind it.

@@ -17,7 +17,7 @@ import { LockIcon } from '../../components/icons/AuthIcons';
 import { PinKeypad } from '../../components/PinKeypad';
 import ResetPinScreen from './ResetPinScreen';
 import {
-  authenticateWithBiometrics,
+  getBiometricCredential,
   isBiometricAvailable,
   isBiometricEnabled,
 } from '../../services/biometric.service';
@@ -97,10 +97,23 @@ export default function AppLockScreen({ onUnlock }: Props) {
     );
   }, []);
 
+  // The server checks Face ID now (a hardware-key signature, review D11),
+  // rather than trusting a prompt on the phone.
   const handleBiometricUnlock = useCallback(async () => {
-    const success = await authenticateWithBiometrics(t('common.unlockQuickPay'));
-    if (success) {
-      performUnlock();
+    const credential = await getBiometricCredential(t('common.unlockQuickPay'));
+    if (!credential) {
+      setShowPinFallback(true);
+      return;
+    }
+    try {
+      if (await validatePin(credential)) {
+        performUnlock(/^\d{6}$/.test(credential) ? credential : undefined);
+      } else {
+        setShowPinFallback(true);
+      }
+    } catch (err) {
+      if (err instanceof PinLockoutError) setPinError(pinLockoutMessage(err, t));
+      setShowPinFallback(true);
     }
   }, [t, performUnlock]);
 

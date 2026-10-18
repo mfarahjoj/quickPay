@@ -20,6 +20,14 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Face ID public keys and their one-time challenges (auth/biometricKeys.ts).
+    match /biometricKeys/{keyId} {
+      allow read, write: if false;
+    }
+    match /biometricChallenges/{challengeId} {
+      allow read, write: if false;
+    }
+
     match /users/{userId} {
       allow read: if isAuthenticated() && isOwner(userId);
       allow create: if false; // Created by setupPin Cloud Function only

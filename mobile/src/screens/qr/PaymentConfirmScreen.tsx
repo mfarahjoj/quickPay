@@ -15,7 +15,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import { processPayment } from '../../services/qr.service';
 import {
   isBiometricEnabled,
-  getPinFromKeychain,
+  getBiometricCredential,
   isBiometricAvailable,
 } from '../../services/biometric.service';
 import { colors, typography, spacing, borderRadius } from '../../theme';
@@ -100,7 +100,7 @@ export default function PaymentConfirmScreen({ navigation, route }: Props) {
 
   const handleBiometricPay = async () => {
     if (processing) return;
-    const storedPin = await getPinFromKeychain(
+    const storedPin = await getBiometricCredential(
       t('common.confirmPaymentAmount', { amount: `${CURRENCY_SYMBOL}${amount.toFixed(2)}` })
     );
     if (storedPin) {

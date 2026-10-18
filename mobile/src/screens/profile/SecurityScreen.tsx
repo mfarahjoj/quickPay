@@ -19,8 +19,8 @@ import { isWeakPin } from '../../components/auth/CodeInput';
 import {
   isBiometricEnabled,
   setBiometricEnabled,
-  clearPinFromKeychain,
-  storePinInKeychain,
+  disableBiometricKey,
+  enableBiometricKey,
   isBiometricAvailable,
 } from '../../services/biometric.service';
 
@@ -109,7 +109,7 @@ export default function SecurityScreen({ navigation }: Props) {
           text: t('common.disable'),
           style: 'destructive',
           onPress: async () => {
-            await clearPinFromKeychain();
+            await disableBiometricKey();
             await setBiometricEnabled(false);
             setBiometricEnabledState(false);
           },
@@ -131,7 +131,7 @@ export default function SecurityScreen({ navigation }: Props) {
         setLoading(false);
         return;
       }
-      await storePinInKeychain(biometricPin);
+      await enableBiometricKey(biometricPin);
       await setBiometricEnabled(true);
       setBiometricEnabledState(true);
       setShowBiometricPin(false);

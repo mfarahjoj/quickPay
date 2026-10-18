@@ -1,6 +1,8 @@
 import ReactNativeBiometrics, { BiometryTypes } from 'react-native-biometrics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Keychain from 'react-native-keychain';
+import { Platform } from 'react-native';
+import { functions } from './firebase.config';
 import { logger } from '../utils/logger';
 
 const BIOMETRIC_ENABLED_KEY = '@quickpay_biometric_enabled';
@@ -80,57 +82,117 @@ export function getBiometricLabel(biometryType?: string): string {
   return 'Biometrics';
 }
 
-/**
- * Store the PIN in the Keychain (for payment confirmation / app unlock).
+/*
+ * Biometrics backed by a hardware key (review A4, D11).
  *
- * The item is stored WITHOUT a biometric access-control flag. Writing a
- * `BIOMETRY_ANY` access-control item goes through `SecAccessControlCreateWithFlags`
- * and the Secure Enclave, which hard-crashes on some devices under the New
- * Architecture — it was the first (and only) Keychain write in onboarding, so
- * it crashed exactly when the user enabled Face ID and entered their PIN.
- * Instead we gate the *read* behind an explicit biometric prompt in
- * `getPinFromKeychain`, preserving the same guarantee (the PIN is only released
- * after a successful Face ID / Touch ID check) via the proven-working
- * `react-native-biometrics` path.
+ * Turning Face ID on makes a key pair on this phone that only Face ID or a
+ * fingerprint can use, and registers the public half with the server. To
+ * approve a payment or unlock, the phone signs a fresh server challenge and
+ * gets back a one-time token, which it sends where the PIN would go. The PIN
+ * itself is no longer kept on the phone.
+ *
+ * Installs from before this kept the PIN in the Keychain. The first Face ID
+ * use after updating reads it one last time, registers a key with it and
+ * deletes it.
  */
-export async function storePinInKeychain(pin: string): Promise<void> {
+const BIOMETRIC_KEY_ID = '@quickpay_biometric_key_id';
+
+async function storedKeyId(): Promise<string | null> {
   try {
-    // Drop any legacy item (older builds stored it with a biometric ACL) so we
-    // always end up with a clean, plainly-readable entry.
-    await Keychain.resetGenericPassword({ service: KEYCHAIN_SERVICE }).catch(() => {});
-    await Keychain.setGenericPassword('quickpay_user', pin, {
-      service: KEYCHAIN_SERVICE,
-      accessible: Keychain.ACCESSIBLE.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
-    });
-  } catch (error) {
-    logger.error('Failed to store PIN in Keychain:', error);
-    throw new Error('Failed to secure PIN');
+    return await AsyncStorage.getItem(BIOMETRIC_KEY_ID);
+  } catch {
+    return null;
   }
 }
 
+async function dropLegacyKeychainPin(): Promise<void> {
+  await Keychain.resetGenericPassword({ service: KEYCHAIN_SERVICE }).catch(() => {});
+}
+
 /**
- * Retrieve the PIN from the Keychain, gated behind a biometric prompt.
+ * Turn on Face ID approval for this phone with the PIN just entered. Does
+ * nothing if this phone already has a key. Throws if the server refuses.
  */
-export async function getPinFromKeychain(
+export async function enableBiometricKey(pin: string): Promise<void> {
+  if (await storedKeyId()) {
+    await dropLegacyKeychainPin();
+    return;
+  }
+  const rn = getRnBiometrics();
+  // A fresh pair each time: an old one may belong to a key the server forgot.
+  await rn.deleteKeys().catch(() => undefined);
+  const { publicKey } = await rn.createKeys();
+  const result = await functions().httpsCallable('registerBiometricKey')({
+    publicKey,
+    pin,
+    platform: Platform.OS,
+  });
+  const keyId = (result.data as { data?: { keyId?: string } }).data?.keyId;
+  if (!keyId) throw new Error('Failed to secure biometrics');
+  await AsyncStorage.setItem(BIOMETRIC_KEY_ID, keyId);
+  await dropLegacyKeychainPin();
+}
+
+/**
+ * Face ID in place of the PIN: returns what to send as `pin` (a one-time
+ * token), or null when the person cancelled or this phone has no key any
+ * more, in which case they type the PIN.
+ */
+export async function getBiometricCredential(
   promptMessage: string = 'Authenticate to confirm payment'
 ): Promise<string | null> {
+  const keyId = await storedKeyId();
+  if (!keyId) return legacyKeychainPin(promptMessage);
+  try {
+    const challenge = await functions().httpsCallable('biometricChallenge')({});
+    const { challengeId, payload } = (challenge.data as { data: { challengeId: string; payload: string } }).data;
+    const { success, signature } = await getRnBiometrics().createSignature({
+      promptMessage,
+      payload,
+      cancelButtonText: 'Cancel',
+    });
+    if (!success || !signature) return null;
+    const approved = await functions().httpsCallable('approveBiometric')({ challengeId, keyId, signature });
+    return (approved.data as { data?: { pinToken?: string } }).data?.pinToken ?? null;
+  } catch (error: any) {
+    if (error?.details?.reason === 'biometric_key_gone') {
+      // Removed on the server (another phone, support): stop offering it.
+      await AsyncStorage.multiRemove([BIOMETRIC_KEY_ID, BIOMETRIC_ENABLED_KEY]).catch(() => {});
+      await getRnBiometrics().deleteKeys().catch(() => undefined);
+    } else {
+      logger.warn('Biometric approval failed:', error);
+    }
+    return null;
+  }
+}
+
+/** Pre-key installs: read the stored PIN once, then move to a key. */
+async function legacyKeychainPin(promptMessage: string): Promise<string | null> {
   try {
     const authenticated = await authenticateWithBiometrics(promptMessage);
     if (!authenticated) return null;
     const credentials = await Keychain.getGenericPassword({ service: KEYCHAIN_SERVICE });
-    return credentials ? credentials.password : null;
+    if (!credentials) return null;
+    const pin = credentials.password;
+    enableBiometricKey(pin).catch((err) => logger.warn('Moving biometrics to a key failed:', err));
+    return pin;
   } catch {
     return null;
   }
 }
 
 /**
- * Clear PIN from Keychain (when user disables biometrics)
+ * Turn Face ID off on this phone: forget the key here and on the server,
+ * and any PIN an older build left in the Keychain. Never throws.
  */
-export async function clearPinFromKeychain(): Promise<void> {
-  try {
-    await Keychain.resetGenericPassword({ service: KEYCHAIN_SERVICE });
-  } catch {
-    // Ignore
+export async function disableBiometricKey(): Promise<void> {
+  const keyId = await storedKeyId();
+  if (keyId) {
+    await functions()
+      .httpsCallable('removeBiometricKey')({ keyId })
+      .catch(() => undefined);
   }
+  await AsyncStorage.removeItem(BIOMETRIC_KEY_ID).catch(() => {});
+  await getRnBiometrics().deleteKeys().catch(() => undefined);
+  await dropLegacyKeychainPin();
 }
