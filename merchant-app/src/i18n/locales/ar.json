@@ -659,5 +659,11 @@
   "transactions.kindLabel.mobile_money_topup": "شحن عبر المال المتنقل",
   "transactions.kindLabel.mobile_money_cashout": "سحب عبر المال المتنقل",
   "transactions.kindLabel.remittance": "حوالة",
-  "disputes.kind.refund_requested": "طلب استرداد المبلغ"
+  "disputes.kind.refund_requested": "طلب استرداد المبلغ",
+  "transactions.refund.amountTitle": "كم تريد أن تسترد؟",
+  "transactions.refund.amountHint": "حتى {{amount}}. استرد مبلغًا أقل لإرجاع جزئي.",
+  "transactions.refund.partialSuccess": "تم استرداد {{amount}}. لا يزال {{left}} قابلًا للاسترداد.",
+  "transactions.refund.amountTooHigh": "المتبقي للاسترداد {{amount}} فقط.",
+  "transactions.refund.refundedLabel": "تم الاسترداد",
+  "transactions.refund.refundedOf": "{{refunded}} من {{total}}"
 }

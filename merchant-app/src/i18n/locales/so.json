@@ -659,5 +659,11 @@
   "transactions.kindLabel.mobile_money_topup": "Lacag-shub mobile money",
   "transactions.kindLabel.mobile_money_cashout": "Lacag-bixin mobile money",
   "transactions.kindLabel.remittance": "Xawaalad",
-  "disputes.kind.refund_requested": "Wuxuu codsaday lacag celin"
+  "disputes.kind.refund_requested": "Wuxuu codsaday lacag celin",
+  "transactions.refund.amountTitle": "Immisa ayaad celinaysaa?",
+  "transactions.refund.amountHint": "Ilaa {{amount}}. Wax ka yar celi haddii qayb la soo celiyay.",
+  "transactions.refund.partialSuccess": "{{amount}} waa la celiyay. {{left}} weli waa la celin karaa.",
+  "transactions.refund.amountTooHigh": "Kaliya {{amount}} ayaa ka hadhay oo la celin karo.",
+  "transactions.refund.refundedLabel": "La celiyay",
+  "transactions.refund.refundedOf": "{{refunded}} ka mid ah {{total}}"
 }

@@ -71,6 +71,8 @@ export interface Transaction {
   refundOfTransactionId?: string;
   /** Latest dispute raised on this transaction, by either side. */
   disputeId?: string;
+  /** Cents refunded so far, across partial refunds. */
+  refundedCents?: number;
   /** What the row really is (getTransactions derives it for older rows). */
   kind?: TransactionKind;
 }

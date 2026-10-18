@@ -183,3 +183,105 @@ describe("refundPayment", () => {
     });
   });
 });
+
+// Plan 3.3: part of a counter payment can be given back.
+describe("partial refunds", () => {
+  let refund: any;
+  let restore: (() => void) | undefined;
+  const KEY1 = "11111111-1111-4111-8111-111111111111";
+  const KEY2 = "22222222-2222-4222-8222-222222222222";
+
+  beforeAll(async () => {
+    if (!admin.apps.length) admin.initializeApp();
+    refund = test.wrap((await import("../qr-payments/refundPayment")).refundPayment);
+  });
+
+  beforeEach(() => mockedPin.mockReset().mockResolvedValue(true));
+  afterEach(() => {
+    restore?.();
+    restore = undefined;
+  });
+
+  /** $10.00 paid with a $0.30 fee, so proportional fees have to round. */
+  const seed = () => {
+    const paidAt = Timestamp.fromMillis(Date.now() - DAY_MS);
+    const db = fakeFirestore({
+      [`users/${MERCHANT}`]: { accountType: "merchant" },
+      [`users/${CUSTOMER}`]: { accountType: "customer" },
+      [`wallets/${MERCHANT}`]: wallet(5_000),
+      [`wallets/${CUSTOMER}`]: wallet(0),
+      "journal_entries/entry-1": { type: "qr_payment" },
+      "transactions/tx-1": {
+        type: "payment",
+        kind: "merchant_payment",
+        fromUserId: CUSTOMER,
+        toUserId: MERCHANT,
+        participants: [CUSTOMER, MERCHANT],
+        amount: 1_000,
+        feeCents: 30,
+        netCents: 970,
+        currency: "USD",
+        status: "completed",
+        journalEntryId: "entry-1",
+        createdAt: paidAt,
+        completedAt: paidAt,
+      },
+    });
+    restore = useFakeFirestore(db);
+    return db;
+  };
+
+  const part = (amountCents: number, idempotencyKey?: string) =>
+    refund({
+      data: { transactionId: "tx-1", pin: "123456", amountCents, ...(idempotencyKey ? { idempotencyKey } : {}) },
+      auth: { uid: MERCHANT },
+    });
+
+  it("refunds part, with the fee returned in proportion", async () => {
+    const db = seed();
+    const res = await part(333, KEY1);
+    expect(res.data.remainingCents).toBe(667);
+    expect(db.get(`wallets/${CUSTOMER}`)!.balance).toBe(333);
+    // fee part = round(30 * 333 / 1000) = 10; merchant returns 323.
+    expect(db.get(`wallets/${MERCHANT}`)!.balance).toBe(5_000 - 323);
+    expect(db.get("ledger_balances/platform:fees")!.balance).toBe(-10);
+    const original = db.get("transactions/tx-1")!;
+    expect(original).toMatchObject({ refundedCents: 333, refundedFeeCents: 10, refundCount: 1 });
+    expect(original.refundedAt).toBeUndefined();
+  });
+
+  it("finishes with exactly the fee that's left, so rounding never drifts", async () => {
+    const db = seed();
+    await part(333, KEY1);
+    const res = await part(667, KEY2);
+    expect(res.data.remainingCents).toBe(0);
+    expect(db.get(`wallets/${CUSTOMER}`)!.balance).toBe(1_000);
+    expect(db.get(`wallets/${MERCHANT}`)!.balance).toBe(5_000 - 970);
+    expect(db.get("ledger_balances/platform:fees")!.balance).toBe(-30);
+    expect(db.get("transactions/tx-1")!.refundedAt).toBeDefined();
+    await expect(part(1, "33333333-3333-4333-8333-333333333333")).rejects.toThrow(/already been refunded/);
+  });
+
+  it("posts a retried partial refund once", async () => {
+    const db = seed();
+    await part(200, KEY1);
+    const again = await part(200, KEY1);
+    expect(again.data.remainingCents).toBe(800);
+    expect(db.get(`wallets/${CUSTOMER}`)!.balance).toBe(200);
+    expect(db.get("transactions/tx-1")!.refundedCents).toBe(200);
+  });
+
+  it("needs a key for a partial refund, and refuses more than is left", async () => {
+    seed();
+    await expect(part(200)).rejects.toThrow(/idempotency key/);
+    const err = await part(1_001, KEY1).catch((e: any) => e);
+    expect(err.details).toEqual({ reason: "refund_amount", remainingCents: 1_000 });
+  });
+
+  it("still refunds the whole payment without a key", async () => {
+    const db = seed();
+    await refund({ data: { transactionId: "tx-1", pin: "123456" }, auth: { uid: MERCHANT } });
+    expect(db.get(`wallets/${CUSTOMER}`)!.balance).toBe(1_000);
+    expect(db.get("journal_entries/refund_tx-1")).toBeDefined();
+  });
+});

@@ -25,6 +25,7 @@ interface TransactionResponse {
   refundOfTransactionId?: string;
   disputeId?: string;
   kind: TransactionKind;
+  refundedCents: number;
 }
 
 interface GetTransactionsRequest {
@@ -155,6 +156,7 @@ export const getTransactions = https.onCall(
           refundOfTransactionId: data.refundOfTransactionId,
           disputeId: data.disputeId,
           kind: kindOf(data),
+          refundedCents: data.refundedCents ?? (data.refundedAt ? data.amount : 0),
         };
       });
 

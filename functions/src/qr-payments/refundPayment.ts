@@ -14,6 +14,7 @@ import {
   WalletNotFoundError,
 } from "../ledger";
 import { prepareRefund, REFUNDABLE_ENTRY_TYPES } from "./refundCore";
+import { isValidIdempotencyKey } from "../utils/idempotency";
 import { DISPUTES_COLLECTION, DisputeDoc } from "../disputes/types";
 import { stageResolvedByRefund } from "../disputes/resolve";
 
@@ -22,11 +23,17 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 interface RefundRequest {
   transactionId: string;
   pin: string;
+  /** Partial refund (plan 3.3); omit to refund everything left. */
+  amountCents?: number;
+  /** Required with a partial refund; resend the same one on retry. */
+  idempotencyKey?: string;
 }
 
 interface RefundResponse {
   refundTransactionId: string;
   amount: number; // Gross amount refunded, in dollars
+  /** What is still refundable on the payment, in cents. */
+  remainingCents: number;
 }
 
 /**
@@ -42,7 +49,11 @@ export const refundPayment = https.onCall(
     requireAuth(request);
     const merchantId = request.auth!.uid;
 
-    const { transactionId, pin } = request.data;
+    const { transactionId, pin, amountCents } = request.data;
+    const partKey = request.data.idempotencyKey;
+    if (partKey !== undefined && !isValidIdempotencyKey(partKey)) {
+      throw new https.HttpsError("invalid-argument", "idempotencyKey is malformed");
+    }
 
     if (!transactionId || !pin) {
       throw new https.HttpsError(
@@ -135,24 +146,31 @@ export const refundPayment = https.onCall(
       const outcome = await db.runTransaction(async (tx) => {
         // Reads first: the dispute, then the original under lock and the ledger.
         const disputeSnap = disputeRef ? await tx.get(disputeRef) : null;
-        const refund = await prepareRefund(tx, transactionId, { postedBy: merchantId });
+        const refund = await prepareRefund(tx, transactionId, {
+          postedBy: merchantId,
+          ...(amountCents !== undefined ? { amountCents } : {}),
+          ...(partKey ? { partKey } : {}),
+        });
         refund.write(tx);
-        // Refunding answers an open dispute on this payment.
+        // Refunding the whole payment answers an open dispute on it; a
+        // partial refund leaves the dispute for the customer to accept.
         const closedDispute =
+          refund.completesRefund &&
           disputeRef !== null &&
           stageResolvedByRefund(tx, disputeRef, disputeSnap?.data() as DisputeDoc | undefined, {
             refundTransactionId: refund.refundTransactionId,
             gross: refund.gross,
             merchantId,
-            journalEntryId: `refund_${transactionId}`,
+            journalEntryId: refund.journalEntryId,
           });
         return { refund, closedDispute };
       });
 
-      const { refundTransactionId, customerId, gross, currency } = outcome.refund;
+      const { refundTransactionId, customerId, gross, currency, remainingCents, alreadyPosted } =
+        outcome.refund;
 
       const amountFormatted = (gross / 100).toFixed(2);
-      notifyUser(
+      if (!alreadyPosted) notifyUser(
         customerId,
         "refund_issued",
         "Refund Received",
@@ -165,6 +183,7 @@ export const refundPayment = https.onCall(
         data: {
           refundTransactionId,
           amount: gross / 100,
+          remainingCents,
         },
       };
     } catch (error: any) {

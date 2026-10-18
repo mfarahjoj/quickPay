@@ -58,6 +58,7 @@ export function chooseRemedy(
     d.disputedKind === "shop_payment" &&
     tx !== undefined &&
     !tx.refundedAt &&
+    !tx.refundedCents &&
     tx.fromUserId === d.raisedBy &&
     amountCents === tx.amount;
   if (fullRefund) {
@@ -91,7 +92,7 @@ async function prepareRemedy(
       allowFrozenDebit: true,
     });
     return {
-      journalEntryId: `refund_${d.transactionId}`,
+      journalEntryId: refund.journalEntryId,
       refundTransactionId: refund.refundTransactionId,
       write: refund.write,
     };

@@ -659,5 +659,11 @@
   "transactions.kindLabel.mobile_money_topup": "Mobile money top-up",
   "transactions.kindLabel.mobile_money_cashout": "Mobile money withdrawal",
   "transactions.kindLabel.remittance": "Remittance",
-  "disputes.kind.refund_requested": "Asked for a refund"
+  "disputes.kind.refund_requested": "Asked for a refund",
+  "transactions.refund.amountTitle": "How much to refund?",
+  "transactions.refund.amountHint": "Up to {{amount}}. Refund less for a partial return.",
+  "transactions.refund.partialSuccess": "Refunded {{amount}}. {{left}} can still be refunded.",
+  "transactions.refund.amountTooHigh": "Only {{amount}} is left to refund.",
+  "transactions.refund.refundedLabel": "Refunded",
+  "transactions.refund.refundedOf": "{{refunded}} of {{total}}"
 }

@@ -313,6 +313,12 @@ export interface Transaction {
   /** On a refunded payment: when it was refunded and the refund tx id. */
   refundedAt?: FirebaseFirestore.Timestamp;
   refundTransactionId?: string;
+  /** On a payment: cents refunded so far, across partial refunds (plan 3.3). */
+  refundedCents?: number;
+  /** On a payment: platform fee returned so far with those refunds. */
+  refundedFeeCents?: number;
+  refundCount?: number;
+  lastRefundTransactionId?: string;
   /** Journal entry that moved the money (accounting source of truth). */
   journalEntryId?: string;
   /** Cash-out only: the entry that took the hold (journalEntryId is the settlement once completed). */
