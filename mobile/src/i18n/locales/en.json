@@ -1117,5 +1117,10 @@
   "wallet.kind.mobile_money_cashout": "Mobile money withdrawal",
   "wallet.kind.remittance": "Remittance",
   "wallet.detail.type": "Type",
-  "disputes.kind.refund_requested": "I'd like a refund"
+  "disputes.kind.refund_requested": "I'd like a refund",
+  "invite.subtitleGeneric": "Share your code and bring your friends to Zapp Pay.",
+  "invite.subtitleCashIn": "Share your code: you both get {{amount}} after their first top-up of {{min}} or more.",
+  "invite.subtitleKyc": "Share your code: you both get {{amount}} once their ID is verified.",
+  "cashout.free": "No fee",
+  "cashout.feeLine": "Fee {{fee}} · {{total}} leaves your wallet"
 }

@@ -18,6 +18,7 @@ import { stageAuditEntry, writeAuditEntry } from "./audit";
 import { parseStorageRef, isKycPathFor } from "../utils/storagePaths";
 import { resolveAccountStatus } from "../utils/accountStatus";
 import { notifyUser } from "../utils/notifications";
+import { maybeUnlockReferral } from "../referral/referralBonus";
 
 /** Long enough to review a submission, short enough that a leak expires. */
 const SIGNED_URL_TTL_MS = 15 * 60 * 1000;
@@ -312,6 +313,7 @@ export const adminReviewKyc = https.onCall(
     });
 
     const approved = outcome.kycStatus === "verified";
+    if (approved) await maybeUnlockReferral(userId, { kind: "kyc_verified" });
     notifyUser(
       userId,
       approved ? "kyc_approved" : "kyc_rejected",

@@ -12,11 +12,11 @@ money ships to prod without explicit per-deploy authorization (CLAUDE.md).
 | W2 CI fix | 0 | committed 2026-10-03 — runs on all branches, deploy job removed, merchant/admin typecheck added; lint non-blocking (backlog) |
 | #1 Self top-up mint | 1 | hotfix committed 2026-10-03 (`utils/agentGuards.ts`, 11 tests); deployed to prod 2026-10-03 (hash bc9ab2b4, from `0ac145e`). Retirement of `manualTopup` waits on D2 |
 | M Business-level monitors | 1 | committed 2026-10-03 (`ledger/activityMonitor.ts`, 17 tests, Ledger Desk section); deployed to prod 2026-10-03 (functions hash 29796837, hosting:admin); admin App Check site key still blank, so the console cannot call it yet |
-| #2 Commission round-trip | 1 | blocked on D1 |
+| #2 Commission round-trip | 1 | committed 2026-10-18 on `fix/wallet-phase1`, not deployed. D1: cash-out free by default (`cashOutFeeRate` 0, editable in the console); split commission rates; no cash-out commission on a cash-in with the same agent within `roundTripWindowHours` (24) |
 | #3 Unauthenticated name lookup | 2 | deployed 2026-10-18 from `fadb515`: `createWebTopup` answers 503 (D4 taken as "disable now"; the form was already gone) |
 | #4 Lockout races | 2 | deployed 2026-10-04 (`7296f76`); `customerCashOut`/`agentConfirmCashOut` followed with the cash-out hold rollout on 2026-10-18 (`8add088`). Before that deploy, `platform:cashout_hold` held $15.00 from one request of 2026-10-03 that never expired; `expireAgentRequests` returned it to the customer at 06:58 UTC and the hold is $0 |
 | #5 Missing App Check | 2 | deployed 2026-10-04 (`3f06704`, 22 callables); `appCheckCoverage.test.ts` guards it in CI. Verified: `loginWithPin` without a token → 401 |
-| #6 Referral farming | 3 | blocked on D3 |
+| #6 Referral farming | 3 | committed 2026-10-18 on `fix/wallet-phase1`, not deployed. D3: bonus waits for the first cash-in ≥ `referralMinCashInCents` or KYC (`referralUnlock`, console), frozen inviters skipped, `referralMonthlyCapPerReferrer` |
 | #7 Merchant profile rename | 3 | deployed 2026-10-18 from `fadb515` (`utils/nameLock.ts`, `adminRenameMerchant`, rules checked in the emulator). Console has no rename button yet |
 | #8 Float maker-checker structuring | 3 | deployed 2026-10-18 from `fadb515` (`utils/rollingTotal.ts`: float per agent+direction, payouts per merchant, last 24h). Index deployed first |
 | #9 Refunds on P2P/payroll | 3 | deployed 2026-10-18 from `fadb515` (refundable = `qr_payment`/`customer_qr_payment` journal entries, `refundWindowDays` default 30 in `config/rates`) |

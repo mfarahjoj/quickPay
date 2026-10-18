@@ -1117,5 +1117,10 @@
   "wallet.kind.mobile_money_cashout": "Lacag-bixin mobile money",
   "wallet.kind.remittance": "Xawaalad",
   "wallet.detail.type": "Nooca",
-  "disputes.kind.refund_requested": "Waxaan rabaa lacag celin"
+  "disputes.kind.refund_requested": "Waxaan rabaa lacag celin",
+  "invite.subtitleGeneric": "La wadaag koodhkaaga oo saaxiibbadaa keen Zapp Pay.",
+  "invite.subtitleCashIn": "La wadaag koodhkaaga: labadiinuba waxaad helaysaan {{amount}} kadib lacag-shubiddooda ugu horreysa ee {{min}} ama ka badan.",
+  "invite.subtitleKyc": "La wadaag koodhkaaga: labadiinuba waxaad helaysaan {{amount}} marka aqoonsigooda la xaqiijiyo.",
+  "cashout.free": "Khidmad lacag la'aan",
+  "cashout.feeLine": "Khidmad {{fee}} · {{total}} ayaa boorsadaada ka baxaysa"
 }

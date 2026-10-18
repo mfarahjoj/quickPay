@@ -76,6 +76,14 @@ export default function CashOutScreen() {
   const [cancelling, setCancelling] = useState(false);
   const [expiresAt, setExpiresAt] = useState<Date | null>(null);
   const [timeLeft, setTimeLeft] = useState(0);
+  // Cash-out fee set by Zapp (free by default, decision D1).
+  const [feeRate, setFeeRate] = useState(0);
+  useEffect(() => {
+    functions()
+      .httpsCallable('getPricing')()
+      .then((r) => setFeeRate((r.data as any)?.data?.cashOutFeeRate ?? 0))
+      .catch(() => setFeeRate(0));
+  }, []);
 
   // Amount pulse
   const amountScale = useSharedValue(1);
@@ -323,6 +331,14 @@ export default function CashOutScreen() {
         <View style={styles.pinSection}>
           <Text style={styles.pinAmountLabel}>Withdrawing</Text>
           <Text style={styles.pinAmount}>{CURRENCY_SYMBOL}{amount.toFixed(2)}</Text>
+          <Text style={styles.feeLine}>
+            {feeRate > 0
+              ? t('cashout.feeLine', {
+                  fee: `${CURRENCY_SYMBOL}${(Math.round(amount * 100 * feeRate) / 100).toFixed(2)}`,
+                  total: `${CURRENCY_SYMBOL}${(amount + Math.round(amount * 100 * feeRate) / 100).toFixed(2)}`,
+                })
+              : t('cashout.free')}
+          </Text>
           <View style={styles.pinDots}>
             {Array.from({ length: 6 }).map((_, i) => (
               <CashOutPinDot key={i} filled={i < pin.length} />
@@ -430,7 +446,8 @@ const styles = StyleSheet.create({
   // PIN
   pinSection: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   pinAmountLabel: { fontSize: 13, fontWeight: '600', letterSpacing: 0.5, textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', marginBottom: 8 },
-  pinAmount: { fontSize: 36, fontWeight: '800', color: '#FFFFFF', letterSpacing: -1, marginBottom: 32 },
+  pinAmount: { fontSize: 36, fontWeight: '800', color: '#FFFFFF', letterSpacing: -1, marginBottom: 8 },
+  feeLine: { fontSize: 14, color: 'rgba(255,255,255,0.6)', marginBottom: 28, textAlign: 'center' },
   pinDots: { flexDirection: 'row', gap: 14 },
   pinDot: { width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)', backgroundColor: 'transparent' },
   pinDotFilled: { backgroundColor: ACCENT, borderColor: ACCENT },

@@ -7,6 +7,7 @@ import { ApiResponse } from "../types";
 import { prepareJournalEntry, userAccount, PLATFORM_PROMO } from "../ledger";
 import { isPrivilegedRole } from "../utils/roles";
 import { assertNameChangeAllowed } from "../utils/nameLock";
+import { recordReferral } from "../referral/referralBonus";
 import { ensureRoleRequest } from "../merchants/requestRole";
 
 interface SetupPinRequest {
@@ -26,105 +27,6 @@ interface SetupPinResponse {
   /** True when a privileged role was requested and awaits admin review. */
   roleRequestPending?: boolean;
   roleRequestId?: string;
-}
-
-async function creditReferralBonus(
-  db: admin.firestore.Firestore,
-  newUserId: string,
-  referralCode: string,
-  newUserFullName: string
-): Promise<void> {
-  const referrerQuery = await db
-    .collection("users")
-    .where("referralCode", "==", referralCode)
-    .limit(1)
-    .get();
-
-  if (referrerQuery.empty) {
-    console.log(`Referral code ${referralCode} not found — skipping bonus`);
-    return;
-  }
-
-  const referrerId = referrerQuery.docs[0].id;
-  if (referrerId === newUserId) {
-    console.log("Self-referral detected — skipping bonus");
-    return;
-  }
-
-  const newUserRef = db.collection("users").doc(newUserId);
-  const referrerUserRef = db.collection("users").doc(referrerId);
-  const BONUS_CENTS = 100;
-
-  await db.runTransaction(async (tx) => {
-    const newUserSnap = await tx.get(newUserRef);
-    if (newUserSnap.data()?.referralBonusClaimedAt) {
-      console.log(`Referral bonus already claimed for ${newUserId}`);
-      return;
-    }
-
-    const referrerSnap = await tx.get(referrerUserRef);
-    const referrerName: string = referrerSnap.data()?.fullName ?? "your friend";
-
-    // Both bonuses are platform marketing spend, posted as one entry.
-    // Entry ID derives from the new user: a signup bonus is claimable once.
-    const pending = await prepareJournalEntry(tx, {
-      entryId: `referral_${newUserId}`,
-      type: "referral_bonus",
-      currency: "USD",
-      lines: [
-        { account: PLATFORM_PROMO, debit: BONUS_CENTS * 2, credit: 0 },
-        { account: userAccount(newUserId), debit: 0, credit: BONUS_CENTS },
-        { account: userAccount(referrerId), debit: 0, credit: BONUS_CENTS },
-      ],
-      description: "Referral bonus",
-      postedBy: "system",
-    });
-
-    const now = admin.firestore.Timestamp.now();
-
-    pending.write(tx);
-
-    tx.set(db.collection("transactions").doc(), {
-      type: "referral",
-      kind: "referral",
-      fromUserId: "system",
-      toUserId: newUserId,
-      participants: ["system", newUserId],
-      amount: BONUS_CENTS,
-      currency: "USD",
-      status: "completed",
-      description: `Referral bonus — invited by ${referrerName}`,
-      journalEntryId: `referral_${newUserId}`,
-      createdAt: now,
-      completedAt: now,
-    });
-
-    tx.set(db.collection("transactions").doc(), {
-      type: "referral",
-      kind: "referral",
-      fromUserId: "system",
-      toUserId: referrerId,
-      participants: ["system", referrerId],
-      amount: BONUS_CENTS,
-      currency: "USD",
-      status: "completed",
-      description: `Referral bonus — you invited ${newUserFullName}`,
-      journalEntryId: `referral_${newUserId}`,
-      createdAt: now,
-      completedAt: now,
-    });
-
-    tx.update(newUserRef, {
-      referredBy: referrerId,
-      referralBonusClaimedAt: now,
-    });
-
-    tx.update(referrerUserRef, {
-      referralCount: admin.firestore.FieldValue.increment(1),
-    });
-  });
-
-  console.log(`Referral bonus credited: referrer=${referrerId} newUser=${newUserId}`);
 }
 
 /**
@@ -259,9 +161,12 @@ export const setupPin = https.onCall(
           })
         : undefined;
 
+      // Records the inviter only; the bonus waits for the new user's first
+      // qualifying action (referral/referralBonus.ts, decision D3).
       if (referralCode && typeof referralCode === "string" && !userDoc.exists) {
-        creditReferralBonus(db, userId, referralCode.trim().toUpperCase(), fullName.trim())
-          .catch((err) => console.error("Referral bonus failed (non-fatal):", err));
+        await recordReferral(db, userId, referralCode.trim().toUpperCase()).catch((err) =>
+          console.error("Recording referral failed (non-fatal):", err)
+        );
       }
 
       return {

@@ -32,6 +32,23 @@ export default function InviteScreen({ navigation: _navigation }: Props) {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  // Referral terms come from the admin console (getPricing), so the promise
+  // here always matches what the backend will pay.
+  const [terms, setTerms] = useState<{ referralUnlock: string; referralBonusCents: number; referralMinCashInCents: number } | null>(null);
+  useEffect(() => {
+    functions()
+      .httpsCallable('getPricing')()
+      .then((r) => setTerms((r.data as any)?.data ?? null))
+      .catch(() => setTerms(null));
+  }, []);
+  const money = (c: number) => `$${(c / 100).toFixed(2)}`;
+  const subtitle = !terms
+    ? t('invite.subtitleGeneric')
+    : terms.referralUnlock === 'off' || terms.referralBonusCents <= 0
+      ? t('invite.subtitleGeneric')
+      : terms.referralUnlock === 'kyc_verified'
+        ? t('invite.subtitleKyc', { amount: money(terms.referralBonusCents) })
+        : t('invite.subtitleCashIn', { amount: money(terms.referralBonusCents), min: money(terms.referralMinCashInCents) });
 
   useEffect(() => {
     functions()
@@ -78,7 +95,7 @@ export default function InviteScreen({ navigation: _navigation }: Props) {
       </View>
 
       <Text style={styles.title}>{t('invite.title')}</Text>
-      <Text style={styles.subtitle}>{t('invite.subtitle')}</Text>
+      <Text style={styles.subtitle}>{subtitle}</Text>
 
       {/* Referral code card */}
       <TouchableOpacity style={styles.codeCard} onPress={handleCopy} activeOpacity={0.75}>

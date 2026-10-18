@@ -9,6 +9,7 @@ import { enforcePerTransactionLimit } from "../utils/limits";
 import { enforceVelocity } from "../utils/velocity";
 import { isAgentRole } from "../utils/roles";
 import { notifyTopupCompleted } from "../utils/notifications";
+import { maybeUnlockReferral } from "../referral/referralBonus";
 import { ApiResponse, Wallet, Transaction } from "../types";
 import { getRates, computeCommission } from "../config/rates";
 import {
@@ -234,6 +235,8 @@ export const manualTopup = https.onCall(
       });
 
       // Send notification to user
+      await maybeUnlockReferral(userId, { kind: "cash_in", amountCents });
+
       notifyTopupCompleted(userId, amountCents, "USD", paymentMethod).catch(
         (err) => console.error("Failed to notify user:", err)
       );

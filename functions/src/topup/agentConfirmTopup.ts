@@ -8,6 +8,7 @@ import { verifyUserPin } from "../auth/validatePin";
 import { notifyUser } from "../utils/notifications";
 import { reserveOtpAttempt, clearOtpFailures } from "../utils/otpGuard";
 import { ApiResponse, AgentTopupRequest, Wallet, Transaction, User } from "../types";
+import { maybeUnlockReferral } from "../referral/referralBonus";
 import { getRates, computeCommission } from "../config/rates";
 import {
   prepareJournalEntry,
@@ -253,6 +254,9 @@ export const agentConfirmTopup = https.onCall(
         confirmationId,
       }
     ).catch((err) => console.error("Failed to notify customer:", err));
+
+    // A first qualifying cash-in may unlock the customer's referral bonus.
+    await maybeUnlockReferral(topup.customerId, { kind: "cash_in", amountCents: topup.amount });
 
     return {
       success: true,

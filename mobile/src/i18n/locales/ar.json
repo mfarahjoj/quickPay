@@ -1117,5 +1117,10 @@
   "wallet.kind.mobile_money_cashout": "سحب عبر المال المتنقل",
   "wallet.kind.remittance": "حوالة",
   "wallet.detail.type": "النوع",
-  "disputes.kind.refund_requested": "أريد استرداد المبلغ"
+  "disputes.kind.refund_requested": "أريد استرداد المبلغ",
+  "invite.subtitleGeneric": "شارك رمزك وادعُ أصدقاءك إلى Zapp Pay.",
+  "invite.subtitleCashIn": "شارك رمزك: يحصل كل منكما على {{amount}} بعد أول شحن لهم بقيمة {{min}} أو أكثر.",
+  "invite.subtitleKyc": "شارك رمزك: يحصل كل منكما على {{amount}} بعد التحقق من هويتهم.",
+  "cashout.free": "بدون رسوم",
+  "cashout.feeLine": "رسوم {{fee}} · يخرج {{total}} من محفظتك"
 }
