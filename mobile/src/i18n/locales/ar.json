@@ -494,7 +494,7 @@
   "auth.setupPin.invalidPinMessage": "يرجى إدخال PIN من 6 أرقام",
   "auth.setupPin.mismatchTitle": "رمز PIN غير متطابق",
   "auth.setupPin.mismatchMessage": "رموز PIN غير متطابقة. يرجى المحاولة مرة أخرى.",
-  "auth.setupPin.weakPin": "يرجى اختيار PIN أقوى. تجنب الأرقام المتسلسلة أو المتكررة.",
+  "auth.setupPin.weakPin": "يرجى اختيار رمز PIN أقوى. تجنب الأنماط والأرقام المتكررة أو المتسلسلة والسنوات مثل 1990.",
   "auth.setupPin.pinMismatchInline": "رموز PIN غير متطابقة",
   "auth.setupPin.showPin": "إظهار PIN",
   "auth.setupPin.hidePin": "إخفاء PIN",

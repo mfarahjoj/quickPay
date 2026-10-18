@@ -494,7 +494,7 @@
   "auth.setupPin.invalidPinMessage": "Please enter a 6-digit PIN",
   "auth.setupPin.mismatchTitle": "PIN Mismatch",
   "auth.setupPin.mismatchMessage": "PINs do not match. Please try again.",
-  "auth.setupPin.weakPin": "Please choose a stronger PIN. Avoid sequential or repeated digits.",
+  "auth.setupPin.weakPin": "Please choose a stronger PIN. Avoid patterns, repeated or sequential digits, and years like 1990.",
   "auth.setupPin.pinMismatchInline": "PINs do not match",
   "auth.setupPin.showPin": "Show PIN",
   "auth.setupPin.hidePin": "Hide PIN",

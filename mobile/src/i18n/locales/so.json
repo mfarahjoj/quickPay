@@ -494,7 +494,7 @@
   "auth.setupPin.invalidPinMessage": "Fadlan geli PIN 6-da lambar",
   "auth.setupPin.mismatchTitle": "PIN-yada isma laha",
   "auth.setupPin.mismatchMessage": "PIN-yada isma laha. Fadlan isku day mar kale.",
-  "auth.setupPin.weakPin": "Fadlan dooro PIN xooggan. Ka fogow lambarro isku xiga ama soo noqnoqda.",
+  "auth.setupPin.weakPin": "Fadlan dooro PIN ka adag. Ka fogow qaabab, lambarro isku mid ah ama isku xiga, iyo sanado sida 1990.",
   "auth.setupPin.pinMismatchInline": "PIN-yada isma laha",
   "auth.setupPin.showPin": "Muuji PIN",
   "auth.setupPin.hidePin": "Qari PIN",

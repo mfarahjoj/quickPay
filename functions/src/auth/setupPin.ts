@@ -1,6 +1,7 @@
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 import { https } from "firebase-functions/v2";
+import { assertStrongPin } from "../utils/weakPin";
 import { hashPin } from "../utils/encryption";
 import { validatePin, requireAuth } from "../utils/validation";
 import { ApiResponse } from "../types";
@@ -106,6 +107,7 @@ export const setupPin = https.onCall(
           "PIN must be exactly 6 digits"
         );
       }
+      assertStrongPin(pin);
 
       const pinHash = await hashPin(pin);
 

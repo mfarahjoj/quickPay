@@ -54,7 +54,7 @@ describe("referral bonuses", () => {
     const db = fakeFirestore({ [`users/${INVITER}`]: { referralCode: "ABCD1234" }, [`wallets/${INVITER}`]: wallet(0) });
     restore = useFakeFirestore(db);
     await setupPin({
-      data: { pin: "135790", fullName: "Brand New", referralCode: "abcd1234" },
+      data: { pin: "482915", fullName: "Brand New", referralCode: "abcd1234" },
       auth: { uid: "brand-new", token: { phone_number: "+252630000077" } },
     });
     expect(db.get("users/brand-new")).toMatchObject({ referredBy: INVITER, referralStatus: "pending" });

@@ -101,7 +101,7 @@
   "auth.success.continue": "Get Started",
   "auth.splash.loading": "Loading...",
   "auth.splash.settingUp": "Setting up your account...",
-  "auth.setupPin.weakPin": "Please choose a stronger PIN. Avoid sequential or repeated digits.",
+  "auth.setupPin.weakPin": "Please choose a stronger PIN. Avoid patterns, repeated or sequential digits, and years like 1990.",
   "auth.setupPin.pinMismatchInline": "PINs do not match",
   "auth.setupPin.showPin": "Show PIN",
   "auth.setupPin.hidePin": "Hide PIN",

@@ -15,6 +15,7 @@ import { PinInput } from '../../components/PinInput';
 import { colors, typography, spacing } from '../../theme';
 import { validatePin, PinLockoutError, pinLockoutMessage } from '../../services/auth.service';
 import { functions } from '../../services/firebase.config';
+import { isWeakPin } from '../../components/auth/CodeInput';
 import {
   isBiometricEnabled,
   setBiometricEnabled,
@@ -158,6 +159,10 @@ export default function SecurityScreen({ navigation }: Props) {
       Alert.alert(t('common.error'), t('profile.security.pinMustDiffer'));
       return;
     }
+    if (isWeakPin(newPin)) {
+      Alert.alert(t('common.error'), t('auth.setupPin.weakPin'));
+      return;
+    }
 
     try {
       setLoading(true);
@@ -186,7 +191,9 @@ export default function SecurityScreen({ navigation }: Props) {
         }
       } catch (innerErr: any) {
         const code = innerErr?.code;
-        if (code === 'functions/not-found' || code === 'functions/unimplemented') {
+        if (innerErr?.details?.reason === 'weak_pin') {
+          Alert.alert(t('common.error'), t('auth.setupPin.weakPin'));
+        } else if (code === 'functions/not-found' || code === 'functions/unimplemented') {
           Alert.alert(
             t('common.comingSoon'),
             t('profile.security.pinChangeComingSoon')

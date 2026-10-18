@@ -101,7 +101,7 @@
   "auth.success.continue": "Bilow",
   "auth.splash.loading": "Waa la soo raraa...",
   "auth.splash.settingUp": "Akoonkaaga waa la dejinayaa...",
-  "auth.setupPin.weakPin": "Fadlan dooro PIN xooggan.",
+  "auth.setupPin.weakPin": "Fadlan dooro PIN ka adag. Ka fogow qaabab, lambarro isku mid ah ama isku xiga, iyo sanado sida 1990.",
   "auth.setupPin.pinMismatchInline": "PIN-yada isma laha",
   "auth.setupPin.showPin": "Muuji PIN",
   "auth.setupPin.hidePin": "Qari PIN",

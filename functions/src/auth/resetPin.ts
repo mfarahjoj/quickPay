@@ -1,5 +1,6 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
+import { assertStrongPin } from "../utils/weakPin";
 import * as bcrypt from "bcrypt";
 import { hashPin } from "../utils/encryption";
 import { readAuth, writeAuth } from "./pinStore";
@@ -78,6 +79,7 @@ export const resetPin = https.onCall(
         "PIN must be exactly 6 digits"
       );
     }
+    assertStrongPin(newPin);
 
     // Recency alone is NOT enough: a trusted-device PIN login signs in with a
     // custom token, which also mints a fresh auth_time despite involving no

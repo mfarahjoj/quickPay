@@ -101,7 +101,7 @@
   "auth.success.continue": "ابدأ",
   "auth.splash.loading": "جارٍ التحميل...",
   "auth.splash.settingUp": "جارٍ إعداد حسابك...",
-  "auth.setupPin.weakPin": "يرجى اختيار PIN أقوى.",
+  "auth.setupPin.weakPin": "يرجى اختيار رمز PIN أقوى. تجنب الأنماط والأرقام المتكررة أو المتسلسلة والسنوات مثل 1990.",
   "auth.setupPin.pinMismatchInline": "رموز PIN غير متطابقة",
   "auth.setupPin.showPin": "إظهار PIN",
   "auth.setupPin.hidePin": "إخفاء PIN",

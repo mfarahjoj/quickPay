@@ -1,5 +1,6 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
+import { assertStrongPin } from "../utils/weakPin";
 import { requireAuth, validatePin } from "../utils/validation";
 import { hashPin } from "../utils/encryption";
 import { verifyUserPin } from "./validatePin";
@@ -26,6 +27,7 @@ export const changePin = https.onCall(
         "PIN must be exactly 6 digits"
       );
     }
+    assertStrongPin(newPin);
 
     if (currentPin === newPin) {
       throw new https.HttpsError(
