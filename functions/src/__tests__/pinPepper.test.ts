@@ -29,7 +29,8 @@ describe("PIN pepper", () => {
     expect(await bcrypt.compare("482915", hash.slice(3))).toBe(false);
     expect(await verifyPin("482915", hash)).toBe(true);
     expect(await verifyPin("482916", hash)).toBe(false);
-  });
+    // Real cost-12 bcrypt, three times: slow on a busy machine.
+  }, 30_000);
 
   it("refuses to hash without the pepper", async () => {
     const saved = process.env.PIN_PEPPER;
