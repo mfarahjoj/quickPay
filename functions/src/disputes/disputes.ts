@@ -267,8 +267,8 @@ export const openDispute = https.onCall(
     notifyQuietly(
       against,
       "dispute_opened",
-      "A payment was disputed",
-      `A customer disputed a payment of $${(amountCents / 100).toFixed(2)}. Reply within ${Math.round(
+      kind === "refund_requested" ? "Refund requested" : "A payment was disputed",
+      `${kind === "refund_requested" ? "A customer asked for a refund of" : "A customer disputed a payment of"} $${(amountCents / 100).toFixed(2)}. Reply within ${Math.round(
         rates.disputeResponseHours / 24
       )} days.`,
       disputeId

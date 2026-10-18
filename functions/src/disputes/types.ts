@@ -22,6 +22,12 @@
 export const DISPUTES_COLLECTION = "disputes";
 
 export type DisputeKind =
+  /**
+   * Not a complaint: "I'd like my money back" (returned goods, cancelled
+   * order). The merchant answers it with Accept & refund; if they don't, it
+   * goes to ops like any other claim (plan 3.2).
+   */
+  | "refund_requested"
   /** Paid, but the goods or service never came. */
   | "not_received"
   /** Charged more than agreed. */
@@ -39,6 +45,7 @@ export type DisputeKind =
   | "other";
 
 export const DISPUTE_KINDS: readonly DisputeKind[] = [
+  "refund_requested",
   "not_received",
   "wrong_amount",
   "unauthorised",
@@ -77,7 +84,7 @@ export type DisputeSide = "payer" | "payee";
  * be raised as `other`, so nobody is ever left without a way to complain.
  */
 const ALLOWED: Partial<Record<DisputedKind, Partial<Record<DisputeSide, DisputeKind[]>>>> = {
-  shop_payment: { payer: ["not_received", "wrong_amount", "unauthorised", "refund_not_given"] },
+  shop_payment: { payer: ["refund_requested", "not_received", "wrong_amount", "unauthorised", "refund_not_given"] },
   online_payment: { payer: ["not_received", "wrong_amount", "unauthorised", "refund_not_given"] },
   p2p: { payer: ["wrong_recipient", "unauthorised", "not_received"] },
   // A cash-in moves value agent → customer, so the customer is the payee.

@@ -658,5 +658,6 @@
   "transactions.kindLabel.card_topup": "شحن بالبطاقة",
   "transactions.kindLabel.mobile_money_topup": "شحن عبر المال المتنقل",
   "transactions.kindLabel.mobile_money_cashout": "سحب عبر المال المتنقل",
-  "transactions.kindLabel.remittance": "حوالة"
+  "transactions.kindLabel.remittance": "حوالة",
+  "disputes.kind.refund_requested": "طلب استرداد المبلغ"
 }

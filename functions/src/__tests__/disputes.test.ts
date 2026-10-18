@@ -414,7 +414,7 @@ describe("getDisputeOptions", () => {
     seedSmall();
     const payer = await options({ data: { transactionId: "pay-1" }, auth: { uid: "cust-1" } });
     expect(payer.data).toMatchObject({
-      allowedKinds: ["not_received", "wrong_amount", "unauthorised", "refund_not_given", "other"],
+      allowedKinds: ["refund_requested", "not_received", "wrong_amount", "unauthorised", "refund_not_given", "other"],
       existingDisputeId: null,
       windowOpen: true,
       hasCounterparty: true,
@@ -434,5 +434,59 @@ describe("getDisputeOptions", () => {
   it("refuses outsiders", async () => {
     seedSmall();
     await expect(options({ data: { transactionId: "pay-1" }, auth: { uid: "x" } })).rejects.toThrow(/weren't part/);
+  });
+});
+
+describe("refund requests (3.2)", () => {
+  let open: any;
+  let refundPayment: any;
+  let restore: (() => void) | undefined;
+  const { Timestamp } = admin.firestore;
+
+  beforeAll(async () => {
+    if (!admin.apps.length) admin.initializeApp();
+    open = test.wrap((await import("../disputes/disputes")).openDispute);
+    refundPayment = test.wrap((await import("../qr-payments/refundPayment")).refundPayment);
+  });
+
+  afterEach(() => {
+    restore?.();
+    restore = undefined;
+  });
+
+  it("is answered by the merchant's Accept & refund, which closes it", async () => {
+    mockedPin.mockReset().mockResolvedValue(true);
+    const db = fakeFirestore({
+      "users/cust-1": { accountType: "customer" },
+      "users/shop-1": { accountType: "merchant" },
+      "wallets/cust-1": wallet(0),
+      "wallets/shop-1": wallet(5_000),
+      "journal_entries/qrpay_q1": { type: "qr_payment" },
+      "transactions/pay-1": {
+        type: "payment",
+        kind: "merchant_payment",
+        fromUserId: "cust-1",
+        toUserId: "shop-1",
+        participants: ["cust-1", "shop-1"],
+        amount: 1_000,
+        feeCents: 10,
+        netCents: 990,
+        currency: "USD",
+        status: "completed",
+        journalEntryId: "qrpay_q1",
+        createdAt: Timestamp.fromMillis(Date.now() - 1000),
+      },
+    });
+    restore = useFakeFirestore(db);
+    const res = await open({
+      data: { transactionId: "pay-1", kind: "refund_requested", note: "Returned the shoes, wrong size" },
+      auth: { uid: "cust-1" },
+    });
+    expect(res.data.status).toBe("open");
+    expect(notifyUser).toHaveBeenCalledWith("shop-1", "dispute_opened", "Refund requested", expect.any(String), expect.any(Object));
+
+    await refundPayment({ data: { transactionId: "pay-1", pin: "123456" }, auth: { uid: "shop-1" } });
+    expect(db.get(`disputes/${res.data.disputeId}`)!.status).toBe("resolved");
+    expect(db.get("wallets/cust-1")!.balance).toBe(1_000);
   });
 });

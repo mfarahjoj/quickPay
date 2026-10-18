@@ -658,5 +658,6 @@
   "transactions.kindLabel.card_topup": "Card top-up",
   "transactions.kindLabel.mobile_money_topup": "Mobile money top-up",
   "transactions.kindLabel.mobile_money_cashout": "Mobile money withdrawal",
-  "transactions.kindLabel.remittance": "Remittance"
+  "transactions.kindLabel.remittance": "Remittance",
+  "disputes.kind.refund_requested": "Asked for a refund"
 }
