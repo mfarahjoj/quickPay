@@ -13,15 +13,15 @@ money ships to prod without explicit per-deploy authorization (CLAUDE.md).
 | #1 Self top-up mint | 1 | hotfix committed 2026-10-03 (`utils/agentGuards.ts`, 11 tests); deployed to prod 2026-10-03 (hash bc9ab2b4, from `0ac145e`). Retirement of `manualTopup` waits on D2 |
 | M Business-level monitors | 1 | committed 2026-10-03 (`ledger/activityMonitor.ts`, 17 tests, Ledger Desk section); deployed to prod 2026-10-03 (functions hash 29796837, hosting:admin); admin App Check site key still blank, so the console cannot call it yet |
 | #2 Commission round-trip | 1 | blocked on D1 |
-| #3 Unauthenticated name lookup | 2 | committed 2026-10-17 on `fix/wallet-phase1`: `createWebTopup` answers 503 (D4 taken as "disable now"; the form was already gone), not deployed |
+| #3 Unauthenticated name lookup | 2 | deployed 2026-10-18 from `fadb515`: `createWebTopup` answers 503 (D4 taken as "disable now"; the form was already gone) |
 | #4 Lockout races | 2 | deployed 2026-10-04 (`7296f76`, prod hash 39217c09) except `customerCashOut`/`agentConfirmCashOut`, held back with the cash-out hold rollout |
 | #5 Missing App Check | 2 | deployed 2026-10-04 (`3f06704`, 22 callables); `appCheckCoverage.test.ts` guards it in CI. Verified: `loginWithPin` without a token → 401 |
 | #6 Referral farming | 3 | blocked on D3 |
-| #7 Merchant profile rename | 3 | committed 2026-10-17 on `fix/wallet-phase1` (`utils/nameLock.ts`, `adminRenameMerchant`, rules checked in the emulator), not deployed. Console has no rename button yet |
-| #8 Float maker-checker structuring | 3 | committed 2026-10-17 on `fix/wallet-phase1` (`utils/rollingTotal.ts`: float per agent+direction, payouts per merchant, last 24h), not deployed. Needs the new `floatIssuances (agentId, createdAt)` index deployed first |
-| #9 Refunds on P2P/payroll | 3 | committed 2026-10-17 on `fix/wallet-phase1` (refundable = `qr_payment`/`customer_qr_payment` journal entries, `refundWindowDays` default 30 in `config/rates`), not deployed |
+| #7 Merchant profile rename | 3 | deployed 2026-10-18 from `fadb515` (`utils/nameLock.ts`, `adminRenameMerchant`, rules checked in the emulator). Console has no rename button yet |
+| #8 Float maker-checker structuring | 3 | deployed 2026-10-18 from `fadb515` (`utils/rollingTotal.ts`: float per agent+direction, payouts per merchant, last 24h). Index deployed first |
+| #9 Refunds on P2P/payroll | 3 | deployed 2026-10-18 from `fadb515` (refundable = `qr_payment`/`customer_qr_payment` journal entries, `refundWindowDays` default 30 in `config/rates`) |
 | #10 PIN in Keychain | 3 | open (needs design pass) |
-| #11 Currency mixing | 3 | committed 2026-10-17 on `fix/wallet-phase1` (`CurrencyMismatchError` in `prepareJournalEntry`, callables USD-only), not deployed |
+| #11 Currency mixing | 3 | deployed 2026-10-18 from `fadb515` (`CurrencyMismatchError` in `prepareJournalEntry`, callables USD-only); not yet in the held-back cash-out group (`customerCashOut`, `agentConfirmCashOut`, `cancelCashOut`, `expireAgentRequests`, `agentConfirmTopup`), which still run older ledger code |
 | Phase 4 lows, W3 rules tests | 4 | open |
 
 ## Phase 0 — one source for prod, before any deploy

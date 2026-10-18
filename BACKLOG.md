@@ -105,8 +105,8 @@ first. Verified open as of 2026-08-05.
   unsigned. Not yet done: checking prod `journal_entries` for existing
   `mmtopup_` / `remit_` ids (needs console access), and the guard-plus-test
   this item actually asks for.
-  *2026-10-17:* guard-plus-test committed on `fix/wallet-phase1`, not
-  deployed. Every Zaad, eDahab and Stripe stub now refuses in a deployed
+  *2026-10-17:* guard-plus-test committed on `fix/wallet-phase1`, deployed
+  2026-10-18 from `fadb515`. Every Zaad, eDahab and Stripe stub now refuses in a deployed
   function (`integrations/sandboxGuard.ts`, keyed on `K_SERVICE` without
   `FUNCTIONS_EMULATOR`). `sandboxGuard.test.ts` fails if a guard is removed,
   and also if `index.ts` exports a module that imports a stub without an
