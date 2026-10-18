@@ -19,6 +19,8 @@ export { updateProfile } from "./auth/updateProfile";
 export { submitKYC } from "./auth/submitKYC";
 export { requestAccountDeletion } from "./auth/deleteAccount";
 export { getAccountLimits } from "./auth/getAccountLimits";
+// The holder stops money leaving their own account; support unfreezes.
+export { freezeMyAccount } from "./auth/freezeMyAccount";
 
 // Wallet functions
 export { getBalance } from "./wallet/getBalance";
@@ -64,6 +66,8 @@ export { mobileMoneyWebhook } from "./topup/mobileMoneyWebhook";
 
 // User lookup (for agents)
 export { lookupUserByPhone } from "./users/lookupUser";
+// Find Agent, and agent standing after upheld disputes (plan 2.6).
+export { listAgents, adminClearAgentFlag } from "./agents/standing";
 // Customers' Send money lookup: masked name, business flag, per-caller budget.
 export { lookupRecipient } from "./users/lookupRecipient";
 

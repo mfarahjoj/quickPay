@@ -69,6 +69,12 @@ export interface Rates {
   disputeWindowDays: number;
   disputeResponseHours: number;
   disputeResolutionHours: number;
+  /**
+   * Agent standing (plan 2.6): this many upheld disputes against an agent
+   * within agentFlagWindowDays takes them out of Find Agent until ops review.
+   */
+  agentFlagUpheldDisputes: number;
+  agentFlagWindowDays: number;
 }
 
 export const DEFAULT_RATES: Rates = {
@@ -85,6 +91,8 @@ export const DEFAULT_RATES: Rates = {
   disputeWindowDays: 60,
   disputeResponseHours: 72,
   disputeResolutionHours: 168,
+  agentFlagUpheldDisputes: 3,
+  agentFlagWindowDays: 30,
 };
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
@@ -198,6 +206,13 @@ export async function getRates(): Promise<Rates> {
         1,
         720
       ),
+      agentFlagUpheldDisputes: coerceIntInRange(
+        data.agentFlagUpheldDisputes,
+        DEFAULT_RATES.agentFlagUpheldDisputes,
+        1,
+        50
+      ),
+      agentFlagWindowDays: coerceIntInRange(data.agentFlagWindowDays, DEFAULT_RATES.agentFlagWindowDays, 1, 365),
       disputeResolutionHours: coerceIntInRange(
         data.disputeResolutionHours,
         DEFAULT_RATES.disputeResolutionHours,

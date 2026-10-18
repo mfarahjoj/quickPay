@@ -414,7 +414,9 @@ export interface Notification {
     | "adjustment_posted"
     | "dispute_opened"
     | "dispute_updated"
-    | "dispute_resolved";
+    | "dispute_resolved"
+    | "account_frozen"
+    | "agent_flagged";
   title: string;
   body: string;
   data?: Record<string, string>;

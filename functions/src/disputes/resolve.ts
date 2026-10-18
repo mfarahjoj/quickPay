@@ -24,6 +24,7 @@ import { prepareAdjustment } from "../admin/adjustments";
 import { prepareRefund } from "../qr-payments/refundCore";
 import { getRates } from "../config/rates";
 import { notifyUser } from "../utils/notifications";
+import { reviewAgentStanding } from "../agents/standing";
 import {
   userAccount,
   PLATFORM_FEES,
@@ -258,6 +259,8 @@ export const adminResolveDispute = https.onCall(
           `Your dispute was upheld. ${dollars(amountCents)} is back in your wallet.`,
           `A dispute against you was upheld and ${dollars(amountCents)} was returned to the customer.`
         );
+        // Upheld against an agent counts towards their standing (2.6).
+        if (payFrom === "counterparty") await reviewAgentStanding(result.d.against);
       }
       return {
         success: true,
@@ -301,6 +304,7 @@ export const adminResolveDispute = https.onCall(
           });
           return { d, remedy, payerDebitCents, auditId };
         });
+        await reviewAgentStanding(parked.d.against);
         notifyBoth(
           parked.d,
           disputeId,
