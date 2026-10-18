@@ -90,7 +90,7 @@ export default function AboutScreen({ navigation }: Props) {
         <View style={styles.menu}>
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => openLink('https://quickpay.so/terms')}
+            onPress={() => openLink('https://zapppay.web.app/terms')}
           >
             <Text style={styles.menuText}>{t('profile.about.termsOfService')}</Text>
             <Text style={styles.menuArrow}>›</Text>
@@ -98,7 +98,7 @@ export default function AboutScreen({ navigation }: Props) {
 
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => openLink('https://quickpay.so/privacy')}
+            onPress={() => openLink('https://zapppay.web.app/privacy')}
           >
             <Text style={styles.menuText}>{t('profile.about.privacyPolicy')}</Text>
             <Text style={styles.menuArrow}>›</Text>
@@ -106,9 +106,17 @@ export default function AboutScreen({ navigation }: Props) {
 
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => openLink('https://quickpay.so/support')}
+            onPress={() => openLink('https://zapppay.web.app/support')}
           >
             <Text style={styles.menuText}>{t('profile.about.helpSupport')}</Text>
+            <Text style={styles.menuArrow}>›</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => openLink('mailto:support@zapppay.so')}
+          >
+            <Text style={styles.menuText}>{t('profile.about.emailSupport')}</Text>
             <Text style={styles.menuArrow}>›</Text>
           </TouchableOpacity>
         </View>

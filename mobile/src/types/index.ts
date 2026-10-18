@@ -70,6 +70,8 @@ export interface Transaction {
   refundOfTransactionId?: string;
   /** Set when someone disputed this transaction. */
   disputeId?: string;
+  /** What the row really is (shop payment, transfer...); see getTransactions. */
+  kind?: string;
 }
 
 export interface QRCodeData {

@@ -96,6 +96,12 @@ export default function TransactionDetailScreen({ navigation, route }: Props) {
             </Text>
             <Text style={styles.detailValue}>{transaction.description}</Text>
           </View>
+          {transaction.kind ? (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailKey}>{t('wallet.detail.type')}</Text>
+              <Text style={styles.detailValue}>{t(`wallet.kind.${transaction.kind}`, transaction.kind)}</Text>
+            </View>
+          ) : null}
           <View style={styles.detailRow}>
             <Text style={styles.detailKey}>{t('wallet.detail.paymentMethod')}</Text>
             <Text style={styles.detailValue}>{t('wallet.detail.walletBalance')}</Text>

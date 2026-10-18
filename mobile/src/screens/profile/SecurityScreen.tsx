@@ -45,6 +45,10 @@ export default function SecurityScreen({ navigation }: Props) {
   const [biometryType, setBiometryType] = useState<string | undefined>();
   const [showBiometricPin, setShowBiometricPin] = useState(false);
   const [biometricPin, setBiometricPin] = useState('');
+  // Freeze my account: confirm, then PIN.
+  const [freezing, setFreezing] = useState(false);
+  const [freezePin, setFreezePin] = useState('');
+  const [frozenNow, setFrozenNow] = useState(false);
 
   const biometricLabel = useMemo(
     () => t(getBiometricLabelKey(biometryType)),
@@ -60,6 +64,38 @@ export default function SecurityScreen({ navigation }: Props) {
       }
     );
   }, []);
+
+  /**
+   * Stop all money leaving the account until support reactivates it. For a
+   * lost phone or a payment the customer doesn't recognise. Receiving still
+   * works, so nothing in flight is stranded.
+   */
+  const confirmFreeze = () =>
+    Alert.alert(t('profile.security.freezeConfirmTitle'), t('profile.security.freezeConfirmMessage'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('profile.security.freeze'), style: 'destructive', onPress: () => setFreezing(true) },
+    ]);
+
+  const handleFreeze = async () => {
+    if (freezePin.length !== 6) return;
+    setLoading(true);
+    try {
+      await functions().httpsCallable('freezeMyAccount')({ pin: freezePin });
+      setFreezing(false);
+      setFrozenNow(true);
+      Alert.alert(t('profile.security.frozenTitle'), t('profile.security.frozenMessage'));
+    } catch (err: any) {
+      Alert.alert(
+        t('common.error'),
+        err?.code === 'functions/permission-denied'
+          ? t('profile.security.pinIncorrect')
+          : t('profile.security.freezeFailed')
+      );
+    } finally {
+      setFreezePin('');
+      setLoading(false);
+    }
+  };
 
   const handleBiometricDisable = () => {
     Alert.alert(
@@ -281,6 +317,39 @@ export default function SecurityScreen({ navigation }: Props) {
             <Text style={styles.comingSoon}>
               {t('profile.security.biometricsUnavailable')}
             </Text>
+          )}
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t('profile.security.freezeTitle')}</Text>
+          <Text style={styles.sectionDesc}>{t('profile.security.freezeDesc')}</Text>
+          {frozenNow ? (
+            <Text style={styles.comingSoon}>{t('profile.security.frozenMessage')}</Text>
+          ) : freezing ? (
+            <View style={styles.biometricPinForm}>
+              <Text style={styles.label}>{t('profile.security.freezeEnterPin')}</Text>
+              <PinInput value={freezePin} onChange={setFreezePin} />
+              <View style={styles.buttonRow}>
+                <Button
+                  title={t('common.cancel')}
+                  onPress={() => {
+                    setFreezing(false);
+                    setFreezePin('');
+                  }}
+                  variant="darkGhost"
+                  style={styles.cancelButton}
+                />
+                <Button
+                  title={t('profile.security.freeze')}
+                  onPress={handleFreeze}
+                  loading={loading}
+                  disabled={freezePin.length !== 6}
+                  style={styles.submitButton}
+                />
+              </View>
+            </View>
+          ) : (
+            <Button title={t('profile.security.freeze')} onPress={confirmFreeze} variant="darkGhost" />
           )}
         </View>
       </ScrollView>

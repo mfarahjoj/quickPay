@@ -13,6 +13,7 @@ import { useAuth } from '../hooks/useAuth';
 import { logger } from '../utils/logger';
 
 export type DisputeKind =
+  | 'refund_requested'
   | 'not_received'
   | 'wrong_amount'
   | 'unauthorised'

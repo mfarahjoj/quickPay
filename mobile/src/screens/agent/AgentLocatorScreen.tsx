@@ -18,7 +18,7 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
-import { firestore } from '../../services/firebase.config';
+import { functions } from '../../services/firebase.config';
 import { triggerHaptic } from '../../services/haptics.service';
 import { colors, typography, spacing, borderRadius } from '../../theme';
 import { Springs } from '../../constants/springs';
@@ -117,19 +117,15 @@ export default function AgentLocatorScreen() {
 
   const fetchAgents = useCallback(async () => {
     try {
-      const snap = await firestore()
-        .collection('users')
-        .where('accountType', 'in', ['topup_agent', 'agent_merchant'])
-        .where('isActive', '==', true)
-        .get();
-
-      const list: Agent[] = snap.docs
-        .map((doc) => ({ id: doc.id, ...(doc.data() as Omit<Agent, 'id'>) }))
-        .filter((u) => u.agentInfo?.isActive !== false);
-
-      list.sort((a, b) =>
-        (a.agentInfo?.area || '').localeCompare(b.agentInfo?.area || '')
-      );
+      // listAgents, not a direct read: other users' docs are owner-only in the
+      // rules, and the server leaves out frozen, unlisted and flagged agents.
+      const res = await functions().httpsCallable('listAgents')();
+      const list: Agent[] = ((res.data as any)?.data?.agents ?? []).map((a: any) => ({
+        id: a.id,
+        fullName: a.name,
+        phoneNumber: a.phoneNumber ?? '',
+        agentInfo: { ...a.agentInfo, isActive: true },
+      }));
 
       setAgents(list);
     } catch (e) {
