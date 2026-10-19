@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Text, TouchableOpacity, StyleSheet, Alert, SafeAreaView, View } from 'react-native';
+import { AppState, Text, TouchableOpacity, StyleSheet, Alert, SafeAreaView, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { BiometryTypes } from 'react-native-biometrics';
 import Animated, {
@@ -45,7 +45,15 @@ export default function AppLockScreen({ onUnlock }: Props) {
   const [pin, setPin] = useState('');
   const [pinError, setPinError] = useState('');
   const [loading, setLoading] = useState(false);
-  const biometricTriggered = useRef(false);
+  const mounted = useRef(true);
+  const prompting = useRef(false);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   const label = useMemo(() => t(getBiometricLabelKey(biometryType)), [biometryType, t]);
 
@@ -75,10 +83,10 @@ export default function AppLockScreen({ onUnlock }: Props) {
     opacity: glowOpacity.value,
   }));
 
-  const performUnlock = useCallback((pin?: string) => {
+  const performUnlock = useCallback((unlockedPin?: string) => {
     // A successful unlock (PIN, or Face ID backed by the keychain PIN)
     // proves the PIN on this install.
-    markPinVerifiedThisInstall(pin);
+    markPinVerifiedThisInstall(unlockedPin);
     glowScale.value = withSpring(1.5, Springs.celebration);
     glowOpacity.value = withTiming(0, { duration: 260 });
     setTimeout(onUnlock, 260);
@@ -89,6 +97,7 @@ export default function AppLockScreen({ onUnlock }: Props) {
   useEffect(() => {
     Promise.all([isBiometricAvailable(), isBiometricEnabled()]).then(
       ([{ available, biometryType: bt }, enabled]) => {
+        if (!mounted.current) return;
         setBiometryType(bt);
         const usable = available && enabled;
         setBioUsable(usable);
@@ -99,30 +108,65 @@ export default function AppLockScreen({ onUnlock }: Props) {
 
   // The server checks Face ID now (a hardware-key signature, review D11),
   // rather than trusting a prompt on the phone.
+  // One prompt at a time: a second Face ID request while one is on screen
+  // fails at once and would drop the person to the PIN pad.
   const handleBiometricUnlock = useCallback(async () => {
-    const credential = await getBiometricCredential(t('common.unlockQuickPay'));
-    if (!credential) {
-      setShowPinFallback(true);
-      return;
-    }
+    if (prompting.current) return;
+    prompting.current = true;
     try {
+      const credential = await getBiometricCredential(t('common.unlockQuickPay'));
+      if (!mounted.current) return;
+      if (!credential) {
+        setShowPinFallback(true);
+        return;
+      }
       if (await validatePin(credential)) {
-        performUnlock(/^\d{6}$/.test(credential) ? credential : undefined);
-      } else {
+        if (mounted.current) performUnlock(/^\d{6}$/.test(credential) ? credential : undefined);
+      } else if (mounted.current) {
         setShowPinFallback(true);
       }
     } catch (err) {
+      if (!mounted.current) return;
       if (err instanceof PinLockoutError) setPinError(pinLockoutMessage(err, t));
       setShowPinFallback(true);
+    } finally {
+      prompting.current = false;
     }
   }, [t, performUnlock]);
 
+  // Held in a ref so the effect below doesn't re-run (and re-prompt) each time
+  // the parent re-renders with a new onUnlock.
+  const biometricUnlockRef = useRef(handleBiometricUnlock);
+  biometricUnlockRef.current = handleBiometricUnlock;
+
+  const promptBiometric = useCallback(() => {
+    setShowPinFallback(false);
+    setPin('');
+    setPinError('');
+    biometricUnlockRef.current();
+  }, []);
+
+  // Ask for Face ID by itself once per visit to the foreground. iOS refuses
+  // the prompt while the app isn't active (cold start before the first
+  // frame, or a lock that went up in the background), which used to drop
+  // straight to the PIN pad, so wait for 'active'. Coming back from another
+  // app asks again even if the last attempt ended on the PIN pad. The Face ID
+  // sheet itself only makes the app 'inactive', so it never re-triggers this.
   useEffect(() => {
-    if (bioUsable && !showPinFallback && !biometricTriggered.current) {
-      biometricTriggered.current = true;
-      handleBiometricUnlock();
-    }
-  }, [bioUsable, showPinFallback, handleBiometricUnlock]);
+    if (!bioUsable) return;
+    let promptedThisVisit = false;
+    const maybePrompt = () => {
+      if (promptedThisVisit || AppState.currentState !== 'active') return;
+      promptedThisVisit = true;
+      promptBiometric();
+    };
+    maybePrompt();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'background') promptedThisVisit = false;
+      else if (state === 'active') maybePrompt();
+    });
+    return () => sub.remove();
+  }, [bioUsable, promptBiometric]);
 
   const handlePinComplete = async (submittedPin: string) => {
     if (loading) return;
@@ -193,12 +237,7 @@ export default function AppLockScreen({ onUnlock }: Props) {
         <View style={styles.footer}>
           {bioUsable ? (
             <TouchableOpacity
-              onPress={() => {
-                setShowPinFallback(false);
-                setPin('');
-                setPinError('');
-                biometricTriggered.current = false;
-              }}
+              onPress={promptBiometric}
               style={styles.linkButton}
               accessibilityLabel={t('auth.appLock.useBiometricInstead', { label })}
             >

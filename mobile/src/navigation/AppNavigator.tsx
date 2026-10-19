@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -470,9 +470,16 @@ export default function AppNavigator() {
   // Only fires when `user` actually flips, so it clears the intent on sign-in
   // and sign-out without wiping it while the user is mid-way through the auth
   // stack (where `user` is still null).
+  const wasSignedIn = useRef(false);
   useEffect(() => {
-    if (!user) setAuthIntent(null);
-  }, [user]);
+    if (!user) {
+      setAuthIntent(null);
+      // Signing in again (PIN or SMS) already proves who this is; a lock left
+      // over from the session that just ended would ask a second time.
+      if (wasSignedIn.current) unlock();
+    }
+    wasSignedIn.current = !!user;
+  }, [user, unlock]);
 
   const clearAuthIntent = useCallback(() => setAuthIntent(null), []);
 
@@ -519,7 +526,10 @@ export default function AppNavigator() {
     // Only blocks the PIN-vs-SMS decision, never the welcome screen itself.
     (!user && authIntent === 'login' && deviceTrusted === null) ||
     (user != null &&
-      (pinSetupDone === null || biometricSetupDone === null || pinVerified === null));
+      (pinSetupDone === null ||
+        biometricSetupDone === null ||
+        pinVerified === null ||
+        locked === null));
 
   // Gate screens render outside NavigationContainer. Swapping root stack
   // screens during bootstrap was crashing react-native-screens on iOS.

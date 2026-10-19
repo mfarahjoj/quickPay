@@ -144,7 +144,7 @@ export async function getBiometricCredential(
   const keyId = await storedKeyId();
   if (!keyId) return legacyKeychainPin(promptMessage);
   try {
-    const challenge = await functions().httpsCallable('biometricChallenge')({});
+    const challenge = await fetchChallenge();
     const { challengeId, payload } = (challenge.data as { data: { challengeId: string; payload: string } }).data;
     const { success, signature } = await getRnBiometrics().createSignature({
       promptMessage,
@@ -163,6 +163,21 @@ export async function getBiometricCredential(
       logger.warn('Biometric approval failed:', error);
     }
     return null;
+  }
+}
+
+/**
+ * The challenge is fetched before Face ID can show. Right after a cold start
+ * the first call can fail while App Check and the connection warm up, so try
+ * once more before giving up and asking for the PIN.
+ */
+async function fetchChallenge() {
+  try {
+    return await functions().httpsCallable('biometricChallenge')({});
+  } catch (error) {
+    logger.warn('Biometric challenge failed, retrying:', error);
+    await new Promise<void>((resolve) => setTimeout(resolve, 700));
+    return functions().httpsCallable('biometricChallenge')({});
   }
 }
 
