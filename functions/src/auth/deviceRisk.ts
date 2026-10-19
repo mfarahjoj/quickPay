@@ -41,7 +41,11 @@ export const reportDeviceRisk = https.onCall(
     const db = admin.firestore();
     const userRef = db.collection("users").doc(uid);
     const batch = db.batch();
-    batch.set(userRef, { deviceRisk: { ...report, flagged } }, { merge: true });
+    // Runs at sign-in, maybe before the account is set up. Never create the
+    // user doc here: setupPin owns that.
+    if ((await userRef.get()).exists) {
+      batch.update(userRef, { deviceRisk: { ...report, flagged } });
+    }
     // Only worth a history entry when something was found.
     if (flagged) batch.set(db.collection("deviceRiskReports").doc(), { uid, ...report });
     await batch.commit();

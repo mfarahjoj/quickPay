@@ -64,6 +64,10 @@ export const setupPin = https.onCall(
       const userRef = db.collection("users").doc(userId);
       const userDoc = await userRef.get();
       const userData = userDoc.exists ? userDoc.data() : undefined;
+      // "Set up" means this ran before, not that the doc exists: the apps
+      // write a few fields on sign-in (the device check, consent), which can
+      // create the doc first. Every finished account has an accountType.
+      const isNewAccount = !userData?.accountType;
       const hasExistingPin = isStoredPinHash((await readAuth(userId, undefined, userData)).pinHash);
 
       // Both branches below write fullName, so re-running setup must not be
@@ -74,7 +78,10 @@ export const setupPin = https.onCall(
         await userRef.update({
           fullName: fullName.trim(),
           updatedAt: admin.firestore.Timestamp.now(),
+          // A PIN but no account behind it: setup was cut short. Finish it.
+          ...(isNewAccount ? newAccountFields() : {}),
         });
+        if (isNewAccount) await ensureWallet(db, userId);
 
         const pendingRole = isPrivilegedRole(accountType)
           ? await ensureRoleRequest(db, userId, accountType, {
@@ -121,46 +128,12 @@ export const setupPin = https.onCall(
           fullName: fullName.trim(),
           phoneNumber: request.auth!.token.phone_number || "",
           updatedAt: admin.firestore.Timestamp.now(),
-          ...(userDoc.exists
-            ? {}
-            : {
-                // Only ever set at creation, and never the requested role:
-                // privileged roles need admin approval. Setting it here
-                // unconditionally would downgrade an already-approved
-                // merchant who reaches this path without a stored PIN.
-                accountType: "customer",
-                kycStatus: "pending",
-                preferredLanguage: "en",
-                notificationPreferences: {
-                  push: true,
-                  transactionAlerts: true,
-                  promotions: false,
-                },
-                linkedAccounts: {},
-                dailyTransactionLimit: 50000,
-                monthlyTransactionLimit: 500000,
-                referralCode: crypto.randomBytes(4).toString("hex").toUpperCase(),
-                createdAt: admin.firestore.Timestamp.now(),
-                isActive: true,
-              }),
+          ...(isNewAccount ? newAccountFields() : {}),
         },
         { merge: true }
       );
 
-      if (!userDoc.exists) {
-        const walletRef = db.collection("wallets").doc(userId);
-        const walletDoc = await walletRef.get();
-        if (!walletDoc.exists) {
-          await walletRef.set({
-            balance: 0,
-            currency: "USD",
-            totalReceived: 0,
-            totalSent: 0,
-            lastTransactionAt: null,
-            updatedAt: admin.firestore.Timestamp.now(),
-          });
-        }
-      }
+      if (isNewAccount) await ensureWallet(db, userId);
 
       const pendingRole = isPrivilegedRole(accountType)
         ? await ensureRoleRequest(db, userId, accountType, {
@@ -170,7 +143,7 @@ export const setupPin = https.onCall(
 
       // Records the inviter only; the bonus waits for the new user's first
       // qualifying action (referral/referralBonus.ts, decision D3).
-      if (referralCode && typeof referralCode === "string" && !userDoc.exists) {
+      if (referralCode && typeof referralCode === "string" && isNewAccount) {
         await recordReferral(db, userId, referralCode.trim().toUpperCase()).catch((err) =>
           console.error("Recording referral failed (non-fatal):", err)
         );
@@ -196,3 +169,41 @@ export const setupPin = https.onCall(
     }
   }
 );
+
+/**
+ * Fields set once, when an account is first set up. Never the requested
+ * role: privileged roles need admin approval, so a new account is a
+ * customer until then.
+ */
+export function newAccountFields(): Record<string, unknown> {
+  return {
+    accountType: "customer",
+    kycStatus: "pending",
+    preferredLanguage: "en",
+    notificationPreferences: {
+      push: true,
+      transactionAlerts: true,
+      promotions: false,
+    },
+    linkedAccounts: {},
+    dailyTransactionLimit: 50000,
+    monthlyTransactionLimit: 500000,
+    referralCode: crypto.randomBytes(4).toString("hex").toUpperCase(),
+    createdAt: admin.firestore.Timestamp.now(),
+    isActive: true,
+  };
+}
+
+/** Create the account's empty wallet, unless it already has one. */
+export async function ensureWallet(db: FirebaseFirestore.Firestore, userId: string): Promise<void> {
+  const walletRef = db.collection("wallets").doc(userId);
+  if ((await walletRef.get()).exists) return;
+  await walletRef.set({
+    balance: 0,
+    currency: "USD",
+    totalReceived: 0,
+    totalSent: 0,
+    lastTransactionAt: null,
+    updatedAt: admin.firestore.Timestamp.now(),
+  });
+}

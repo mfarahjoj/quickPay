@@ -46,6 +46,13 @@ describe("reportDeviceRisk (review E14)", () => {
     expect([...db.store.keys()].some((k) => k.startsWith("deviceRiskReports/"))).toBe(true);
   });
 
+  it("never creates the user doc before setup", async () => {
+    const db = fakeFirestore({});
+    restore = useFakeFirestore(db);
+    await call({ platform: "ios" });
+    expect(db.get("users/u1")).toBeUndefined();
+  });
+
   it("records a clean phone as unflagged", async () => {
     const db = fakeFirestore({ "users/u1": {} });
     restore = useFakeFirestore(db);
