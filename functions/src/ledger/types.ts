@@ -42,7 +42,16 @@ export type JournalEntryType =
    */
   | "float_move"
   | "opening_balance"
-  | "adjustment";
+  | "adjustment"
+  /**
+   * Money reached Zapp's Zaad/eDahab collection number but couldn't be
+   * credited (unknown sender, outside the limits): float → platform:mm_suspense.
+   */
+  | "mobile_money_suspense"
+  /** An admin gives a held payment to its customer: suspense → user. */
+  | "mobile_money_assign"
+  /** An admin sent a held payment back to its sender: suspense → float. */
+  | "mobile_money_refund";
 
 export type LedgerCurrency = "USD" | "SLS";
 
@@ -66,6 +75,8 @@ export interface JournalRefs {
   apiChargeId?: string;
   /** API refund (`api_refunds`) behind a partial or full API refund. */
   apiRefundId?: string;
+  /** Collection-number payment (`mobile_money_receipts`) behind a mobile_money_* entry. */
+  receiptId?: string;
   /** Ops correction (`adjustments`) behind an adjustment entry. */
   adjustmentId?: string;
   /** Dispute whose resolution posted this entry. */

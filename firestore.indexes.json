@@ -1,6 +1,23 @@
 {
   "indexes": [
     {
+      "collectionGroup": "linked_numbers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "uid", "order": "ASCENDING" },
+        { "fieldPath": "provider", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "linked_numbers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "uid", "order": "ASCENDING" },
+        { "fieldPath": "provider", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "transactions",
       "queryScope": "COLLECTION",
       "fields": [

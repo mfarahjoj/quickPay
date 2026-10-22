@@ -33,6 +33,7 @@ export type AuditTargetType =
   | "ledger_check"
   | "api_key"
   | "adjustment"
+  | "mobile_money_receipt"
   | "dispute"
   | "rates"
   | "migration";
