@@ -16,6 +16,9 @@ export interface NotificationPreferences {
 export interface LinkedAccounts {
   zaadPhone?: string;
   edahabPhone?: string;
+  /** Set by the server once an activation payment from the number arrives. */
+  zaadVerified?: boolean;
+  edahabVerified?: boolean;
 }
 
 export interface User {
