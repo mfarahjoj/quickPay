@@ -9,6 +9,8 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings as AndroidSettings
 import android.text.InputType
@@ -35,6 +37,15 @@ class MainActivity : Activity() {
     private lateinit var queue: SmsQueue
     private lateinit var status: TextView
     private lateinit var recent: TextView
+
+    // Texts arrive and get sent while the screen is open: keep it current.
+    private val ticker = Handler(Looper.getMainLooper())
+    private val tick = object : Runnable {
+        override fun run() {
+            refresh()
+            ticker.postDelayed(this, 3_000)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -122,7 +133,12 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        refresh()
+        ticker.post(tick)
+    }
+
+    override fun onPause() {
+        ticker.removeCallbacks(tick)
+        super.onPause()
     }
 
     private fun refresh() {
