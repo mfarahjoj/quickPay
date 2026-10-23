@@ -33,12 +33,10 @@ import { triggerHaptic } from '../../services/haptics.service';
 import { functions } from '../../services/firebase.config';
 import {
   TokenResponse,
-  CUSTOMER_TOKEN_TTL_SECONDS,
   BACKOFF_SECONDS_ON_FAILURE,
-  buildOfflineReceiveToken,
-  clearReceiveTokenCache,
   isReceiveTokenPermissionError,
   readCachedReceiveToken,
+  receiveQrErrorKey,
   resolveReceiveToken,
   secondsLeftFromToken,
 } from '../../services/customerToken.service';
@@ -119,7 +117,7 @@ export default function PaymentsScreen({ route }: Props) {
   const tokenFetchInFlightRef = useRef(false);
   /** Slots for budgeted fetches; reset when leaving Receive. */
   const receiveAutoFetchRemainingRef = useRef(MAX_RECEIVE_AUTO_FETCHES);
-  /** When true, timer expiry only rotates local QR — no generateCustomerToken (permission or offline display). */
+  /** Set when the server refused for good (e.g. a merchant account): stop asking. */
   const receiveAutoSkipCloudRef = useRef(false);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
@@ -133,13 +131,6 @@ export default function PaymentsScreen({ route }: Props) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
-  }, []);
-
-  const bumpOfflineReceiveDisplay = useCallback(() => {
-    const offlineToken = buildOfflineReceiveToken();
-    if (!offlineToken) return;
-    setToken(offlineToken);
-    setSecondsLeft(CUSTOMER_TOKEN_TTL_SECONDS);
   }, []);
 
   const fetchToken = useCallback(async (opts?: { silent?: boolean; useBudget?: boolean; forceRefresh?: boolean }) => {
@@ -176,32 +167,23 @@ export default function PaymentsScreen({ route }: Props) {
 
       const data = await resolveReceiveToken({ forceRefresh });
       if (!mountedRef.current) return;
-      if (data.tokenId !== 'offline') {
-        receiveAutoSkipCloudRef.current = false;
-      }
+      receiveAutoSkipCloudRef.current = false;
       setToken(data);
       setSecondsLeft(secondsLeftFromToken(data));
       if (!opts?.silent) triggerHaptic('success');
     } catch (e: any) {
-      // No Cloud Function round-trip — refund budgeted slot (same as home screen offline QR).
+      // The call failed, so it didn't use up an automatic refresh.
       if (budgetConsumed) {
         receiveAutoFetchRemainingRef.current += 1;
       }
       if (!mountedRef.current) return;
-      if (isReceiveTokenPermissionError(e)) {
-        receiveAutoSkipCloudRef.current = true;
-      }
-      const offlineToken = buildOfflineReceiveToken();
-      if (offlineToken) {
-        await clearReceiveTokenCache().catch(() => {});
-        setToken(offlineToken);
-        setSecondsLeft(CUSTOMER_TOKEN_TTL_SECONDS);
-        if (!opts?.silent) triggerHaptic('success');
-      } else if (!opts?.silent) {
-        setTokenError(e?.message || t('payments.failedGenerateQr'));
-      } else {
-        setSecondsLeft(BACKOFF_SECONDS_ON_FAILURE);
-      }
+      // No stand-in QR: nothing can scan one, so it would only look like it works.
+      // A silent refresh only runs once the old code has run out, so either
+      // way there's no code left to show.
+      if (isReceiveTokenPermissionError(e)) receiveAutoSkipCloudRef.current = true;
+      setToken(null);
+      setTokenError(t(receiveQrErrorKey(e)));
+      if (opts?.silent) setSecondsLeft(BACKOFF_SECONDS_ON_FAILURE);
     } finally {
       tokenFetchInFlightRef.current = false;
       if (mountedRef.current) setTokenLoading(false);
@@ -240,7 +222,6 @@ export default function PaymentsScreen({ route }: Props) {
     if (tokenLoading || tokenFetchInFlightRef.current) return;
     if (receiveAutoSkipCloudRef.current) {
       clearReceiveTimer();
-      bumpOfflineReceiveDisplay();
       return;
     }
     if (receiveAutoFetchRemainingRef.current <= 0) {
@@ -250,7 +231,7 @@ export default function PaymentsScreen({ route }: Props) {
     }
     clearReceiveTimer();
     fetchToken({ silent: true, useBudget: true });
-  }, [tab, token, secondsLeft, tokenLoading, fetchToken, clearReceiveTimer, bumpOfflineReceiveDisplay]);
+  }, [tab, token, secondsLeft, tokenLoading, fetchToken, clearReceiveTimer]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
@@ -666,11 +647,6 @@ export default function PaymentsScreen({ route }: Props) {
                   backgroundColor="#FFFFFF"
                 />
               </View>
-              {token.tokenId === 'offline' ? (
-                <Text style={styles.offlineQrHint}>
-                  {t('payments.offlineQrHint')}
-                </Text>
-              ) : null}
               <View style={[
                 styles.timerPill,
                 (secondsLeft < 30 || receiveCapReached) && styles.timerPillWarning,
@@ -961,14 +937,6 @@ const styles = StyleSheet.create({
     color: colors.error,
     textAlign: 'center',
     marginBottom: spacing.md,
-  },
-  offlineQrHint: {
-    ...typography.caption,
-    color: colors.text.secondary,
-    textAlign: 'center',
-    marginTop: spacing.sm,
-    marginBottom: spacing.xs,
-    paddingHorizontal: spacing.sm,
   },
   timerPill: {
     alignSelf: 'center',

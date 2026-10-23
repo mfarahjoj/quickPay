@@ -123,22 +123,11 @@ export function secondsLeftFromToken(
   return Math.min(max, Math.max(0, raw));
 }
 
-/** Constructs an offline TokenResponse with a local QR payload, or null if no user is signed in. */
-export function buildOfflineReceiveToken(): TokenResponse | null {
-  const payload = buildLocalCustomerQrPayload();
-  if (!payload) return null;
-  return {
-    tokenId: 'offline',
-    tokenData: payload,
-    expiresAt: new Date(Date.now() + CUSTOMER_TOKEN_TTL_MS).toISOString(),
-  };
-}
-
-/** Same payload as home-screen fallback when Cloud Function is unavailable or rejects (e.g. non-customer). */
-export function buildLocalCustomerQrPayload(): string | null {
-  const uid = auth().currentUser?.uid;
-  if (!uid) return null;
-  return JSON.stringify({ type: 'quickpay_customer', uid, ts: Date.now() });
+/** Whether [token] can still be scanned at [nowMs] (a little before its server expiry). */
+export function isTokenStillValid(token: TokenResponse | null, nowMs: number = Date.now()): boolean {
+  if (!token) return false;
+  const exp = new Date(token.expiresAt).getTime();
+  return !Number.isNaN(exp) && nowMs < exp - 5_000;
 }
 
 /**
@@ -151,6 +140,14 @@ export function isReceiveTokenPermissionError(e: unknown): boolean {
   if (code === 'functions/permission-denied') return true;
   if (/only customers can generate/i.test(msg)) return true;
   return false;
+}
+
+/**
+ * What to tell someone whose receive QR couldn't be made. There is no local
+ * fallback QR: nothing scans one, so it would only look like it works.
+ */
+export function receiveQrErrorKey(e: unknown): string {
+  return isReceiveTokenPermissionError(e) ? 'dashboard.qrMerchantAccount' : 'dashboard.qrError';
 }
 
 /**
