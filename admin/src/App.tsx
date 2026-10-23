@@ -15,6 +15,7 @@ import { RoleQueue } from "./components/RoleQueue";
 import { FloatDesk } from "./components/FloatDesk";
 import { KycQueue } from "./components/KycQueue";
 import { PayoutDesk } from "./components/PayoutDesk";
+import { ZaadDesk } from "./components/ZaadDesk";
 import { LedgerBanner } from "./components/LedgerBanner";
 import { LedgerDesk } from "./components/LedgerDesk";
 import { DisputeDesk } from "./components/DisputeDesk";
@@ -23,7 +24,7 @@ import { PricingPanel } from "./components/PricingPanel";
 import { Icon, type IconName } from "./components/Icon";
 import { Avatar, BrandMark, EmptyState, Loading } from "./components/ui";
 
-type Tab = "users" | "roles" | "kyc" | "float" | "payouts" | "disputes" | "ledger" | "pricing";
+type Tab = "users" | "roles" | "kyc" | "float" | "payouts" | "zaad" | "disputes" | "ledger" | "pricing";
 
 /** `short` is what the phone tab bar shows; the sidebar uses `label`. */
 const TABS: Record<
@@ -59,6 +60,12 @@ const TABS: Record<
     short: "Payouts",
     icon: "send",
     subtitle: "Send each payout on its rail first, then record the reference here.",
+  },
+  zaad: {
+    label: "Zaad top-ups",
+    short: "Zaad",
+    icon: "inbox",
+    subtitle: "Payments to the collection number that couldn't be credited, the texts behind them, and the listener phones.",
   },
   disputes: {
     label: "Disputes",
@@ -178,7 +185,7 @@ export default function App() {
 
   const visibleTabs: Tab[] = ["users"];
   if (canReviewRoles) visibleTabs.push("roles", "kyc");
-  if (canRunFloatDesk) visibleTabs.push("float", "payouts", "disputes", "ledger");
+  if (canRunFloatDesk) visibleTabs.push("float", "payouts", "zaad", "disputes", "ledger");
   visibleTabs.push("pricing");
 
   return (
@@ -272,6 +279,8 @@ export default function App() {
             {tab === "float" && canRunFloatDesk && <FloatDesk adminUid={user.uid} isSuper={claims.adminRoles.includes("super")} />}
 
             {tab === "payouts" && canRunFloatDesk && <PayoutDesk />}
+
+            {tab === "zaad" && canRunFloatDesk && <ZaadDesk isSuper={claims.adminRoles.includes("super")} />}
 
             {tab === "disputes" && canRunFloatDesk && <DisputeDesk />}
 

@@ -151,3 +151,27 @@ describe("settings and dial codes", () => {
     expect(dialCode("edahab", "+252654000001", 1000)).toBeNull();
   });
 });
+
+describe("collectionUpdate", () => {
+  // Imported here: adminDesk pulls in firebase-admin, which the pure tests above don't need.
+  const { collectionUpdate } = require("../mobileMoney/adminDesk");
+
+  it("normalises the number and cleans the sender IDs", () => {
+    expect(collectionUpdate({ number: "063 400 0001", senderIds: " Zaad, ,Zaad,Telesom", active: true }))
+      .toEqual({ number: "+252634000001", senderIds: ["Zaad", "Telesom"], active: true });
+  });
+
+  it("can be saved switched off and half-filled", () => {
+    expect(collectionUpdate({ number: "", senderIds: [], active: false }))
+      .toEqual({ number: null, senderIds: [], active: false });
+  });
+
+  it("won't switch top-ups on without a number and a sender ID", () => {
+    expect(() => collectionUpdate({ number: "", senderIds: ["Zaad"], active: true })).toThrow(/number/);
+    expect(() => collectionUpdate({ number: "0634000001", senderIds: [], active: true })).toThrow(/sender ID/);
+  });
+
+  it("refuses a number that isn't Somali", () => {
+    expect(() => collectionUpdate({ number: "+447700900123" })).toThrow(/collection number/);
+  });
+});

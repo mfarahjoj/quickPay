@@ -16,6 +16,9 @@ import {
 
 export const RECEIPTS = "mobile_money_receipts";
 export const LINKED_NUMBERS = "linked_numbers";
+/** Listener phones (adminDesk.ts) and the texts they forwarded (listener.ts). */
+export const LISTENER_DEVICES = "listener_devices";
+export const LISTENER_SMS = "listener_sms";
 
 export type ReceiptStatus = "credited" | "held" | "assigned" | "refunded";
 

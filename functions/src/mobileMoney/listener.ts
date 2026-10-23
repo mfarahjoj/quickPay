@@ -5,11 +5,8 @@ import { decrypt } from "../utils/encryption";
 import { ENCRYPTION_KEY, PIN_PEPPER } from "../config/secrets";
 import { Provider } from "./core";
 import { parseOperatorSms } from "./parsers";
-import { processReceipt } from "./receipts";
-import { LISTENER_DEVICES } from "./adminDesk";
+import { LISTENER_DEVICES, LISTENER_SMS, processReceipt } from "./receipts";
 import { COLLECTION_CONFIG } from "./linking";
-
-export const LISTENER_SMS = "listener_sms";
 
 /**
  * Whether [header] (`t=<unix seconds>,v1=<hex>`) is HMAC-SHA256 of
