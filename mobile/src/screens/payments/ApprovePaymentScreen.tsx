@@ -89,6 +89,10 @@ export default function ApprovePaymentScreen() {
   // the list carried, then follows the live request: the shop can cancel, the
   // window can run out, and the customer pays exactly the amount shown here.
   const [liveAmount, setLiveAmount] = useState<number | null>(null);
+  // A cash-out at an agent's counter: the customer receives cash and pays the
+  // amount plus any cash-out fee from their balance.
+  const [isCashOut, setIsCashOut] = useState(false);
+  const [feeCents, setFeeCents] = useState(0);
   const [expiresAtMs, setExpiresAtMs] = useState<number | null>(null);
   // Ticks every second while the request is open, so the countdown and the
   // lock at zero both re-render (a repeated 0 alone would not).
@@ -133,6 +137,8 @@ export default function ApprovePaymentScreen() {
 
   const shownAmount = liveAmount ?? amount;
   const amountFormatted = (shownAmount / 100).toFixed(2);
+  const feeFormatted = (feeCents / 100).toFixed(2);
+  const totalFormatted = ((shownAmount + feeCents) / 100).toFixed(2);
 
   const showResult = (kind: ResultKind, message: string, title = '') => {
     resultShown.current = true;
@@ -219,6 +225,8 @@ export default function ApprovePaymentScreen() {
           const d = doc.data();
           if (!d) return;
           if (typeof d.amount === 'number') setLiveAmount(d.amount);
+          setIsCashOut(d.purpose === 'cash_out');
+          setFeeCents(d.purpose === 'cash_out' && typeof d.feeCents === 'number' ? d.feeCents : 0);
           setExpiresAtMs(
             d.expiresAt?.toMillis?.() ??
               (d.createdAt?.toMillis?.() ?? Date.now()) + LEGACY_TTL_MS,
@@ -292,7 +300,7 @@ export default function ApprovePaymentScreen() {
       setTransactionAmount(`${CURRENCY_SYMBOL}${amountFormatted}`);
       setResultKind('approved');
       setResultMessage(
-        t('payments.approve.successMessage', {
+        t(isCashOut ? 'payments.approve.cashOutSuccess' : 'payments.approve.successMessage', {
           amount: `${CURRENCY_SYMBOL}${amountFormatted}`,
           merchant: merchantName,
         })
@@ -400,7 +408,9 @@ export default function ApprovePaymentScreen() {
             </Text>
           </View>
           <Text style={styles.merchantNameLarge}>{merchantName}</Text>
-          <Text style={styles.requestLabel}>{t('payments.approve.requesting')}</Text>
+          <Text style={styles.requestLabel}>
+            {t(isCashOut ? 'payments.approve.cashOutRequesting' : 'payments.approve.requesting')}
+          </Text>
         </View>
 
         <View
@@ -408,7 +418,9 @@ export default function ApprovePaymentScreen() {
           accessibilityLabel={`Total amount ${amountFormatted} ${currency}`}
           accessibilityRole="text"
         >
-          <Text style={styles.amountCardLabel}>{t('payments.approve.totalAmount')}</Text>
+          <Text style={styles.amountCardLabel}>
+            {t(isCashOut ? 'payments.approve.cashYouReceive' : 'payments.approve.totalAmount')}
+          </Text>
           <Text style={styles.amountCardValue}>
             {CURRENCY_SYMBOL}{amountFormatted}
           </Text>
@@ -431,13 +443,15 @@ export default function ApprovePaymentScreen() {
           <View style={styles.divider} />
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>{t('common.fee')}</Text>
-            <Text style={styles.detailValue}>{CURRENCY_SYMBOL}0.00</Text>
+            <Text style={styles.detailValue}>{CURRENCY_SYMBOL}{isCashOut ? feeFormatted : '0.00'}</Text>
           </View>
           <View style={styles.divider} />
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>{t('common.total')}</Text>
+            <Text style={styles.detailLabel}>
+              {isCashOut ? t('payments.approve.fromYourBalance') : t('common.total')}
+            </Text>
             <Text style={[styles.detailValue, styles.detailValueBold]}>
-              {CURRENCY_SYMBOL}{amountFormatted}
+              {CURRENCY_SYMBOL}{isCashOut ? totalFormatted : amountFormatted}
             </Text>
           </View>
           <View style={styles.divider} />
@@ -467,7 +481,9 @@ export default function ApprovePaymentScreen() {
           accessibilityLabel={`Accept and pay ${amountFormatted} ${currency} to ${merchantName}`}
           accessibilityRole="button"
         >
-          <Text style={styles.acceptButtonText}>{t('payments.approve.acceptPay')}</Text>
+          <Text style={styles.acceptButtonText}>
+            {t(isCashOut ? 'payments.approve.acceptCashOut' : 'payments.approve.acceptPay')}
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
