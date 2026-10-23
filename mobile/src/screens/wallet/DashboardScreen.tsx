@@ -15,7 +15,13 @@ import { triggerHaptic } from '../../services/haptics.service';
 import { usePaymentRequests } from '../../hooks/usePaymentRequests';
 import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { useUserProfile } from '../../hooks/useUserProfile';
-import { resolveReceiveToken, buildLocalCustomerQrPayload } from '../../services/customerToken.service';
+import {
+  resolveReceiveToken,
+  isTokenStillValid,
+  receiveQrErrorKey,
+  secondsLeftFromToken,
+  type TokenResponse,
+} from '../../services/customerToken.service';
 import { LanguageSelector } from '../../components/LanguageSelector';
 import { QrCodeIcon } from '../../components/icons/AuthIcons';
 import Animated, {
@@ -282,6 +288,8 @@ export default function DashboardScreen({ navigation }: Props) {
   const [qrValue, setQrValue] = useState<string | null>(null);
   const [qrLoading, setQrLoading] = useState(false);
   const [qrSecondsLeft, setQrSecondsLeft] = useState(0);
+  /** The code on screen, so pressing Show again keeps it while it's still valid. */
+  const qrTokenRef = useRef<TokenResponse | null>(null);
   const qrTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const qrAutoHideRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const qrPrewarmRef = useRef<Promise<void> | null>(null);
@@ -336,8 +344,10 @@ export default function DashboardScreen({ navigation }: Props) {
     setQrSecondsLeft(0);
   }, [clearQrTimers]);
 
-  const startQrTimers = useCallback(() => {
-    setQrSecondsLeft(QR_DISPLAY_SECONDS);
+  // Shown for QR_DISPLAY_SECONDS, or until the code itself expires if sooner.
+  const startQrTimers = useCallback((token: TokenResponse) => {
+    const seconds = Math.max(1, Math.min(QR_DISPLAY_SECONDS, secondsLeftFromToken(token) - 5));
+    setQrSecondsLeft(seconds);
 
     if (qrTimerRef.current) clearInterval(qrTimerRef.current);
     qrTimerRef.current = setInterval(() => {
@@ -351,10 +361,18 @@ export default function DashboardScreen({ navigation }: Props) {
     }, 1000);
 
     if (qrAutoHideRef.current) clearTimeout(qrAutoHideRef.current);
-    qrAutoHideRef.current = setTimeout(hideQr, QR_DISPLAY_SECONDS * 1000);
+    qrAutoHideRef.current = setTimeout(hideQr, seconds * 1000);
   }, [hideQr]);
 
   const showQr = useCallback(async () => {
+    // A code is already on screen and still scannable: keep it, just show it
+    // for longer. A new one would cancel the one the customer is showing.
+    const current = qrTokenRef.current;
+    if (qrVisible && isTokenStillValid(current)) {
+      triggerHaptic('light');
+      startQrTimers(current!);
+      return;
+    }
     try {
       setQrLoading(true);
       triggerHaptic('medium');
@@ -366,27 +384,19 @@ export default function DashboardScreen({ navigation }: Props) {
         qrPrewarmRef.current = null;
       }
 
-      try {
-        const token = await resolveReceiveToken({ forceRefresh: false });
-        setQrValue(token.tokenData);
-      } catch {
-        const fallback = buildLocalCustomerQrPayload();
-        if (!fallback) {
-          Alert.alert(t('common.error'), t('dashboard.qrSignInRequired'));
-          return;
-        }
-        setQrValue(fallback);
-      }
-
+      const token = await resolveReceiveToken({ forceRefresh: false });
+      qrTokenRef.current = token;
+      setQrValue(token.tokenData);
       setQrVisible(true);
-      startQrTimers();
-    } catch (e: any) {
+      startQrTimers(token);
+    } catch (e: unknown) {
+      // No stand-in QR: nothing can scan one, so it would only look like it works.
       triggerHaptic('light');
-      Alert.alert(t('common.error'), e?.message || t('dashboard.qrError'));
+      Alert.alert(t('common.error'), t(receiveQrErrorKey(e)));
     } finally {
       setQrLoading(false);
     }
-  }, [startQrTimers, t]);
+  }, [qrVisible, startQrTimers, t]);
 
   const scrollQrIntoFocus = useCallback(() => {
     const content = scrollContentRef.current;
