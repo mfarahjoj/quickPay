@@ -24,7 +24,10 @@ export function useTransactions(status?: TransactionStatus, limit: number = 50) 
 
       const data = result.data as { success: boolean; data: Transaction[] };
       if (data.success) {
-        setTransactions(data.data);
+        // A callable sends dates as ISO strings; screens call Date methods on these.
+        setTransactions(
+          data.data.map((tx) => ({ ...tx, createdAt: new Date(tx.createdAt as unknown as string) }))
+        );
         setError(null);
       }
     } catch (err: any) {
