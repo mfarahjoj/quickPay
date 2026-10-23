@@ -8,7 +8,8 @@ import {
   validateCurrency,
 } from "../utils/validation";
 import { sendPushNotification } from "../utils/notifications";
-import { getRates } from "../config/rates";
+import { getRates, computePaymentFee } from "../config/rates";
+import { isPurpose, mayRaise } from "./counterCashOut";
 import {
   ApiResponse,
   CustomerToken,
@@ -87,6 +88,8 @@ interface CreatePaymentRequestInput {
   amount: number; // In cents
   currency: string;
   reference?: string;
+  /** "cash_out" from an agent paying out cash; a shop charge otherwise. */
+  purpose?: "payment" | "cash_out";
 }
 
 export const createPaymentRequest = https.onCall(
@@ -108,13 +111,16 @@ export const createPaymentRequest = https.onCall(
     // Must match scanCustomerToken: an agent_merchant that can scan a customer
     // token but cannot then raise the charge is stranded halfway through the
     // flow, which is worse than being refused at the scan.
-    if (
-      merchant.accountType !== "merchant" &&
-      merchant.accountType !== "agent_merchant"
-    ) {
+    const purpose = request.data?.purpose ?? "payment";
+    if (!isPurpose(purpose)) {
+      throw new https.HttpsError("invalid-argument", "purpose must be payment or cash_out");
+    }
+    if (!mayRaise(merchant.accountType, purpose)) {
       throw new https.HttpsError(
         "permission-denied",
-        "Only merchants can create payment requests"
+        purpose === "cash_out"
+          ? "Only agents can pay out cash"
+          : "Only merchants can create payment requests"
       );
     }
     // Stop a frozen merchant raising new charges against customers.
@@ -167,9 +173,11 @@ export const createPaymentRequest = https.onCall(
     const customer = customerDoc.data() as User;
     // Only the per-transaction cap: the customer has not spent anything yet,
     // and their daily total is checked when they approve.
-    await enforcePerTransactionLimit(amount, customer);
+    const { paymentRequestTtlSeconds, cashOutFeeRate } = await getRates();
+    // A cash-out's fee is fixed now, so the customer approves the exact total.
+    const feeCents = purpose === "cash_out" ? computePaymentFee(amount, cashOutFeeRate) : 0;
+    await enforcePerTransactionLimit(amount + feeCents, customer);
 
-    const { paymentRequestTtlSeconds } = await getRates();
     const now = admin.firestore.Timestamp.now();
     const expiresAt = admin.firestore.Timestamp.fromMillis(
       now.toMillis() + paymentRequestTtlSeconds * 1000
@@ -183,6 +191,7 @@ export const createPaymentRequest = https.onCall(
       currency,
       status: "pending",
       ...(reference ? { reference } : {}),
+      ...(purpose === "cash_out" ? { purpose, feeCents } : {}),
       createdAt: now,
       expiresAt,
     };
@@ -213,12 +222,14 @@ export const createPaymentRequest = https.onCall(
     }
 
     const amountFormatted = (amount / 100).toFixed(2);
-    const notifBody = reference
-      ? `${merchant.fullName} is requesting ${currency} ${amountFormatted} — ${reference}`
-      : `${merchant.fullName} is requesting ${currency} ${amountFormatted}`;
+    const notifBody = purpose === "cash_out"
+      ? `${merchant.fullName} will give you ${currency} ${amountFormatted} in cash. Approve to cash out.`
+      : reference
+        ? `${merchant.fullName} is requesting ${currency} ${amountFormatted} — ${reference}`
+        : `${merchant.fullName} is requesting ${currency} ${amountFormatted}`;
     sendPushNotification(
       token.customerId,
-      "Payment Request",
+      purpose === "cash_out" ? "Cash-out" : "Payment Request",
       notifBody,
       {
         type: "payment_request",
@@ -228,6 +239,7 @@ export const createPaymentRequest = https.onCall(
         currency,
         expiresAt: expiresAt.toDate().toISOString(),
         ...(reference ? { reference } : {}),
+        ...(purpose === "cash_out" ? { purpose, feeCents: feeCents.toString() } : {}),
       }
     ).catch((err) => console.error("Failed to notify customer:", err));
 

@@ -491,6 +491,14 @@ export interface MerchantPaymentRequest {
   currency: string;
   status: PaymentRequestStatus;
   reference?: string;
+  /**
+   * "cash_out": an agent hands the customer [amount] in cash, paid from their
+   * wallet into the agent's float (customer-qr/counterCashOut.ts). Absent on a
+   * shop payment.
+   */
+  purpose?: "payment" | "cash_out";
+  /** Cash-out only: the fee the customer pays on top, fixed when raised. */
+  feeCents?: number;
   createdAt: FirebaseFirestore.Timestamp;
   /**
    * When the customer can no longer approve. Absent on requests raised before

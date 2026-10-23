@@ -1,5 +1,6 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
+import { mayRaise } from "./counterCashOut";
 import { requireAuth } from "../utils/validation";
 import { decrypt } from "../utils/encryption";
 import { ENCRYPTION_KEY, PIN_PEPPER } from "../config/secrets";
@@ -32,13 +33,12 @@ export const scanCustomerToken = https.onCall(
     }
 
     const merchant = merchantDoc.data() as User;
-    if (
-      merchant.accountType !== "merchant" &&
-      merchant.accountType !== "agent_merchant"
-    ) {
+    // Shops scan to charge; agents (topup_agent too) scan to pay out cash.
+    // createPaymentRequest checks which of the two each account may raise.
+    if (!mayRaise(merchant.accountType, "payment") && !mayRaise(merchant.accountType, "cash_out")) {
       throw new https.HttpsError(
         "permission-denied",
-        "Only merchants can scan customer tokens"
+        "Only merchants and agents can scan customer tokens"
       );
     }
 

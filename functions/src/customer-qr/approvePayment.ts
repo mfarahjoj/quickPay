@@ -9,13 +9,14 @@ import { enforceVelocity } from "../utils/velocity";
 import {
   notifyPaymentReceived,
   notifyPaymentSent,
+  notifyUser,
 } from "../utils/notifications";
 import {
   ApiResponse,
   MerchantPaymentRequest,
   Transaction,
 } from "../types";
-import { getRates, computePaymentFee } from "../config/rates";
+import { getRates, computePaymentFee, computeCommission } from "../config/rates";
 import {
   prepareJournalEntry,
   userAccount,
@@ -23,6 +24,8 @@ import {
   PLATFORM_FEES,
 } from "../ledger";
 import { requestExpiryMillis } from "./requestExpiry";
+import { counterCashOutEntryId, counterCashOutLines } from "./counterCashOut";
+import { cashedInWithAgentSince } from "../topup/agentConfirmCashOut";
 
 interface ApprovePaymentInput {
   requestId: string;
@@ -102,7 +105,11 @@ export const approvePaymentRequest = https.onCall(
 
     // Outgoing money waits out the pause after a PIN reset. After the retry
     // check: a payment made before the reset must still get its receipt.
-    await assertResetCooldownAllows(customerId, "shop_payment", preRequest?.amount ?? 0);
+    // A cash-out at the counter is outgoing money that isn't a shop payment:
+    // refused outright during the pause, like the code-based cash-out.
+    const isCashOut = preRequest?.purpose === "cash_out";
+    const preTotal = (preRequest?.amount ?? 0) + (isCashOut ? preRequest?.feeCents ?? 0 : 0);
+    await assertResetCooldownAllows(customerId, isCashOut ? "other" : "shop_payment", preTotal);
 
     const customerData = await requireActiveAccount(customerId);
 
@@ -111,14 +118,25 @@ export const approvePaymentRequest = https.onCall(
     // Limits are checked against the requested amount before posting. The
     // transaction below re-reads the request as the authoritative copy.
     if (preRequest) {
-      await enforceTransactionLimits(
-        customerId,
-        preRequest.amount ?? 0,
-        customerData
-      );
+      await enforceTransactionLimits(customerId, preTotal, customerData);
     }
 
-    const { paymentFeeRate } = await getRates();
+    const { paymentFeeRate, cashOutCommissionRate, roundTripWindowHours } = await getRates();
+
+    // Cashing out with the agent who just cashed this customer in earns that
+    // agent no commission (the round-trip guard in agentConfirmCashOut).
+    const roundTrip =
+      isCashOut &&
+      roundTripWindowHours > 0 &&
+      (await cashedInWithAgentSince(
+        db,
+        customerId,
+        preRequest!.merchantId,
+        Date.now() - roundTripWindowHours * 3_600_000
+      ));
+    let commissionCents = 0;
+    let entryId = `custqr_${requestId}`;
+    let cashOut = false;
 
     const transactionId = db.collection("transactions").doc().id;
     let replayedTransactionId: string | undefined;
@@ -179,27 +197,50 @@ export const approvePaymentRequest = https.onCall(
       approvedCurrency = paymentReq.currency;
       approvedMerchantId = paymentReq.merchantId;
       approvedReference = paymentReq.reference;
+      cashOut = paymentReq.purpose === "cash_out";
+      // The round-trip check read the request outside this transaction. A
+      // request never changes purpose, but don't post on a stale read if it did.
+      if (cashOut !== isCashOut) {
+        throw new https.HttpsError("aborted", "The request changed; try again");
+      }
 
-      // Merchant absorbs the platform fee and receives the net.
-      feeCents = computePaymentFee(approvedAmount, paymentFeeRate);
-      netCents = approvedAmount - feeCents;
+      let lines: JournalLine[];
+      if (cashOut) {
+        // Cash-out at the counter: customer → agent float, the fee fixed when
+        // it was raised on top, commission to the agent (counterCashOut.ts).
+        feeCents = paymentReq.feeCents ?? 0;
+        commissionCents = roundTrip ? 0 : computeCommission(approvedAmount, cashOutCommissionRate);
+        netCents = approvedAmount;
+        entryId = counterCashOutEntryId(requestId);
+        lines = counterCashOutLines({
+          customerId,
+          agentId: approvedMerchantId,
+          amount: approvedAmount,
+          feeCents,
+          commissionCents,
+        });
+      } else {
+        // Merchant absorbs the platform fee and receives the net.
+        feeCents = computePaymentFee(approvedAmount, paymentFeeRate);
+        netCents = approvedAmount - feeCents;
 
-      const lines: JournalLine[] = [
-        { account: userAccount(customerId), debit: approvedAmount, credit: 0 },
-        { account: userAccount(approvedMerchantId), debit: 0, credit: netCents },
-      ];
-      if (feeCents > 0) {
-        lines.push({ account: PLATFORM_FEES, debit: 0, credit: feeCents });
+        lines = [
+          { account: userAccount(customerId), debit: approvedAmount, credit: 0 },
+          { account: userAccount(approvedMerchantId), debit: 0, credit: netCents },
+        ];
+        if (feeCents > 0) {
+          lines.push({ account: PLATFORM_FEES, debit: 0, credit: feeCents });
+        }
       }
 
       // Entry ID derives from the payment request, which resolves exactly once.
       const pending = await prepareJournalEntry(tx, {
-        entryId: `custqr_${requestId}`,
-        type: "customer_qr_payment",
+        entryId,
+        type: cashOut ? "agent_cashout" : "customer_qr_payment",
         currency: approvedCurrency as "USD" | "SLS",
         lines,
         refs: { transactionId },
-        description: "QR Payment (Customer Token)",
+        description: cashOut ? "Cash-out at an agent" : "QR Payment (Customer Token)",
         postedBy: customerId,
       });
 
@@ -210,7 +251,7 @@ export const approvePaymentRequest = https.onCall(
         // written together, so this should not happen. Settle the request on
         // the transaction that entry names rather than write a second row.
         const entrySnap = await tx.get(
-          db.collection("journal_entries").doc(`custqr_${requestId}`)
+          db.collection("journal_entries").doc(entryId)
         );
         const postedTxId = entrySnap.data()?.refs?.transactionId as string | undefined;
         tx.update(requestRef, {
@@ -225,19 +266,22 @@ export const approvePaymentRequest = https.onCall(
       pending.write(tx);
 
       const txRecord: Transaction = {
-        type: "payment",
-        kind: "merchant_payment",
+        type: cashOut ? "withdrawal" : "payment",
+        kind: cashOut ? "cash_out" : "merchant_payment",
         fromUserId: customerId,
         toUserId: approvedMerchantId,
         participants: [customerId, approvedMerchantId],
         amount: approvedAmount,
         feeCents,
         netCents,
+        ...(cashOut
+          ? { commissionCents, ...(roundTrip ? { commissionWithheld: "round_trip" as const } : {}) }
+          : {}),
         currency: approvedCurrency,
         status: "completed",
-        description: "QR Payment (Customer Token)",
+        description: cashOut ? "Cash-out at an agent" : "QR Payment (Customer Token)",
         ...(approvedReference ? { reference: approvedReference } : {}),
-        journalEntryId: `custqr_${requestId}`,
+        journalEntryId: entryId,
         createdAt: now,
         completedAt: now,
       };
@@ -265,19 +309,38 @@ export const approvePaymentRequest = https.onCall(
       };
     }
 
-    notifyPaymentReceived(
-      approvedMerchantId!,
-      netCents,
-      approvedCurrency!,
-      customerId
-    ).catch((err) => console.error("Failed to notify merchant:", err));
+    if (cashOut) {
+      const amountText = `${approvedCurrency!} ${(approvedAmount! / 100).toFixed(2)}`;
+      // The agent hands over the cash on this.
+      notifyUser(
+        approvedMerchantId!,
+        "cashout_completed",
+        "Cash-out approved",
+        `Hand over ${amountText} in cash now.`,
+        { type: "cashout_approved", transactionId, requestId }
+      ).catch((err) => console.error("Failed to notify agent:", err));
+      notifyUser(
+        customerId,
+        "cashout_completed",
+        "Cash Out Complete",
+        `You cashed out ${amountText}. Collect your cash from the agent.`,
+        { type: "cashout_complete", transactionId }
+      ).catch((err) => console.error("Failed to notify customer:", err));
+    } else {
+      notifyPaymentReceived(
+        approvedMerchantId!,
+        netCents,
+        approvedCurrency!,
+        customerId
+      ).catch((err) => console.error("Failed to notify merchant:", err));
 
-    notifyPaymentSent(
-      customerId,
-      approvedAmount!,
-      approvedCurrency!,
-      approvedMerchantId!
-    ).catch((err) => console.error("Failed to notify customer:", err));
+      notifyPaymentSent(
+        customerId,
+        approvedAmount!,
+        approvedCurrency!,
+        approvedMerchantId!
+      ).catch((err) => console.error("Failed to notify customer:", err));
+    }
 
     return {
       success: true,
