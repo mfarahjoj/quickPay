@@ -15,13 +15,14 @@ interface TransactionResponse {
   status: TransactionStatus;
   description: string;
   reference?: string;
-  createdAt: Date;
-  completedAt?: Date;
+  /** ISO 8601. */
+  createdAt: string;
+  completedAt?: string;
   isIncoming: boolean;
   otherPartyId: string;
   counterpartyName: string | null;
   counterpartyPhone: string | null;
-  refundedAt?: Date;
+  refundedAt?: string;
   refundOfTransactionId?: string;
   disputeId?: string;
   kind: TransactionKind;
@@ -146,13 +147,15 @@ export const getTransactions = https.onCall(
           status: data.status,
           description: data.description,
           reference: data.reference,
-          createdAt: data.createdAt.toDate(),
-          completedAt: data.completedAt?.toDate(),
+          // ISO strings: a callable sends a Date as {} (it copies own fields,
+          // and a Date has none), so the apps never got these dates.
+          createdAt: data.createdAt.toDate().toISOString(),
+          completedAt: data.completedAt?.toDate().toISOString(),
           isIncoming,
           otherPartyId: otherId,
           counterpartyName: party?.name ?? null,
           counterpartyPhone: party?.phone ?? null,
-          refundedAt: data.refundedAt?.toDate(),
+          refundedAt: data.refundedAt?.toDate().toISOString(),
           refundOfTransactionId: data.refundOfTransactionId,
           disputeId: data.disputeId,
           kind: kindOf(data),
