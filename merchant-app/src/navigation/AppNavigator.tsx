@@ -40,7 +40,10 @@ type MerchantStackParamList = {
     tokenId: string;
     customerName: string;
     customerId: string;
+    /** "cash_out": the agent hands over cash once the customer approves. */
+    purpose?: 'payment' | 'cash_out';
   };
+  ScanCashOut: { purpose: 'cash_out' };
   TransactionDetail: { transaction: any };
   TopupCustomer: undefined;
   TopupHistory: undefined;
@@ -235,6 +238,12 @@ function MainStackNavigator() {
         name="TopupHistory"
         getComponent={() => require('../screens/topup/TopupHistoryScreen').default}
         options={{ title: t('navigation.headers.topUpHistory') }}
+      />
+      <MainStack.Screen
+        name="ScanCashOut"
+        getComponent={() => require('../screens/scan/ScanCustomerScreen').default}
+        initialParams={{ purpose: 'cash_out' }}
+        options={{ title: t('scan.cashOut.scanTitle') }}
       />
       <MainStack.Screen
         name="ConfirmCashOut"

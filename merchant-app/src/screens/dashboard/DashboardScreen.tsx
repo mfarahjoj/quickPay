@@ -118,7 +118,9 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
     ...(isAgentRole ? [
       { key: 'topup', label: t('dashboard.quickActions.topUpCustomer'), Icon: TopUpIcon, route: 'TopupCustomer' },
       { key: 'confirmTopup', label: t('dashboard.quickActions.confirmTopUp'), Icon: TopUpIcon, route: 'ConfirmTopup' },
-      { key: 'cashout', label: t('dashboard.quickActions.confirmCashOut'), Icon: TopUpIcon, route: 'ConfirmCashOut' },
+      { key: 'cashout', label: t('dashboard.quickActions.cashOut'), Icon: ScanIcon, route: 'ScanCashOut' },
+      // The code-based cash-out, until every customer app approves at the counter.
+      { key: 'cashoutCode', label: t('dashboard.quickActions.confirmCashOut'), Icon: TopUpIcon, route: 'ConfirmCashOut' },
       { key: 'history', label: t('dashboard.quickActions.topUpHistory'), Icon: HistoryIcon, route: 'TopupHistory' },
     ] : []),
     ...(!isMerchantRole && !isAgentRole ? [

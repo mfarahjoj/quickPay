@@ -28,7 +28,14 @@ import { toCents, formatCents, sanitizeAmountInput } from '../../utils/money';
 import { callableErrorKey } from '../../utils/errors';
 
 interface Props {
-  route: { params: { tokenId: string; customerName: string; customerId: string } };
+  route: {
+    params: {
+      tokenId: string;
+      customerName: string;
+      customerId: string;
+      purpose?: 'payment' | 'cash_out';
+    };
+  };
   navigation: any;
 }
 
@@ -74,6 +81,9 @@ const formatClock = (seconds: number) =>
 export default function ChargeScreen({ route, navigation }: Props) {
   const { t } = useTranslation();
   const { tokenId, customerName } = route.params;
+  // A cash-out: the agent hands over cash once the customer approves.
+  const cashOut = route.params.purpose === 'cash_out';
+  const k = (key: string) => (cashOut ? `scan.cashOut.${key}` : `scan.charge.${key}`);
   const [amount, setAmount] = useState('');
   const [reference, setReference] = useState('');
   const [phase, setPhase] = useState<Phase>('idle');
@@ -212,7 +222,8 @@ export default function ChargeScreen({ route, navigation }: Props) {
         tokenId,
         cents,
         'USD',
-        reference.trim() || undefined,
+        cashOut ? undefined : reference.trim() || undefined,
+        cashOut ? 'cash_out' : 'payment',
       );
       // Fallbacks cover a server older than this screen, which replies with
       // the request ID alone.
@@ -230,16 +241,19 @@ export default function ChargeScreen({ route, navigation }: Props) {
   };
 
   const close = () => navigation.goBack();
-  const scanAgain = () => navigation.navigate('MainTabs', { screen: 'ScanCharge' });
+  const scanAgain = () =>
+    cashOut
+      ? navigation.navigate('ScanCashOut', { purpose: 'cash_out' })
+      : navigation.navigate('MainTabs', { screen: 'ScanCharge' });
 
   // ── Outcomes ──
   if (phase === 'approved') {
     return (
       <DarkScreen edges={[]} contentStyle={styles.resultWrap}>
         <SuccessCheckIcon size={72} />
-        <Text style={styles.resultTitle}>{t('scan.charge.paymentReceived')}</Text>
+        <Text style={styles.resultTitle}>{t(k('paymentReceived'))}</Text>
         <Text style={styles.resultAmount}>{formatCents(chargedCents)}</Text>
-        <Text style={styles.resultSubtitle}>{t('scan.charge.fromCustomer', { name: customerName })}</Text>
+        <Text style={styles.resultSubtitle}>{t(k('fromCustomer'), { name: customerName })}</Text>
         <View style={styles.resultBtn}>
           <PillButton label={t('common.done')} onPress={close} />
         </View>
@@ -250,16 +264,16 @@ export default function ChargeScreen({ route, navigation }: Props) {
   if (isOutcome(phase)) {
     const copy: Record<string, { title: string; message: string }> = {
       rejected: {
-        title: t('scan.charge.paymentDeclined'),
-        message: t('scan.charge.declinedMessage', { name: customerName }),
+        title: t(k('paymentDeclined')),
+        message: t(k('declinedMessage'), { name: customerName }),
       },
       expired: {
-        title: t('scan.charge.expiredTitle'),
-        message: t('scan.charge.expiredMessage', { name: customerName }),
+        title: t(k('expiredTitle')),
+        message: t(k('expiredMessage'), { name: customerName }),
       },
       cancelled: {
-        title: t('scan.charge.cancelledTitle'),
-        message: t('scan.charge.nothingPaid'),
+        title: t(k('cancelledTitle')),
+        message: t(k('nothingPaid')),
       },
       unknown: {
         title: t('scan.charge.unknownTitle'),
@@ -294,8 +308,8 @@ export default function ChargeScreen({ route, navigation }: Props) {
     return (
       <DarkScreen edges={[]} contentStyle={styles.resultWrap}>
         <ActivityIndicator size="large" color={ACCENT} style={styles.spinner} />
-        <Text style={styles.resultTitle}>{t('scan.charge.waitingApproval')}</Text>
-        <Text style={styles.resultSubtitle}>{t('scan.charge.confirmMessage', { name: customerName })}</Text>
+        <Text style={styles.resultTitle}>{t(k('waitingApproval'))}</Text>
+        <Text style={styles.resultSubtitle}>{t(k('confirmMessage'), { name: customerName })}</Text>
         <Text style={styles.waitingAmount}>{formatCents(chargedCents)}</Text>
         {reference.trim() ? (
           <Text style={styles.waitingRef}>{reference.trim()}</Text>
@@ -328,21 +342,25 @@ export default function ChargeScreen({ route, navigation }: Props) {
           <Text style={styles.customerName}>{customerName}</Text>
         </GlassCard>
 
-        <Text style={styles.label}>{t('scan.charge.referenceLabel')}</Text>
-        <GlassCard style={[styles.refCard, refFocused && styles.refCardFocused]}>
-          <TextInput
-            style={styles.refInput}
-            placeholder={t('scan.charge.referencePlaceholder')}
-            placeholderTextColor="rgba(255,255,255,0.25)"
-            value={reference}
-            onChangeText={setReference}
-            returnKeyType="next"
-            onFocus={() => setRefFocused(true)}
-            onBlur={() => setRefFocused(false)}
-          />
-        </GlassCard>
+{cashOut ? null : (
+          <>
+                  <Text style={styles.label}>{t('scan.charge.referenceLabel')}</Text>
+          <GlassCard style={[styles.refCard, refFocused && styles.refCardFocused]}>
+            <TextInput
+              style={styles.refInput}
+              placeholder={t('scan.charge.referencePlaceholder')}
+              placeholderTextColor="rgba(255,255,255,0.25)"
+              value={reference}
+              onChangeText={setReference}
+              returnKeyType="next"
+              onFocus={() => setRefFocused(true)}
+              onBlur={() => setRefFocused(false)}
+            />
+          </GlassCard>
+          </>
+        )}
 
-        <Text style={[styles.label, styles.amountLabel]}>{t('scan.charge.amountLabel')}</Text>
+        <Text style={[styles.label, styles.amountLabel]}>{t(k('amountLabel'))}</Text>
         <GlassCard style={[styles.amountCard, focused && styles.amountCardFocused]}>
           <Text style={styles.currency}>$</Text>
           <TextInput
@@ -360,7 +378,7 @@ export default function ChargeScreen({ route, navigation }: Props) {
 
       <View style={styles.footer}>
         <PillButton
-          label={t('scan.charge.chargeCustomer')}
+          label={t(k('chargeCustomer'))}
           onPress={handleCharge}
           loading={phase === 'sending'}
           disabled={toCents(amount) <= 0 || phase === 'sending'}

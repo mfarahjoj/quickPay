@@ -47,11 +47,18 @@ export async function createPaymentRequest(
   tokenId: string,
   amount: number,
   currency: string,
-  reference?: string
+  reference?: string,
+  purpose: 'payment' | 'cash_out' = 'payment'
 ): Promise<ChargeResult> {
   try {
     const fn = functions().httpsCallable('createPaymentRequest');
-    const result = await fn({ tokenId, amount, currency, ...(reference ? { reference } : {}) });
+    const result = await fn({
+      tokenId,
+      amount,
+      currency,
+      ...(reference ? { reference } : {}),
+      ...(purpose === 'cash_out' ? { purpose } : {}),
+    });
     const data = result.data as { success: boolean; error?: string; data: ChargeResult };
 
     if (!data.success) {

@@ -12,7 +12,7 @@ import {
   Platform,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 import { Camera, useCameraDevice } from 'react-native-vision-camera';
 import {
   CAMERA_NATIVE_AVAILABLE,
@@ -72,6 +72,9 @@ function CameraLayer({ isActive, torchOn, onScan, onDeviceReady, onPermission }:
 export default function ScanCustomerScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
+  // Opened as "Cash out" from an agent's dashboard; the Scan tab charges.
+  const purpose: 'payment' | 'cash_out' =
+    (useRoute<any>().params?.purpose as string) === 'cash_out' ? 'cash_out' : 'payment';
   const [loading, setLoading] = useState(false);
   const [manualInput, setManualInput] = useState('');
   const [hasPermission, setHasPermission] = useState<boolean | null>(
@@ -104,6 +107,7 @@ export default function ScanCustomerScreen() {
           tokenId: result.tokenId,
           customerName: result.customerName,
           customerId: result.customerId,
+          purpose,
         });
       } catch (e: any) {
         setScanError(e.message || t('scan.scanFailedMessage'));
@@ -113,7 +117,7 @@ export default function ScanCustomerScreen() {
         setLoading(false);
       }
     },
-    [loading, navigation, t]
+    [loading, navigation, t, purpose]
   );
 
   const handleManualSubmit = () => {
