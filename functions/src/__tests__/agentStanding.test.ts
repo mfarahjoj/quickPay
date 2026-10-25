@@ -4,6 +4,13 @@ import { fakeFirestore, useFakeFirestore, wallet, FakeDb } from "./helpers/fakeF
 const test = require("firebase-functions-test")();
 
 jest.mock("../auth/validatePin", () => ({ verifyUserPin: jest.fn() }));
+// Ending sessions calls Firebase Auth, which without credentials waits on a
+// metadata-server lookup that can take 30 s and time the test out.
+jest.mock("../auth/sessions", () => ({
+  ...jest.requireActual("../auth/sessions"),
+  endSessions: jest.fn().mockResolvedValue(undefined),
+}));
+
 jest.mock("../utils/notifications", () => ({
   notifyUser: jest.fn().mockResolvedValue(undefined),
 }));

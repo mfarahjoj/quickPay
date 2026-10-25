@@ -47,6 +47,7 @@ export interface Rates {
   trustedDeviceIdleDays: number;
   sessionIdleDays: number;
   phoneChangeCooldownDays: number;
+  accountDeletionGraceDays: number;
 }
 
 export type RateGroup =
@@ -367,6 +368,16 @@ export const RATE_FIELDS: { [K in keyof Rates]: RateFieldSpec } = {
     default: 7,
     min: 1,
     max: 30,
+    unit: "days",
+  },
+  accountDeletionGraceDays: {
+    group: "Sign-in and devices",
+    label: "Delete accounts after",
+    help: "Days between asking to delete an account and it being deleted. Signing back in during this time can keep the account.",
+    kind: "int",
+    default: 30,
+    min: 7,
+    max: 90,
     unit: "days",
   },
 };

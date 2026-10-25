@@ -108,6 +108,14 @@ export const adminUpdateRates = https.onCall(
       const snap = await tx.get(ref);
       const before = resolveRates(snap.exists ? snap.data() ?? {} : {});
       tx.set(ref, { ...update, updatedAt: admin.firestore.Timestamp.now(), updatedBy: actor.uid }, { merge: true });
+      // The apps sign themselves out after this long idle too, and can't read
+      // config/rates: mirror it into the public config/app_client.
+      const after = resolveRates({ ...(snap.exists ? snap.data() ?? {} : {}), ...update });
+      tx.set(
+        admin.firestore().collection("config").doc("app_client"),
+        { sessionIdleDays: after.sessionIdleDays },
+        { merge: true }
+      );
       const keys = Object.keys(update);
       return stageAuditEntry(tx, {
         actor,

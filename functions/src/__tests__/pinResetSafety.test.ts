@@ -7,6 +7,13 @@ jest.mock("../utils/encryption", () => ({
   ...jest.requireActual("../utils/encryption"),
   hashPin: jest.fn().mockResolvedValue("new-hash"),
 }));
+// Ending sessions calls Firebase Auth, which without credentials waits on a
+// metadata-server lookup that can take 30 s and time the test out.
+jest.mock("../auth/sessions", () => ({
+  ...jest.requireActual("../auth/sessions"),
+  endSessions: jest.fn().mockResolvedValue(undefined),
+}));
+
 jest.mock("../utils/notifications", () => ({
   notifyUser: jest.fn().mockResolvedValue(undefined),
 }));

@@ -22,7 +22,11 @@ export {
 } from "./auth/trustedDevice";
 export { updateProfile } from "./auth/updateProfile";
 export { submitKYC } from "./auth/submitKYC";
-export { requestAccountDeletion } from "./auth/deleteAccount";
+export {
+  requestAccountDeletion,
+  cancelAccountDeletion,
+  processAccountDeletions,
+} from "./auth/deleteAccount";
 export { getAccountLimits } from "./auth/getAccountLimits";
 // The holder stops money leaving their own account; support unfreezes.
 export { freezeMyAccount } from "./auth/freezeMyAccount";
