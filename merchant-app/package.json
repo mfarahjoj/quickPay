@@ -37,6 +37,7 @@
     "react-i18next": "^17.0.8",
     "react-native": "^0.85.3",
     "react-native-gesture-handler": "^2.14.1",
+    "react-native-haptic-feedback": "2.3.3",
     "react-native-linear-gradient": "^2.8.3",
     "react-native-nitro-image": "^0.15.2",
     "react-native-nitro-modules": "^0.37.1",

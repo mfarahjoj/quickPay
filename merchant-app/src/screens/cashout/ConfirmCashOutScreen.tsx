@@ -8,8 +8,8 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  Vibration,
-} from 'react-native';
+  } from 'react-native';
+import { triggerHaptic } from '../../services/haptics.service';
 import { CameraLayer, CAMERA_NATIVE_AVAILABLE } from '../../components/QrCameraLayer';
 import { functions } from '../../services/firebase.config';
 import {
@@ -101,7 +101,7 @@ export default function ConfirmCashOutScreen({ navigation }: Props) {
         setScanError(t('cashout.confirm.notCashOutQr'));
         return;
       }
-      Vibration.vibrate(80);
+      triggerHaptic('medium');
       askForPin(scanned);
     },
     [askForPin, t],

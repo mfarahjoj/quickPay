@@ -10,6 +10,7 @@ import {
 } from '../../services/auth.service';
 import { markPinVerifiedThisInstall } from '../../hooks/usePinVerifiedThisInstall';
 import { getDeviceCredential } from '../../services/device.service';
+import { setPendingSetupPin } from '../../services/biometric.service';
 import { accountLine } from '../../services/accountLabel';
 import { logger } from '../../utils/logger';
 import { colors, typography, spacing } from '../../theme';
@@ -53,6 +54,9 @@ export default function PinLoginScreen({ onUseCode, onBack }: Props) {
       // flag too — signOut clears it, and without this the navigator would
       // route straight to WelcomeBackScreen and ask for the same PIN again.
       await markPinVerifiedThisInstall();
+      // Signing out clears Face ID; if they turn it back on next, it can use
+      // this PIN instead of asking for it a second time.
+      setPendingSetupPin(submitted);
       // Signed in — the navigator's auth gate swaps this screen out.
     } catch (err) {
       if (err instanceof PinLockoutError) {

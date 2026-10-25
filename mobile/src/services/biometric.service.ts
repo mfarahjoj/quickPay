@@ -21,19 +21,21 @@ export interface BiometricAvailability {
   biometryType?: string;
 }
 
-// In-memory handoff of the PIN the user just created in SetupPinScreen so
-// BiometricSetupScreen can store it in the keychain without asking the user
-// to retype it seconds later. Never persisted; consumed once.
-let _pendingSetupPin: string | null = null;
+// In-memory handoff of the PIN the user just created (SetupPinScreen) or
+// just signed in with (PinLoginScreen), so BiometricSetupScreen can store it
+// in the keychain without asking for it again seconds later. Never
+// persisted; consumed once, and dropped after a few minutes.
+const PENDING_PIN_MS = 5 * 60 * 1000;
+let _pendingSetupPin: { pin: string; at: number } | null = null;
 
 export function setPendingSetupPin(pin: string): void {
-  _pendingSetupPin = pin;
+  _pendingSetupPin = { pin, at: Date.now() };
 }
 
 export function consumePendingSetupPin(): string | null {
-  const pin = _pendingSetupPin;
+  const held = _pendingSetupPin;
   _pendingSetupPin = null;
-  return pin;
+  return held && Date.now() - held.at < PENDING_PIN_MS ? held.pin : null;
 }
 
 export async function isBiometricAvailable(): Promise<BiometricAvailability> {

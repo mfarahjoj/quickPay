@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -66,15 +66,17 @@ function KeyButton({ keyLabel, onPress }: { keyLabel: string; onPress: () => voi
 
   return (
     <Pressable
+      // The digit counts on touch-down, as on the phone's own keypad. Waiting
+      // for the finger to lift made fast typing feel a beat behind.
       onPressIn={() => {
         scale.value = withTiming(0.88, { duration: 60, easing: Easing.out(Easing.quad) });
         if (isBackspace) rotateZ.value = withTiming(-15, { duration: 80 });
+        onPress();
       }}
       onPressOut={() => {
         scale.value = withSpring(1, Springs.feedback);
         if (isBackspace) rotateZ.value = withSpring(0, Springs.feedback);
       }}
-      onPress={onPress}
       accessibilityLabel={isBackspace ? 'Delete' : keyLabel}
     >
       <Animated.View
@@ -118,14 +120,24 @@ export function PinKeypad({ value, onChange, onComplete, title, subtitle, error 
     );
   }, [error, shakeX, errorGlow]);
 
+  // The PIN as of the last tap, not the last render: two quick taps can land
+  // before the parent re-renders, and building both on the same old value
+  // dropped a digit.
+  const latest = useRef(value);
+  latest.current = value;
+
   const handlePress = (key: string) => {
     triggerHaptic('light');
+    const current = latest.current;
     if (key === '⌫') {
-      onChange(value.slice(0, -1));
+      const next = current.slice(0, -1);
+      latest.current = next;
+      onChange(next);
       return;
     }
-    if (value.length >= PIN_LENGTH) return;
-    const next = value + key;
+    if (current.length >= PIN_LENGTH) return;
+    const next = current + key;
+    latest.current = next;
     onChange(next);
     if (next.length === PIN_LENGTH) onComplete?.(next);
   };

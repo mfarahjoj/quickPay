@@ -6,10 +6,10 @@ import {
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
-  Vibration,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { triggerHaptic } from '../../services/haptics.service';
 import { useTranslation } from 'react-i18next';
 import { useFocusEffect } from '@react-navigation/native';
 import { CameraLayer, CAMERA_NATIVE_AVAILABLE } from '../../components/QrCameraLayer';
@@ -140,7 +140,7 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
         setScanError(t('topup.confirm.notTopupCode'));
         return;
       }
-      Vibration.vibrate(80);
+      triggerHaptic('medium');
       askForPin(code);
     },
     [askForPin, t],

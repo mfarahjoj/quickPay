@@ -7,10 +7,10 @@ import {
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
-  Vibration,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { triggerHaptic } from '../../services/haptics.service';
 import { useTranslation } from 'react-i18next';
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 import { Camera, useCameraDevice } from 'react-native-vision-camera';
@@ -100,7 +100,7 @@ export default function ScanCustomerScreen() {
       isProcessing.current = true;
       setIsScanning(false);
       setLoading(true);
-      Vibration.vibrate(80);
+      triggerHaptic('medium');
       try {
         const result = await scanCustomerToken(tokenData);
         navigation.navigate('Charge', {
