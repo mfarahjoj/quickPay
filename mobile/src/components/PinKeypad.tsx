@@ -146,8 +146,11 @@ export function PinKeypad({ value, onChange, onComplete, title, subtitle, error 
     transform: [{ translateX: shakeX.value }],
   }));
 
+  // Fade a fixed colour by opacity. Building "rgba(…, ${alpha})" here crashed
+  // the app: near the end of the fade alpha prints as e.g. 3.4e-9, which
+  // Reanimated rejects as an invalid colour (a fatal JS error).
   const glowStyle = useAnimatedStyle(() => ({
-    backgroundColor: `rgba(255, 92, 92, ${errorGlow.value * 0.12})`,
+    opacity: errorGlow.value,
   }));
 
   return (
@@ -155,13 +158,14 @@ export function PinKeypad({ value, onChange, onComplete, title, subtitle, error 
       <Text style={styles.title}>{title}</Text>
       {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
 
-      <Animated.View style={[styles.dotsGlow, glowStyle]}>
+      <View style={styles.dotsGlow}>
+        <Animated.View pointerEvents="none" style={[styles.dotsGlowFill, glowStyle]} />
         <Animated.View style={[styles.dotsRow, dotsRowStyle]}>
           {Array.from({ length: PIN_LENGTH }).map((_, i) => (
             <PinDot key={i} filled={i < value.length} />
           ))}
         </Animated.View>
-      </Animated.View>
+      </View>
 
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
@@ -204,6 +208,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     marginTop: spacing.lg,
+  },
+  dotsGlowFill: {
+    ...StyleSheet.absoluteFill,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,92,92,0.12)',
   },
   dotsRow: {
     flexDirection: 'row',
