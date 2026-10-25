@@ -810,5 +810,8 @@
   "changePhone.failed": "Lambarkaaga lama beddeli karin. Isku day mar kale.",
   "changePhone.doneTitle": "Lambarka waa la beddelay",
   "changePhone.doneMessage": "Akoonkaagu hadda wuxuu isticmaalaa {{phone}}. Dirista lacagta waa la hakiyay ilaa {{date}}.",
-  "errors.sendingPaused": "Dirista lacagta waa la hakiyay muddo kadib dib-u-dejinta PIN-ka ama beddelka lambarka taleefanka. Helitaanku wuu shaqeynayaa."
+  "errors.sendingPaused": "Dirista lacagta waa la hakiyay muddo kadib dib-u-dejinta PIN-ka ama beddelka lambarka taleefanka. Helitaanku wuu shaqeynayaa.",
+  "deletionPending.title": "Akoonka waa la tirtiri doonaa",
+  "deletionPending.subtitle": "Waxaa la tirtiri doonaa {{date}}. Geli PIN-kaaga si aad u haysato.",
+  "deletionPending.signOut": "Ka bax oo ha la tirtiro"
 }

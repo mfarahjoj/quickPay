@@ -1180,5 +1180,17 @@
   "changePhone.failed": "تعذّر تغيير رقمك. حاول مرة أخرى.",
   "changePhone.doneTitle": "تم تغيير الرقم",
   "changePhone.doneMessage": "يستخدم حسابك الآن {{phone}}. إرسال الأموال متوقف حتى {{date}}.",
-  "payments.phoneCooldown": "إرسال الأموال متوقف حتى {{time}} لأن رقم هاتفك تغيّر مؤخرًا. لا يزال بإمكانك إنفاق {{amount}} إجمالًا في المتاجر."
+  "payments.phoneCooldown": "إرسال الأموال متوقف حتى {{time}} لأن رقم هاتفك تغيّر مؤخرًا. لا يزال بإمكانك إنفاق {{amount}} إجمالًا في المتاجر.",
+  "auth.pinLogin.subtitleFor": "تسجيل الدخول إلى {{account}}. لا حاجة لرمز على هذا الهاتف.",
+  "auth.pinLogin.notYou": "لست أنت؟ استخدم رمزًا",
+  "auth.pinLogin.wrongAccountHint": "هذا الهاتف يسجّل الدخول إلى {{account}}. إن لم يكن حسابك فاستخدم رمزًا: الأرقام السرية الخاطئة تقفل ذلك الحساب.",
+  "auth.deletionPending.title": "الحساب مجدول للحذف",
+  "auth.deletionPending.subtitle": "سيُحذف في {{date}}. أدخل رقمك السري للاحتفاظ به.",
+  "auth.deletionPending.signOut": "تسجيل الخروج وترك الحساب يُحذف",
+  "auth.noAccount.title": "لا يوجد حساب Zapp على هذا الرقم",
+  "auth.noAccount.subtitle": "لا يملك {{phone}} حساب Zapp Pay بعد.",
+  "auth.noAccount.create": "أنشئ حسابًا",
+  "auth.noAccount.otherNumber": "استخدم رقمًا آخر",
+  "dashboard.businessAccount.title": "هذا حساب تجاري",
+  "dashboard.businessAccount.body": "استلام المدفوعات ورمز QR لمتجرك والسحب النقدي للعملاء متاحة في Zapp Pay Merchant."
 }

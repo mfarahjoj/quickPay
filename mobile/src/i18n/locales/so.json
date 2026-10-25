@@ -1180,5 +1180,17 @@
   "changePhone.failed": "Lambarkaaga lama beddeli karin. Isku day mar kale.",
   "changePhone.doneTitle": "Lambarka waa la beddelay",
   "changePhone.doneMessage": "Akoonkaagu hadda wuxuu isticmaalaa {{phone}}. Dirista lacagta waa la hakiyay ilaa {{date}}.",
-  "payments.phoneCooldown": "Dirista lacagta waa la hakiyay ilaa {{time}} maxaa yeelay lambarkaaga taleefanka dhowaan ayaa la beddelay. Weli waxaad dukaamada ku qarash gareyn kartaa {{amount}} wadar ahaan."
+  "payments.phoneCooldown": "Dirista lacagta waa la hakiyay ilaa {{time}} maxaa yeelay lambarkaaga taleefanka dhowaan ayaa la beddelay. Weli waxaad dukaamada ku qarash gareyn kartaa {{amount}} wadar ahaan.",
+  "auth.pinLogin.subtitleFor": "Waxaad gelaysaa {{account}}. Taleefankan kood uma baahna.",
+  "auth.pinLogin.notYou": "Adigu ma tihid? Isticmaal kood",
+  "auth.pinLogin.wrongAccountHint": "Taleefankani wuxuu galaa {{account}}. Haddii aadan adigu ahayn, kood isticmaal: PIN khaldan wuxuu xiraa akoonkaas.",
+  "auth.deletionPending.title": "Akoonka waa la tirtiri doonaa",
+  "auth.deletionPending.subtitle": "Waxaa la tirtiri doonaa {{date}}. Geli PIN-kaaga si aad u haysato.",
+  "auth.deletionPending.signOut": "Ka bax oo ha la tirtiro",
+  "auth.noAccount.title": "Nambarkan akoon Zapp ah kuma jiro",
+  "auth.noAccount.subtitle": "{{phone}} weli akoon Zapp Pay ah ma laha.",
+  "auth.noAccount.create": "Samee akoon",
+  "auth.noAccount.otherNumber": "Isticmaal nambar kale",
+  "dashboard.businessAccount.title": "Kani waa akoon ganacsi",
+  "dashboard.businessAccount.body": "Lacag qaadashada, QR-ka dukaankaaga iyo lacag bixinta macaamiisha waxay ku jiraan Zapp Pay Merchant."
 }

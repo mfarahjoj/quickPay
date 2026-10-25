@@ -810,5 +810,8 @@
   "changePhone.failed": "تعذّر تغيير رقمك. حاول مرة أخرى.",
   "changePhone.doneTitle": "تم تغيير الرقم",
   "changePhone.doneMessage": "يستخدم حسابك الآن {{phone}}. إرسال الأموال متوقف حتى {{date}}.",
-  "errors.sendingPaused": "إرسال الأموال متوقف لفترة بعد إعادة تعيين رمز PIN أو تغيير رقم الهاتف. الاستلام لا يزال يعمل."
+  "errors.sendingPaused": "إرسال الأموال متوقف لفترة بعد إعادة تعيين رمز PIN أو تغيير رقم الهاتف. الاستلام لا يزال يعمل.",
+  "deletionPending.title": "الحساب مجدول للحذف",
+  "deletionPending.subtitle": "سيُحذف في {{date}}. أدخل رقمك السري للاحتفاظ به.",
+  "deletionPending.signOut": "تسجيل الخروج وترك الحساب يُحذف"
 }

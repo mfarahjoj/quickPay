@@ -810,5 +810,8 @@
   "changePhone.failed": "Couldn't change your number. Try again.",
   "changePhone.doneTitle": "Number changed",
   "changePhone.doneMessage": "Your account now uses {{phone}}. Sending money is paused until {{date}}.",
-  "errors.sendingPaused": "Sending money is paused for a while after a PIN reset or a phone number change. Receiving still works."
+  "errors.sendingPaused": "Sending money is paused for a while after a PIN reset or a phone number change. Receiving still works.",
+  "deletionPending.title": "Account scheduled for deletion",
+  "deletionPending.subtitle": "It will be deleted on {{date}}. Enter your PIN to keep it.",
+  "deletionPending.signOut": "Sign out and let it be deleted"
 }

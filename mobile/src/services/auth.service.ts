@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
-import { auth, functions } from './firebase.config';
+import { auth, firestore, functions } from './firebase.config';
+import { firstName, maskPhone } from './accountLabel';
 import { clearReceiveTokenCache } from './customerToken.service';
 import { unregisterPushNotifications } from './notification.service';
 import {
@@ -223,6 +224,33 @@ function deviceName(): string {
   return Platform.OS === 'ios' ? 'iPhone' : 'Android phone';
 }
 
+/** First name and masked number of the signed-in account, for the PIN sign-in screen. */
+async function currentAccountLabel(): Promise<{ name?: string; phone?: string }> {
+  const user = auth().currentUser;
+  let name: string | undefined;
+  try {
+    const snap = await firestore().collection('users').doc(user?.uid ?? '-').get();
+    name = firstName(snap.data()?.fullName);
+  } catch {
+    // The number alone still tells people whose account it is.
+  }
+  return { name, phone: maskPhone(user?.phoneNumber) };
+}
+
+/**
+ * Phones trusted before the PIN sign-in screen named the account have a
+ * credential without a label: add it, once, while signed in. No-op otherwise.
+ */
+export async function labelTrustedDevice(): Promise<void> {
+  try {
+    const cred = await getDeviceCredential();
+    if (!cred || cred.label || !auth().currentUser) return;
+    await storeDeviceCredential({ ...cred, label: await currentAccountLabel() });
+  } catch (error) {
+    logger.warn('Labelling the trusted device failed:', error);
+  }
+}
+
 /**
  * Mint and store this device's trusted-device credential, so the next sign-in
  * here can use the PIN instead of an SMS code. Safe to call repeatedly — it
@@ -249,7 +277,7 @@ export async function registerTrustedDevice(): Promise<void> {
       return;
     }
 
-    await storeDeviceCredential({ deviceId, deviceSecret });
+    await storeDeviceCredential({ deviceId, deviceSecret, label: await currentAccountLabel() });
   } catch (error) {
     logger.warn('Trusted-device registration failed:', error);
   }

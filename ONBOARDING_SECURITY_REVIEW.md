@@ -149,3 +149,20 @@ Already done well:
 - OWASP MASVS v2: MASVS-AUTH (authentication), MASVS-STORAGE (no secrets on device), MASVS-RESILIENCE (device integrity). <https://mas.owasp.org/MASVS/>
 - Firebase Auth: SMS region policy and abuse prevention for phone sign-in. <https://firebase.google.com/docs/auth/web/phone-auth>
 - Firebase Admin `revokeRefreshTokens` for ending sessions. <https://firebase.google.com/docs/auth/admin/manage-sessions>
+
+---
+
+## Login-flow review (2026-10-25)
+
+Every sign-in scenario traced through the code: sign-up, sign-up with a number that has an account, log in with one that hasn't, reopening, signing back in on the same phone, a new phone, deleting and reinstalling (iPhone and Android), forgot PIN, wrong PINs, 30 days idle, lost phone, number change, account deletion, and a merchant opening the customer app. Fixed on `fix/login-flows`:
+
+| # | Finding | Fix |
+|---|---|---|
+| 1 | Account deletion never deleted anything; the app promised "within 30 days" | Request ends every session and forgets trusted phones; `processAccountDeletions` deletes due accounts daily (sign-in record, PIN secrets, push tokens, personal details; an anonymous tombstone keeps the ledger whole); signing back in during the wait offers Keep my account; `accountDeletionGraceDays` setting |
+| 2 | PIN-only sign-in didn't say whose account; someone else on a shared phone typing their own PIN could hard-lock the owner | The screen shows "Hodan · 063 ••• 3864" and "Not you? Use a code", made prominent after a wrong PIN |
+| 3 | iPhone: deleting the app left the Firebase session and Keychain items, so a reinstall opened signed in | Both apps clear them on the first launch of a fresh install (`installGuard`); installs that just updated are left alone |
+| 3b | Android 12+: `allowBackup="false"` doesn't stop device-to-device transfer, which would carry the session to a new phone | `dataExtractionRules` exclude everything from cloud backup and device transfer, both apps |
+| 4 | A shop or agent opening the customer app got its business account with no explanation | Home screen notice pointing to Zapp Pay Merchant |
+| 5 | Both apps hard-coded the 30-day idle sign-out the console makes editable | `sessionIdleDays` mirrored into `config/app_client`; both apps read it |
+| 6 | Somtel numbers may not receive codes (Firebase "Error code:39" seen on another project) | Not a code fix: test a Somtel (62/65/66) sign-up before launch; if blocked, raise it with Firebase support |
+| 7 | "Log in" with a number that has no account silently started a sign-up; abandoned sign-ups left empty sign-in records | "No Zapp account on this number": create one or use another number; the daily job removes week-old empty phone sign-ins |

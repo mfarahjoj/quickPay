@@ -1,8 +1,9 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Alert, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { guardFreshInstall } from './services/installGuard';
 import AppNavigator, { navigationRef } from './navigation/AppNavigator';
 import { UpdateRequired } from './components/UpdateRequired';
 import { useUpdateGate } from './hooks/useUpdateGate';
@@ -93,7 +94,12 @@ function AppContent() {
 }
 
 export default function App() {
-  return <AppContent />;
+  // Nothing else runs until a reinstall's leftover session is gone.
+  const [installChecked, setInstallChecked] = useState(false);
+  useEffect(() => {
+    guardFreshInstall().finally(() => setInstallChecked(true));
+  }, []);
+  return installChecked ? <AppContent /> : null;
 }
 
 const styles = StyleSheet.create({

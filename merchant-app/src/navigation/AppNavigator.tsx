@@ -9,6 +9,8 @@ import MerchantOnboardingNavigator from './MerchantOnboardingNavigator';
 import RoleReviewPendingScreen from '../screens/auth/RoleReviewPendingScreen';
 import { confirmSignOut } from '../utils/confirmSignOut';
 import { AppLockGate } from '../components/security/AppLockGate';
+import { DeletionPendingScreen } from '../components/security/DeletionPendingScreen';
+import { useDeletionPending } from '../hooks/useDeletionPending';
 import { useIdleSignOut } from '../hooks/useIdleSignOut';
 import { useDeviceIntegrity } from '../hooks/useDeviceIntegrity';
 import { ConsentGate } from '../components/legal/ConsentGate';
@@ -349,6 +351,7 @@ export default function AppNavigator() {
   const { loading, state, requestedRole, rejectionReason } = useMerchantOnboardingGate();
   useIdleSignOut(!!user);
   useDeviceIntegrity(!!user);
+  const deletionDueAt = useDeletionPending(user?.uid);
 
   // A rejected applicant who chooses to try again is sent back through
   // onboarding. Local because there is nothing to persist: submitting writes a
@@ -362,8 +365,13 @@ export default function AppNavigator() {
 
   // Avoid mounting NavigationContainer during bootstrap — swapping root stack
   // screens while auth/onboarding state resolves crashes react-native-screens on iOS.
-  if (loading) {
+  if (loading || (user && deletionDueAt === undefined)) {
     return <BootstrapLoading />;
+  }
+
+  // Signed back in while the account waits to be deleted: keep it (PIN) or leave.
+  if (user && deletionDueAt) {
+    return <DeletionPendingScreen dueAt={deletionDueAt} />;
   }
 
   if (user && (state === 'onboarding' || (state === 'rejected' && reapplying))) {

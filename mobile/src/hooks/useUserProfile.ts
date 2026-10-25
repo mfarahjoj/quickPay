@@ -18,7 +18,7 @@ export interface UserProfile {
   gender?: 'male' | 'female' | 'other';
   address?: UserAddress;
   preferredLanguage: PreferredLanguage;
-  accountType: 'customer' | 'merchant';
+  accountType: 'customer' | 'merchant' | 'topup_agent' | 'agent_merchant';
   kycStatus: KycStatus;
   notificationPreferences: NotificationPreferences;
   linkedAccounts: LinkedAccounts;

@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { Header } from '../../components/Header';
 import { Button } from '../../components/Button';
 import { PinInput } from '../../components/PinInput';
+import { signOut } from '../../services/auth.service';
 import { functions } from '../../services/firebase.config';
 import { colors, typography, spacing, borderRadius } from '../../theme';
 
@@ -55,9 +56,11 @@ export default function AboutScreen({ navigation }: Props) {
       const data = result.data as { success: boolean; message?: string; error?: string };
 
       if (data.success) {
+        // Every session on the account has just ended, this one included.
         Alert.alert(
           t('profile.about.deletionRequested'),
-          data.message ?? t('profile.about.deletionMessage')
+          data.message ?? t('profile.about.deletionMessage'),
+          [{ text: t('common.ok'), onPress: () => signOut().catch(() => undefined) }]
         );
       } else {
         Alert.alert(t('common.error'), data.error ?? t('profile.about.deleteFailed'));

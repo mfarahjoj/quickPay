@@ -18,6 +18,12 @@ const ACCOUNT = 'quickpay_device';
 export interface DeviceCredential {
   deviceId: string;
   deviceSecret: string;
+  /**
+   * Whose account this phone signs in to, shown on the PIN sign-in screen so
+   * someone else on a shared phone doesn't type their own PIN into it (and
+   * lock the owner out). First name and a masked number only.
+   */
+  label?: { name?: string; phone?: string };
 }
 
 export async function getDeviceCredential(): Promise<DeviceCredential | null> {
@@ -28,7 +34,7 @@ export async function getDeviceCredential(): Promise<DeviceCredential | null> {
     const parsed = JSON.parse(stored.password) as Partial<DeviceCredential>;
     if (!parsed?.deviceId || !parsed?.deviceSecret) return null;
 
-    return { deviceId: parsed.deviceId, deviceSecret: parsed.deviceSecret };
+    return { deviceId: parsed.deviceId, deviceSecret: parsed.deviceSecret, label: parsed.label };
   } catch (error) {
     // A corrupt or unreadable entry just means "not trusted" — fall back to SMS.
     logger.warn('Failed to read device credential:', error);

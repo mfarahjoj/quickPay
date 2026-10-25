@@ -1180,5 +1180,17 @@
   "changePhone.failed": "Couldn't change your number. Try again.",
   "changePhone.doneTitle": "Number changed",
   "changePhone.doneMessage": "Your account now uses {{phone}}. Sending money is paused until {{date}}.",
-  "payments.phoneCooldown": "Sending money is paused until {{time}} because your phone number changed recently. You can still spend {{amount}} in total at shops."
+  "payments.phoneCooldown": "Sending money is paused until {{time}} because your phone number changed recently. You can still spend {{amount}} in total at shops.",
+  "auth.pinLogin.subtitleFor": "Signing in to {{account}}. No code needed on this phone.",
+  "auth.pinLogin.notYou": "Not you? Use a code",
+  "auth.pinLogin.wrongAccountHint": "This phone signs in to {{account}}. If that isn't you, use a code instead: wrong PINs lock that account.",
+  "auth.deletionPending.title": "Account scheduled for deletion",
+  "auth.deletionPending.subtitle": "It will be deleted on {{date}}. Enter your PIN to keep it.",
+  "auth.deletionPending.signOut": "Sign out and let it be deleted",
+  "auth.noAccount.title": "No Zapp account on this number",
+  "auth.noAccount.subtitle": "{{phone}} doesn't have a Zapp Pay account yet.",
+  "auth.noAccount.create": "Create an account",
+  "auth.noAccount.otherNumber": "Use a different number",
+  "dashboard.businessAccount.title": "This is a business account",
+  "dashboard.businessAccount.body": "Taking payments, your shop QR and customer cash-outs are in Zapp Pay Merchant."
 }

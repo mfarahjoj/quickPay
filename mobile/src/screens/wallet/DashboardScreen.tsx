@@ -501,6 +501,16 @@ export default function DashboardScreen({ navigation }: Props) {
         </TouchableOpacity>
       )}
 
+      {/* One phone number is one account in both apps: a shop or agent that
+          opens this app sees its business account, where Show QR and the
+          customer cash-out don't apply. */}
+      {profile && profile.accountType !== 'customer' && (
+        <View style={styles.businessBanner}>
+          <Text style={styles.businessBannerTitle}>{t('dashboard.businessAccount.title')}</Text>
+          <Text style={styles.businessBannerText}>{t('dashboard.businessAccount.body')}</Text>
+        </View>
+      )}
+
       {/* Pending requests */}
       {pendingRequests.length > 0 && (
         <View style={styles.pendingSection}>
@@ -843,6 +853,23 @@ const styles = StyleSheet.create({
   errorBannerText: {
     ...typography.bodySemibold,
     color: colors.dark.error,
+  },
+  businessBanner: {
+    backgroundColor: colors.dark.glass,
+    borderWidth: 1,
+    borderColor: colors.dark.glassBorder,
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+  },
+  businessBannerTitle: {
+    ...typography.bodySemibold,
+    color: colors.dark.text,
+  },
+  businessBannerText: {
+    ...typography.body,
+    color: colors.dark.textDim,
+    marginTop: 4,
   },
 
   // ─── Header ───

@@ -12,7 +12,7 @@ import { useBiometricSetupDone } from '../hooks/useBiometricSetupDone';
 import { usePinVerifiedThisInstall } from '../hooks/usePinVerifiedThisInstall';
 import { useAppLock } from '../hooks/useAppLock';
 import { hasDeviceCredential } from '../services/device.service';
-import { registerTrustedDevice } from '../services/auth.service';
+import { labelTrustedDevice, registerTrustedDevice, signOut } from '../services/auth.service';
 import { View, StyleSheet, ActivityIndicator, Linking } from 'react-native';
 import { parsePaymentLink, type PaymentLink } from '../services/paymentLink.service';
 import { colors } from '../theme';
@@ -25,6 +25,9 @@ import PinLoginScreen from '../screens/auth/PinLoginScreen';
 import SetupPinScreen from '../screens/auth/SetupPinScreen';
 import BiometricSetupScreen from '../screens/auth/BiometricSetupScreen';
 import WelcomeBackScreen from '../screens/auth/WelcomeBackScreen';
+import DeletionPendingScreen from '../screens/auth/DeletionPendingScreen';
+import NoAccountScreen from '../screens/auth/NoAccountScreen';
+import { useDeletionPending } from '../hooks/useDeletionPending';
 
 export const navigationRef = createNavigationContainerRef<MainStackParamList>();
 
@@ -431,6 +434,7 @@ export default function AppNavigator() {
   const { done: pinVerified, refresh: refreshPinVerified, markDone: markPinVerified } =
     usePinVerifiedThisInstall();
   const { locked, unlock } = useAppLock();
+  const deletionDueAt = useDeletionPending(user?.uid);
 
   // A zapppay://send link waits here until the app is signed in and unlocked:
   // every gate below renders outside the NavigationContainer, so the container
@@ -505,6 +509,8 @@ export default function AppNavigator() {
       registerTrustedDevice()
         .then(() => setDeviceTrusted(true))
         .catch(() => {});
+      // Phones trusted before the PIN sign-in screen named the account.
+      labelTrustedDevice();
     }
   }, [user, pinSetupDone, pinVerified]);
 
@@ -526,7 +532,8 @@ export default function AppNavigator() {
     // Only blocks the PIN-vs-SMS decision, never the welcome screen itself.
     (!user && authIntent === 'login' && deviceTrusted === null) ||
     (user != null &&
-      (pinSetupDone === null ||
+      (deletionDueAt === undefined ||
+        pinSetupDone === null ||
         biometricSetupDone === null ||
         pinVerified === null ||
         locked === null));
@@ -557,6 +564,20 @@ export default function AppNavigator() {
     );
   }
 
+  // Signed back in while the account waits to be deleted: keep it (PIN) or leave.
+  if (user && deletionDueAt) {
+    return (
+      <DeletionPendingScreen
+        dueAt={deletionDueAt}
+        onKept={() => {
+          // The PIN was just checked on the server.
+          markPinVerified();
+          unlock();
+        }}
+      />
+    );
+  }
+
   if (user && locked) {
     return (
       <AppLockScreen
@@ -566,6 +587,18 @@ export default function AppNavigator() {
           markPinVerified();
           unlock();
         }}
+      />
+    );
+  }
+
+  // Chose Log in, but the verified number has no account: say so rather than
+  // quietly start a sign-up. Creating one carries on to the PIN screen.
+  if (user && pinSetupDone === false && (authIntent === 'login' || authIntent === 'login-sms')) {
+    return (
+      <NoAccountScreen
+        phone={user.phoneNumber}
+        onCreate={() => setAuthIntent('signup')}
+        onOtherNumber={() => signOut().catch(() => undefined)}
       />
     );
   }
