@@ -535,6 +535,8 @@
   "auth.appLock.invalidPinTitle": "PIN-ka waa khalad",
   "auth.appLock.invalidPinMessage": "Fadlan isku day mar kale.",
   "auth.appLock.verifyError": "Lama xaqiijin karo PIN. Fadlan isku day mar kale.",
+  "auth.appLock.biometricReset": "{{label}} waa laga beddelay taleefankan, sidaas darteed waa ka xiran yahay Zapp Pay. Geli PIN-kaaga, kadibna dib uga shid Amniga.",
+  "auth.welcomeBack.biometricEnableFailed": "Lama shidi karin {{label}}. Waxaad mar kale isku dayi kartaa Amniga.",
   "onboarding.slide1.titleLead": "Bixi qof kasta.",
   "onboarding.slide1.titleAccent": "Isla markiiba.",
   "onboarding.slide2.titleLead": "Ammaan.",

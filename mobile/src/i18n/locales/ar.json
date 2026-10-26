@@ -535,6 +535,8 @@
   "auth.appLock.invalidPinTitle": "رمز PIN غير صالح",
   "auth.appLock.invalidPinMessage": "يرجى المحاولة مرة أخرى.",
   "auth.appLock.verifyError": "تعذر التحقق من PIN. يرجى المحاولة مرة أخرى.",
+  "auth.appLock.biometricReset": "تم تغيير {{label}} على هذا الهاتف، لذا تم إيقافه في Zapp Pay. أدخل رمز PIN ثم فعّله مجددًا من الأمان.",
+  "auth.welcomeBack.biometricEnableFailed": "تعذر تفعيل {{label}}. يمكنك المحاولة مرة أخرى من الأمان.",
   "onboarding.slide1.titleLead": "ادفع لأي شخص.",
   "onboarding.slide1.titleAccent": "فوراً.",
   "onboarding.slide2.titleLead": "الأمان.",

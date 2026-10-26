@@ -535,6 +535,8 @@
   "auth.appLock.invalidPinTitle": "Invalid PIN",
   "auth.appLock.invalidPinMessage": "Please try again.",
   "auth.appLock.verifyError": "Could not verify PIN. Please try again.",
+  "auth.appLock.biometricReset": "{{label}} changed on this phone, so it's off for Zapp Pay. Enter your PIN, then turn it on again in Security.",
+  "auth.welcomeBack.biometricEnableFailed": "Couldn't turn on {{label}}. You can try again in Security.",
   "onboarding.slide1.titleLead": "Pay anyone.",
   "onboarding.slide1.titleAccent": "Instantly.",
   "onboarding.slide2.titleLead": "Security.",

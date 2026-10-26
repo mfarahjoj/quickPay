@@ -17,6 +17,7 @@ import {
   isBiometricEnabled,
   getBiometricCredential,
   isBiometricAvailable,
+  prepareBiometricApproval,
 } from '../../services/biometric.service';
 import { colors, typography, spacing, borderRadius } from '../../theme';
 import { CURRENCY_SYMBOL } from '../../config/constants';
@@ -62,6 +63,7 @@ export default function PaymentConfirmScreen({ navigation, route }: Props) {
       ([enabled, { available, biometryType: bt }]) => {
         setBiometricAvailable(enabled && available);
         setBiometryType(bt);
+        if (enabled && available) prepareBiometricApproval();
       }
     );
   }, []);

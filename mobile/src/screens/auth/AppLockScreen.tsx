@@ -17,7 +17,7 @@ import { LockIcon } from '../../components/icons/AuthIcons';
 import { PinKeypad } from '../../components/PinKeypad';
 import ResetPinScreen from './ResetPinScreen';
 import {
-  getBiometricCredential,
+  unlockWithBiometrics,
   isBiometricAvailable,
   isBiometricEnabled,
 } from '../../services/biometric.service';
@@ -106,33 +106,32 @@ export default function AppLockScreen({ onUnlock }: Props) {
     );
   }, []);
 
-  // The server checks Face ID now (a hardware-key signature, review D11),
-  // rather than trusting a prompt on the phone.
+  // Opening the app is checked on the phone: the hardware key only signs
+  // after Face ID passes. Asking the server as well (challenge, approve,
+  // validate) took three calls to us-central1, over 15 seconds when they
+  // were cold, and any hiccup dropped to the PIN pad. Payments still get a
+  // server-checked approval (getBiometricCredential).
   // One prompt at a time: a second Face ID request while one is on screen
   // fails at once and would drop the person to the PIN pad.
   const handleBiometricUnlock = useCallback(async () => {
     if (prompting.current) return;
     prompting.current = true;
     try {
-      const credential = await getBiometricCredential(t('common.unlockQuickPay'));
+      const result = await unlockWithBiometrics(t('common.unlockQuickPay'));
       if (!mounted.current) return;
-      if (!credential) {
-        setShowPinFallback(true);
+      if (result === 'ok') {
+        performUnlock();
         return;
       }
-      if (await validatePin(credential)) {
-        if (mounted.current) performUnlock(/^\d{6}$/.test(credential) ? credential : undefined);
-      } else if (mounted.current) {
-        setShowPinFallback(true);
+      if (result === 'unavailable') {
+        setBioUsable(false);
+        setPinError(t('auth.appLock.biometricReset', { label }));
       }
-    } catch (err) {
-      if (!mounted.current) return;
-      if (err instanceof PinLockoutError) setPinError(pinLockoutMessage(err, t));
       setShowPinFallback(true);
     } finally {
       prompting.current = false;
     }
-  }, [t, performUnlock]);
+  }, [t, label, performUnlock]);
 
   // Held in a ref so the effect below doesn't re-run (and re-prompt) each time
   // the parent re-renders with a new onUnlock.

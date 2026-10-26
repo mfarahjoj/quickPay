@@ -143,9 +143,12 @@ export default function WelcomeBackScreen({ onComplete }: Props) {
       await enableBiometricKey(verifiedPin);
       await setBiometricEnabled(true);
     } catch (err) {
-      // Keychain hiccups shouldn't block entry — user can enable in Security.
+      // Say so and stay here: carrying on looked like it worked, and the
+      // person only found out at the lock screen. Skip still gets them in.
       logger.warn('Welcome-back biometric enable failed:', err);
       await setBiometricEnabled(false).catch(() => {});
+      setBioError(t('auth.welcomeBack.biometricEnableFailed', { label }));
+      return;
     } finally {
       setLoading(false);
     }

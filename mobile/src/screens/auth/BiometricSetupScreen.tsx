@@ -184,6 +184,8 @@ export default function BiometricSetupScreen({ onComplete }: Props) {
   const [pinError, setPinError] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
   const [showReset, setShowReset] = useState(false);
+  // undefined: not taken yet; null: none (or it was refused).
+  const heldPin = useRef<string | null | undefined>(undefined);
 
   const label = useMemo(() => t(getBiometricLabelKey(biometryType)), [biometryType, t]);
 
@@ -215,17 +217,25 @@ export default function BiometricSetupScreen({ onComplete }: Props) {
       setPromptError(t('auth.biometricSetup.failedPrompt'));
       return;
     }
-    // Fresh signups just created their PIN on the previous screen — use it
-    // directly instead of asking them to retype it.
-    const pendingPin = consumePendingSetupPin();
+    // The PIN was just created or entered on the previous screen — use it
+    // instead of asking for it again. Held here so trying again after a
+    // failed call (a slow first request) still has it.
+    if (heldPin.current === undefined) heldPin.current = consumePendingSetupPin();
+    const pendingPin = heldPin.current;
     if (pendingPin) {
       try {
         setLoading(true);
         await enableBiometricKey(pendingPin);
         await finishSetup(true);
         return;
-      } catch (err) {
-        logger.warn('Pending PIN keychain store failed, falling back to manual entry:', err);
+      } catch (err: any) {
+        logger.warn('Enabling biometrics with the held PIN failed:', err);
+        if (err?.code !== 'functions/permission-denied') {
+          // Network or server trouble, not the PIN: let them try again.
+          setPromptError(t('auth.biometricSetup.failedEnable'));
+          return;
+        }
+        heldPin.current = null;
       } finally {
         setLoading(false);
       }

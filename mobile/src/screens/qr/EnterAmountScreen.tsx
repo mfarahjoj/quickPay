@@ -19,6 +19,7 @@ import {
   isBiometricEnabled,
   getBiometricCredential,
   isBiometricAvailable,
+  prepareBiometricApproval,
 } from '../../services/biometric.service';
 import { colors, typography, spacing, borderRadius } from '../../theme';
 import { CURRENCY_SYMBOL } from '../../config/constants';
@@ -86,6 +87,7 @@ export default function EnterAmountScreen({ navigation, route }: Props) {
     }
     setError(null);
     idempotencyKey.current = newIdempotencyKey();
+    if (biometricAvailable) prepareBiometricApproval();
     setStep('confirm');
   };
 
