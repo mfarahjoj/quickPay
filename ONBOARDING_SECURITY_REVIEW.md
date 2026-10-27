@@ -166,3 +166,19 @@ Every sign-in scenario traced through the code: sign-up, sign-up with a number t
 | 5 | Both apps hard-coded the 30-day idle sign-out the console makes editable | `sessionIdleDays` mirrored into `config/app_client`; both apps read it |
 | 6 | Somtel numbers may not receive codes (Firebase "Error code:39" seen on another project) | Not a code fix: test a Somtel (62/65/66) sign-up before launch; if blocked, raise it with Firebase support |
 | 7 | "Log in" with a number that has no account silently started a sign-up; abandoned sign-ups left empty sign-in records | "No Zapp account on this number": create one or use another number; the daily job removes week-old empty phone sign-ins |
+
+## Customer sign-in, slow and unreliable next to the merchant app (2026-10-27)
+
+The customer app's gates against the merchant app's, on `fix/customer-login`:
+
+| # | Finding | Fix |
+|---|---|---|
+| 1 | The gates' flags ("PIN checked", "Face ID offered", "has a PIN") were read from storage once per app start. Signing out and back in without restarting kept the last session's values: an SMS sign-in, even to another account, skipped the PIN and the Face ID offer | One shared copy (`services/signInFlags.ts`): screens set a flag when they're done and the gates follow at once; cleared when the session ends |
+| 2 | Firebase ending a session by itself (the server revokes it after a PIN reset, a removed phone or a freeze) never cleared those flags, so the next SMS sign-in skipped the PIN | Cleared whenever the app is signed out, however that happened |
+| 3 | A PIN sign-in after a restart asked for the same PIN again (welcome-back) | `loginWithPin` marks the PIN checked before the session starts |
+| 4 | Every launch waited on a server read ("has a PIN?") before showing even the lock screen: seconds on a weak connection | The value kept from last time is used at once and checked behind it; only a fresh sign-in waits |
+| 5 | The lock replaced the app: every return from the background tore down every screen, and each unlock rebuilt the app on the home tab and reloaded the wallet. On Android, the camera or a file picker counts as leaving the app, so a KYC photo came back to a screen that no longer existed | The lock covers the app, as in the merchant app: unlocking is instant and returns to the same place; the wallet loads under the lock while Face ID runs |
+| 6 | Signing out waited on the network (removing the push token waits for the server, for ever offline; the Face ID key removal is a callable) | Waits at most 1.5 s; local clean-up doesn't depend on the network |
+| 7 | `loginWithPin` ran bcrypt (cost 12) on the phone's 256-bit random secret as well as on the PIN: about a quarter of a second of every PIN sign-in for no extra safety | A plain SHA-256 is kept beside the bcrypt hash (as for API keys) and checked first; phones trusted before get it at their next sign-in. bcrypt stays for a wrong secret and for `resetPin` |
+
+Not changed: the customer app still locks the moment it leaves the screen (the merchant app waits 60 s).
