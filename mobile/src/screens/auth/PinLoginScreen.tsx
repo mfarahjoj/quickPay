@@ -8,7 +8,6 @@ import {
   IncorrectPinError,
   PinLockoutError, pinLockoutMessage,
 } from '../../services/auth.service';
-import { markPinVerifiedThisInstall } from '../../hooks/usePinVerifiedThisInstall';
 import { getDeviceCredential } from '../../services/device.service';
 import { setPendingSetupPin } from '../../services/biometric.service';
 import { accountLine } from '../../services/accountLabel';
@@ -49,11 +48,9 @@ export default function PinLoginScreen({ onUseCode, onBack }: Props) {
     try {
       setLoading(true);
       setError('');
+      // Also marks the PIN checked on this install, before the session
+      // starts, so the navigator doesn't ask for it again.
       await loginWithPin(submitted);
-      // The PIN was just verified server-side, so satisfy the install-scoped
-      // flag too — signOut clears it, and without this the navigator would
-      // route straight to WelcomeBackScreen and ask for the same PIN again.
-      await markPinVerifiedThisInstall();
       // Signing out clears Face ID; if they turn it back on next, it can use
       // this PIN instead of asking for it a second time.
       setPendingSetupPin(submitted);

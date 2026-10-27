@@ -1,59 +1,60 @@
 import { useState, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import firestore from '@react-native-firebase/firestore';
-import { useAuth } from './useAuth';
+import { pinSetupDoneFlag, useFlag } from '../services/signInFlags';
 
-const PIN_SETUP_DONE_KEY = '@quickpay_pin_setup_done';
+/** A PIN was just set on the account. The gates move on at once. */
+export async function markPinSetupDone(): Promise<void> {
+  await pinSetupDoneFlag.set(true);
+}
 
-export function usePinSetupDone() {
-  const { user } = useAuth();
-  const [done, setDone] = useState<boolean | null>(null);
+/**
+ * Whether the signed-in account has a PIN, or null while that isn't known.
+ *
+ * The SERVER is authoritative: a PIN is only "set up" if the user doc
+ * actually has a PIN (`hasPin`; older accounts still carry `pinHash`).
+ * Trusting the local flag alone traps users whose Firestore doc is
+ * missing/incomplete (e.g. account never finished setup, or data was wiped)
+ * on the "enter PIN" screen, where every PIN reads as wrong because
+ * validateUserPin throws "User not found".
+ *
+ * A phone that already knows the account has one (kept from the last
+ * launch) goes straight on and checks with the server behind it; waiting
+ * for the server first held every launch on a spinner, for seconds on a weak
+ * connection. Only a fresh sign-in waits for the answer. The last known
+ * value stands when the read fails (offline).
+ */
+export function usePinSetupDone(uid: string | undefined): boolean | null {
+  const stored = useFlag(pinSetupDoneFlag);
+  const [checkedFor, setCheckedFor] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!user?.uid) {
-      setDone(null);
+    // Signed out: signing back in, even to the same account, waits for a new answer.
+    if (!uid) {
+      setCheckedFor(null);
       return;
     }
-
     let cancelled = false;
-
-    // The SERVER is authoritative: a PIN is only "set up" if the user doc
-    // actually has a PIN (`hasPin`; older accounts still carry `pinHash`). Trusting the local flag alone traps users
-    // whose Firestore doc is missing/incomplete (e.g. account never finished
-    // setup, or data was wiped) on the "enter PIN" screen, where every PIN
-    // reads as wrong because validateUserPin throws "User not found". We fall
-    // back to the local flag only when the read fails (offline).
-    (async () => {
-      try {
-        const doc = await firestore().collection('users').doc(user.uid).get();
-        const hasPin = doc.exists && (doc.data()?.hasPin === true || !!doc.data()?.pinHash);
+    firestore()
+      .collection('users')
+      .doc(uid)
+      .get()
+      .then((doc) => {
         if (cancelled) return;
-        await AsyncStorage.setItem(PIN_SETUP_DONE_KEY, hasPin ? 'true' : 'false').catch(() => {});
-        setDone(hasPin);
-      } catch {
-        // Offline / read failed — trust the last known local value.
-        try {
-          const value = await AsyncStorage.getItem(PIN_SETUP_DONE_KEY);
-          if (!cancelled) setDone(value === 'true');
-        } catch {
-          if (!cancelled) setDone(false);
-        }
-      }
-    })();
-
+        const data = doc.data();
+        pinSetupDoneFlag.set(doc.exists && (data?.hasPin === true || !!data?.pinHash));
+        setCheckedFor(uid);
+      })
+      .catch(() => {
+        if (!cancelled) setCheckedFor(uid);
+      });
     return () => {
       cancelled = true;
     };
-  }, [user?.uid]);
+  }, [uid]);
 
-  const refresh = () => {
-    AsyncStorage.getItem(PIN_SETUP_DONE_KEY)
-      .then((value) => setDone(value === 'true'))
-      .catch(() => setDone(false));
-  };
-
-  // Synchronous optimistic update — see useBiometricSetupDone for rationale.
-  const markDone = () => setDone(true);
-
-  return { done, refresh, markDone };
+  if (!uid) return null;
+  // Known to have one: go on. The read above corrects it if the server disagrees.
+  if (stored === true) return true;
+  // Otherwise the server's answer decides (it sets the flag), or offline, no PIN.
+  return checkedFor === uid ? false : null;
 }

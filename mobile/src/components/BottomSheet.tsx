@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
+  AppState,
   Modal,
   View,
   TouchableOpacity,
@@ -27,6 +28,17 @@ export function BottomSheet({
     typeof height === 'string'
       ? (SCREEN_HEIGHT * parseInt(height, 10)) / 100
       : height;
+
+  // A Modal draws above everything, the app lock included, and the lock goes
+  // up as the app leaves the screen: close the sheet then, or it would sit
+  // over the lock when the app comes back.
+  useEffect(() => {
+    if (!visible) return;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'background') onClose();
+    });
+    return () => sub.remove();
+  }, [visible, onClose]);
 
   return (
     <Modal

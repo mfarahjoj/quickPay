@@ -275,12 +275,15 @@ async function legacyKeychainPin(promptMessage: string): Promise<string | null> 
  */
 export async function disableBiometricKey(): Promise<void> {
   const keyId = await storedKeyId();
-  if (keyId) {
-    await functions()
-      .httpsCallable('removeBiometricKey')({ keyId })
-      .catch(() => undefined);
-  }
+  // The phone's half goes whatever the network does (signOut stops waiting
+  // after a moment), so the server call runs alongside, not first.
+  const removedOnServer = keyId
+    ? functions()
+        .httpsCallable('removeBiometricKey')({ keyId })
+        .catch(() => undefined)
+    : undefined;
   await AsyncStorage.removeItem(BIOMETRIC_KEY_ID).catch(() => {});
   await getRnBiometrics().deleteKeys().catch(() => undefined);
   await dropLegacyKeychainPin();
+  await removedOnServer;
 }

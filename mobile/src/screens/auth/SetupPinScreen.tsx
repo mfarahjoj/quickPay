@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { Text, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setupPin } from '../../services/auth.service';
 import { setPendingSetupPin } from '../../services/biometric.service';
 import { markPinVerifiedThisInstall } from '../../hooks/usePinVerifiedThisInstall';
+import { markPinSetupDone } from '../../hooks/usePinSetupDone';
 import { AuthLayout, AuthHeader } from '../../components/auth';
 import { isWeakPin } from '../../components/auth/CodeInput';
 import { Button } from '../../components/Button';
@@ -14,18 +14,12 @@ import { colors, typography, spacing } from '../../theme';
 
 type Step = 'name' | 'enter' | 'confirm';
 
-interface Props {
-  navigation?: any;
-  /**
-   * Called when this step is done. `verified` is true for a genuinely new PIN
-   * (the account had none), false when the account already had a PIN and the
-   * one typed here was NOT stored — the caller must then route to welcome-back
-   * verification rather than treating it as verified.
-   */
-  onComplete?: (result: { verified: boolean }) => void;
-}
-
-export default function SetupPinScreen({ onComplete }: Props) {
+/**
+ * Name and a new PIN. Finishing sets the gates' flags (services/signInFlags)
+ * and AppNavigator moves on: to Face ID setup for a new PIN, or to
+ * welcome-back when the account turned out to have one already.
+ */
+export default function SetupPinScreen() {
   const { t } = useTranslation();
   const [step, setStep] = useState<Step>('name');
   const [fullName, setFullName] = useState('');
@@ -82,18 +76,17 @@ export default function SetupPinScreen({ onComplete }: Props) {
       setLoading(true);
       setSubmitError('');
       const { alreadyHasPin } = await setupPin({ pin, fullName: fullName.trim(), accountType: 'customer', referralCode: referralCode.trim() || undefined });
-      await AsyncStorage.setItem('@quickpay_pin_setup_done', 'true');
-      if (alreadyHasPin) {
-        // The account already had a PIN and the backend kept it — the PIN
-        // typed here was never stored. Don't hand it to the biometric screen
-        // or mark it verified; the welcome-back gate will verify the real one.
-        onComplete?.({ verified: false });
-        return;
+      // If the account already had a PIN, the backend kept it — the PIN
+      // typed here was never stored. Don't hand it to the biometric screen
+      // or mark it verified; the welcome-back gate will verify the real one.
+      if (!alreadyHasPin) {
+        // Hand the fresh PIN to the biometric setup screen so it isn't retyped.
+        setPendingSetupPin(pin);
+        // Before "has a PIN" below, which moves the navigator on: without it
+        // welcome-back would come up asking for the PIN just chosen.
+        markPinVerifiedThisInstall(pin);
       }
-      await markPinVerifiedThisInstall(pin);
-      // Hand the fresh PIN to the biometric setup screen so it isn't retyped.
-      setPendingSetupPin(pin);
-      onComplete?.({ verified: true });
+      await markPinSetupDone();
     } catch (error: any) {
       setSubmitError(error.message ?? t('common.error'));
       setConfirmPin('');

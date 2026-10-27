@@ -9,6 +9,7 @@ import {
   hasDeviceCredential,
   storeDeviceCredential,
 } from './device.service';
+import { pinVerifiedFlag } from './signInFlags';
 import { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logger } from '../utils/logger';
@@ -315,7 +316,17 @@ export async function loginWithPin(pin: string): Promise<void> {
       throw new Error(responseData.error || 'Failed to sign in');
     }
 
-    await auth().signInWithCustomToken(token);
+    // The server has just checked the PIN. Mark it before the session
+    // starts: the sign-in gates move on the moment it does, and without the
+    // mark they asked for the same PIN again.
+    pinVerifiedFlag.set(true);
+    try {
+      await auth().signInWithCustomToken(token);
+    } catch (signInError) {
+      // Not signed in after all, so the next sign-in (maybe by SMS) must ask.
+      pinVerifiedFlag.set(false);
+      throw signInError;
+    }
   } catch (error: any) {
     if (error instanceof DeviceNotTrustedError) throw error;
 
@@ -352,14 +363,33 @@ export async function revokeTrustedDevices(): Promise<void> {
   }
 }
 
+/** Wait for these, but no longer than `ms`. Never throws. */
+function settleWithin(ms: number, work: Promise<unknown>[]): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    Promise.allSettled(work).then(() => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
+
+/** Enough for both tidy-ups below on a working connection. */
+const SIGN_OUT_TIDY_MS = 1500;
+
 /**
  * Sign out
  */
 export async function signOut(): Promise<void> {
   try {
     const { disableBiometricKey } = await import('./biometric.service');
-    await disableBiometricKey().catch(() => {});
-    // Clear setup flags so user goes through full setup on next login.
+    // Both need the session, so they start before it ends, but signing out
+    // doesn't wait on the network for them: removing the push token waits
+    // for the server to confirm (for ever, offline) and a callable can take a
+    // minute to fail. Requests already sent carry the session with them.
+    await settleWithin(SIGN_OUT_TIDY_MS, [disableBiometricKey(), unregisterPushNotifications()]);
+    // Clear setup flags so user goes through full setup on next login (the
+    // copies in memory go once the session has ended: AppNavigator).
     // biometric_enabled must go too — the keychain PIN it depends on was
     // just cleared, otherwise Security shows Face ID "on" with no PIN behind it.
     await AsyncStorage.multiRemove([
@@ -369,7 +399,6 @@ export async function signOut(): Promise<void> {
       '@quickpay_pin_verified_this_install',
     ]).catch(() => {});
     await clearReceiveTokenCache().catch(() => {});
-    await unregisterPushNotifications().catch(() => {});
     await auth().signOut();
   } catch (error: any) {
     logger.error('Sign out error:', error);

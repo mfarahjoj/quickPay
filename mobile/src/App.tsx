@@ -16,13 +16,14 @@ import crashlytics from '@react-native-firebase/crashlytics';
 import { firebase } from '@react-native-firebase/app-check';
 import { parseChargeLink } from './services/apiCharge.service';
 
-/** Give up on a pending deep link if the customer hasn't unlocked the app by then. */
+/** Give up on a pending deep link if the customer hasn't signed in by then. */
 const PENDING_LINK_TIMEOUT_MS = 2 * 60 * 1000;
 
 /**
  * Open the approval screen for an API charge once the app can show it. The
- * navigation container only mounts after sign-in and the app lock, so a link
- * opened from the checkout page waits for the customer to unlock first.
+ * navigation container only mounts after sign-in, so a link opened from the
+ * checkout page waits for that. The app lock covers the screen until the
+ * customer unlocks.
  */
 function navigateToApiCharge(chargeId: string) {
   const startedAt = Date.now();

@@ -8,7 +8,6 @@ import Animated, {
   withRepeat,
   withSequence,
   withTiming,
-  withSpring,
   cancelAnimation,
   Easing,
 } from 'react-native-reanimated';
@@ -24,7 +23,6 @@ import {
 import { validatePin, signOut, PinLockoutError, pinLockoutMessage } from '../../services/auth.service';
 import { markPinVerifiedThisInstall } from '../../hooks/usePinVerifiedThisInstall';
 import { colors, typography, spacing } from '../../theme';
-import { Springs } from '../../constants/springs';
 
 interface Props {
   onUnlock: () => void;
@@ -87,10 +85,9 @@ export default function AppLockScreen({ onUnlock }: Props) {
     // A successful unlock (PIN, or Face ID backed by the keychain PIN)
     // proves the PIN on this install.
     markPinVerifiedThisInstall(unlockedPin);
-    glowScale.value = withSpring(1.5, Springs.celebration);
-    glowOpacity.value = withTiming(0, { duration: 260 });
-    setTimeout(onUnlock, 260);
-  }, [glowScale, glowOpacity, onUnlock]);
+    // At once: the app is already there under the lock, where it was left.
+    onUnlock();
+  }, [onUnlock]);
 
   // Only offer/auto-prompt biometrics when the user actually enabled them —
   // users who skipped or disabled Face ID go straight to the PIN pad.

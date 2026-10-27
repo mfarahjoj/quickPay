@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Text, TouchableOpacity, View, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { BiometryTypes } from 'react-native-biometrics';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Button } from '../../components/Button';
 import { AuthLayout, AuthHeader, CodeInput, SetupSuccessScreen } from '../../components/auth';
 import { FaceIdIcon, FingerprintIcon } from '../../components/icons/AuthIcons';
@@ -15,13 +14,9 @@ import {
   consumePendingSetupPin,
 } from '../../services/biometric.service';
 import { validatePin, PinLockoutError } from '../../services/auth.service';
+import { markBiometricSetupDone } from '../../hooks/useBiometricSetupDone';
 import ResetPinScreen from './ResetPinScreen';
 import { colors, typography, spacing } from '../../theme';
-
-interface Props {
-  navigation: any;
-  onComplete?: () => void;
-}
 
 type Step = 'prompt' | 'pin';
 
@@ -173,7 +168,8 @@ function getBiometricLabelKey(biometryType?: string): string {
   return 'biometric.generic';
 }
 
-export default function BiometricSetupScreen({ onComplete }: Props) {
+/** The Face ID offer after sign-in. Continue marks it answered and AppNavigator moves on. */
+export default function BiometricSetupScreen() {
   const { t } = useTranslation();
   const [available, setAvailable] = useState<boolean | null>(null);
   const [biometryType, setBiometryType] = useState<string | undefined>();
@@ -199,10 +195,11 @@ export default function BiometricSetupScreen({ onComplete }: Props) {
     });
   }, []);
 
+  // Done is marked on the success screen's Continue: the navigator moves on
+  // the moment it's set, which would skip the success screen.
   const finishSetup = async (enabled: boolean) => {
     try {
       await setBiometricEnabled(enabled);
-      await AsyncStorage.setItem('@quickpay_biometric_setup_done', 'true');
       setShowSuccess(true);
     } catch (err) {
       logger.error('Biometric setup complete error:', err);
@@ -275,7 +272,7 @@ export default function BiometricSetupScreen({ onComplete }: Props) {
   };
 
   const handleSuccessContinue = () => {
-    onComplete?.();
+    markBiometricSetupDone();
   };
 
   if (showSuccess) {

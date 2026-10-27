@@ -19,12 +19,12 @@ import {
   verifyOTP,
   resetPin,
   getCurrentUser,
+  trustThisDeviceWithPin,
 } from '../../services/auth.service';
 import {
   isBiometricEnabled,
   enableBiometricKey,
 } from '../../services/biometric.service';
-import { markPinVerifiedThisInstall } from '../../hooks/usePinVerifiedThisInstall';
 import { logger } from '../../utils/logger';
 import { formatUntil } from '../../utils/cooldownMessage';
 import { colors, typography, spacing } from '../../theme';
@@ -121,7 +121,9 @@ export default function ResetPinScreen({ onDone, onCancel }: Props) {
           logger.warn('Keychain update after PIN reset failed:', err)
         );
       }
-      await markPinVerifiedThisInstall(pinValue);
+      // The screen that opened this marks the PIN checked in onDone: marking
+      // it here would move the navigator on before onDone could run.
+      trustThisDeviceWithPin(pinValue);
       // Say why sending money will be refused for a while, before it is.
       Alert.alert(
         t('auth.resetPin.doneTitle'),

@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useEffect, useRef } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -9,11 +9,12 @@ import { useDeviceIntegrity } from '../hooks/useDeviceIntegrity';
 import { ConsentGate } from '../components/legal/ConsentGate';
 import { usePinSetupDone } from '../hooks/usePinSetupDone';
 import { useBiometricSetupDone } from '../hooks/useBiometricSetupDone';
-import { usePinVerifiedThisInstall } from '../hooks/usePinVerifiedThisInstall';
+import { markPinVerifiedThisInstall, usePinVerifiedThisInstall } from '../hooks/usePinVerifiedThisInstall';
 import { useAppLock } from '../hooks/useAppLock';
+import { clearSignInFlags } from '../services/signInFlags';
 import { hasDeviceCredential } from '../services/device.service';
 import { labelTrustedDevice, registerTrustedDevice, signOut } from '../services/auth.service';
-import { View, StyleSheet, ActivityIndicator, Linking } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Linking, BackHandler } from 'react-native';
 import { parsePaymentLink, type PaymentLink } from '../services/paymentLink.service';
 import { colors } from '../theme';
 import OnboardingScreen from '../screens/onboarding/OnboardingScreen';
@@ -429,16 +430,17 @@ export default function AppNavigator() {
   const { user, loading: authLoading } = useAuth();
   useIdleSignOut(!!user);
   useDeviceIntegrity(!!user);
-  const { done: pinSetupDone, markDone: markPinSetupDone } = usePinSetupDone();
-  const { done: biometricSetupDone, markDone: markBiometricSetupDone } = useBiometricSetupDone();
-  const { done: pinVerified, refresh: refreshPinVerified, markDone: markPinVerified } =
-    usePinVerifiedThisInstall();
+  const pinSetupDone = usePinSetupDone(user?.uid);
+  const biometricSetupDone = useBiometricSetupDone();
+  const pinVerified = usePinVerifiedThisInstall();
   const { locked, unlock } = useAppLock();
   const deletionDueAt = useDeletionPending(user?.uid);
 
-  // A zapppay://send link waits here until the app is signed in and unlocked:
-  // every gate below renders outside the NavigationContainer, so the container
-  // only mounts — and reports ready — once there is nothing left to bypass.
+  // A zapppay://send link waits here until the app is signed in: every gate
+  // below renders outside the NavigationContainer, so the container only
+  // mounts — and reports ready — once there is nothing left to bypass. The
+  // app lock covers the container rather than replacing it, so the link's
+  // screen can open underneath and is there once the app is unlocked.
   const [pendingLink, setPendingLink] = useState<PaymentLink | null>(null);
   const [navReadyTick, setNavReadyTick] = useState(0);
 
@@ -471,19 +473,21 @@ export default function AppNavigator() {
   // available. Null means "hasn't chosen yet".
   const [authIntent, setAuthIntent] = useState<AuthIntent | null>(null);
 
-  // Only fires when `user` actually flips, so it clears the intent on sign-in
-  // and sign-out without wiping it while the user is mid-way through the auth
-  // stack (where `user` is still null).
-  const wasSignedIn = useRef(false);
+  // Only fires when `user` actually flips (or auth first settles), so it clears
+  // the intent on sign-out without wiping it while the user is mid-way through
+  // the auth stack (where `user` is still null).
   useEffect(() => {
-    if (!user) {
-      setAuthIntent(null);
-      // Signing in again (PIN or SMS) already proves who this is; a lock left
-      // over from the session that just ended would ask a second time.
-      if (wasSignedIn.current) unlock();
-    }
-    wasSignedIn.current = !!user;
-  }, [user, unlock]);
+    if (authLoading || user) return;
+    setAuthIntent(null);
+    // The gates' flags belong to one sign-in. signOut clears them on the way
+    // out, but Firebase also ends sessions by itself (the server revokes them
+    // after a PIN reset, a removed phone or a freeze), and flags left over
+    // from that let the next SMS sign-in skip the PIN.
+    clearSignInFlags();
+    // Signing in again (PIN or SMS) already proves who this is; a lock left
+    // over from the session that just ended would ask a second time.
+    unlock();
+  }, [authLoading, user, unlock]);
 
   const clearAuthIntent = useCallback(() => setAuthIntent(null), []);
 
@@ -538,128 +542,139 @@ export default function AppNavigator() {
         pinVerified === null ||
         locked === null));
 
+  // Each sign-in screen sets its flag when it's done (services/signInFlags),
+  // and the first gate whose flag isn't set yet shows.
+  //
   // Gate screens render outside NavigationContainer. Swapping root stack
   // screens during bootstrap was crashing react-native-screens on iOS.
-  if (isLoading) {
-    return <BootstrapLoading />;
-  }
+  const renderGate = () => {
+    if (isLoading) {
+      return <BootstrapLoading />;
+    }
 
-  if (!user && authIntent === null) {
-    return (
-      <OnboardingScreen
-        onGetStarted={() => setAuthIntent('signup')}
-        onLogin={() => setAuthIntent('login')}
-      />
+    if (!user && authIntent === null) {
+      return (
+        <OnboardingScreen
+          onGetStarted={() => setAuthIntent('signup')}
+          onLogin={() => setAuthIntent('login')}
+        />
+      );
+    }
+
+    // Returning user on a device that has already verified by SMS: the PIN alone
+    // signs them back in. "Use a code instead" drops to the phone + OTP flow.
+    if (!user && authIntent === 'login' && deviceTrusted === true) {
+      return (
+        <PinLoginScreen
+          onUseCode={() => setAuthIntent('login-sms')}
+          onBack={clearAuthIntent}
+        />
+      );
+    }
+
+    // Signed back in while the account waits to be deleted: keep it (PIN) or leave.
+    if (user && deletionDueAt) {
+      return (
+        <DeletionPendingScreen
+          dueAt={deletionDueAt}
+          onKept={() => {
+            // The PIN was just checked on the server.
+            markPinVerifiedThisInstall();
+            unlock();
+          }}
+        />
+      );
+    }
+
+    // Chose Log in, but the verified number has no account: say so rather than
+    // quietly start a sign-up. Creating one carries on to the PIN screen.
+    if (user && pinSetupDone === false && (authIntent === 'login' || authIntent === 'login-sms')) {
+      return (
+        <NoAccountScreen
+          phone={user.phoneNumber}
+          onCreate={() => setAuthIntent('signup')}
+          onOtherNumber={() => signOut().catch(() => undefined)}
+        />
+      );
+    }
+
+    if (user && pinSetupDone === false) {
+      return <SetupPinScreen />;
+    }
+
+    // Returning user (PIN exists on the server, e.g. new device / reinstall /
+    // post-sign-out login) who hasn't proven their PIN on this install yet.
+    if (user && pinVerified === false) {
+      return <WelcomeBackScreen />;
+    }
+
+    if (user && biometricSetupDone === false) {
+      return <BiometricSetupScreen />;
+    }
+
+    const app = (
+      <NavigationContainer ref={navigationRef} onReady={() => setNavReadyTick((n) => n + 1)}>
+        <RootStack.Navigator screenOptions={{ headerShown: false }}>
+          {user ? (
+            <RootStack.Screen name="Main" component={MainStackNavigator} />
+          ) : (
+            <RootStack.Screen name="Auth">{renderAuthStack}</RootStack.Screen>
+          )}
+        </RootStack.Navigator>
+      </NavigationContainer>
     );
-  }
+    // Terms and privacy, recorded with versions (review E12).
+    return user ? <ConsentGate uid={user.uid}>{app}</ConsentGate> : app;
+  };
 
-  // Returning user on a device that has already verified by SMS: the PIN alone
-  // signs them back in. "Use a code instead" drops to the phone + OTP flow.
-  if (!user && authIntent === 'login' && deviceTrusted === true) {
-    return (
-      <PinLoginScreen
-        onUseCode={() => setAuthIntent('login-sms')}
-        onBack={clearAuthIntent}
-      />
-    );
-  }
+  // The lock covers what's underneath instead of replacing it, as in the
+  // merchant app. Replacing it tore down every screen at each lock, so each
+  // unlock rebuilt the app on the home tab and reloaded the wallet, and
+  // nothing loaded while Face ID ran. It goes up as soon as the phone knows
+  // it's locked, without waiting on the server reads below it. A pending
+  // deletion has its own PIN screen and stays uncovered.
+  const showLock = user != null && locked === true && !deletionDueAt;
 
-  // Signed back in while the account waits to be deleted: keep it (PIN) or leave.
-  if (user && deletionDueAt) {
-    return (
-      <DeletionPendingScreen
-        dueAt={deletionDueAt}
-        onKept={() => {
-          // The PIN was just checked on the server.
-          markPinVerified();
-          unlock();
-        }}
-      />
-    );
-  }
+  // Android's back button would otherwise go back in the app hidden under
+  // the lock. Registered after the navigator's handler, so it's asked first.
+  useEffect(() => {
+    if (!showLock) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => true);
+    return () => sub.remove();
+  }, [showLock]);
 
-  if (user && locked) {
-    return (
-      <AppLockScreen
-        onUnlock={() => {
-          // Unlocking proves the PIN (or Face ID backed by it) on this install.
-          // Both updates are synchronous so the gate settles in one render.
-          markPinVerified();
-          unlock();
-        }}
-      />
-    );
-  }
-
-  // Chose Log in, but the verified number has no account: say so rather than
-  // quietly start a sign-up. Creating one carries on to the PIN screen.
-  if (user && pinSetupDone === false && (authIntent === 'login' || authIntent === 'login-sms')) {
-    return (
-      <NoAccountScreen
-        phone={user.phoneNumber}
-        onCreate={() => setAuthIntent('signup')}
-        onOtherNumber={() => signOut().catch(() => undefined)}
-      />
-    );
-  }
-
-  if (user && pinSetupDone === false) {
-    return (
-      <SetupPinScreen
-        onComplete={({ verified }) => {
-          // Set both flags synchronously (one batched render) so we never flash
-          // the welcome-back screen between two async refreshes.
-          markPinSetupDone();
-          if (verified) markPinVerified();
-          else refreshPinVerified();
-        }}
-      />
-    );
-  }
-
-  // Returning user (PIN exists on the server, e.g. new device / reinstall /
-  // post-sign-out login) who hasn't proven their PIN on this install yet.
-  if (user && pinVerified === false) {
-    return (
-      <WelcomeBackScreen
-        onComplete={() => {
-          // Synchronous so we go straight to the app without flashing the
-          // biometric-setup screen.
-          markPinVerified();
-          markBiometricSetupDone();
-        }}
-      />
-    );
-  }
-
-  if (user && biometricSetupDone === false) {
-    return (
-      <BiometricSetupScreen navigation={{} as any} onComplete={markBiometricSetupDone} />
-    );
-  }
-
-  const app = (
-    <NavigationContainer ref={navigationRef} onReady={() => setNavReadyTick((n) => n + 1)}>
-      <RootStack.Navigator screenOptions={{ headerShown: false }}>
-        {user ? (
-          <RootStack.Screen name="Main" component={MainStackNavigator} />
-        ) : (
-          <RootStack.Screen name="Auth">{renderAuthStack}</RootStack.Screen>
-        )}
-      </RootStack.Navigator>
-    </NavigationContainer>
+  return (
+    <View style={styles.fill}>
+      <View
+        style={styles.fill}
+        accessibilityElementsHidden={showLock}
+        importantForAccessibility={showLock ? 'no-hide-descendants' : 'auto'}
+      >
+        {renderGate()}
+      </View>
+      {showLock ? (
+        <View style={[StyleSheet.absoluteFill, styles.lockCover]}>
+          {/* It marks the PIN checked itself as it unlocks. */}
+          <AppLockScreen onUnlock={unlock} />
+        </View>
+      ) : null}
+    </View>
   );
-  // Terms and privacy, recorded with versions (review E12).
-  return user ? <ConsentGate uid={user.uid}>{app}</ConsentGate> : app;
 }
 
 // ─── Styles ─────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
+  fill: {
+    flex: 1,
+  },
   bootstrapLoading: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: colors.background.primary,
+  },
+  lockCover: {
+    backgroundColor: colors.dark.canvas,
   },
 });

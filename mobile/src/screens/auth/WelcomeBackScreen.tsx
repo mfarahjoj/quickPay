@@ -9,7 +9,6 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { BiometryTypes } from 'react-native-biometrics';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import firestore from '@react-native-firebase/firestore';
 import { AuthLayout, AuthHeader } from '../../components/auth';
 import { FaceIdIcon, FingerprintIcon } from '../../components/icons/AuthIcons';
@@ -20,6 +19,7 @@ import {
   validatePin,
   signOut,
   getCurrentUser,
+  trustThisDeviceWithPin,
   PinLockoutError, pinLockoutMessage,
 } from '../../services/auth.service';
 import {
@@ -29,12 +29,9 @@ import {
   enableBiometricKey,
 } from '../../services/biometric.service';
 import { markPinVerifiedThisInstall } from '../../hooks/usePinVerifiedThisInstall';
+import { markBiometricSetupDone } from '../../hooks/useBiometricSetupDone';
 import { logger } from '../../utils/logger';
 import { colors, typography, spacing } from '../../theme';
-
-interface Props {
-  onComplete: () => void;
-}
 
 type Step = 'pin' | 'biometric' | 'reset';
 
@@ -49,8 +46,9 @@ function getBiometricLabelKey(biometryType?: string): string {
  * server) but the PIN hasn't been verified on this install yet — returning
  * users on a new device, after a reinstall, or after signing out. Verifies
  * the existing PIN, then offers to (re-)enable Face ID / Touch ID in one tap.
+ * Finishing sets both gates' flags, and AppNavigator moves on.
  */
-export default function WelcomeBackScreen({ onComplete }: Props) {
+export default function WelcomeBackScreen() {
   const { t } = useTranslation();
   const [step, setStep] = useState<Step>('pin');
   const [pin, setPin] = useState('');
@@ -88,20 +86,23 @@ export default function WelcomeBackScreen({ onComplete }: Props) {
     }
   }, []);
 
-  const finish = async () => {
+  const finish = () => {
     // The welcome-back flow replaces the biometric-setup ceremony for
-    // returning users, so both gates are satisfied together.
-    await AsyncStorage.setItem('@quickpay_biometric_setup_done', 'true').catch(() => {});
-    onComplete();
+    // returning users, so both gates are satisfied together. Face ID's goes
+    // first: the navigator moves on once the PIN's is set.
+    markBiometricSetupDone();
+    markPinVerifiedThisInstall();
   };
 
-  const proceedVerified = async (verified: string) => {
-    await markPinVerifiedThisInstall(verified);
+  const proceedVerified = (verified: string) => {
+    // Marked as checked in finish(): marking it here would move the
+    // navigator past the Face ID step below.
+    trustThisDeviceWithPin(verified);
     if (bioAvailable) {
       setVerifiedPin(verified);
       setStep('biometric');
     } else {
-      await finish();
+      finish();
     }
   };
 
@@ -112,7 +113,7 @@ export default function WelcomeBackScreen({ onComplete }: Props) {
       setPinError('');
       const valid = await validatePin(submittedPin);
       if (valid) {
-        await proceedVerified(submittedPin);
+        proceedVerified(submittedPin);
       } else {
         setPinError(t('auth.welcomeBack.invalidPin'));
         setPin('');
@@ -152,12 +153,12 @@ export default function WelcomeBackScreen({ onComplete }: Props) {
     } finally {
       setLoading(false);
     }
-    await finish();
+    finish();
   };
 
   const handleSkipBiometric = async () => {
     await setBiometricEnabled(false).catch(() => {});
-    await finish();
+    finish();
   };
 
   const handleSignOut = () => {
