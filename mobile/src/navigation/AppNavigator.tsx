@@ -65,6 +65,7 @@ type MainStackParamList = {
   ManualTopup: undefined;
   TopUpMethod: undefined;
   AgentTopup: undefined;
+  ZaadTopup: { mode?: 'link' } | undefined;
   AgentLocator: undefined;
   CashOut: undefined;
   Notifications: undefined;
@@ -295,6 +296,11 @@ function MainStackNavigator() {
       <MainStack.Screen
         name="AgentTopup"
         getComponent={() => require('../screens/topup/AgentTopupScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="ZaadTopup"
+        getComponent={() => require('../screens/topup/ZaadTopupScreen').default}
         options={{ headerShown: false }}
       />
       <MainStack.Screen

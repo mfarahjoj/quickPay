@@ -48,6 +48,10 @@ export interface Rates {
   sessionIdleDays: number;
   phoneChangeCooldownDays: number;
   accountDeletionGraceDays: number;
+  topupMinCents: number;
+  topupMaxCents: number;
+  linkActivationCents: number;
+  linkChangeCooldownHours: number;
 }
 
 export type RateGroup =
@@ -57,7 +61,8 @@ export type RateGroup =
   | "Payouts"
   | "Limits and safety"
   | "Refunds and disputes"
-  | "Sign-in and devices";
+  | "Sign-in and devices"
+  | "Zaad and eDahab top-ups";
 
 interface BaseField {
   group: RateGroup;
@@ -379,6 +384,43 @@ export const RATE_FIELDS: { [K in keyof Rates]: RateFieldSpec } = {
     min: 7,
     max: 90,
     unit: "days",
+  },
+  topupMinCents: {
+    group: "Zaad and eDahab top-ups",
+    label: "Smallest top-up",
+    help: "A payment to the collection number below this isn't credited; it waits for an admin to assign or return it.",
+    kind: "cents",
+    default: 500,
+    min: 100,
+    max: 100000,
+  },
+  topupMaxCents: {
+    group: "Zaad and eDahab top-ups",
+    label: "Largest top-up",
+    help: "A payment above this isn't credited; it waits for an admin. KYC limits still apply.",
+    kind: "cents",
+    default: 10000,
+    min: 100,
+    max: 500000,
+  },
+  linkActivationCents: {
+    group: "Zaad and eDahab top-ups",
+    label: "Activation payment",
+    help: "What a customer sends from a newly linked number to prove it's theirs. It's credited to their balance.",
+    kind: "cents",
+    default: 10,
+    min: 1,
+    max: 500,
+  },
+  linkChangeCooldownHours: {
+    group: "Zaad and eDahab top-ups",
+    label: "Wait before linking a different number",
+    help: "After a customer links a number, how long before they can link another one instead.",
+    kind: "int",
+    default: 24,
+    min: 0,
+    max: 168,
+    unit: "hours",
   },
 };
 

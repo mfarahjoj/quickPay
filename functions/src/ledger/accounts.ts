@@ -24,6 +24,13 @@ export const FLOAT_ZAAD = "float:zaad";
 /** Value in the company's own eDahab account (none yet — future rail). */
 export const FLOAT_EDAHAB = "float:edahab";
 
+/**
+ * Money that reached a Zaad/eDahab collection number but couldn't be matched
+ * to a customer, held until an admin assigns it or sends it back. Must trend
+ * to zero: a balance here is real money someone sent and hasn't got yet.
+ */
+export const MOBILE_MONEY_SUSPENSE = "platform:mm_suspense";
+
 /** Float account for a mobile-money rail. */
 export function mobileMoneyFloat(method: "zaad" | "edahab"): string {
   return method === "zaad" ? FLOAT_ZAAD : FLOAT_EDAHAB;

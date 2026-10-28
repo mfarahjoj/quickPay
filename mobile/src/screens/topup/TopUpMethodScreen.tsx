@@ -13,11 +13,17 @@ interface Method {
   glyph: string;
 }
 
-// Zaad/eDahab top-up is deliberately absent: `functions/src/integrations/` are
-// sandbox stubs that fake success, and the callable behind this entry credited
-// a wallet on that fake success. It was deleted from prod on 2026-09-18, so the
-// row could only lead to an error. It comes back when a real rail does.
+// Zaad goes through Zapp's collection number (functions/src/mobileMoney/):
+// money is credited only when the operator's text for it arrives, never on an
+// integration's say-so. eDahab follows once its collection account exists.
 const METHODS: Method[] = [
+  {
+    key: 'zaad',
+    route: 'ZaadTopup',
+    titleKey: 'topup.method.zaadTitle',
+    subtitleKey: 'topup.method.zaadSubtitle',
+    glyph: '📲',
+  },
   {
     key: 'agent',
     route: 'AgentTopup',

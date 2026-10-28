@@ -82,6 +82,19 @@ export { agentConfirmTopup } from "./topup/agentConfirmTopup";
 // Do not re-export either until the stubs refuse to run in prod and a real
 // Telesom/Somtel rail is connected — see BACKLOG.md item 3b.
 export { mobileMoneyWebhook } from "./topup/mobileMoneyWebhook";
+// Zaad/eDahab top-ups through Zapp's collection number (mobileMoney/core.ts).
+export { startNumberLink, getTopupInstructions } from "./mobileMoney/linking";
+export {
+  adminListHeldMobileMoney,
+  adminAssignMobileMoney,
+  adminRefundMobileMoney,
+  adminRegisterListener,
+  adminListListeners,
+  adminListListenerSms,
+  adminGetCollection,
+  adminUpdateCollection,
+} from "./mobileMoney/adminDesk";
+export { mobileMoneyListener } from "./mobileMoney/listener";
 
 // User lookup (for agents)
 export { lookupUserByPhone } from "./users/lookupUser";

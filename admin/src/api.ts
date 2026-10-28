@@ -52,6 +52,44 @@ export interface PayoutRow {
   createdAt?: { _seconds?: number; seconds?: number };
 }
 
+export interface HeldPayment {
+  receiptId: string;
+  provider: "zaad" | "edahab";
+  operatorTxnId: string;
+  amountCents: number;
+  currency: string;
+  senderMsisdn: string;
+  senderName: string | null;
+  /** unknown_sender | below_min | above_max | currency | no_wallet */
+  reason: string;
+  suggestedUid: string | null;
+  receivedAt: number | null;
+}
+
+export interface ListenerPhone {
+  deviceId: string;
+  provider: "zaad" | "edahab";
+  label: string;
+  active: boolean;
+  lastSeenAt: number | null;
+  createdAt: number | null;
+}
+
+export interface ListenerSms {
+  id: string;
+  provider: "zaad" | "edahab";
+  from: string;
+  body: string;
+  status: "unparsed" | "failed" | "ignored";
+  receivedAt: number | null;
+}
+
+export interface CollectionEntry {
+  number: string | null;
+  active: boolean;
+  senderIds: string[];
+}
+
 export interface UserSummary {
   userId: string;
   fullName?: string;
@@ -401,6 +439,37 @@ export interface RateRow {
 }
 
 export const api = {
+  // Zaad / eDahab top-ups through the collection number (functions/src/mobileMoney/).
+  listHeldMobileMoney: () => call<undefined, HeldPayment[]>("adminListHeldMobileMoney"),
+  assignMobileMoney: (receiptId: string, uid: string, reason: string) =>
+    call<{ receiptId: string; uid: string; reason: string }, unknown>("adminAssignMobileMoney", {
+      receiptId,
+      uid,
+      reason,
+    }),
+  refundMobileMoney: (receiptId: string, reference: string, reason: string) =>
+    call<{ receiptId: string; reference: string; reason: string }, unknown>("adminRefundMobileMoney", {
+      receiptId,
+      reference,
+      reason,
+    }),
+  listListeners: () => call<undefined, ListenerPhone[]>("adminListListeners"),
+  registerListener: (provider: "zaad" | "edahab", label: string) =>
+    call<{ provider: string; label: string }, { deviceId: string; key: string; provider: string; label: string }>(
+      "adminRegisterListener",
+      { provider, label }
+    ),
+  listListenerSms: (status: ListenerSms["status"]) =>
+    call<{ status: string }, ListenerSms[]>("adminListListenerSms", { status }),
+  getCollection: () =>
+    call<undefined, { zaad: CollectionEntry; edahab: CollectionEntry }>("adminGetCollection"),
+  updateCollection: (
+    provider: "zaad" | "edahab",
+    entry: { number: string; active: boolean; senderIds: string[] },
+    reason: string
+  ) =>
+    call<Record<string, unknown>, CollectionEntry>("adminUpdateCollection", { provider, ...entry, reason }),
+
   searchUsers: (query: string) =>
     call<{ query: string }, UserSummary[]>("adminSearchUsers", { query }),
 
