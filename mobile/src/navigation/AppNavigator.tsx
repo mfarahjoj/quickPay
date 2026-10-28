@@ -14,7 +14,7 @@ import { useAppLock } from '../hooks/useAppLock';
 import { clearSignInFlags } from '../services/signInFlags';
 import { hasDeviceCredential } from '../services/device.service';
 import { labelTrustedDevice, registerTrustedDevice, signOut } from '../services/auth.service';
-import { View, StyleSheet, ActivityIndicator, Linking, BackHandler } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Linking, BackHandler, Platform } from 'react-native';
 import { parsePaymentLink, type PaymentLink } from '../services/paymentLink.service';
 import { colors } from '../theme';
 import OnboardingScreen from '../screens/onboarding/OnboardingScreen';
@@ -496,6 +496,20 @@ export default function AppNavigator() {
   }, [authLoading, user, unlock]);
 
   const clearAuthIntent = useCallback(() => setAuthIntent(null), []);
+
+  // Android's back button on the first sign-in screen left the app: the
+  // welcome screen sits outside the navigator, so nothing handled it. Do what
+  // the screen's back arrow does. Asked before the navigator's handler, so it
+  // leaves Back to the navigator whenever there's a screen to go back to.
+  useEffect(() => {
+    if (Platform.OS !== 'android' || user || authIntent === null) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (navigationRef.isReady() && navigationRef.canGoBack()) return false;
+      clearAuthIntent();
+      return true;
+    });
+    return () => sub.remove();
+  }, [user, authIntent, clearAuthIntent]);
 
   // Whether this device holds a trusted-device credential, which is what makes
   // PIN-only sign-in possible. Re-checked whenever auth flips, since a fresh
