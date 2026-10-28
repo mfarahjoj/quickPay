@@ -64,8 +64,10 @@ export function AuthLayout({
       style={[styles.safe, dark && styles.safeDark, white && styles.safeWhite]}
       edges={['top', 'bottom']}
     >
+      {/* The default variant is drawn on the dark canvas too, so Android's
+          dark icons vanished there (clock, battery). iOS is left as it was. */}
       <StatusBar
-        barStyle={dark ? 'light-content' : 'dark-content'}
+        barStyle={dark || (Platform.OS === 'android' && !white) ? 'light-content' : 'dark-content'}
         backgroundColor={dark ? colors.hero.canvas : white ? '#FFFFFF' : colors.background.primary}
       />
       <KeyboardAvoidingView
