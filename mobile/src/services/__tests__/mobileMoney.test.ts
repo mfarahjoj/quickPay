@@ -1,4 +1,4 @@
-import { amountCents, canDialUssd, dollars, formatLocal, ussdUrl } from '../mobileMoney.utils';
+import { amountCents, canDialUssd, dollars, formatLocal, ussdUrl, zaadTopupsOn } from '../mobileMoney.utils';
 
 describe('mobile money helpers', () => {
   it('escapes # so the dialer keeps the whole code', () => {
@@ -28,5 +28,16 @@ describe('mobile money helpers', () => {
   it('formats dollars', () => {
     expect(dollars(500)).toBe('$5.00');
     expect(dollars(10)).toBe('$0.10');
+  });
+
+  it('offers Zaad top-ups only when config/app_client says exactly that', () => {
+    expect(zaadTopupsOn({ customer: { zaadTopups: true, minCompatLevel: 2 } })).toBe(true);
+    expect(zaadTopupsOn({ customer: { zaadTopups: false } })).toBe(false);
+    expect(zaadTopupsOn({ customer: { zaadTopups: 'true' } })).toBe(false);
+    expect(zaadTopupsOn({ customer: { minCompatLevel: 2 } })).toBe(false);
+    expect(zaadTopupsOn({ zaadTopups: true })).toBe(false);
+    expect(zaadTopupsOn({ merchant: { zaadTopups: true } })).toBe(false);
+    expect(zaadTopupsOn(undefined)).toBe(false);
+    expect(zaadTopupsOn(null)).toBe(false);
   });
 });

@@ -33,3 +33,13 @@ export function amountCents(text: string): number | null {
 export function dollars(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
+
+/**
+ * Whether the app offers Zaad top-ups, from the public config/app_client doc:
+ * `{ customer: { zaadTopups: true } }`. Anything else (no doc, no field, a
+ * string) is off, so a build that ships before the Zaad functions are
+ * deployed never leads anyone to their screens.
+ */
+export function zaadTopupsOn(appClient: unknown): boolean {
+  return (appClient as { customer?: { zaadTopups?: unknown } } | undefined)?.customer?.zaadTopups === true;
+}

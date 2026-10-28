@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Header } from '../../components/Header';
 import { Button } from '../../components/Button';
 import { useUserProfile } from '../../hooks/useUserProfile';
+import { useZaadTopups } from '../../hooks/useZaadTopups';
 import { formatLocal } from '../../services/mobileMoney.utils';
 import { colors, typography, spacing, borderRadius } from '../../theme';
 
@@ -15,16 +16,21 @@ interface Props {
  * The Zaad / eDahab numbers this customer tops up from. A number counts only
  * once it's verified by an activation payment from it (functions/src/
  * mobileMoney/), so it can't be typed in here: linking goes through the
- * Zaad top-up screen. The server writes linkedAccounts.
+ * Zaad top-up screen. The server writes linkedAccounts. Until
+ * config/app_client opens Zaad top-ups (useZaadTopups), Zaad reads "Coming
+ * soon" like eDahab and there's nothing to tap.
  */
 export default function LinkedAccountsScreen({ navigation }: Props) {
   const { t } = useTranslation();
   const { profile } = useUserProfile();
+  const zaadOpen = useZaadTopups();
   const zaad = profile?.linkedAccounts?.zaadPhone;
   const zaadVerified = profile?.linkedAccounts?.zaadVerified === true;
 
   const zaadStatus = !zaad
-    ? t('profile.linkedAccounts.notLinked')
+    ? zaadOpen
+      ? t('profile.linkedAccounts.notLinked')
+      : t('profile.linkedAccounts.comingSoon')
     : zaadVerified
       ? t('profile.linkedAccounts.verified')
       : t('profile.linkedAccounts.waitingActivation');
@@ -44,11 +50,13 @@ export default function LinkedAccountsScreen({ navigation }: Props) {
             </View>
             <Text style={[styles.status, zaadVerified && styles.statusGood]}>{zaadStatus}</Text>
           </View>
-          <Button
-            title={zaad ? t('profile.linkedAccounts.change') : t('profile.linkedAccounts.link')}
-            onPress={() => navigation.navigate('ZaadTopup', { mode: 'link' })}
-            fullWidth
-          />
+          {zaadOpen ? (
+            <Button
+              title={zaad ? t('profile.linkedAccounts.change') : t('profile.linkedAccounts.link')}
+              onPress={() => navigation.navigate('ZaadTopup', { mode: 'link' })}
+              fullWidth
+            />
+          ) : null}
         </View>
 
         <View style={styles.card}>

@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
+import { useZaadTopups } from '../../hooks/useZaadTopups';
 import { triggerHaptic } from '../../services/haptics.service';
 import { colors } from '../../theme';
 
@@ -15,7 +16,8 @@ interface Method {
 
 // Zaad goes through Zapp's collection number (functions/src/mobileMoney/):
 // money is credited only when the operator's text for it arrives, never on an
-// integration's say-so. eDahab follows once its collection account exists.
+// integration's say-so. It's listed only once config/app_client opens it
+// (useZaadTopups). eDahab follows once its collection account exists.
 const METHODS: Method[] = [
   {
     key: 'zaad',
@@ -36,6 +38,8 @@ const METHODS: Method[] = [
 export default function TopUpMethodScreen() {
   const navigation = useNavigation<any>();
   const { t } = useTranslation();
+  const zaadOpen = useZaadTopups();
+  const methods = METHODS.filter((m) => m.key !== 'zaad' || zaadOpen);
 
   return (
     <View style={styles.container}>
@@ -50,7 +54,7 @@ export default function TopUpMethodScreen() {
       </View>
 
       <View style={styles.list}>
-        {METHODS.map((m) => (
+        {methods.map((m) => (
           <TouchableOpacity
             key={m.key}
             style={styles.card}
