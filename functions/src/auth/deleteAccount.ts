@@ -5,6 +5,7 @@ import { requireAuth } from "../utils/validation";
 import { verifyUserPin } from "./validatePin";
 import { endSessions } from "./sessions";
 import { getRates } from "../config/rates";
+import { LINKED_NUMBERS } from "../mobileMoney/receipts";
 import { ApiResponse } from "../types";
 
 /**
@@ -16,8 +17,10 @@ import { ApiResponse } from "../types";
  *   cancel   → signing back in (SMS) during the wait and entering the PIN
  *              keeps the account.
  *   daily    → due accounts are deleted: the sign-in record (which frees the
- *              phone number), PIN secrets, push tokens, trusted phones and
- *              the profile's personal details. users/{uid} stays as an
+ *              phone number), PIN secrets, push tokens, trusted phones, the
+ *              Zaad/eDahab numbers linked for top-ups (a later payment from
+ *              one is held for review, not credited to the closed wallet)
+ *              and the profile's personal details. users/{uid} stays as an
  *              anonymous tombstone so past transactions and the ledger, which
  *              the law requires kept, still resolve. An account that has
  *              money again (a refund, a dispute) is skipped and flagged.
@@ -64,6 +67,11 @@ export function isOrphanAuthUser(
 
 async function forgetTrustedDevices(uid: string): Promise<void> {
   const snap = await admin.firestore().collection(DEVICES).where("uid", "==", uid).get();
+  await Promise.all(snap.docs.map((d) => d.ref.delete()));
+}
+
+async function forgetLinkedNumbers(uid: string): Promise<void> {
+  const snap = await admin.firestore().collection(LINKED_NUMBERS).where("uid", "==", uid).get();
   await Promise.all(snap.docs.map((d) => d.ref.delete()));
 }
 
@@ -171,6 +179,8 @@ export async function deleteDueAccount(uid: string, nowMs: number): Promise<"del
   }
 
   await forgetTrustedDevices(uid);
+  // Whoever has their Zaad/eDahab number next can link it.
+  await forgetLinkedNumbers(uid);
   // PIN secrets (private/auth), push tokens and anything else under the user.
   await db.recursiveDelete(userRef);
   await userRef.set(tombstone(user!, nowMs));
