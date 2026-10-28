@@ -173,8 +173,7 @@ export const refundPayment = https.onCall(
       if (!alreadyPosted) notifyUser(
         customerId,
         "refund_issued",
-        "Refund Received",
-        `You were refunded ${currency} ${amountFormatted}`,
+        { key: "refund.received", params: { amount: `${currency} ${amountFormatted}` } },
         { type: "refund_issued", amount: gross.toString(), currency, merchantId }
       ).catch((err) => console.error("Failed to notify customer:", err));
 

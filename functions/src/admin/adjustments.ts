@@ -202,8 +202,7 @@ export function notifyAdjustment(
     notifyUser(
       userIdOf(creditAccount),
       "adjustment_posted",
-      "Balance corrected",
-      `Zapp Pay added ${amount} to your wallet.`,
+      { key: "adjustment.credit", params: { amount } },
       { type: "adjustment_posted", amount: String(amountCents) }
     ).catch((err) => console.error("Failed to notify adjustment credit:", err));
   }
@@ -211,8 +210,7 @@ export function notifyAdjustment(
     notifyUser(
       userIdOf(debitAccount),
       "adjustment_posted",
-      "Balance corrected",
-      `Zapp Pay took ${amount} from your wallet to correct an error.`,
+      { key: "adjustment.debit", params: { amount } },
       { type: "adjustment_posted", amount: String(-amountCents) }
     ).catch((err) => console.error("Failed to notify adjustment debit:", err));
   }

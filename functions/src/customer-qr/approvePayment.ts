@@ -315,15 +315,13 @@ export const approvePaymentRequest = https.onCall(
       notifyUser(
         approvedMerchantId!,
         "cashout_completed",
-        "Cash-out approved",
-        `Hand over ${amountText} in cash now.`,
+        { key: "cashout.hand_over", params: { amount: amountText } },
         { type: "cashout_approved", transactionId, requestId }
       ).catch((err) => console.error("Failed to notify agent:", err));
       notifyUser(
         customerId,
         "cashout_completed",
-        "Cash Out Complete",
-        `You cashed out ${amountText}. Collect your cash from the agent.`,
+        { key: "cashout.completed", params: { amount: amountText } },
         { type: "cashout_complete", transactionId }
       ).catch((err) => console.error("Failed to notify customer:", err));
     } else {

@@ -165,8 +165,7 @@ export const completePhoneChange = https.onCall(
     notifyUser(
       uid,
       "phone_changed",
-      "Your Zapp Pay number was changed",
-      `Your account now uses ${approval.newPhone}. Sending money is paused until ${until.toUTCString()}. If this wasn't you, contact support now.`,
+      { key: "security.phone_changed", params: { phone: approval.newPhone, until } },
       { type: "phone_changed" }
     ).catch((err) => console.error("Failed to notify phone change:", err));
 

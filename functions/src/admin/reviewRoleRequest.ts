@@ -14,6 +14,7 @@ import { ensureMerchantProfile } from "../merchants/profile";
 import { isMerchantRole } from "../utils/roles";
 import { ROLE_REQUESTS_COLLECTION } from "../merchants/requestRole";
 import { notifyUser } from "../utils/notifications";
+import { ROLE_NAMES } from "../utils/pushTemplates";
 
 interface ListRoleRequestsRequest {
   status?: RoleRequestStatus;
@@ -222,10 +223,9 @@ export const adminReviewRoleRequest = https.onCall(
     notifyUser(
       outcome.userId,
       approved ? "role_approved" : "role_rejected",
-      approved ? "Account upgraded" : "Application not approved",
       approved
-        ? `You can now use Zapp Pay as a ${outcome.requestedRole.replace("_", " ")}.`
-        : `Your application was not approved. ${reason}`,
+        ? { key: "role.approved", params: { role: ROLE_NAMES[outcome.requestedRole] ?? outcome.requestedRole } }
+        : { key: "role.rejected", params: { reason } },
       { requestId, role: outcome.requestedRole }
     ).catch((err) => console.error("Failed to notify applicant:", err));
 

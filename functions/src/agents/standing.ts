@@ -75,8 +75,7 @@ export async function reviewAgentStanding(uid: string | null | undefined): Promi
     notifyUser(
       uid,
       "agent_flagged",
-      "Your agent listing is paused",
-      "Several disputes against you were upheld recently, so customers won't see you in Find Agent until Zapp Pay has reviewed them.",
+      { key: "agent.listing_paused" },
       { type: "agent_flagged" }
     ).catch((err) => console.error("Failed to notify agent flag:", err));
     return true;

@@ -183,7 +183,7 @@ describe("PIN reset safety", () => {
       expect(db.store.has("trustedDevices/dev-old")).toBe(true);
       expect(db.store.has("trustedDevices/dev-other")).toBe(false);
       expect(mockedNotify).toHaveBeenCalledWith(
-        UID, "pin_reset", expect.any(String), expect.any(String), expect.any(Object)
+        UID, "pin_reset", { key: "security.pin_reset", params: { until: expect.any(Date) } }, expect.any(Object)
       );
       const until = new Date(result.data.cooldownUntil).getTime();
       expect(until - Date.now()).toBeGreaterThan(23 * 60 * 60 * 1000);

@@ -69,8 +69,7 @@ export const freezeMyAccount = https.onCall(
       notifyUser(
         uid,
         "account_frozen",
-        "Account frozen",
-        "You froze your Zapp Pay account. No money can leave it until support unfreezes it.",
+        { key: "account.frozen_by_you" },
         { type: "account_frozen" }
       ).catch((err) => console.error("Failed to notify self-freeze:", err));
     }

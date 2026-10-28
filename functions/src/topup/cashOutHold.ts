@@ -89,8 +89,7 @@ export async function releaseCashOutHold(
     notifyUser(
       done.customerId,
       "cashout_returned",
-      "Cash-out money returned",
-      `${amount} is back in your wallet. ${RELEASE_COPY[reason].split(" — ")[0]}.`,
+      { key: `cashout.returned.${reason}`, params: { amount } },
       { type: "cashout_returned", cashOutId, reason }
     ).catch((err) => console.error("Failed to notify customer:", err));
   }

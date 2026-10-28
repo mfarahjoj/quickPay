@@ -156,7 +156,12 @@ describe("trusted devices", () => {
   it("alerts the owner when a phone is trusted", async () => {
     seed();
     await register({ data: { platform: "ios", pin: "246810", name: "iPhone" }, auth });
-    expect(notifyUser).toHaveBeenCalledWith("u1", "new_device", expect.any(String), expect.stringContaining("iPhone"), expect.anything());
+    expect(notifyUser).toHaveBeenCalledWith(
+      "u1",
+      "new_device",
+      { key: "security.new_device", params: { device: "iPhone" } },
+      expect.anything()
+    );
   });
 
   describe("the owner's list (review C9)", () => {

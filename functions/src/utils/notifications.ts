@@ -1,10 +1,36 @@
 import * as admin from "firebase-admin";
-import { Notification } from "../types";
+import { Notification, PreferredLanguage } from "../types";
+import { PushMessage, renderPush, resolveLanguage } from "./pushTemplates";
 
 /**
- * Send push notification to a user
+ * The language a user reads their pushes in: `preferredLanguage`, which both
+ * apps set from their language picker, else English.
+ */
+export async function pushLanguageOf(userId: string): Promise<PreferredLanguage> {
+  try {
+    const user = await admin.firestore().collection("users").doc(userId).get();
+    return resolveLanguage(user.data()?.preferredLanguage);
+  } catch (error) {
+    console.error(`Couldn't read ${userId}'s language; sending English:`, error);
+    return "en";
+  }
+}
+
+/**
+ * Send push notification to a user, in their own language. Push only: nothing
+ * lands in their notifications list (see notifyUser for that).
  */
 export async function sendPushNotification(
+  userId: string,
+  message: PushMessage,
+  data?: Record<string, string>
+): Promise<void> {
+  const { title, body } = renderPush(message, await pushLanguageOf(userId));
+  await deliverPush(userId, title, body, data);
+}
+
+/** Send already-written text to every device the user has. */
+async function deliverPush(
   userId: string,
   title: string,
   body: string,
@@ -114,17 +140,18 @@ export async function storeNotification(
 }
 
 /**
- * Send and store notification
+ * Send and store notification, in the user's own language. The stored copy is
+ * what the customer app's notifications list shows, so it matches the push.
  */
 export async function notifyUser(
   userId: string,
   type: Notification["type"],
-  title: string,
-  body: string,
+  message: PushMessage,
   data?: Record<string, string>
 ): Promise<void> {
+  const { title, body } = renderPush(message, await pushLanguageOf(userId));
   await Promise.all([
-    sendPushNotification(userId, title, body, data),
+    deliverPush(userId, title, body, data),
     storeNotification(userId, type, title, body, data),
   ]);
 }
@@ -142,8 +169,7 @@ export async function notifyPaymentReceived(
   await notifyUser(
     merchantId,
     "payment_received",
-    "Payment Received",
-    `You received ${currency} ${amountFormatted}`,
+    { key: "payment.received", params: { amount: `${currency} ${amountFormatted}` } },
     {
       type: "payment_received",
       amount: amount.toString(),
@@ -166,8 +192,7 @@ export async function notifyPaymentSent(
   await notifyUser(
     customerId,
     "payment_sent",
-    "Payment Sent",
-    `You paid ${currency} ${amountFormatted}`,
+    { key: "payment.sent", params: { amount: `${currency} ${amountFormatted}` } },
     {
       type: "payment_sent",
       amount: amount.toString(),
@@ -190,34 +215,9 @@ export async function notifyTopupCompleted(
   await notifyUser(
     userId,
     "topup_completed",
-    "Top-up Successful",
-    `Your wallet has been credited with ${currency} ${amountFormatted}`,
+    { key: "topup.completed", params: { amount: `${currency} ${amountFormatted}` } },
     {
       type: "topup_completed",
-      amount: amount.toString(),
-      currency,
-      method,
-    }
-  );
-}
-
-/**
- * Notify settlement completed
- */
-export async function notifySettlementCompleted(
-  merchantId: string,
-  amount: number,
-  currency: string,
-  method: string
-): Promise<void> {
-  const amountFormatted = (amount / 100).toFixed(2);
-  await notifyUser(
-    merchantId,
-    "settlement_completed",
-    "Settlement Completed",
-    `${currency} ${amountFormatted} has been sent to your ${method} account`,
-    {
-      type: "settlement_completed",
       amount: amount.toString(),
       currency,
       method,

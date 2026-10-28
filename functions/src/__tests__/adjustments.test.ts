@@ -86,7 +86,12 @@ describe("adminPostAdjustment", () => {
     });
     expect(db.get(`adjustments/${id}`)!.postedBy).toBe("admin-1");
     expect(db.get(`admin_audit/${res.data.auditId}`)!.action).toBe("ledger.adjust");
-    expect(notifyUser).toHaveBeenCalledWith("cust-1", "adjustment_posted", expect.any(String), expect.any(String), expect.any(Object));
+    expect(notifyUser).toHaveBeenCalledWith(
+      "cust-1",
+      "adjustment_posted",
+      { key: "adjustment.credit", params: { amount: "$25.00" } },
+      expect.any(Object)
+    );
   });
 
   it("moves value between two wallets", async () => {

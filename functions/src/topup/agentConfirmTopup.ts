@@ -240,8 +240,13 @@ export const agentConfirmTopup = https.onCall(
     notifyUser(
       topup.customerId,
       "topup_completed",
-      "Top-up Successful",
-      `${agentData.fullName} topped up your wallet with ${topup.currency} ${(topup.amount / 100).toFixed(2)}`,
+      {
+        key: "topup.by_agent",
+        params: {
+          agent: agentData.fullName,
+          amount: `${topup.currency} ${(topup.amount / 100).toFixed(2)}`,
+        },
+      },
       {
         type: "topup_completed",
         amount: topup.amount.toString(),

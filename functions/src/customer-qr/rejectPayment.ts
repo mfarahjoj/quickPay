@@ -76,8 +76,7 @@ export const rejectPaymentRequest = https.onCall(
 
     sendPushNotification(
       paymentReq.merchantId,
-      "Payment Declined",
-      `${customer.fullName} declined your payment request`,
+      { key: "payment.declined", params: { customer: customer.fullName } },
       {
         type: "payment_rejected",
         requestId,

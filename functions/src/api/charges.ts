@@ -12,6 +12,7 @@ import { getRates } from "../config/rates";
 import { isAccountActive } from "../utils/accountStatus";
 import { validatePhoneNumber } from "../utils/validation";
 import { sendPushNotification } from "../utils/notifications";
+import { PushMessage } from "../utils/pushTemplates";
 import { ApiCaller } from "./keys";
 import { ApiError, badRequest, conflict, notFound } from "./http";
 import {
@@ -351,11 +352,11 @@ export async function createCharge(
   }
 
   if (customerId) {
-    const amount = (input.amount / 100).toFixed(2);
-    const body = input.reference
-      ? `${merchantName} is requesting USD ${amount} — ${input.reference}`
-      : `${merchantName} is requesting USD ${amount}`;
-    sendPushNotification(customerId, "Payment Request", body, {
+    const amount = `USD ${(input.amount / 100).toFixed(2)}`;
+    const message: PushMessage = input.reference
+      ? { key: "payment.request_with_reference", params: { merchant: merchantName, amount, reference: input.reference } }
+      : { key: "payment.request", params: { merchant: merchantName, amount } };
+    sendPushNotification(customerId, message, {
       type: "api_charge",
       chargeId: chargeRef.id,
       merchantName,
