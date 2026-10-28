@@ -62,8 +62,7 @@ export const changePin = https.onCall(
       notifyUser(
         userId,
         "pin_changed",
-        "Your Zapp Pay PIN was changed",
-        "If this wasn't you, reset your PIN now and contact support.",
+        { key: "security.pin_changed" },
         { type: "pin_changed" }
       ).catch((err) => console.error("Failed to notify PIN change:", err));
 

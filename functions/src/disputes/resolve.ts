@@ -24,6 +24,7 @@ import { prepareAdjustment } from "../admin/adjustments";
 import { prepareRefund } from "../qr-payments/refundCore";
 import { getRates } from "../config/rates";
 import { notifyUser } from "../utils/notifications";
+import { PushMessage } from "../utils/pushTemplates";
 import { reviewAgentStanding } from "../agents/standing";
 import {
   userAccount,
@@ -111,15 +112,15 @@ async function prepareRemedy(
   return { journalEntryId: adjustment.journalEntryId, write: adjustment.write };
 }
 
-function notifyBoth(d: DisputeDoc, disputeId: string, raiserBody: string, againstBody: string) {
-  const send = (uid: string | null, body: string) =>
+function notifyBoth(d: DisputeDoc, disputeId: string, toRaiser: PushMessage, toAgainst: PushMessage) {
+  const send = (uid: string | null, message: PushMessage) =>
     uid &&
-    notifyUser(uid, "dispute_resolved", "Dispute decided", body, {
+    notifyUser(uid, "dispute_resolved", message, {
       type: "dispute_resolved",
       disputeId,
     }).catch((err) => console.error("Failed to notify dispute outcome:", err));
-  send(d.raisedBy, raiserBody);
-  send(d.against, againstBody);
+  send(d.raisedBy, toRaiser);
+  send(d.against, toAgainst);
 }
 
 const dollars = (cents: number) => `$${(cents / 100).toFixed(2)}`;
@@ -252,13 +253,13 @@ export const adminResolveDispute = https.onCall(
       });
 
       if (outcome === "rejected") {
-        notifyBoth(result.d, disputeId, "Your dispute was reviewed and not upheld.", "A dispute against you was not upheld.");
+        notifyBoth(result.d, disputeId, { key: "dispute.not_upheld" }, { key: "dispute.not_upheld_against" });
       } else {
         notifyBoth(
           result.d,
           disputeId,
-          `Your dispute was upheld. ${dollars(amountCents)} is back in your wallet.`,
-          `A dispute against you was upheld and ${dollars(amountCents)} was returned to the customer.`
+          { key: "dispute.upheld", params: { amount: dollars(amountCents) } },
+          { key: "dispute.upheld_against", params: { amount: dollars(amountCents) } }
         );
         // Upheld against an agent counts towards their standing (2.6).
         if (payFrom === "counterparty") await reviewAgentStanding(result.d.against);
@@ -309,8 +310,8 @@ export const adminResolveDispute = https.onCall(
         notifyBoth(
           parked.d,
           disputeId,
-          `Your dispute was upheld. ${dollars(amountCents)} will reach your wallet as soon as the other party has it.`,
-          `A dispute against you was upheld. ${dollars(parked.payerDebitCents)} is owed and will be taken from your next payments.`
+          { key: "dispute.upheld_awaiting_funds", params: { amount: dollars(amountCents) } },
+          { key: "dispute.upheld_awaiting_funds_against", params: { amount: dollars(parked.payerDebitCents) } }
         );
         return {
           success: true,
@@ -390,8 +391,8 @@ export async function collectAwaitingDisputes(limit = 50): Promise<number> {
         notifyBoth(
           done,
           doc.id,
-          `${dollars(done.resolution!.amountCents)} from your upheld dispute is now in your wallet.`,
-          `${dollars(done.owedCents!)} owed on a dispute has now been paid.`
+          { key: "dispute.collected", params: { amount: dollars(done.resolution!.amountCents) } },
+          { key: "dispute.collected_against", params: { amount: dollars(done.owedCents!) } }
         );
       }
     } catch (err) {

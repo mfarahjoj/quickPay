@@ -284,8 +284,13 @@ export const agentConfirmCashOut = https.onCall(
     notifyUser(
       cashOut.customerId,
       "cashout_completed",
-      "Cash Out Complete",
-      `${agentData.fullName} paid out your cash-out of ${cashOut.currency} ${(cashOut.amount / 100).toFixed(2)}`,
+      {
+        key: "cashout.paid_by_agent",
+        params: {
+          agent: agentData.fullName,
+          amount: `${cashOut.currency} ${(cashOut.amount / 100).toFixed(2)}`,
+        },
+      },
       { type: "cashout_complete", transactionId }
     ).catch((err) => console.error("Failed to notify customer:", err));
 

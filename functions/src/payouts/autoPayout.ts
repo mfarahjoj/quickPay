@@ -149,8 +149,10 @@ export async function runAutoPayoutsNow(): Promise<{ queued: number; skipped: nu
       notifyUser(
         uid,
         "payout_sent",
-        "Automatic payout requested",
-        `$${(amountCents / 100).toFixed(2)} is on its way to ${settings.destinationName}.`,
+        {
+          key: "payout.auto_requested",
+          params: { amount: `$${(amountCents / 100).toFixed(2)}`, destination: settings.destinationName },
+        },
         { type: "auto_payout" }
       ).catch(() => undefined);
     } catch (err) {

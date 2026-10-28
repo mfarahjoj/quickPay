@@ -22,6 +22,7 @@ import { https } from "firebase-functions/v2";
 import { requireAdmin, requireRecentAdminAuth, requireReason } from "./guard";
 import { stageAuditEntry } from "./audit";
 import { notifyUser } from "../utils/notifications";
+import { PAYOUT_ROUTE_NAMES } from "../utils/pushTemplates";
 import {
   prepareJournalEntry,
   userAccount,
@@ -197,8 +198,13 @@ export const adminSettlePayout = https.onCall(
     notifyUser(
       result.merchantId,
       "payout_sent",
-      "Payout sent",
-      `$${(result.amountCents / 100).toFixed(2)} is on its way via ${result.route}.`
+      {
+        key: "payout.sent",
+        params: {
+          amount: `$${(result.amountCents / 100).toFixed(2)}`,
+          route: PAYOUT_ROUTE_NAMES[result.route] ?? result.route,
+        },
+      }
     ).catch((err) => console.error("Failed to notify merchant:", err));
 
     return {
@@ -305,8 +311,7 @@ export const adminRejectPayout = https.onCall(
     notifyUser(
       result.merchantId,
       "payout_rejected",
-      "Payout declined",
-      `$${(result.amountCents / 100).toFixed(2)} is back in your balance. ${reason}`
+      { key: "payout.declined", params: { amount: `$${(result.amountCents / 100).toFixed(2)}`, reason } }
     ).catch((err) => console.error("Failed to notify merchant:", err));
 
     return { success: true, message: "Returned to the merchant", data: { payoutId } };

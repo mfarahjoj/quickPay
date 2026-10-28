@@ -53,7 +53,7 @@ describe("ending sessions", () => {
     const res = await fn({ data: { currentPin: "246810", newPin: "482915" }, auth: user });
     expect(revoke).toHaveBeenCalledWith("u1");
     expect(res.data.sessionToken).toBe("custom-token");
-    expect(notifyUser).toHaveBeenCalledWith("u1", "pin_changed", expect.any(String), expect.any(String), expect.anything());
+    expect(notifyUser).toHaveBeenCalledWith("u1", "pin_changed", { key: "security.pin_changed" }, expect.anything());
   });
 
   it("on revoking devices", async () => {

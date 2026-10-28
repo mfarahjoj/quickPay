@@ -153,7 +153,12 @@ describe("disputes", () => {
       expect(d.respondBy.toMillis() - d.createdAt.toMillis()).toBe(72 * HOUR_MS);
       expect(d.resolveBy.toMillis() - d.createdAt.toMillis()).toBe(168 * HOUR_MS);
       expect(db.get("transactions/pay-1")!.disputeId).toBe("pay-1_cust-1");
-      expect(notifyUser).toHaveBeenCalledWith(MERCHANT, "dispute_opened", expect.any(String), expect.any(String), expect.any(Object));
+      expect(notifyUser).toHaveBeenCalledWith(
+        MERCHANT,
+        "dispute_opened",
+        { key: "dispute.payment_disputed", params: { amount: "$10.00", days: { days: 3 } } },
+        expect.any(Object)
+      );
     });
 
     it("refuses a claim that doesn't fit the movement", async () => {
@@ -483,7 +488,12 @@ describe("refund requests (3.2)", () => {
       auth: { uid: "cust-1" },
     });
     expect(res.data.status).toBe("open");
-    expect(notifyUser).toHaveBeenCalledWith("shop-1", "dispute_opened", "Refund requested", expect.any(String), expect.any(Object));
+    expect(notifyUser).toHaveBeenCalledWith(
+      "shop-1",
+      "dispute_opened",
+      expect.objectContaining({ key: "dispute.refund_requested" }),
+      expect.any(Object)
+    );
 
     await refundPayment({ data: { transactionId: "pay-1", pin: "123456" }, auth: { uid: "shop-1" } });
     expect(db.get(`disputes/${res.data.disputeId}`)!.status).toBe("resolved");

@@ -9,6 +9,7 @@ import { readAuth } from "./pinStore";
 import { ApiResponse } from "../types";
 import { getRates } from "../config/rates";
 import { notifyUser } from "../utils/notifications";
+import { UNNAMED_PHONE } from "../utils/pushTemplates";
 
 /**
  * Trusted-device PIN login.
@@ -165,8 +166,10 @@ export const registerTrustedDevice = https.onCall(
     notifyUser(
       uid,
       "new_device",
-      "A new phone can now sign in",
-      `${name ?? (platform === "ios" ? "An iPhone" : "A phone")} was trusted for PIN sign-in. If this wasn't you, remove it in Security and change your PIN.`,
+      {
+        key: "security.new_device",
+        params: { device: name ?? (platform === "ios" ? UNNAMED_PHONE.ios : UNNAMED_PHONE.other) },
+      },
       { type: "new_device", deviceId }
     ).catch((err) => console.error("Failed to send new-device alert:", err));
 

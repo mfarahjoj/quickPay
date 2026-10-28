@@ -165,8 +165,7 @@ export const resetPin = https.onCall(
     notifyUser(
       userId,
       "pin_reset",
-      "Your Zapp Pay PIN was reset",
-      `If this wasn't you, contact support now. Sending money is paused until ${cooldownUntil.toUTCString()}.`,
+      { key: "security.pin_reset", params: { until: cooldownUntil } },
       { type: "pin_reset" }
     ).catch((err) => console.error("Failed to notify PIN reset:", err));
 

@@ -8,6 +8,7 @@ import {
   validateCurrency,
 } from "../utils/validation";
 import { sendPushNotification } from "../utils/notifications";
+import { PushMessage } from "../utils/pushTemplates";
 import { getRates, computePaymentFee } from "../config/rates";
 import { isPurpose, mayRaise } from "./counterCashOut";
 import {
@@ -221,16 +222,15 @@ export const createPaymentRequest = https.onCall(
       return replay(outcome.request, merchantId, requestRef.id);
     }
 
-    const amountFormatted = (amount / 100).toFixed(2);
-    const notifBody = purpose === "cash_out"
-      ? `${merchant.fullName} will give you ${currency} ${amountFormatted} in cash. Approve to cash out.`
+    const amountText = `${currency} ${(amount / 100).toFixed(2)}`;
+    const notification: PushMessage = purpose === "cash_out"
+      ? { key: "cashout.request", params: { merchant: merchant.fullName, amount: amountText } }
       : reference
-        ? `${merchant.fullName} is requesting ${currency} ${amountFormatted} — ${reference}`
-        : `${merchant.fullName} is requesting ${currency} ${amountFormatted}`;
+        ? { key: "payment.request_with_reference", params: { merchant: merchant.fullName, amount: amountText, reference } }
+        : { key: "payment.request", params: { merchant: merchant.fullName, amount: amountText } };
     sendPushNotification(
       token.customerId,
-      purpose === "cash_out" ? "Cash-out" : "Payment Request",
-      notifBody,
+      notification,
       {
         type: "payment_request",
         requestId: requestRef.id,

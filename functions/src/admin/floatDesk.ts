@@ -342,10 +342,10 @@ export const adminApproveFloat = https.onCall(
     notifyUser(
       result.agentId,
       result.direction === "issue" ? "float_issued" : "float_withdrawn",
-      result.direction === "issue" ? "Float added" : "Float withdrawn",
-      `${result.direction === "issue" ? "+" : "-"}$${(result.amountCents / 100).toFixed(
-        2
-      )} float`,
+      {
+        key: result.direction === "issue" ? "float.issued" : "float.withdrawn",
+        params: { amount: `$${(result.amountCents / 100).toFixed(2)}` },
+      },
       { transactionId: result.transactionId }
     ).catch((err) => console.error("Failed to notify agent:", err));
 

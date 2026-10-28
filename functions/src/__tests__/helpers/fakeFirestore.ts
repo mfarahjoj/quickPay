@@ -150,6 +150,11 @@ export function fakeFirestore(seed: Record<string, Data> = {}): FakeDb {
   function collection(name: string): any {
     return {
       doc: (id?: string) => ref(name, id),
+      add: async (d: Data) => {
+        const r = ref(name);
+        await r.set(d);
+        return r;
+      },
       ...query(name, { filters: [], max: Infinity }),
     };
   }

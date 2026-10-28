@@ -213,8 +213,10 @@ describe("Merchant Payments API", () => {
       expect(db.get(`api_charges/${res.json.id}`)!.customerId).toBe(CUSTOMER);
       expect(mockedPush).toHaveBeenCalledWith(
         CUSTOMER,
-        "Payment Request",
-        expect.stringContaining("Hooyo Cafe"),
+        {
+          key: "payment.request_with_reference",
+          params: { merchant: "Hooyo Cafe", amount: "USD 12.50", reference: "Order 1001" },
+        },
         expect.objectContaining({ type: "api_charge", chargeId: res.json.id })
       );
     });
@@ -383,7 +385,12 @@ describe("Merchant Payments API", () => {
       });
       expect(db.get(`transactions/${PAYMENT_TX}`)!.refundedAt).toBeDefined();
       expect(db.get(`api_charges/${CHARGE}`)).toMatchObject({ amountRefunded: 5000, feeRefunded: 50, refundCount: 1 });
-      expect(mockedNotify).toHaveBeenCalledWith(CUSTOMER, "refund_issued", expect.any(String), expect.any(String), expect.any(Object));
+      expect(mockedNotify).toHaveBeenCalledWith(
+        CUSTOMER,
+        "refund_issued",
+        expect.objectContaining({ key: "refund.received" }),
+        expect.any(Object)
+      );
     });
 
     it("partial refunds add up to exactly the charge and the fee", async () => {

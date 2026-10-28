@@ -328,8 +328,7 @@ export async function createRefund(
   notifyUser(
     refund.customerId,
     "refund_issued",
-    "Refund Received",
-    `You were refunded USD ${(refund.amount / 100).toFixed(2)}`,
+    { key: "refund.received", params: { amount: `USD ${(refund.amount / 100).toFixed(2)}` } },
     { type: "refund_issued", amount: refund.amount.toString(), currency: "USD", merchantId: refund.merchantId }
   ).catch((err) => console.error("Failed to notify customer of refund:", err));
 

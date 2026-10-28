@@ -317,10 +317,7 @@ export const adminReviewKyc = https.onCall(
     notifyUser(
       userId,
       approved ? "kyc_approved" : "kyc_rejected",
-      approved ? "Identity verified" : "Verification unsuccessful",
-      approved
-        ? "Your identity is verified. Your transaction limits have increased."
-        : `We could not verify your documents. ${reason}`,
+      approved ? { key: "kyc.approved" } : { key: "kyc.rejected", params: { reason } },
       { kycStatus: outcome.kycStatus }
     ).catch((err) => console.error("Failed to notify applicant:", err));
 

@@ -16,6 +16,7 @@ import { ApiResponse, Transaction } from "../types";
 import { requireAuth, sanitizeString } from "../utils/validation";
 import { getRates } from "../config/rates";
 import { notifyUser } from "../utils/notifications";
+import { PushMessage } from "../utils/pushTemplates";
 import { JOURNAL_COLLECTION, JournalEntryType } from "../ledger";
 import { REFUNDABLE_ENTRY_TYPES } from "../qr-payments/refundCore";
 import {
@@ -151,12 +152,11 @@ function requireText(value: unknown, field: string): string {
 function notifyQuietly(
   userId: string | null,
   type: "dispute_opened" | "dispute_updated" | "dispute_resolved",
-  title: string,
-  body: string,
+  message: PushMessage,
   disputeId: string
 ): void {
   if (!userId) return;
-  notifyUser(userId, type, title, body, { type, disputeId }).catch((err) =>
+  notifyUser(userId, type, message, { type, disputeId }).catch((err) =>
     console.error(`Failed to notify ${userId} about dispute ${disputeId}:`, err)
   );
 }
@@ -267,10 +267,13 @@ export const openDispute = https.onCall(
     notifyQuietly(
       against,
       "dispute_opened",
-      kind === "refund_requested" ? "Refund requested" : "A payment was disputed",
-      `${kind === "refund_requested" ? "A customer asked for a refund of" : "A customer disputed a payment of"} $${(amountCents / 100).toFixed(2)}. Reply within ${Math.round(
-        rates.disputeResponseHours / 24
-      )} days.`,
+      {
+        key: kind === "refund_requested" ? "dispute.refund_requested" : "dispute.payment_disputed",
+        params: {
+          amount: `$${(amountCents / 100).toFixed(2)}`,
+          days: { days: Math.round(rates.disputeResponseHours / 24) },
+        },
+      },
       disputeId
     );
 
@@ -324,7 +327,7 @@ export const postDisputeMessage = https.onCall(
       return { status, notify: role === "raiser" ? d.against : d.raisedBy };
     });
 
-    notifyQuietly(result.notify, "dispute_updated", "Dispute update", "There's a new reply on a dispute.", disputeId);
+    notifyQuietly(result.notify, "dispute_updated", { key: "dispute.new_reply" }, disputeId);
     return { success: true, data: { status: result.status } };
   }
 );
@@ -359,7 +362,7 @@ export const withdrawDispute = https.onCall(
       return d.against;
     });
 
-    notifyQuietly(against, "dispute_resolved", "Dispute withdrawn", "A dispute against you was withdrawn.", disputeId);
+    notifyQuietly(against, "dispute_resolved", { key: "dispute.withdrawn" }, disputeId);
     return { success: true, message: "Dispute withdrawn" };
   }
 );
