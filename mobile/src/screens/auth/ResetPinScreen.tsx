@@ -2,13 +2,13 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  SafeAreaView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from '../../components/SafeAreaView';
 import { useTranslation } from 'react-i18next';
 import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import { AuthLayout, AuthHeader, CodeInput } from '../../components/auth';

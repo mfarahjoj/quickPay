@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Text, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
+import { Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { SafeAreaView } from '../../components/SafeAreaView';
 import { useTranslation } from 'react-i18next';
 import { setupPin } from '../../services/auth.service';
 import { setPendingSetupPin } from '../../services/biometric.service';

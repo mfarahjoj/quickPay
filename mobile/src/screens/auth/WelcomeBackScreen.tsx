@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
-  SafeAreaView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from '../../components/SafeAreaView';
 import { useTranslation } from 'react-i18next';
 import { BiometryTypes } from 'react-native-biometrics';
 import firestore from '@react-native-firebase/firestore';

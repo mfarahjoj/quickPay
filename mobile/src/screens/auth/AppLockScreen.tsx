@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, Text, TouchableOpacity, StyleSheet, Alert, SafeAreaView, View } from 'react-native';
+import { AppState, Text, TouchableOpacity, StyleSheet, Alert, View } from 'react-native';
+import { SafeAreaView } from '../../components/SafeAreaView';
 import { useTranslation } from 'react-i18next';
 import { BiometryTypes } from 'react-native-biometrics';
 import Animated, {

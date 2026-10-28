@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Linking, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from '../SafeAreaView';
 import { useTranslation } from 'react-i18next';
 import firestore from '@react-native-firebase/firestore';
 import { functions } from '../../services/firebase.config';
