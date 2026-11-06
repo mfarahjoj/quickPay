@@ -6,6 +6,7 @@ import {
   aggregateDeltas,
   validateEntry,
 } from "../ledger";
+import { fakeFirestore, useFakeFirestore, wallet, FakeDb } from "./helpers/fakeFirestore";
 
 const test = require("firebase-functions-test")();
 
@@ -17,6 +18,7 @@ jest.mock("../utils/notifications", () => ({
 }));
 
 import { verifyUserPin } from "../auth/validatePin";
+import { clearRatesCache } from "../config/rates";
 const mockedVerifyPin = verifyUserPin as jest.MockedFunction<typeof verifyUserPin>;
 
 const MERCHANT = "merch-1";
@@ -94,12 +96,33 @@ describe("requestPayout", () => {
     wrapped = test.wrap((await import("../payouts/requestPayout")).requestPayout);
   });
 
+  let restore: (() => void) | undefined;
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockedVerifyPin.mockResolvedValue(true);
+    clearRatesCache();
+  });
+
+  afterEach(() => {
+    restore?.();
+    restore = undefined;
   });
 
   afterAll(() => test.cleanup());
+
+  const ZAAD = { msisdn: "+252634123456", name: "Hooyo Xasan", updatedAt: admin.firestore.Timestamp.now() };
+  const seed = (user: Record<string, unknown> = { zaad: ZAAD }): FakeDb => {
+    const db = fakeFirestore({
+      [`users/${MERCHANT}`]: { accountType: "merchant", fullName: "Hooyo Restaurant", ...user },
+      [`wallets/${MERCHANT}`]: wallet(AMOUNT * 2),
+      [`merchantProfiles/${MERCHANT}`]: { businessName: "Hooyo Restaurant" },
+    });
+    restore = useFakeFirestore(db);
+    return db;
+  };
+  const payouts = (db: FakeDb) =>
+    [...db.store.entries()].filter(([p]) => p.startsWith("payoutRequests/")).map(([, d]) => d);
 
   const call = (data: Record<string, unknown> = {}) =>
     wrapped({
@@ -132,13 +155,31 @@ describe("requestPayout", () => {
     await expect(call({ amountCents: 250.5 })).rejects.toThrow(/Payouts start at/i);
   });
 
-  it("refuses an unknown rail", async () => {
-    await expect(call({ route: "carrier-pigeon" })).rejects.toThrow(/route must be/i);
+  it("sends it to the Zaad account on file, whatever the request names", async () => {
+    const db = seed();
+    await call({ route: "bank", destinationName: "Someone Else", destinationRef: "999" });
+    const [p] = payouts(db);
+    expect(p).toMatchObject({
+      merchantId: MERCHANT,
+      amountCents: AMOUNT,
+      route: "zaad",
+      destinationName: "Hooyo Xasan",
+      destinationRef: "+252634123456",
+      status: "requested",
+    });
+    expect(db.get(`wallets/${MERCHANT}`)!.balance).toBe(AMOUNT);
   });
 
-  it("insists on somewhere to send the money", async () => {
-    await expect(call({ destinationRef: "" })).rejects.toThrow(
-      /account name and number/i
-    );
+  it("asks for a Zaad account first", async () => {
+    const db = seed({});
+    await expect(call()).rejects.toThrow(/Add your Zaad account/i);
+    expect(payouts(db)).toHaveLength(0);
+    expect(mockedVerifyPin).not.toHaveBeenCalled();
+  });
+
+  it("waits after the Zaad number changes", async () => {
+    const db = seed({ zaad: { ...ZAAD, changedAt: admin.firestore.Timestamp.now() } });
+    await expect(call()).rejects.toThrow(/changed Zaad number 24 hours/i);
+    expect(payouts(db)).toHaveLength(0);
   });
 });

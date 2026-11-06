@@ -28,6 +28,20 @@ export interface LinkedAccounts {
   edahabPhone?: string;
 }
 
+/**
+ * The Zaad account a customer or merchant gives as their own (auth/zaadAccount.ts):
+ * typed, not verified. Merchants' payouts go only here.
+ */
+export interface ZaadAccount {
+  /** E.164, e.g. +252634123456. */
+  msisdn: string;
+  /** The name the Zaad account is registered to. */
+  name: string;
+  updatedAt: FirebaseFirestore.Timestamp;
+  /** When an earlier number was replaced; payouts wait after it. */
+  changedAt?: FirebaseFirestore.Timestamp;
+}
+
 export type AgentService = "cash_in" | "cash_out";
 
 export interface AgentInfo {
@@ -59,6 +73,7 @@ export interface User {
   kycStatus: KycStatus;
   notificationPreferences: NotificationPreferences;
   linkedAccounts: LinkedAccounts;
+  zaad?: ZaadAccount;
   agentInfo?: AgentInfo;
   dailyTransactionLimit: number;
   monthlyTransactionLimit: number;

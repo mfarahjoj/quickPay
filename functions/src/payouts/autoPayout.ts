@@ -2,7 +2,8 @@
  * Automatic daily payouts (plan 3.6, decision D11).
  *
  * A merchant switches it on once, with their PIN, choosing a balance to keep
- * for refunds and where the money goes. Every evening `runAutoPayouts` queues
+ * for refunds. The money goes to their Zaad account on file, like every
+ * payout (auth/zaadAccount.ts). Every evening `runAutoPayouts` queues
  * a payout of everything above that balance, through the same path as a
  * manual request (createPayoutRequest: hold, 24-hour senior threshold, ops
  * desk). Ops still send the money, since there are no automated rails yet.
@@ -11,6 +12,7 @@
  * - a frozen or closed account, or one no longer a merchant;
  * - a merchant still in the pause after a PIN reset;
  * - a merchant with a payout already waiting;
+ * - no Zaad account on file, or a number changed too recently;
  * - less than autoPayoutMinCents (config) above the kept balance.
  * Money reserved for a lost dispute (D8) is never counted as available.
  */
@@ -26,8 +28,9 @@ import { isMerchantRole } from "../utils/roles";
 import { assertResetCooldownAllows } from "../utils/resetCooldown";
 import { notifyUser } from "../utils/notifications";
 import { getRates } from "../config/rates";
-import { isFloatRoute, type FloatRoute } from "../ledger";
+import { type FloatRoute } from "../ledger";
 import { createPayoutRequest, PAYOUT_REQUESTS_COLLECTION } from "./requestPayout";
+import { zaadLabel, zaadPayoutBlock } from "../auth/zaadAccount";
 
 /** A typo should not become a five-figure transfer. */
 const MAX_AUTO_PAYOUT_CENTS = 1_000_000_00;
@@ -36,18 +39,16 @@ export interface AutoPayoutSettings {
   enabled: boolean;
   /** Left in the wallet for refunds and change. */
   keepCents: number;
-  route: FloatRoute;
-  destinationName: string;
-  destinationRef: string;
   updatedAt: FirebaseFirestore.Timestamp;
+  // Set before payouts went only to the Zaad account on file; no longer read.
+  route?: FloatRoute;
+  destinationName?: string;
+  destinationRef?: string;
 }
 
 interface SetAutoPayoutRequest {
   enabled: boolean;
   keepCents?: number;
-  route?: string;
-  destinationName?: string;
-  destinationRef?: string;
   pin: string;
 }
 
@@ -77,20 +78,12 @@ export const setAutoPayout = https.onCall(
     if (!Number.isInteger(keepCents) || keepCents < 0 || keepCents > MAX_AUTO_PAYOUT_CENTS) {
       throw new https.HttpsError("invalid-argument", "Choose a balance to keep of $0 or more");
     }
-    if (!isFloatRoute(d.route)) {
-      throw new https.HttpsError("invalid-argument", "route must be cash, zaad, edahab or bank");
-    }
-    const name = (d.destinationName ?? "").trim();
-    const destRef = (d.destinationRef ?? "").trim();
-    if (name.length < 2 || destRef.length < 3) {
-      throw new https.HttpsError("invalid-argument", "Tell us the account name and number to send the money to");
+    if (!user.zaad?.msisdn || !user.zaad?.name) {
+      throw new https.HttpsError("failed-precondition", "Add your Zaad account first");
     }
     const settings: AutoPayoutSettings = {
       enabled: true,
       keepCents,
-      route: d.route,
-      destinationName: name.slice(0, 100),
-      destinationRef: destRef.slice(0, 60),
       updatedAt: admin.firestore.Timestamp.now(),
     };
     await ref.set({ autoPayout: settings }, { merge: true });
@@ -101,7 +94,7 @@ export const setAutoPayout = https.onCall(
 /** One night's run. Returns how many payouts were queued. */
 export async function runAutoPayoutsNow(): Promise<{ queued: number; skipped: number }> {
   const db = admin.firestore();
-  const { autoPayoutMinCents } = await getRates();
+  const { autoPayoutMinCents, zaadChangeHoldHours } = await getRates();
   const profiles = await db.collection("merchantProfiles").where("autoPayout.enabled", "==", true).limit(500).get();
 
   let queued = 0;
@@ -115,6 +108,11 @@ export async function runAutoPayoutsNow(): Promise<{ queued: number; skipped: nu
         skipped++;
         continue;
       }
+      if (zaadPayoutBlock(user, zaadChangeHoldHours, Date.now())) {
+        skipped++;
+        continue;
+      }
+      const zaad = user.zaad!;
       try {
         await assertResetCooldownAllows(uid, "other", 0);
       } catch {
@@ -140,9 +138,9 @@ export async function runAutoPayoutsNow(): Promise<{ queued: number; skipped: nu
       const amountCents = Math.min(available, MAX_AUTO_PAYOUT_CENTS);
       await createPayoutRequest(db, uid, user, {
         amountCents,
-        route: settings.route,
-        destinationName: settings.destinationName,
-        destinationRef: settings.destinationRef,
+        route: "zaad",
+        destinationName: zaad.name,
+        destinationRef: zaad.msisdn,
         auto: true,
       });
       queued++;
@@ -151,7 +149,7 @@ export async function runAutoPayoutsNow(): Promise<{ queued: number; skipped: nu
         "payout_sent",
         {
           key: "payout.auto_requested",
-          params: { amount: `$${(amountCents / 100).toFixed(2)}`, destination: settings.destinationName },
+          params: { amount: `$${(amountCents / 100).toFixed(2)}`, destination: zaadLabel(zaad.msisdn) },
         },
         { type: "auto_payout" }
       ).catch(() => undefined);

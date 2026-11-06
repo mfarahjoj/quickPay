@@ -18,6 +18,7 @@ Account types: `customer`, `merchant`, `topup_agent`, `agent_merchant`. Prod Fir
 5. **Guards run before posting:** App Check on callables, PIN verification for user-initiated debits, KYC per-transaction caps, and `enforceVelocity` (`functions/src/utils/velocity.ts`).
 6. **Every `transactions` writer sets the `participants` array** and links `journalEntryId`.
 7. Money helpers: `dollarsToCents`/`centsToDollars` in `functions/src/utils/validation.ts`.
+8. **Merchant payouts go only to the Zaad account on file** (`users.zaad`, set by `setZaadAccount` in `functions/src/auth/zaadAccount.ts`; both apps ask every account for it). Never take a payout destination from the request. A new number holds payouts for `zaadChangeHoldHours`. The Zaad account is typed, not verified, so it must never be used to credit money.
 
 Use the `new-money-flow` skill when adding or modifying any flow that moves value.
 

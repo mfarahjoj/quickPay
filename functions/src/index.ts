@@ -21,6 +21,7 @@ export {
   renameMyDevice,
 } from "./auth/trustedDevice";
 export { updateProfile } from "./auth/updateProfile";
+export { setZaadAccount } from "./auth/zaadAccount";
 export { submitKYC } from "./auth/submitKYC";
 export {
   requestAccountDeletion,
