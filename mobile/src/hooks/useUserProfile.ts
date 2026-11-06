@@ -22,6 +22,8 @@ export interface UserProfile {
   kycStatus: KycStatus;
   notificationPreferences: NotificationPreferences;
   linkedAccounts: LinkedAccounts;
+  /** The customer's own Zaad account (services/zaadAccount.service.ts); unset until they give it. */
+  zaad?: { msisdn: string; name: string };
   dailyTransactionLimit: number;
   monthlyTransactionLimit: number;
   referralCode?: string;
@@ -71,6 +73,9 @@ export function useUserProfile() {
             notificationPreferences:
               data?.notificationPreferences ?? DEFAULT_NOTIFICATION_PREFS,
             linkedAccounts: data?.linkedAccounts ?? {},
+            zaad: data?.zaad?.msisdn && data?.zaad?.name
+              ? { msisdn: data.zaad.msisdn, name: data.zaad.name }
+              : undefined,
             dailyTransactionLimit: data?.dailyTransactionLimit ?? 50000,
             monthlyTransactionLimit: data?.monthlyTransactionLimit ?? 500000,
             referralCode: data?.referralCode ?? undefined,

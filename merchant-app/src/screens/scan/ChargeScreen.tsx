@@ -244,7 +244,7 @@ export default function ChargeScreen({ route, navigation }: Props) {
   const scanAgain = () =>
     cashOut
       ? navigation.navigate('ScanCashOut', { purpose: 'cash_out' })
-      : navigation.navigate('MainTabs', { screen: 'ScanCharge' });
+      : navigation.navigate('ScanCharge');
 
   // ── Outcomes ──
   if (phase === 'approved') {

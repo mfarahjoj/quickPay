@@ -20,7 +20,7 @@ import {
   useTheme,
   type AppearancePreference,
 } from '../../theme';
-import { ShieldIcon, ChartIcon } from '../../components/icons/AuthIcons';
+import { ShieldIcon, ChartIcon, PhoneIcon } from '../../components/icons/AuthIcons';
 import {
   IDCardIcon,
   LinkIcon,
@@ -31,6 +31,7 @@ import {
   GiftIcon,
   ContrastIcon,
 } from '../../components/icons/UIIcons';
+import { formatLocal } from '../../services/mobileMoney.utils';
 import type { KycStatus } from '../../types';
 
 interface Props {
@@ -53,11 +54,13 @@ const KYC_LABEL_KEYS: Record<KycStatus, string> = {
 function MenuItem({
   icon,
   label,
+  detail,
   onPress,
   danger,
 }: {
   icon: React.ReactNode;
   label: string;
+  detail?: string;
   onPress: () => void;
   danger?: boolean;
 }) {
@@ -68,6 +71,7 @@ function MenuItem({
       <Text style={[styles.menuText, danger && styles.menuTextDanger]}>
         {label}
       </Text>
+      {detail ? <Text style={styles.menuDetail}>{detail}</Text> : null}
       <Text style={styles.menuArrow}>›</Text>
     </TouchableOpacity>
   );
@@ -198,6 +202,12 @@ export default function ProfileScreen({ navigation }: Props) {
           icon={<IDCardIcon size={22} color={colors.ui.textDim} />}
           label={t('profile.identityVerification')}
           onPress={() => navigation.navigate('KYC')}
+        />
+        <MenuItem
+          icon={<PhoneIcon size={22} color={colors.ui.textDim} />}
+          label={t('profile.zaadAccount')}
+          detail={profile?.zaad ? formatLocal(profile.zaad.msisdn) : undefined}
+          onPress={() => navigation.navigate('ZaadAccount')}
         />
         <MenuItem
           icon={<LinkIcon size={22} color={colors.ui.textDim} />}
@@ -384,6 +394,11 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
   },
   menuTextDanger: {
     color: colors.ui.error,
+  },
+  menuDetail: {
+    ...typography.body,
+    color: colors.ui.textFaint,
+    marginRight: spacing.sm,
   },
   menuArrow: {
     fontSize: 20,

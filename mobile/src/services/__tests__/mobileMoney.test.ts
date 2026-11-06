@@ -1,4 +1,13 @@
-import { amountCents, canDialUssd, dollars, formatLocal, ussdUrl, zaadTopupsOn } from '../mobileMoney.utils';
+import {
+  amountCents,
+  canDialUssd,
+  dollars,
+  formatLocal,
+  normaliseSomaliMsisdn,
+  normaliseZaadName,
+  ussdUrl,
+  zaadTopupsOn,
+} from '../mobileMoney.utils';
 
 describe('mobile money helpers', () => {
   it('escapes # so the dialer keeps the whole code', () => {
@@ -39,5 +48,21 @@ describe('mobile money helpers', () => {
     expect(zaadTopupsOn({ merchant: { zaadTopups: true } })).toBe(false);
     expect(zaadTopupsOn(undefined)).toBe(false);
     expect(zaadTopupsOn(null)).toBe(false);
+  });
+
+  it('reads Somali numbers the way the server does', () => {
+    expect(normaliseSomaliMsisdn('063 412 3456')).toBe('+252634123456');
+    expect(normaliseSomaliMsisdn('+252 63 412 3456')).toBe('+252634123456');
+    expect(normaliseSomaliMsisdn('00252634123456')).toBe('+252634123456');
+    expect(normaliseSomaliMsisdn('634123456')).toBe('+252634123456');
+    expect(normaliseSomaliMsisdn('12345')).toBeNull();
+    expect(normaliseSomaliMsisdn('')).toBeNull();
+  });
+
+  it('takes a full Zaad name, not one word or digits', () => {
+    expect(normaliseZaadName('  Amina   Yusuf ')).toBe('Amina Yusuf');
+    expect(normaliseZaadName('أمينة يوسف')).toBe('أمينة يوسف');
+    expect(normaliseZaadName('Amina')).toBeNull();
+    expect(normaliseZaadName('Amina 063')).toBeNull();
   });
 });

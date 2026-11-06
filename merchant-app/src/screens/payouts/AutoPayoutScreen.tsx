@@ -1,33 +1,30 @@
 /**
  * Automatic daily payouts (plan 3.6, D11): each evening, everything above the
- * balance the merchant chooses to keep is requested as a payout to the
- * account they give here. Switching it on or off takes the PIN.
+ * balance the merchant chooses to keep is requested as a payout to their
+ * Zaad account on file. Switching it on or off takes the PIN.
  */
 
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Switch, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput, ActivityIndicator, Switch, Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import { DarkScreen, ScreenHeader, GlassCard, PillButton, PinInput, ACCENT, TEXT_DIM, TEXT_FAINT } from '../../components';
 import { firestore, functions } from '../../services/firebase.config';
 import { useAuth } from '../../hooks/useAuth';
+import { useMerchantProfile } from '../../hooks/useMerchantProfile';
 import { toCents, formatCents, sanitizeAmountInput } from '../../utils/money';
 import { isWrongPin, pinActionErrorKey } from '../../utils/errors';
-
-type Route = 'bank' | 'zaad' | 'edahab' | 'cash';
-const ROUTES: Route[] = ['bank', 'zaad', 'edahab', 'cash'];
+import { ZaadDestination } from './ZaadDestination';
 
 export default function AutoPayoutScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
   const { user } = useAuth();
+  const zaad = useMerchantProfile().profile?.zaad;
 
   const [loading, setLoading] = useState(true);
   const [enabled, setEnabled] = useState(false);
   const [keep, setKeep] = useState('20');
-  const [route, setRoute] = useState<Route>('zaad');
-  const [name, setName] = useState('');
-  const [ref, setRef] = useState('');
   const [minCents, setMinCents] = useState(1000);
   const [pinStep, setPinStep] = useState(false);
   const [pin, setPin] = useState('');
@@ -45,9 +42,6 @@ export default function AutoPayoutScreen() {
         if (a) {
           setEnabled(!!a.enabled);
           if (typeof a.keepCents === 'number') setKeep((a.keepCents / 100).toFixed(2));
-          if (a.route) setRoute(a.route);
-          if (a.destinationName) setName(a.destinationName);
-          if (a.destinationRef) setRef(a.destinationRef);
         }
         setMinCents((pricing.data as any)?.data?.autoPayoutMinCents ?? 1000);
       })
@@ -55,16 +49,14 @@ export default function AutoPayoutScreen() {
       .finally(() => setLoading(false));
   }, [user?.uid]);
 
-  const valid = !enabled || (name.trim().length >= 2 && ref.trim().length >= 3);
+  const valid = !enabled || !!zaad;
 
   const save = async (enteredPin: string) => {
     if (saving) return;
     setSaving(true);
     try {
       await functions().httpsCallable('setAutoPayout')(
-        enabled
-          ? { enabled, keepCents: toCents(keep), route, destinationName: name.trim(), destinationRef: ref.trim(), pin: enteredPin }
-          : { enabled, pin: enteredPin }
+        enabled ? { enabled, keepCents: toCents(keep), pin: enteredPin } : { enabled, pin: enteredPin }
       );
       setPinStep(false);
       Alert.alert(t('common.success'), enabled ? t('autoPayout.savedOn') : t('autoPayout.savedOff'), [
@@ -135,27 +127,7 @@ export default function AutoPayoutScreen() {
                 </GlassCard>
                 <Text style={styles.hint}>{t('autoPayout.keepHint')}</Text>
 
-                <Text style={styles.label}>{t('payout.routeLabel')}</Text>
-                <View style={styles.routeRow}>
-                  {ROUTES.map((r) => (
-                    <TouchableOpacity key={r} style={[styles.routeChip, route === r && styles.routeChipActive]} onPress={() => setRoute(r)}>
-                      <Text style={styles.routeText}>{t(`payout.route.${r}`)}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                <Text style={styles.label}>{t('payout.destinationLabel')}</Text>
-                <GlassCard>
-                  <TextInput style={styles.input} value={name} onChangeText={setName} placeholder={t('payout.destinationNamePlaceholder')} placeholderTextColor={TEXT_FAINT} />
-                  <View style={styles.divider} />
-                  <TextInput
-                    style={styles.input}
-                    value={ref}
-                    onChangeText={setRef}
-                    placeholder={route === 'bank' ? t('payout.destinationAccountPlaceholder') : t('payout.destinationPhonePlaceholder')}
-                    placeholderTextColor={TEXT_FAINT}
-                  />
-                </GlassCard>
+                <ZaadDestination zaad={zaad} />
               </>
             )}
 
@@ -181,11 +153,6 @@ const styles = StyleSheet.create({
   toggleLabel: { fontSize: 16, fontWeight: '600', color: '#FFFFFF', flex: 1 },
   label: { fontSize: 12, fontWeight: '700', color: TEXT_FAINT, letterSpacing: 1, textTransform: 'uppercase', marginTop: 20, marginBottom: 8 },
   input: { fontSize: 15, color: '#FFFFFF', padding: 16 },
-  divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.08)' },
   hint: { fontSize: 12, color: TEXT_FAINT, marginTop: 10, lineHeight: 17 },
-  routeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  routeChip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
-  routeChipActive: { backgroundColor: ACCENT, borderColor: ACCENT },
-  routeText: { color: '#FFFFFF', fontWeight: '600' },
   save: { marginTop: 28 },
 });

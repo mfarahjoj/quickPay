@@ -13,6 +13,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useIdleSignOut } from '../hooks/useIdleSignOut';
 import { useDeviceIntegrity } from '../hooks/useDeviceIntegrity';
 import { ConsentGate } from '../components/legal/ConsentGate';
+import { ZaadGate } from '../screens/profile/ZaadAccountScreen';
 import { usePinSetupDone } from '../hooks/usePinSetupDone';
 import { useBiometricSetupDone } from '../hooks/useBiometricSetupDone';
 import { markPinVerifiedThisInstall, usePinVerifiedThisInstall } from '../hooks/usePinVerifiedThisInstall';
@@ -112,6 +113,7 @@ type MainStackParamList = {
   EditProfile: undefined;
   KYC: undefined;
   LinkedAccounts: undefined;
+  ZaadAccount: undefined;
   TransactionLimits: undefined;
   About: undefined;
   Invite: undefined;
@@ -407,6 +409,11 @@ function MainStackNavigator() {
         options={{ title: t('nav.screen.linkedAccounts') }}
       />
       <MainStack.Screen
+        name="ZaadAccount"
+        getComponent={() => require('../screens/profile/ZaadAccountScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
         name="TransactionLimits"
         getComponent={() => require('../screens/profile/TransactionLimitsScreen').default}
         options={{ title: t('nav.screen.transactionLimits') }}
@@ -674,8 +681,15 @@ export default function AppNavigator() {
         </RootStack.Navigator>
       </NavigationContainer>
     );
-    // Terms and privacy, recorded with versions (review E12).
-    return user ? <ConsentGate uid={user.uid}>{app}</ConsentGate> : app;
+    // Terms and privacy, recorded with versions (review E12), then the
+    // Zaad account every account gives.
+    return user ? (
+      <ConsentGate uid={user.uid}>
+        <ZaadGate>{app}</ZaadGate>
+      </ConsentGate>
+    ) : (
+      app
+    );
   };
 
   // The lock covers what's underneath instead of replacing it, as in the

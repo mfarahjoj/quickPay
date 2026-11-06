@@ -24,22 +24,6 @@ export interface TopupResult {
   newBalance: number;
 }
 
-export interface TopupRecord {
-  id: string;
-  userId: string;
-  agentId: string;
-  amount: number;
-  amountDollars: number;
-  currency: string;
-  paymentMethod: string;
-  reference: string;
-  notes: string;
-  status: string;
-  transactionId: string;
-  createdAt: Date;
-  completedAt?: Date;
-}
-
 export async function lookupCustomer(phoneNumber: string): Promise<CustomerLookupResult> {
   try {
     const fn = functions().httpsCallable('lookupUserByPhone');
@@ -71,22 +55,5 @@ export async function topupCustomer(request: TopupRequest): Promise<TopupResult>
   } catch (error: any) {
     logger.error('Top-up customer error:', error);
     throw new Error(error.message || 'Failed to top up customer');
-  }
-}
-
-export async function getTopupHistory(limit: number = 50): Promise<TopupRecord[]> {
-  try {
-    const fn = functions().httpsCallable('getAgentTopupHistory');
-    const result = await fn({ limit });
-    const data = result.data as { success: boolean; error?: string; data: TopupRecord[] };
-
-    if (!data.success) {
-      throw new Error(data.error || 'Failed to load history');
-    }
-
-    return data.data;
-  } catch (error: any) {
-    logger.error('Get topup history error:', error);
-    throw new Error(error.message || 'Failed to load top-up history');
   }
 }

@@ -156,18 +156,3 @@ export interface CustomerLookupResult {
   fullName: string;
   accountType: string;
 }
-
-export interface TopupRecord {
-  id: string;
-  userId: string;
-  agentId: string;
-  amount: number;
-  amountDollars: number;
-  currency: string;
-  paymentMethod: string;
-  reference: string;
-  status: string;
-  transactionId: string;
-  createdAt: Date;
-  completedAt?: Date;
-}

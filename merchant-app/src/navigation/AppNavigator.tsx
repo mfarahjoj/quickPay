@@ -14,11 +14,11 @@ import { useDeletionPending } from '../hooks/useDeletionPending';
 import { useIdleSignOut } from '../hooks/useIdleSignOut';
 import { useDeviceIntegrity } from '../hooks/useDeviceIntegrity';
 import { ConsentGate } from '../components/legal/ConsentGate';
+import { ZaadGate } from '../screens/settings/ZaadAccountScreen';
 import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import { colors } from '../theme';
 import {
   HomeTabIcon,
-  ScanTabIcon,
   ReceiveTabIcon,
   HistoryTabIcon,
   SettingsTabIcon,
@@ -45,10 +45,10 @@ type MerchantStackParamList = {
     /** "cash_out": the agent hands over cash once the customer approves. */
     purpose?: 'payment' | 'cash_out';
   };
+  ScanCharge: undefined;
   ScanCashOut: { purpose: 'cash_out' };
   TransactionDetail: { transaction: any };
   TopupCustomer: undefined;
-  TopupHistory: undefined;
   ConfirmCashOut: undefined;
   ConfirmTopup: undefined;
   AgentProfileEdit: undefined;
@@ -67,11 +67,11 @@ type MerchantStackParamList = {
   ChangePhone: undefined;
   ChangePin: undefined;
   ResetPin: undefined;
+  ZaadAccount: undefined;
 };
 
 type TabParamList = {
   Dashboard: undefined;
-  ScanCharge: undefined;
   GenerateQR: undefined;
   History: undefined;
   Settings: undefined;
@@ -85,7 +85,6 @@ const Tab = createBottomTabNavigator<TabParamList>();
 type TabIconArgs = { color: string; focused: boolean };
 
 const DashboardIcon = ({ color, focused }: TabIconArgs) => <HomeTabIcon color={color} focused={focused} />;
-const ScanIcon = ({ color, focused }: TabIconArgs) => <ScanTabIcon color={color} focused={focused} />;
 const HistoryIcon = ({ color, focused }: TabIconArgs) => <HistoryTabIcon color={color} focused={focused} />;
 const SettingsIcon = ({ color, focused }: TabIconArgs) => <SettingsTabIcon color={color} focused={focused} />;
 const ReceiveIcon = ({ color, focused }: TabIconArgs) => <ReceiveTabIcon color={color} focused={focused} />;
@@ -153,16 +152,6 @@ function MainTabs() {
           title: t('navigation.tabs.home'),
           tabBarIcon: DashboardIcon,
           tabBarAccessibilityLabel: t('navigation.accessibility.dashboardTab'),
-        }}
-      />
-      <Tab.Screen
-        name="ScanCharge"
-        getComponent={() => require('../screens/scan/ScanCustomerScreen').default}
-        options={{
-          title: t('navigation.tabs.scan'),
-          headerTitle: t('navigation.tabs.scanAndCharge'),
-          tabBarIcon: ScanIcon,
-          tabBarAccessibilityLabel: t('navigation.accessibility.scanTab'),
         }}
       />
       <Tab.Screen
@@ -237,9 +226,9 @@ function MainStackNavigator() {
         options={{ title: t('navigation.headers.topUpCustomer') }}
       />
       <MainStack.Screen
-        name="TopupHistory"
-        getComponent={() => require('../screens/topup/TopupHistoryScreen').default}
-        options={{ title: t('navigation.headers.topUpHistory') }}
+        name="ScanCharge"
+        getComponent={() => require('../screens/scan/ScanCustomerScreen').default}
+        options={{ title: t('navigation.tabs.scanAndCharge') }}
       />
       <MainStack.Screen
         name="ScanCashOut"
@@ -341,6 +330,11 @@ function MainStackNavigator() {
         getComponent={() => require('../screens/disputes/ReportProblemScreen').default}
         options={{ headerShown: false }}
       />
+      <MainStack.Screen
+        name="ZaadAccount"
+        getComponent={() => require('../screens/settings/ZaadAccountScreen').default}
+        options={{ headerShown: false }}
+      />
     </MainStack.Navigator>
   );
 }
@@ -424,8 +418,11 @@ export default function AppNavigator() {
   // so a different account never inherits an unlocked state.
   return user ? (
     <AppLockGate key={user.uid}>
-      {/* Terms and privacy, recorded with versions (review E12). */}
-      <ConsentGate uid={user.uid}>{app}</ConsentGate>
+      {/* Terms and privacy, recorded with versions (review E12), then the
+          Zaad account payouts go to. */}
+      <ConsentGate uid={user.uid}>
+        <ZaadGate>{app}</ZaadGate>
+      </ConsentGate>
     </AppLockGate>
   ) : (
     app

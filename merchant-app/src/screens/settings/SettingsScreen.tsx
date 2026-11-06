@@ -7,6 +7,7 @@ import { signOut } from '../../services/auth.service';
 import { useMerchantProfile } from '../../hooks/useMerchantProfile';
 import { useAuth } from '../../hooks/useAuth';
 import { needsReply, useMyDisputes } from '../../services/dispute.service';
+import { formatLocal } from '../../utils/zaad';
 import {
   LanguageSelector,
   DarkScreen,
@@ -33,10 +34,11 @@ function Row({ label, value, mono }: { label: string; value: string; mono?: bool
   );
 }
 
-function TappableRow({ label, onPress }: { label: string; onPress: () => void }) {
+function TappableRow({ label, value, onPress }: { label: string; value?: string; onPress: () => void }) {
   return (
     <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.7}>
       <Text style={styles.rowLabel}>{label}</Text>
+      {value ? <Text style={styles.rowDetail}>{value}</Text> : null}
       <Text style={styles.rowChevron}>›</Text>
     </TouchableOpacity>
   );
@@ -97,6 +99,13 @@ export default function SettingsScreen() {
             <Row label={t('settings.email')} value={profile.email} />
           </>
         ) : null}
+        <View style={styles.divider} />
+        {/* Where payouts go. */}
+        <TappableRow
+          label={t('settings.zaadAccount')}
+          value={profile?.zaad ? formatLocal(profile.zaad.msisdn) : undefined}
+          onPress={() => navigation.navigate('ZaadAccount')}
+        />
       </GlassCard>
 
       {/* Security */}
@@ -300,6 +309,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: 'rgba(255,105,97,0.75)',
+  },
+  rowDetail: {
+    flex: 1,
+    textAlign: 'right',
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.85)',
   },
   rowChevron: {
     fontSize: 20,

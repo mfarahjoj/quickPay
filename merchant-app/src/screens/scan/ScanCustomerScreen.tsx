@@ -252,6 +252,12 @@ export default function ScanCustomerScreen() {
           disabled={!manualInput.trim() || loading}
           style={styles.verifyBtn}
         />
+        {/* Customer apps that can't approve at the counter show a cash-out code. */}
+        {purpose === 'cash_out' ? (
+          <TouchableOpacity style={styles.altLink} onPress={() => navigation.replace('ConfirmCashOut')}>
+            <Text style={styles.altLinkText}>{t('scan.cashOut.haveCode')}</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
       </KeyboardAvoidingView>
     </View>
@@ -349,4 +355,6 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   verifyBtn: { marginTop: 0 },
+  altLink: { alignItems: 'center', paddingTop: 14 },
+  altLinkText: { fontSize: 14, fontWeight: '600', color: ACCENT_COLOR },
 });

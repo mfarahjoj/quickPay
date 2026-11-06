@@ -321,6 +321,10 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
             disabled={extractCode(manual) === null}
             style={styles.verifyBtn}
           />
+          {/* Cash in without a code: find the customer by phone instead. */}
+          <TouchableOpacity style={styles.altLink} onPress={() => navigation.replace('TopupCustomer')}>
+            <Text style={styles.altLinkText}>{t('topup.confirm.byPhone')}</Text>
+          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     </View>
@@ -376,6 +380,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0, left: 0, right: 0,
   },
+  altLink: { alignItems: 'center', paddingTop: 14 },
+  altLinkText: { fontSize: 14, fontWeight: '600', color: ACCENT },
   manualSection: {
     backgroundColor: 'rgba(0,0,0,0.85)',
     paddingHorizontal: 20,

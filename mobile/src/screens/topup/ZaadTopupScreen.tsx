@@ -74,7 +74,8 @@ export default function ZaadTopupScreen() {
     if (step !== null || profile === undefined || profile === null) return;
     if (verified && !linkOnly) setStep('amount');
     else setStep('link');
-    setNumberText(linkedNumber ? formatLocal(linkedNumber) : '');
+    const offered = linkedNumber || profile.zaad?.msisdn;
+    setNumberText(offered ? formatLocal(offered) : '');
   }, [profile, step, verified, linkOnly, linkedNumber]);
 
   // Activation lands: the server marks the number verified on the profile.

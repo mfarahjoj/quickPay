@@ -24,6 +24,8 @@ import {
   ScanIcon,
   TopUpIcon,
   HistoryIcon,
+  WalletIcon,
+  HandshakeIcon,
 } from '../../components/icons/AuthIcons';
 import { Transaction } from '../../types';
 import { CURRENCY_SYMBOL } from '../../config/constants';
@@ -108,24 +110,20 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
   // Agents hold float apart from their sales and earnings.
   const { floatCents } = useFloat(isAgentRole, wallet?.lastTransactionAt?.getTime());
 
+  // One button per job. Receive also scans a customer's code; Cash in also
+  // finds a customer by phone; Cash out also takes a cash-out code, for
+  // customer apps that can't yet approve at the counter.
   const actions: ActionDef[] = [
     ...(isMerchantRole ? [
-      { key: 'qr', label: t('dashboard.quickActions.generateQR'), Icon: QrIcon, route: 'GenerateQR' },
-      { key: 'scan', label: t('dashboard.quickActions.scanAndCharge'), Icon: ScanIcon, route: 'ScanCharge' },
-      { key: 'payroll', label: t('dashboard.quickActions.payroll'), Icon: HistoryIcon, route: 'Payroll' },
-      { key: 'payout', label: t('dashboard.quickActions.getPaid'), Icon: TopUpIcon, route: 'Payout' },
+      { key: 'receive', label: t('dashboard.quickActions.receive'), Icon: QrIcon, route: 'GenerateQR' },
     ] : []),
     ...(isAgentRole ? [
-      { key: 'topup', label: t('dashboard.quickActions.topUpCustomer'), Icon: TopUpIcon, route: 'TopupCustomer' },
-      { key: 'confirmTopup', label: t('dashboard.quickActions.confirmTopUp'), Icon: TopUpIcon, route: 'ConfirmTopup' },
-      { key: 'cashout', label: t('dashboard.quickActions.cashOut'), Icon: ScanIcon, route: 'ScanCashOut' },
-      // The code-based cash-out, until every customer app approves at the counter.
-      { key: 'cashoutCode', label: t('dashboard.quickActions.confirmCashOut'), Icon: TopUpIcon, route: 'ConfirmCashOut' },
-      { key: 'history', label: t('dashboard.quickActions.topUpHistory'), Icon: HistoryIcon, route: 'TopupHistory' },
+      { key: 'cashIn', label: t('dashboard.quickActions.cashIn'), Icon: TopUpIcon, route: 'ConfirmTopup' },
+      { key: 'cashOut', label: t('dashboard.quickActions.cashOut'), Icon: ScanIcon, route: 'ScanCashOut' },
     ] : []),
-    ...(!isMerchantRole && !isAgentRole ? [
-      { key: 'scan', label: t('dashboard.quickActions.scanAndCharge'), Icon: ScanIcon, route: 'ScanCharge' },
-      { key: 'topup', label: t('dashboard.quickActions.topUpCustomer'), Icon: TopUpIcon, route: 'TopupCustomer' },
+    ...(isMerchantRole ? [
+      { key: 'withdraw', label: t('dashboard.quickActions.withdraw'), Icon: WalletIcon, route: 'Payout' },
+      { key: 'payroll', label: t('dashboard.quickActions.payroll'), Icon: HandshakeIcon, route: 'Payroll' },
     ] : []),
   ];
 

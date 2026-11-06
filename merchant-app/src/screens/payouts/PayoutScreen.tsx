@@ -8,26 +8,21 @@ import {
   GlassCard,
   PillButton,
   PinInput,
-  ACCENT,
   TEXT_DIM,
   TEXT_FAINT,
 } from '../../components';
 import { SuccessCheckIcon } from '../../components/icons/AuthIcons';
-import {
-  requestPayout,
-  watchMyPayouts,
-  PayoutRecord,
-  PayoutRoute,
-} from '../../services/payout.service';
+import { requestPayout, watchMyPayouts, PayoutRecord } from '../../services/payout.service';
 import { useWallet } from '../../hooks/useWallet';
+import { useMerchantProfile } from '../../hooks/useMerchantProfile';
+import { formatLocal } from '../../utils/zaad';
+import { ZaadDestination } from './ZaadDestination';
 import { useExitGuard } from '../../hooks/useExitGuard';
 import { toCents, formatCents, sanitizeAmountInput } from '../../utils/money';
 import { isWrongPin, pinActionErrorKey } from '../../utils/errors';
 import { functions } from '../../services/firebase.config';
 
 type Step = 'form' | 'pin' | 'sent';
-
-const ROUTES: PayoutRoute[] = ['bank', 'zaad', 'edahab', 'cash'];
 
 /** Mirrors MIN_PAYOUT_CENTS in functions/src/payouts/requestPayout.ts. */
 const MIN_PAYOUT_CENTS = 500;
@@ -37,6 +32,9 @@ function payoutErrorKey(error: any): string {
   if (error?.code === 'functions/resource-exhausted' && /payouts waiting/i.test(message)) {
     return 'payout.tooManyOpen';
   }
+  if (error?.code === 'functions/failed-precondition' && /Add your Zaad/i.test(message)) {
+    return 'payout.noZaad';
+  }
   if (error?.code === 'functions/invalid-argument') return 'payout.checkDetails';
   return pinActionErrorKey(error);
 }
@@ -45,12 +43,10 @@ export default function PayoutScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
   const { wallet } = useWallet();
+  const zaad = useMerchantProfile().profile?.zaad;
 
   const [step, setStep] = useState<Step>('form');
   const [amount, setAmount] = useState('');
-  const [route, setRoute] = useState<PayoutRoute>('bank');
-  const [destinationName, setDestinationName] = useState('');
-  const [destinationRef, setDestinationRef] = useState('');
   const [pin, setPin] = useState('');
   const [pinError, setPinError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -84,12 +80,7 @@ export default function PayoutScreen() {
   const balanceCents = wallet?.balanceCents;
   const belowMinimum = amountCents > 0 && amountCents < MIN_PAYOUT_CENTS;
   const overBalance = balanceCents !== undefined && amountCents > balanceCents;
-  const canSubmit =
-    amountCents > 0 &&
-    !belowMinimum &&
-    !overBalance &&
-    destinationName.trim().length >= 2 &&
-    destinationRef.trim().length >= 3;
+  const canSubmit = amountCents > 0 && !belowMinimum && !overBalance && !!zaad;
 
   // Back from the PIN step returns to the form; while the request is in
   // flight nothing leaves, so the merchant sees whether it went through.
@@ -115,13 +106,7 @@ export default function PayoutScreen() {
     setSubmitting(true);
     setError(null);
     try {
-      await requestPayout({
-        amountCents,
-        route,
-        destinationName: destinationName.trim(),
-        destinationRef: destinationRef.trim(),
-        pin: enteredPin,
-      });
+      await requestPayout({ amountCents, pin: enteredPin });
       setStep('sent');
       setAmount('');
     } catch (e: any) {
@@ -129,7 +114,9 @@ export default function PayoutScreen() {
       if (isWrongPin(e)) {
         setPinError(t('errors.wrongPin'));
       } else {
-        setError(t(payoutErrorKey(e)));
+        // A new Zaad number holds payouts for a while (zaadChangeHoldHours).
+        const hold = /(\d+) hours after the change/.exec(e?.message ?? '');
+        setError(hold ? t('payout.zaadChangedWait', { hours: hold[1] }) : t(payoutErrorKey(e)));
         setStep('form');
       }
     } finally {
@@ -218,46 +205,7 @@ export default function PayoutScreen() {
           </Text>
         ) : null}
 
-        <Text style={styles.label}>{t('payout.routeLabel')}</Text>
-        <View style={styles.routeRow}>
-          {ROUTES.map((r) => (
-            <TouchableOpacity
-              key={r}
-              style={[styles.routeChip, route === r && styles.routeChipActive]}
-              onPress={() => setRoute(r)}
-            >
-              <Text style={[styles.routeText, route === r && styles.routeTextActive]}>
-                {t(`payout.route.${r}`)}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <Text style={styles.label}>{t('payout.destinationLabel')}</Text>
-        <GlassCard style={styles.card}>
-          <TextInput
-            style={styles.input}
-            value={destinationName}
-            onChangeText={setDestinationName}
-            placeholder={t('payout.destinationNamePlaceholder')}
-            placeholderTextColor="rgba(255,255,255,0.25)"
-            autoCapitalize="words"
-          />
-        </GlassCard>
-        <GlassCard style={styles.card}>
-          <TextInput
-            style={styles.input}
-            value={destinationRef}
-            onChangeText={setDestinationRef}
-            placeholder={t(
-              route === 'zaad' || route === 'edahab'
-                ? 'payout.destinationPhonePlaceholder'
-                : 'payout.destinationAccountPlaceholder',
-            )}
-            placeholderTextColor="rgba(255,255,255,0.25)"
-            autoCapitalize="none"
-          />
-        </GlassCard>
+        <ZaadDestination zaad={zaad} />
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -299,7 +247,7 @@ export default function PayoutScreen() {
                 </Text>
               </View>
               <Text style={styles.historyMeta}>
-                {t(`payout.route.${p.route}`)} · {p.destinationRef}
+                {t(`payout.route.${p.route}`)} · {formatLocal(p.destinationRef)}
               </Text>
               {p.status === 'paid' && p.externalReference ? (
                 <Text style={styles.historyMeta}>
@@ -369,20 +317,8 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 8,
   },
-  input: { fontSize: 15, color: '#FFFFFF', padding: 16 },
   available: { fontSize: 12, color: TEXT_FAINT, marginTop: 4 },
   amountError: { fontSize: 12, color: '#FF6961', marginTop: 4 },
-  routeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  routeChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 999,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.18)',
-  },
-  routeChipActive: { backgroundColor: ACCENT, borderColor: ACCENT },
-  routeText: { fontSize: 13, fontWeight: '600', color: TEXT_DIM },
-  routeTextActive: { color: '#FFFFFF' },
   hint: { fontSize: 12, color: TEXT_FAINT, marginVertical: 12, lineHeight: 17 },
   linkCard: { marginTop: 20, paddingHorizontal: 16 },
   linkRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 16 },

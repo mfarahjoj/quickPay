@@ -4,11 +4,9 @@ import { logger } from '../utils/logger';
 export type PayoutRoute = 'bank' | 'zaad' | 'edahab' | 'cash';
 export type PayoutStatus = 'requested' | 'paid' | 'rejected';
 
+/** Payouts go to the Zaad account on file (functions/src/auth/zaadAccount.ts). */
 export interface PayoutRequestInput {
   amountCents: number;
-  route: PayoutRoute;
-  destinationName: string;
-  destinationRef: string;
   note?: string;
   pin: string;
 }
@@ -43,7 +41,8 @@ export async function requestPayout(
     return data.data;
   } catch (error: any) {
     logger.error('Request payout error:', error);
-    throw new Error(error.message || 'Payout request failed');
+    // Rethrown as is: the screen reads the code to tell a wrong PIN apart.
+    throw error;
   }
 }
 

@@ -8,6 +8,7 @@ import {
   Share,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { useNavigation } from '@react-navigation/native';
 import NetInfo from '@react-native-community/netinfo';
 import QRCode from 'react-native-qrcode-svg';
 import { firestore } from '../../services/firebase.config';
@@ -29,7 +30,7 @@ import {
   TEXT_DIM,
   TEXT_FAINT,
 } from '../../components';
-import { SuccessCheckIcon } from '../../components/icons/AuthIcons';
+import { ScanIcon, SuccessCheckIcon } from '../../components/icons/AuthIcons';
 import CounterIncomingFeed from './CounterIncomingFeed';
 
 type Mode = 'charge' | 'counter';
@@ -37,8 +38,13 @@ type Phase = 'entry' | 'showing' | 'paid' | 'expired';
 
 const QR_SIZE = 260;
 
+/**
+ * The Receive tab: a QR for one sale, the counter code, and (top right)
+ * scanning the customer's own code instead.
+ */
 export default function GenerateQRScreen() {
   const { t } = useTranslation();
+  const navigation = useNavigation<any>();
 
   const [mode, setMode] = useState<Mode>('charge');
   const [amount, setAmount] = useState('');
@@ -341,6 +347,17 @@ export default function GenerateQRScreen() {
       <ScreenHeader
         title={t('qr.receive.title')}
         subtitle={mode === 'charge' ? t('qr.receive.subtitle') : t('qr.counter.subtitle')}
+        right={
+          <TouchableOpacity
+            style={styles.scanBtn}
+            onPress={() => navigation.navigate('ScanCharge')}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+          >
+            <ScanIcon size={16} color="#FFFFFF" />
+            <Text style={styles.scanBtnText}>{t('qr.receive.scanCustomer')}</Text>
+          </TouchableOpacity>
+        }
       />
 
       <View style={styles.segment}>
@@ -478,6 +495,18 @@ const styles = StyleSheet.create({
   },
 
   // segmented mode switch
+  scanBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    height: 34,
+    paddingHorizontal: 14,
+    borderRadius: 9999,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  scanBtnText: { fontSize: 13, fontWeight: '600', color: '#FFFFFF' },
   segment: {
     flexDirection: 'row',
     marginHorizontal: 24,
