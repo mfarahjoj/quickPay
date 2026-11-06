@@ -28,7 +28,8 @@ import { assertAccountActive } from "../utils/accountStatus";
 import { verifyUserPin } from "../auth/validatePin";
 import { getRates } from "../config/rates";
 import { rollingWindowStart, sumStandingCents } from "../utils/rollingTotal";
-import { isFloatRoute, type FloatRoute } from "../ledger";
+import { type FloatRoute } from "../ledger";
+import { zaadLabel, zaadPayoutBlock, zaadPayoutBlockMessage } from "../auth/zaadAccount";
 import {
   prepareJournalEntry,
   userAccount,
@@ -51,11 +52,13 @@ const MAX_OPEN_REQUESTS = 3;
 
 interface RequestPayoutInput {
   amountCents: number;
-  route: string;
-  destinationName: string;
-  destinationRef: string;
   note?: string;
   pin: string;
+  // Older apps still send a route and destination. Payouts now go only to
+  // the Zaad account on file (auth/zaadAccount.ts), so these are ignored.
+  route?: string;
+  destinationName?: string;
+  destinationRef?: string;
 }
 
 export interface PayoutInput {
@@ -210,8 +213,7 @@ export const requestPayout = https.onCall(
     requireAuth(request);
     const merchantId = request.auth!.uid;
 
-    const { amountCents, route, destinationName, destinationRef, note, pin } =
-      request.data ?? {};
+    const { amountCents, note, pin } = request.data ?? ({} as RequestPayoutInput);
 
     if (!pin) {
       throw new https.HttpsError("invalid-argument", "PIN is required");
@@ -232,22 +234,6 @@ export const requestPayout = https.onCall(
         `A single payout is capped at $${MAX_PAYOUT_CENTS / 100}`
       );
     }
-    if (!isFloatRoute(route)) {
-      throw new https.HttpsError(
-        "invalid-argument",
-        "route must be cash, zaad, edahab or bank"
-      );
-    }
-
-    const name = typeof destinationName === "string" ? destinationName.trim() : "";
-    const ref = typeof destinationRef === "string" ? destinationRef.trim() : "";
-    if (name.length < 2 || ref.length < 3) {
-      throw new https.HttpsError(
-        "invalid-argument",
-        "Tell us the account name and number to send the money to"
-      );
-    }
-
     const db = admin.firestore();
 
     const merchantSnap = await db.collection("users").doc(merchantId).get();
@@ -266,6 +252,13 @@ export const requestPayout = https.onCall(
     }
     assertAccountActive(merchant);
 
+    const { zaadChangeHoldHours } = await getRates();
+    const block = zaadPayoutBlock(merchant, zaadChangeHoldHours, Date.now());
+    if (block) {
+      throw new https.HttpsError("failed-precondition", zaadPayoutBlockMessage(block, zaadChangeHoldHours));
+    }
+    const zaad = merchant.zaad!;
+
     // The payout debits the merchant's own wallet, so it is a user-initiated
     // debit and takes a PIN like every other one.
     const pinValid = await verifyUserPin(merchantId, pin);
@@ -278,15 +271,15 @@ export const requestPayout = https.onCall(
 
     const { payoutId } = await createPayoutRequest(db, merchantId, merchant, {
       amountCents,
-      route,
-      destinationName: name,
-      destinationRef: ref,
+      route: "zaad",
+      destinationName: zaad.name,
+      destinationRef: zaad.msisdn,
       ...(typeof note === "string" && note.trim() ? { note } : {}),
     });
 
     return {
       success: true,
-      message: "Requested — we'll send it and confirm here",
+      message: `Requested — we'll send it to ${zaadLabel(zaad.msisdn)} and confirm here`,
       data: { payoutId, amountCents },
     };
   }

@@ -30,6 +30,7 @@ export interface Rates {
   referralMonthlyCapPerReferrer: number;
   payoutTargetHours: number;
   autoPayoutMinCents: number;
+  zaadChangeHoldHours: number;
   floatApprovalThresholdCents: number;
   paymentRequestTtlSeconds: number;
   apiChargeTtlSeconds: number;
@@ -206,6 +207,16 @@ export const RATE_FIELDS: { [K in keyof Rates]: RateFieldSpec } = {
     default: 1000,
     min: 500,
     max: 1000000,
+  },
+  zaadChangeHoldHours: {
+    group: "Payouts",
+    label: "Wait after a Zaad number changes",
+    help: "Merchants are paid out only to the Zaad account on file. After they change it, payouts wait this long, so someone who gets into the account can't redirect the takings at once.",
+    kind: "int",
+    default: 24,
+    min: 0,
+    max: 168,
+    unit: "hours",
   },
   floatApprovalThresholdCents: {
     group: "Limits and safety",

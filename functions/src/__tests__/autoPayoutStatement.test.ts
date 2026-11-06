@@ -13,13 +13,11 @@ const mockedPin = verifyUserPin as jest.MockedFunction<typeof verifyUserPin>;
 const { Timestamp } = admin.firestore;
 
 const SHOP = "shop-1";
+const ZAAD = { msisdn: "+252634000000", name: "Hooyo Xasan", updatedAt: Timestamp.now() };
 const settings = (extra: Record<string, unknown> = {}) => ({
   autoPayout: {
     enabled: true,
     keepCents: 2_000,
-    route: "zaad",
-    destinationName: "Hooyo Shop",
-    destinationRef: "0634000000",
     updatedAt: Timestamp.now(),
     ...extra,
   },
@@ -49,7 +47,7 @@ describe("automatic payouts (3.6, D11)", () => {
 
   const seed = (extra: Record<string, any> = {}): FakeDb => {
     const db = fakeFirestore({
-      [`users/${SHOP}`]: { accountType: "merchant", fullName: "Hooyo Shop" },
+      [`users/${SHOP}`]: { accountType: "merchant", fullName: "Hooyo Shop", zaad: ZAAD },
       [`wallets/${SHOP}`]: wallet(12_000),
       [`merchantProfiles/${SHOP}`]: { businessName: "Hooyo Shop", ...settings() },
       ...extra,
@@ -64,7 +62,15 @@ describe("automatic payouts (3.6, D11)", () => {
     const db = seed();
     expect(await runNow()).toEqual({ queued: 1, skipped: 0 });
     const [p] = payouts(db);
-    expect(p).toMatchObject({ merchantId: SHOP, amountCents: 10_000, route: "zaad", auto: true, status: "requested" });
+    expect(p).toMatchObject({
+      merchantId: SHOP,
+      amountCents: 10_000,
+      route: "zaad",
+      destinationName: "Hooyo Xasan",
+      destinationRef: "+252634000000",
+      auto: true,
+      status: "requested",
+    });
     expect(db.get(`wallets/${SHOP}`)!.balance).toBe(2_000);
     expect(db.get("ledger_balances/platform:settlement_hold")!.balance).toBe(10_000);
   });
@@ -82,22 +88,35 @@ describe("automatic payouts (3.6, D11)", () => {
     db = seed({ "payoutRequests/old": { merchantId: SHOP, status: "requested", amountCents: 500 } });
     expect((await runNow()).queued).toBe(0);
     restore?.();
-    db = seed({ [`users/${SHOP}`]: { accountType: "merchant", accountStatus: "frozen" } });
+    db = seed({ [`users/${SHOP}`]: { accountType: "merchant", accountStatus: "frozen", zaad: ZAAD } });
+    expect((await runNow()).queued).toBe(0);
+    expect(payouts(db)).toHaveLength(0);
+  });
+
+  it("skips a shop with no Zaad account, or a number changed today", async () => {
+    let db = seed({ [`users/${SHOP}`]: { accountType: "merchant", fullName: "Hooyo Shop" } });
+    expect((await runNow()).queued).toBe(0);
+    restore?.();
+    db = seed({ [`users/${SHOP}`]: { accountType: "merchant", zaad: { ...ZAAD, changedAt: Timestamp.now() } } });
     expect((await runNow()).queued).toBe(0);
     expect(payouts(db)).toHaveLength(0);
   });
 
   it("is switched on with the PIN, and off again", async () => {
     const db = seed({ [`merchantProfiles/${SHOP}`]: { businessName: "Hooyo Shop" } });
-    await setAuto({
-      data: { enabled: true, keepCents: 1_000, route: "bank", destinationName: "Hooyo Ltd", destinationRef: "0123456789", pin: "123456" },
-      auth: { uid: SHOP },
-    });
-    expect(db.get(`merchantProfiles/${SHOP}`)!.autoPayout).toMatchObject({ enabled: true, keepCents: 1_000, route: "bank" });
+    await setAuto({ data: { enabled: true, keepCents: 1_000, pin: "123456" }, auth: { uid: SHOP } });
+    expect(db.get(`merchantProfiles/${SHOP}`)!.autoPayout).toMatchObject({ enabled: true, keepCents: 1_000 });
     await setAuto({ data: { enabled: false, pin: "123456" }, auth: { uid: SHOP } });
     expect(db.get(`merchantProfiles/${SHOP}`)!.autoPayout.enabled).toBe(false);
     mockedPin.mockResolvedValue(false);
     await expect(setAuto({ data: { enabled: false, pin: "000000" }, auth: { uid: SHOP } })).rejects.toThrow(/Invalid PIN/);
+  });
+
+  it("won't switch on without a Zaad account", async () => {
+    seed({ [`users/${SHOP}`]: { accountType: "merchant", fullName: "Hooyo Shop" } });
+    await expect(setAuto({ data: { enabled: true, keepCents: 0, pin: "123456" }, auth: { uid: SHOP } })).rejects.toThrow(
+      /Add your Zaad account/
+    );
   });
 
   it("refuses customers", async () => {
