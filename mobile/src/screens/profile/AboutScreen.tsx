@@ -14,7 +14,7 @@ import { Button } from '../../components/Button';
 import { PinInput } from '../../components/PinInput';
 import { signOut } from '../../services/auth.service';
 import { functions } from '../../services/firebase.config';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles } from '../../theme';
 
 interface Props {
   navigation: any;
@@ -23,6 +23,7 @@ interface Props {
 const APP_VERSION = '1.0.0';
 
 export default function AboutScreen({ navigation }: Props) {
+  const styles = useStyles();
   const { t } = useTranslation();
   const [showDelete, setShowDelete] = useState(false);
   const [pin, setPin] = useState('');
@@ -165,26 +166,26 @@ export default function AboutScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.dark.canvas },
+const useStyles = makeStyles((colors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.ui.canvas },
   scroll: { flex: 1 },
   content: { padding: spacing.lg, paddingBottom: spacing.xxl },
   logoCard: {
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderRadius: borderRadius.lg,
     padding: spacing.xl,
     alignItems: 'center',
     marginBottom: spacing.lg,
   },
-  appName: { ...typography.h1, color: colors.dark.accentText },
-  version: { ...typography.caption, color: colors.dark.textFaint, marginTop: spacing.xs },
-  tagline: { ...typography.body, color: colors.dark.textDim, marginTop: spacing.sm },
+  appName: { ...typography.h1, color: colors.ui.accentText },
+  version: { ...typography.caption, color: colors.ui.textFaint, marginTop: spacing.xs },
+  tagline: { ...typography.body, color: colors.ui.textDim, marginTop: spacing.sm },
   menu: {
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderRadius: borderRadius.lg,
     overflow: 'hidden',
     marginBottom: spacing.xl,
@@ -194,39 +195,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: spacing.lg,
     borderBottomWidth: 1,
-    borderBottomColor: colors.dark.divider,
+    borderBottomColor: colors.ui.divider,
   },
   menuText: {
     flex: 1,
     ...typography.body,
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
-  menuArrow: { fontSize: 20, color: colors.dark.textFaint },
+  menuArrow: { fontSize: 20, color: colors.ui.textFaint },
   dangerZone: {
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
     borderWidth: 1,
-    borderColor: colors.dark.errorSoft,
+    borderColor: colors.ui.errorSoft,
   },
   dangerTitle: {
     ...typography.captionBold,
-    color: colors.dark.error,
+    color: colors.ui.error,
     marginBottom: spacing.md,
   },
-  deleteButtonText: { color: colors.dark.error },
+  deleteButtonText: { color: colors.ui.error },
   deleteForm: { gap: spacing.md },
-  deletePrompt: { ...typography.body, color: colors.dark.textDim },
+  deletePrompt: { ...typography.body, color: colors.ui.textDim },
   deleteButtons: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.sm },
   deleteBtn: { flex: 1 },
   deleteBtnDanger: {
-    backgroundColor: colors.dark.error,
-    borderColor: colors.dark.error,
+    backgroundColor: colors.ui.error,
+    borderColor: colors.ui.error,
   },
   deleteBtnDangerFull: {
     flex: 1,
-    backgroundColor: colors.dark.error,
-    borderColor: colors.dark.error,
+    backgroundColor: colors.ui.error,
+    borderColor: colors.ui.error,
   },
   deleteBtnText: { color: '#fff' },
-});
+}));

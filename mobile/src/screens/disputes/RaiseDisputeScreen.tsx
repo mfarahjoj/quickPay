@@ -21,7 +21,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Header, Button } from '../../components';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
 import {
   DisputeKind,
   DisputeOptions,
@@ -40,6 +40,8 @@ interface Props {
 const MIN_NOTE = 3;
 
 export default function RaiseDisputeScreen({ navigation, route }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const target: DisputeTarget = {
     ...(route.params.transactionId ? { transactionId: route.params.transactionId } : {}),
@@ -92,7 +94,7 @@ export default function RaiseDisputeScreen({ navigation, route }: Props) {
       return <Text style={styles.errorText}>{loadError}</Text>;
     }
     if (!options) {
-      return <ActivityIndicator style={styles.loader} color={colors.dark.accent} />;
+      return <ActivityIndicator style={styles.loader} color={colors.ui.accent} />;
     }
     if (!options.windowOpen) {
       return (
@@ -129,7 +131,7 @@ export default function RaiseDisputeScreen({ navigation, route }: Props) {
           value={note}
           onChangeText={setNote}
           placeholder={t('disputes.raise.notePlaceholder')}
-          placeholderTextColor={colors.dark.textFaint}
+          placeholderTextColor={colors.ui.textFaint}
           multiline
           maxLength={1000}
           textAlignVertical="top"
@@ -164,14 +166,14 @@ export default function RaiseDisputeScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.dark.canvas },
+const useStyles = makeStyles((colors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.ui.canvas },
   content: { padding: spacing.md, paddingBottom: spacing.xxl },
   loader: { marginTop: spacing.xl },
-  lead: { ...typography.body, color: colors.dark.textDim, marginBottom: spacing.lg },
+  lead: { ...typography.body, color: colors.ui.textDim, marginBottom: spacing.lg },
   sectionLabel: {
     ...typography.captionBold,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     marginBottom: spacing.sm,
     textTransform: 'uppercase',
   },
@@ -181,34 +183,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: spacing.smPlus,
     borderRadius: borderRadius.md,
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     marginBottom: spacing.sm,
   },
-  kindSelected: { borderColor: colors.dark.accentBorder, backgroundColor: colors.dark.accentSoft },
+  kindSelected: { borderColor: colors.ui.accentBorder, backgroundColor: colors.ui.accentSoft },
   radio: {
     width: 18,
     height: 18,
     borderRadius: 9,
     borderWidth: 2,
-    borderColor: colors.dark.textFaint,
+    borderColor: colors.ui.textFaint,
     marginRight: spacing.smPlus,
   },
-  radioSelected: { borderColor: colors.dark.accent, backgroundColor: colors.dark.accent },
-  kindText: { ...typography.body, color: colors.dark.text, flex: 1 },
+  radioSelected: { borderColor: colors.ui.accent, backgroundColor: colors.ui.accent },
+  kindText: { ...typography.body, color: colors.ui.text, flex: 1 },
   note: {
     ...typography.body,
-    color: colors.dark.text,
+    color: colors.ui.text,
     minHeight: 120,
     padding: spacing.smPlus,
     borderRadius: borderRadius.md,
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     marginBottom: spacing.md,
   },
-  hint: { ...typography.caption, color: colors.dark.textFaint, marginBottom: spacing.lg },
+  hint: { ...typography.caption, color: colors.ui.textFaint, marginBottom: spacing.lg },
   send: { marginTop: spacing.sm },
-  errorText: { ...typography.body, color: colors.dark.textDim, marginTop: spacing.xl, textAlign: 'center' },
-});
+  errorText: { ...typography.body, color: colors.ui.textDim, marginTop: spacing.xl, textAlign: 'center' },
+}));

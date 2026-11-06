@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { colors, typography, spacing } from '../theme';
+import { typography, spacing, makeStyles } from '../theme';
 
 interface HeaderProps {
   title: string;
@@ -9,6 +9,7 @@ interface HeaderProps {
 }
 
 export function Header({ title, onBack, rightAction }: HeaderProps) {
+  const styles = useStyles();
   return (
     <View style={styles.container}>
       <View style={styles.left}>
@@ -30,7 +31,7 @@ export function Header({ title, onBack, rightAction }: HeaderProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -65,4 +66,4 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
   },
-});
+}));

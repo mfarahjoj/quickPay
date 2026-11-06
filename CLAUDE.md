@@ -36,7 +36,8 @@ Every user-facing string ships in **all three locales** — `en`, `so`, `ar` —
 
 - `DESIGN_SYSTEM.md` — base palette and components.
 - Merchant app: dark-glass Revolut style, blue accent `#1A56FF`, incoming green `#34C77B` (reference: `merchant-app/src/screens/dashboard/DashboardScreen.tsx`).
-- Customer onboarding: "dark kinetic" theme — ink `#0D0B0A`, coral `#FF5043`, teal `#5DCAA5`.
+- Customer onboarding: "dark kinetic" theme — ink `#0D0B0A`, coral `#FF5043`, teal `#5DCAA5`. It stays dark in light mode, as do the QR camera screens.
+- Customer app: light and dark themes (`mobile/src/theme/colors.ts`), following the phone unless Profile → Appearance says otherwise. Read colours from `useColors()` and build sheets with `const useStyles = makeStyles((colors) => StyleSheet.create({...}))`; never hard-code canvas or text colours. `colors.ui.ink(alpha)` stands in for `rgba(255,255,255,alpha)`.
 
 ## Verification
 

@@ -6,6 +6,7 @@ import firestore from '@react-native-firebase/firestore';
 import { functions } from '../../services/firebase.config';
 import { LEGAL_VERSIONS, PRIVACY_URL, TERMS_URL } from '../../utils/legal';
 import { logger } from '../../utils/logger';
+import { makeStyles } from '../../theme';
 
 type Consent = { termsVersion?: string; privacyVersion?: string } | undefined;
 
@@ -18,6 +19,7 @@ const isCurrent = (c: Consent) =>
  * the app underneath waits until then.
  */
 export function ConsentGate({ uid, children }: { uid: string; children: React.ReactNode }) {
+  const styles = useStyles();
   const { t } = useTranslation();
   const [consent, setConsent] = useState<Consent | null>(null);
   const [saving, setSaving] = useState(false);
@@ -76,13 +78,13 @@ export function ConsentGate({ uid, children }: { uid: string; children: React.Re
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#000000', paddingHorizontal: 24, paddingBottom: 24 },
+const useStyles = makeStyles((colors) => StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.ui.canvas, paddingHorizontal: 24, paddingBottom: 24 },
   body: { flex: 1, justifyContent: 'center' },
-  title: { fontSize: 26, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.5, marginBottom: 12 },
-  text: { fontSize: 16, lineHeight: 23, color: 'rgba(255,255,255,0.7)', marginBottom: 24 },
-  link: { fontSize: 16, fontWeight: '600', color: '#FF8A7A', paddingVertical: 10 },
-  error: { fontSize: 14, color: '#FF6961', marginTop: 16 },
+  title: { fontSize: 26, fontWeight: '800', color: colors.ui.text, letterSpacing: -0.5, marginBottom: 12 },
+  text: { fontSize: 16, lineHeight: 23, color: colors.ui.ink(0.7), marginBottom: 24 },
+  link: { fontSize: 16, fontWeight: '600', color: colors.ui.accentText, paddingVertical: 10 },
+  error: { fontSize: 14, color: colors.ui.error, marginTop: 16 },
   button: {
     height: 56,
     borderRadius: 28,
@@ -91,4 +93,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   buttonText: { fontSize: 17, fontWeight: '700', color: '#FFFFFF' },
-});
+}));

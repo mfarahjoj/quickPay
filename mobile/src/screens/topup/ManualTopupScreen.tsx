@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 import LinearGradient from 'react-native-linear-gradient';
 import { functions } from '../../services/firebase.config';
 import { useAuth } from '../../hooks/useAuth';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
 import {
   PHONE_PREFIX,
   COUNTRY_FLAG,
@@ -29,6 +29,8 @@ interface Props {
 }
 
 export default function ManualTopupScreen({ navigation }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   useAuth();
   const [customerPhone, setCustomerPhone] = useState(PHONE_PREFIX);
@@ -316,10 +318,10 @@ export default function ManualTopupScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   scrollView: {
     flex: 1,
@@ -336,7 +338,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: borderRadius.xl,
-    backgroundColor: colors.dark.incomingSoft,
+    backgroundColor: colors.ui.incomingSoft,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: spacing.lg,
@@ -346,7 +348,7 @@ const styles = StyleSheet.create({
   },
   title: {
     ...typography.h1,
-    color: colors.dark.text,
+    color: colors.ui.text,
     marginBottom: spacing.sm,
   },
   subtitle: {
@@ -368,11 +370,11 @@ const styles = StyleSheet.create({
   phoneInputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderRadius: borderRadius.lg,
     paddingHorizontal: spacing.md,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
   },
   countryFlag: {
     fontSize: 24,
@@ -381,12 +383,12 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     ...typography.body,
-    color: colors.dark.text,
+    color: colors.ui.text,
     paddingVertical: spacing.md,
   },
   hint: {
     ...typography.caption,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
     marginTop: spacing.xs,
   },
   textArea: {
@@ -397,23 +399,23 @@ const styles = StyleSheet.create({
   amountInputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.dark.incomingSoft,
+    backgroundColor: colors.ui.incomingSoft,
     borderRadius: borderRadius.lg,
     paddingHorizontal: spacing.md,
     borderWidth: 1,
-    borderColor: colors.dark.incoming,
+    borderColor: colors.ui.incoming,
   },
   currencySymbol: {
     ...typography.h2,
     fontWeight: 'bold',
-    color: colors.dark.incoming,
+    color: colors.ui.incoming,
     marginRight: spacing.sm,
   },
   amountInput: {
     flex: 1,
     ...typography.h2,
     fontWeight: 'bold',
-    color: colors.dark.incoming,
+    color: colors.ui.incoming,
     paddingVertical: spacing.md,
   },
 
@@ -425,15 +427,15 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: spacing.md,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderRadius: borderRadius.lg,
     alignItems: 'center',
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     position: 'relative',
   },
   methodButtonActive: {
-    borderColor: colors.dark.accent,
-    backgroundColor: colors.dark.accentSoft,
+    borderColor: colors.ui.accent,
+    backgroundColor: colors.ui.accentSoft,
   },
   selectedIndicator: {
     position: 'absolute',
@@ -442,7 +444,7 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: colors.dark.accent,
+    backgroundColor: colors.ui.accent,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -452,10 +454,10 @@ const styles = StyleSheet.create({
   },
   methodText: {
     ...typography.bodySemibold,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
   },
   methodTextActive: {
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
   },
 
   pinContainer: {
@@ -470,20 +472,20 @@ const styles = StyleSheet.create({
   pinInput: {
     height: 64,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderRadius: borderRadius.lg,
     ...typography.h2,
     fontWeight: 'bold',
     textAlign: 'center',
     color: 'transparent',
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
   },
   pinDot: {
     position: 'absolute',
     width: 14,
     height: 14,
     borderRadius: 7,
-    backgroundColor: colors.dark.incoming,
+    backgroundColor: colors.ui.incoming,
     top: '50%',
     left: '50%',
     marginTop: -7,
@@ -493,11 +495,11 @@ const styles = StyleSheet.create({
   warningBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.dark.warningSoft,
+    backgroundColor: colors.ui.warningSoft,
     padding: spacing.md,
     borderRadius: borderRadius.lg,
     borderLeftWidth: 4,
-    borderLeftColor: colors.dark.warning,
+    borderLeftColor: colors.ui.warning,
     marginBottom: spacing.lg,
   },
   warningIcon: {
@@ -506,7 +508,7 @@ const styles = StyleSheet.create({
   },
   warningText: {
     ...typography.caption,
-    color: colors.dark.warning,
+    color: colors.ui.warning,
     flex: 1,
   },
 
@@ -527,4 +529,4 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '600',
   },
-});
+}));

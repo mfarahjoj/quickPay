@@ -22,7 +22,7 @@ import { useTranslation } from 'react-i18next';
 import { cooldownMessage } from '../../utils/cooldownMessage';
 import { functions } from '../../services/firebase.config';
 import { triggerHaptic } from '../../services/haptics.service';
-import { colors } from '../../theme';
+import { makeStyles, useColors } from '../../theme';
 import { CURRENCY_SYMBOL } from '../../config/constants';
 import { Springs } from '../../constants/springs';
 import { SuccessCheckIcon } from '../../components/icons/AuthIcons';
@@ -30,8 +30,6 @@ import { AnimatedXMark } from '../../components/icons/StatusIcons';
 
 type Step = 'amount' | 'pin' | 'processing' | 'success' | 'error';
 
-const ACCENT = '#FF8A7A';
-const INCOMING = '#34C77B';
 const KEYPAD = ['1','2','3','4','5','6','7','8','9','.','0','⌫'];
 
 // The agent scans this. It names the one request the code belongs to, so a
@@ -42,6 +40,7 @@ const qrPayload = (id: string, code: string) =>
 // Dots must own their animation hooks: calling useAnimatedStyle inside the
 // pin-step JSX changes the hook count between renders and crashes React.
 function CashOutPinDot({ filled }: { filled: boolean }) {
+  const styles = useStyles();
   const scale = useSharedValue(1);
 
   useEffect(() => {
@@ -65,6 +64,8 @@ function CashOutPinDot({ filled }: { filled: boolean }) {
 }
 
 export default function CashOutScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const navigation = useNavigation();
   const [step, setStep] = useState<Step>('amount');
@@ -272,7 +273,7 @@ export default function CashOutScreen() {
               disabled={cancelling}
             >
               {cancelling ? (
-                <ActivityIndicator color="#FF6B6B" />
+                <ActivityIndicator color={colors.ui.error} />
               ) : (
                 <Text style={styles.cancelText}>{t('cashout.cancelCta')}</Text>
               )}
@@ -312,7 +313,7 @@ export default function CashOutScreen() {
   if (step === 'processing') {
     return (
       <View style={[styles.container, styles.resultCenter]}>
-        <ActivityIndicator size="large" color={ACCENT} />
+        <ActivityIndicator size="large" color={colors.ui.accentText} />
         <Text style={styles.processingText}>Generating your code…</Text>
       </View>
     );
@@ -412,8 +413,8 @@ export default function CashOutScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.dark.canvas },
+const useStyles = makeStyles((colors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.ui.canvas },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -426,69 +427,69 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.ui.ink(0.06),
     alignItems: 'center',
     justifyContent: 'center',
   },
-  backArrow: { fontSize: 24, color: '#FFFFFF', lineHeight: 28 },
-  headerTitle: { fontSize: 22, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.5 },
-  headerSub: { fontSize: 13, color: 'rgba(255,255,255,0.4)', marginTop: 2 },
+  backArrow: { fontSize: 24, color: colors.ui.text, lineHeight: 28 },
+  headerTitle: { fontSize: 22, fontWeight: '800', color: colors.ui.text, letterSpacing: -0.5 },
+  headerSub: { fontSize: 13, color: colors.ui.ink(0.4), marginTop: 2 },
 
   // Amount entry
   amountSection: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
-  amountLabel: { fontSize: 13, fontWeight: '600', letterSpacing: 0.5, textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', marginBottom: 16 },
+  amountLabel: { fontSize: 13, fontWeight: '600', letterSpacing: 0.5, textTransform: 'uppercase', color: colors.ui.ink(0.4), marginBottom: 16 },
   amountRow: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 10 },
-  amountCurrency: { fontSize: 36, fontWeight: '700', color: '#FFFFFF', marginBottom: 6, marginRight: 4 },
-  amountDisplay: { fontSize: 64, fontWeight: '800', color: '#FFFFFF', letterSpacing: -2 },
-  amountPlaceholder: { color: 'rgba(255,255,255,0.2)' },
-  amountHint: { fontSize: 13, color: 'rgba(255,255,255,0.35)' },
+  amountCurrency: { fontSize: 36, fontWeight: '700', color: colors.ui.text, marginBottom: 6, marginRight: 4 },
+  amountDisplay: { fontSize: 64, fontWeight: '800', color: colors.ui.text, letterSpacing: -2 },
+  amountPlaceholder: { color: colors.ui.ink(0.2) },
+  amountHint: { fontSize: 13, color: colors.ui.ink(0.35) },
 
   // PIN
   pinSection: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  pinAmountLabel: { fontSize: 13, fontWeight: '600', letterSpacing: 0.5, textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', marginBottom: 8 },
-  pinAmount: { fontSize: 36, fontWeight: '800', color: '#FFFFFF', letterSpacing: -1, marginBottom: 8 },
-  feeLine: { fontSize: 14, color: 'rgba(255,255,255,0.6)', marginBottom: 28, textAlign: 'center' },
+  pinAmountLabel: { fontSize: 13, fontWeight: '600', letterSpacing: 0.5, textTransform: 'uppercase', color: colors.ui.ink(0.4), marginBottom: 8 },
+  pinAmount: { fontSize: 36, fontWeight: '800', color: colors.ui.text, letterSpacing: -1, marginBottom: 8 },
+  feeLine: { fontSize: 14, color: colors.ui.ink(0.6), marginBottom: 28, textAlign: 'center' },
   pinDots: { flexDirection: 'row', gap: 14 },
-  pinDot: { width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)', backgroundColor: 'transparent' },
-  pinDotFilled: { backgroundColor: ACCENT, borderColor: ACCENT },
+  pinDot: { width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: colors.ui.ink(0.3), backgroundColor: 'transparent' },
+  pinDotFilled: { backgroundColor: colors.ui.accentText, borderColor: colors.ui.accentText },
 
   // Keypad
   keypad: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 24, gap: 12, justifyContent: 'center', paddingBottom: 24 },
-  key: { width: 88, height: 56, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.07)', alignItems: 'center', justifyContent: 'center' },
+  key: { width: 88, height: 56, borderRadius: 14, backgroundColor: colors.ui.ink(0.07), alignItems: 'center', justifyContent: 'center' },
   keyDelete: { backgroundColor: 'transparent' },
-  keyText: { fontSize: 22, fontWeight: '600', color: '#FFFFFF' },
-  keyDeleteText: { fontSize: 20, color: 'rgba(255,255,255,0.6)' },
+  keyText: { fontSize: 22, fontWeight: '600', color: colors.ui.text },
+  keyDeleteText: { fontSize: 20, color: colors.ui.ink(0.6) },
 
   footer: { paddingHorizontal: 24, paddingBottom: 36 },
-  continueBtn: { height: 56, borderRadius: 28, backgroundColor: ACCENT, alignItems: 'center', justifyContent: 'center' },
+  continueBtn: { height: 56, borderRadius: 28, backgroundColor: colors.ui.accentText, alignItems: 'center', justifyContent: 'center' },
   continueBtnDisabled: { opacity: 0.35 },
   continueBtnText: { fontSize: 17, fontWeight: '700', color: '#FFFFFF' },
 
   // Success / OTP
   otpContainer: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 24, gap: 20 },
   qrCard: { padding: 14, borderRadius: 20, backgroundColor: '#FFFFFF' },
-  heldNote: { fontSize: 13, lineHeight: 19, color: 'rgba(255,255,255,0.5)', textAlign: 'center' },
+  heldNote: { fontSize: 13, lineHeight: 19, color: colors.ui.ink(0.5), textAlign: 'center' },
   cancelBtn: { minWidth: 200, alignItems: 'center', paddingHorizontal: 32, paddingVertical: 14, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(255,107,107,0.4)' },
-  cancelText: { fontSize: 16, fontWeight: '600', color: '#FF6B6B' },
-  otpBox: { width: '100%', backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', borderRadius: 20, padding: 24, alignItems: 'center', gap: 16 },
-  otpLabel: { fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, color: 'rgba(255,255,255,0.45)' },
+  cancelText: { fontSize: 16, fontWeight: '600', color: colors.ui.error },
+  otpBox: { width: '100%', backgroundColor: colors.ui.ink(0.05), borderWidth: 1, borderColor: colors.ui.ink(0.1), borderRadius: 20, padding: 24, alignItems: 'center', gap: 16 },
+  otpLabel: { fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, color: colors.ui.ink(0.45) },
   otpDigits: { flexDirection: 'row', gap: 8 },
   otpDigitBox: { width: 44, height: 54, borderRadius: 10, backgroundColor: 'rgba(111,155,255,0.12)', borderWidth: 1, borderColor: 'rgba(111,155,255,0.35)', alignItems: 'center', justifyContent: 'center' },
-  otpDigitText: { fontSize: 28, fontWeight: '800', color: ACCENT, letterSpacing: -0.5 },
-  otpAmount: { fontSize: 14, color: 'rgba(255,255,255,0.5)' },
+  otpDigitText: { fontSize: 28, fontWeight: '800', color: colors.ui.accentText, letterSpacing: -0.5 },
+  otpAmount: { fontSize: 14, color: colors.ui.ink(0.5) },
   timerRow: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, backgroundColor: 'rgba(52,199,123,0.1)', borderWidth: 1, borderColor: 'rgba(52,199,123,0.3)' },
   timerWarn: { backgroundColor: 'rgba(255,92,92,0.1)', borderColor: 'rgba(255,92,92,0.3)' },
-  timerText: { fontSize: 14, fontWeight: '600', color: INCOMING },
-  timerTextWarn: { color: '#FF6961' },
-  instructionCard: { width: '100%', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 16, padding: 18, gap: 8 },
-  instructionTitle: { fontSize: 13, fontWeight: '700', color: 'rgba(255,255,255,0.6)', marginBottom: 4 },
-  instructionStep: { fontSize: 13, color: 'rgba(255,255,255,0.45)', lineHeight: 20 },
+  timerText: { fontSize: 14, fontWeight: '600', color: colors.ui.incoming },
+  timerTextWarn: { color: colors.ui.error },
+  instructionCard: { width: '100%', backgroundColor: colors.ui.ink(0.03), borderRadius: 16, padding: 18, gap: 8 },
+  instructionTitle: { fontSize: 13, fontWeight: '700', color: colors.ui.ink(0.6), marginBottom: 4 },
+  instructionStep: { fontSize: 13, color: colors.ui.ink(0.45), lineHeight: 20 },
 
   // Error
   resultCenter: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  errorTitle: { fontSize: 22, fontWeight: '800', color: '#FFFFFF', marginTop: 20, marginBottom: 10 },
-  errorSub: { fontSize: 14, color: 'rgba(255,255,255,0.45)', textAlign: 'center', lineHeight: 21 },
-  retryBtn: { marginTop: 28, paddingHorizontal: 32, paddingVertical: 14, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.08)' },
-  retryText: { fontSize: 16, fontWeight: '600', color: '#FFFFFF' },
-  processingText: { fontSize: 16, color: 'rgba(255,255,255,0.5)', marginTop: 20 },
-});
+  errorTitle: { fontSize: 22, fontWeight: '800', color: colors.ui.text, marginTop: 20, marginBottom: 10 },
+  errorSub: { fontSize: 14, color: colors.ui.ink(0.45), textAlign: 'center', lineHeight: 21 },
+  retryBtn: { marginTop: 28, paddingHorizontal: 32, paddingVertical: 14, borderRadius: 24, backgroundColor: colors.ui.ink(0.08) },
+  retryText: { fontSize: 16, fontWeight: '600', color: colors.ui.text },
+  processingText: { fontSize: 16, color: colors.ui.ink(0.5), marginTop: 20 },
+}));

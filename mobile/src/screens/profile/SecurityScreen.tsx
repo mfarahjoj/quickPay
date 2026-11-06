@@ -12,7 +12,7 @@ import { BiometryTypes } from 'react-native-biometrics';
 import { Header } from '../../components/Header';
 import { Button } from '../../components/Button';
 import { PinInput } from '../../components/PinInput';
-import { colors, typography, spacing } from '../../theme';
+import { typography, spacing, makeStyles, useColors } from '../../theme';
 import { validatePin, PinLockoutError, pinLockoutMessage, adoptSessionToken } from '../../services/auth.service';
 import { functions } from '../../services/firebase.config';
 import { isWeakPin } from '../../components/auth/CodeInput';
@@ -35,6 +35,8 @@ function getBiometricLabelKey(biometryType?: string): string {
 }
 
 export default function SecurityScreen({ navigation }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const [changingPin, setChangingPin] = useState(false);
   const [currentPin, setCurrentPin] = useState('');
@@ -308,8 +310,8 @@ export default function SecurityScreen({ navigation }: Props) {
                     value={true}
                     onValueChange={() => handleBiometricDisable()}
                     trackColor={{
-                      false: 'rgba(255,255,255,0.15)',
-                      true: colors.dark.accent,
+                      false: colors.ui.ink(0.15),
+                      true: colors.ui.accent,
                     }}
                     thumbColor="#FFFFFF"
                   />
@@ -378,10 +380,10 @@ export default function SecurityScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   content: {
     flex: 1,
@@ -391,21 +393,21 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxl,
   },
   section: {
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     padding: spacing.lg,
     borderRadius: 16,
     marginBottom: spacing.lg,
   },
   sectionTitle: {
     ...typography.h3,
-    color: colors.dark.text,
+    color: colors.ui.text,
     marginBottom: spacing.sm,
   },
   sectionDesc: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     marginBottom: spacing.lg,
   },
   pinForm: {
@@ -413,7 +415,7 @@ const styles = StyleSheet.create({
   },
   label: {
     ...typography.captionBold,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     marginTop: spacing.md,
     marginBottom: spacing.sm,
   },
@@ -430,7 +432,7 @@ const styles = StyleSheet.create({
   },
   comingSoon: {
     ...typography.caption,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
     fontStyle: 'italic',
   },
   toggleRow: {
@@ -440,9 +442,9 @@ const styles = StyleSheet.create({
   },
   toggleLabel: {
     ...typography.body,
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
   biometricPinForm: {
     marginTop: spacing.sm,
   },
-});
+}));

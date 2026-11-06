@@ -27,7 +27,7 @@ import {
 } from '../../services/biometric.service';
 import { logger } from '../../utils/logger';
 import { formatUntil } from '../../utils/cooldownMessage';
-import { colors, typography, spacing } from '../../theme';
+import { typography, spacing, makeStyles, useColors } from '../../theme';
 
 interface Props {
   /** Called with the new PIN after it has been reset and verified. */
@@ -50,6 +50,8 @@ type Step = 'otp' | 'newPin' | 'confirm' | 'id' | 'agent';
  * because those live outside the NavigationContainer.
  */
 export default function ResetPinScreen({ onDone, onCancel }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const [step, setStep] = useState<Step>('otp');
   const [otpCode, setOtpCode] = useState('');
@@ -222,7 +224,7 @@ export default function ResetPinScreen({ onDone, onCancel }: Props) {
           autoCorrect={false}
           maxLength={4}
           placeholder="····"
-          placeholderTextColor={colors.dark.textDim}
+          placeholderTextColor={colors.ui.textDim}
           accessibilityLabel={t('auth.resetPin.idTitle')}
         />
         {idError ? <Text style={styles.idError}>{idError}</Text> : null}
@@ -249,7 +251,7 @@ export default function ResetPinScreen({ onDone, onCancel }: Props) {
           subtitle={t('auth.resetPin.otpSubtitle', { phone: phoneNumber })}
         />
         {sending ? (
-          <ActivityIndicator size="large" color={colors.dark.accent} style={styles.spinner} />
+          <ActivityIndicator size="large" color={colors.ui.accent} style={styles.spinner} />
         ) : (
           <>
             <CodeInput
@@ -308,10 +310,10 @@ export default function ResetPinScreen({ onDone, onCancel }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   fullScreen: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   centered: {
     justifyContent: 'center',
@@ -325,7 +327,7 @@ const styles = StyleSheet.create({
   },
   backIcon: {
     fontSize: 32,
-    color: colors.dark.text,
+    color: colors.ui.text,
     lineHeight: 36,
   },
   spinner: {
@@ -338,30 +340,30 @@ const styles = StyleSheet.create({
   },
   resendText: {
     ...typography.bodySemibold,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
   },
   confirmWrap: {
     flex: 1,
   },
   idInput: {
     ...typography.h3,
-    color: colors.dark.text,
+    color: colors.ui.text,
     textAlign: 'center',
     letterSpacing: 12,
     borderBottomWidth: 1,
-    borderBottomColor: colors.dark.divider,
+    borderBottomColor: colors.ui.divider,
     paddingVertical: spacing.md,
     marginTop: spacing.xl,
     marginHorizontal: spacing.xl,
   },
   idError: {
     ...typography.caption,
-    color: colors.dark.error,
+    color: colors.ui.error,
     textAlign: 'center',
     marginTop: spacing.sm,
   },
   primaryBtn: {
-    backgroundColor: colors.dark.accent,
+    backgroundColor: colors.ui.accent,
     borderRadius: 999,
     paddingVertical: spacing.md,
     alignItems: 'center',
@@ -374,4 +376,4 @@ const styles = StyleSheet.create({
     ...typography.bodySemibold,
     color: '#FFFFFF',
   },
-});
+}));

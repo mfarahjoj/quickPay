@@ -23,7 +23,7 @@ import {
 } from '../../services/biometric.service';
 import { validatePin, signOut, PinLockoutError, pinLockoutMessage } from '../../services/auth.service';
 import { markPinVerifiedThisInstall } from '../../hooks/usePinVerifiedThisInstall';
-import { colors, typography, spacing } from '../../theme';
+import { typography, spacing, makeStyles } from '../../theme';
 
 interface Props {
   onUnlock: () => void;
@@ -36,6 +36,7 @@ function getBiometricLabelKey(biometryType?: string): string {
 }
 
 export default function AppLockScreen({ onUnlock }: Props) {
+  const styles = useStyles();
   const { t } = useTranslation();
   const [biometryType, setBiometryType] = useState<string | undefined>();
   const [bioUsable, setBioUsable] = useState<boolean | null>(null);
@@ -291,7 +292,7 @@ export default function AppLockScreen({ onUnlock }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   lockIconWrap: {
     width: 88,
     height: 88,
@@ -303,11 +304,11 @@ const styles = StyleSheet.create({
     width: 88,
     height: 88,
     borderRadius: 44,
-    backgroundColor: colors.dark.accentSoft,
+    backgroundColor: colors.ui.accentSoft,
   },
   fullScreen: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   biometricContent: {
     flex: 1,
@@ -323,7 +324,7 @@ const styles = StyleSheet.create({
   },
   linkText: {
     ...typography.bodySemibold,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
   },
   signOutLink: {
     alignItems: 'center',
@@ -331,6 +332,6 @@ const styles = StyleSheet.create({
   },
   signOutText: {
     ...typography.body,
-    color: colors.dark.error,
+    color: colors.ui.error,
   },
-});
+}));

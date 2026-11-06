@@ -15,7 +15,7 @@ import { Button } from '../../components/Button';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import { functions } from '../../services/firebase.config';
 import { applyLanguage } from '../../i18n';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
 import type { PreferredLanguage } from '../../types';
 
 interface Props {
@@ -35,6 +35,8 @@ const GENDERS = [
 ];
 
 export default function EditProfileScreen({ navigation }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const { profile } = useUserProfile();
 
@@ -205,10 +207,10 @@ export default function EditProfileScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   scroll: { flex: 1 },
   content: {
@@ -217,18 +219,18 @@ const styles = StyleSheet.create({
   },
   label: {
     ...typography.captionBold,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     marginTop: spacing.md,
     marginBottom: spacing.xs,
   },
   input: {
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderRadius: borderRadius.md,
     padding: spacing.md,
     ...typography.body,
-    color: colors.dark.text,
+    color: colors.ui.text,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
   },
   chipRow: {
     flexDirection: 'row',
@@ -240,22 +242,22 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.full,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
-    backgroundColor: colors.dark.glass,
+    borderColor: colors.ui.glassBorder,
+    backgroundColor: colors.ui.glass,
   },
   chipSelected: {
-    backgroundColor: colors.dark.accentSoft,
-    borderColor: colors.dark.accentBorder,
+    backgroundColor: colors.ui.accentSoft,
+    borderColor: colors.ui.accentBorder,
   },
   chipText: {
     ...typography.caption,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
   },
   chipTextSelected: {
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
     fontWeight: '600',
   },
   saveContainer: {
     marginTop: spacing.xl,
   },
-});
+}));

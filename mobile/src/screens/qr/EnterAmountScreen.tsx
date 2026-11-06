@@ -21,7 +21,7 @@ import {
   isBiometricAvailable,
   prepareBiometricApproval,
 } from '../../services/biometric.service';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
 import { CURRENCY_SYMBOL } from '../../config/constants';
 import { PinInput } from '../../components/PinInput';
 import { Header } from '../../components/Header';
@@ -46,6 +46,8 @@ function getBiometricLabelKey(biometryType?: string): string {
 }
 
 export default function EnterAmountScreen({ navigation, route }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const { merchantId, merchantName, currency } = route.params;
 
@@ -274,10 +276,10 @@ export default function EnterAmountScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   content: {
     flex: 1,
@@ -292,23 +294,23 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: colors.dark.accentSoft,
+    backgroundColor: colors.ui.accentSoft,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: spacing.smPlus,
   },
   merchantInitialText: {
     ...typography.display,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
   },
   merchantNameLarge: {
     ...typography.h1,
-    color: colors.dark.text,
+    color: colors.ui.text,
     textAlign: 'center',
   },
   amountLabel: {
     ...typography.captionBold,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: spacing.sm,
@@ -316,9 +318,9 @@ const styles = StyleSheet.create({
   amountInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderRadius: borderRadius.lg,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
@@ -326,13 +328,13 @@ const styles = StyleSheet.create({
   },
   currencyPrefix: {
     ...typography.display,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
     marginRight: spacing.sm,
   },
   amountInput: {
     flex: 1,
     ...typography.display,
-    color: colors.dark.text,
+    color: colors.ui.text,
     padding: 0,
   },
   continueButton: {
@@ -354,20 +356,20 @@ const styles = StyleSheet.create({
   },
   payToLabel: {
     ...typography.caption,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
     textAlign: 'center',
     marginBottom: spacing.xs,
   },
   merchantNameConfirm: {
     ...typography.h2,
-    color: colors.dark.text,
+    color: colors.ui.text,
     textAlign: 'center',
     marginBottom: spacing.xl,
   },
   amountBox: {
-    backgroundColor: colors.dark.incomingSoft,
+    backgroundColor: colors.ui.incomingSoft,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     padding: spacing.xl,
     borderRadius: borderRadius.lg,
     alignItems: 'center',
@@ -375,18 +377,18 @@ const styles = StyleSheet.create({
   },
   amountCurrencyLabel: {
     ...typography.caption,
-    color: colors.dark.incoming,
+    color: colors.ui.incoming,
     marginBottom: spacing.xs,
   },
   amountDisplay: {
     ...typography.display,
-    color: colors.dark.incoming,
+    color: colors.ui.incoming,
     fontWeight: '700',
   },
   biometricButton: {
-    backgroundColor: colors.dark.accentSoft,
+    backgroundColor: colors.ui.accentSoft,
     borderWidth: 1,
-    borderColor: colors.dark.accentBorder,
+    borderColor: colors.ui.accentBorder,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
     borderRadius: borderRadius.lg,
@@ -395,18 +397,18 @@ const styles = StyleSheet.create({
   },
   biometricButtonText: {
     ...typography.bodySemibold,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
   },
   pinLabel: {
     ...typography.captionBold,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     marginBottom: spacing.md,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   errorText: {
     ...typography.body,
-    color: colors.dark.error,
+    color: colors.ui.error,
     textAlign: 'center',
     marginTop: spacing.md,
   },
@@ -427,6 +429,6 @@ const styles = StyleSheet.create({
   },
   cancelText: {
     ...typography.bodySemibold,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
   },
-});
+}));

@@ -24,7 +24,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import QRCode from 'react-native-qrcode-svg';
 import { Card, Button, PinInput } from '../../components';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
 import { CURRENCY_SYMBOL, PHONE_PREFIX } from '../../config/constants';
 import { Springs } from '../../constants/springs';
 import { SuccessCheckIcon } from '../../components/icons/AuthIcons';
@@ -64,6 +64,8 @@ interface Props {
 }
 
 export default function PaymentsScreen({ route }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const initialMode = route?.params?.mode === 'receive' ? 'receive' : 'send';
   const [tab, setTab] = useState<PaymentTab>(initialMode);
@@ -683,10 +685,10 @@ export default function PaymentsScreen({ route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   content: {
     padding: spacing.md,
@@ -700,10 +702,10 @@ const styles = StyleSheet.create({
   },
   tabRow: {
     flexDirection: 'row',
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderRadius: borderRadius.md,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     padding: 4,
     marginBottom: spacing.lg,
   },
@@ -752,9 +754,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.dark.glassRaised,
+    backgroundColor: colors.ui.glassRaised,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderTopLeftRadius: borderRadius.md,
     borderBottomLeftRadius: borderRadius.md,
   },
@@ -768,16 +770,16 @@ const styles = StyleSheet.create({
     height: 44,
     borderWidth: 1,
     borderLeftWidth: 0,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderTopRightRadius: borderRadius.md,
     borderBottomRightRadius: borderRadius.md,
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     paddingHorizontal: spacing.md,
-    color: colors.dark.text,
+    color: colors.ui.text,
     ...typography.body,
   },
   linkNotice: {
-    backgroundColor: colors.dark.warningSoft,
+    backgroundColor: colors.ui.warningSoft,
     borderRadius: borderRadius.md,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
@@ -785,12 +787,12 @@ const styles = StyleSheet.create({
   },
   linkNoticeText: {
     ...typography.caption,
-    color: colors.dark.warning,
+    color: colors.ui.warning,
   },
   recipientBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.dark.incomingSoft,
+    backgroundColor: colors.ui.incomingSoft,
     borderRadius: borderRadius.md,
     padding: spacing.sm,
     marginBottom: spacing.md,
@@ -799,7 +801,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: spacing.smPlus,
@@ -837,11 +839,11 @@ const styles = StyleSheet.create({
   noteInput: {
     height: 44,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderRadius: borderRadius.md,
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     paddingHorizontal: spacing.md,
-    color: colors.dark.text,
+    color: colors.ui.text,
     marginBottom: spacing.md,
   },
   keypad: {
@@ -854,8 +856,8 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: borderRadius.md,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
-    backgroundColor: colors.dark.glass,
+    borderColor: colors.ui.glassBorder,
+    backgroundColor: colors.ui.glass,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -898,7 +900,7 @@ const styles = StyleSheet.create({
     height: 88,
     borderRadius: 44,
     borderWidth: 2,
-    borderColor: colors.dark.incoming,
+    borderColor: colors.ui.incoming,
   },
   successTitle: {
     ...typography.h2,
@@ -940,20 +942,20 @@ const styles = StyleSheet.create({
   },
   timerPill: {
     alignSelf: 'center',
-    backgroundColor: colors.dark.accentSoft,
+    backgroundColor: colors.ui.accentSoft,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.full,
     marginBottom: spacing.md,
   },
   timerPillWarning: {
-    backgroundColor: colors.dark.errorSoft,
+    backgroundColor: colors.ui.errorSoft,
   },
   timerText: {
     ...typography.bodySemibold,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
   },
   timerTextWarning: {
-    color: colors.dark.error,
+    color: colors.ui.error,
   },
-});
+}));

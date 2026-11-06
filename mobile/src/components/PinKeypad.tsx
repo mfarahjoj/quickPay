@@ -8,7 +8,7 @@ import Animated, {
   withSequence,
   Easing,
 } from 'react-native-reanimated';
-import { colors, typography, spacing } from '../theme';
+import { typography, spacing, makeStyles } from '../theme';
 import { triggerHaptic } from '../services/haptics.service';
 import { Springs } from '../constants/springs';
 
@@ -24,6 +24,7 @@ const KEYS: Array<string | null> = [
 // ─── PinDot ──────────────────────────────────────────────────
 
 function PinDot({ filled }: { filled: boolean }) {
+  const styles = useStyles();
   const scale = useSharedValue(filled ? 1 : 0.01);
   const opacity = useSharedValue(filled ? 1 : 0);
 
@@ -56,6 +57,7 @@ function PinDot({ filled }: { filled: boolean }) {
 // ─── KeyButton ───────────────────────────────────────────────
 
 function KeyButton({ keyLabel, onPress }: { keyLabel: string; onPress: () => void }) {
+  const styles = useStyles();
   const isBackspace = keyLabel === '⌫';
   const scale = useSharedValue(1);
   const rotateZ = useSharedValue(0);
@@ -102,6 +104,7 @@ interface PinKeypadProps {
 }
 
 export function PinKeypad({ value, onChange, onComplete, title, subtitle, error }: PinKeypadProps) {
+  const styles = useStyles();
   const shakeX = useSharedValue(0);
   const errorGlow = useSharedValue(0);
 
@@ -183,23 +186,23 @@ export function PinKeypad({ value, onChange, onComplete, title, subtitle, error 
 
 const KEY_SIZE = 76;
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xl,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   title: {
     ...typography.h2,
-    color: colors.dark.text,
+    color: colors.ui.text,
     textAlign: 'center',
     marginBottom: spacing.sm,
   },
   subtitle: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     textAlign: 'center',
     marginBottom: spacing.xl,
   },
@@ -227,15 +230,15 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     borderRadius: 7,
     borderWidth: 2,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
   },
   dotFilled: {
     borderRadius: 7,
-    backgroundColor: colors.dark.text,
+    backgroundColor: colors.ui.text,
   },
   errorText: {
     ...typography.caption,
-    color: colors.dark.error,
+    color: colors.ui.error,
     marginTop: spacing.sm,
     marginBottom: spacing.sm,
     textAlign: 'center',
@@ -253,10 +256,10 @@ const styles = StyleSheet.create({
     height: KEY_SIZE,
     borderRadius: KEY_SIZE / 2,
     borderWidth: 1.5,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
   },
   keyBackspace: {
     borderColor: 'transparent',
@@ -265,15 +268,15 @@ const styles = StyleSheet.create({
   keyText: {
     fontSize: 26,
     fontWeight: '400',
-    color: colors.dark.text,
+    color: colors.ui.text,
     lineHeight: 32,
   },
   keyBackspaceText: {
     fontSize: 22,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
   },
   keyPlaceholder: {
     width: KEY_SIZE,
     height: KEY_SIZE,
   },
-});
+}));

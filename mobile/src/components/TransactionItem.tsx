@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Transaction } from '../types';
-import { colors, typography, spacing, borderRadius } from '../theme';
+import { typography, spacing, borderRadius, makeStyles, useColors } from '../theme';
 import { CURRENCY_SYMBOL } from '../config/constants';
 
 interface TransactionItemProps {
@@ -11,6 +11,8 @@ interface TransactionItemProps {
 }
 
 export function TransactionItem({ transaction, onPress }: TransactionItemProps) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   // A cancelled or expired cash-out returned its money: never show it as spent.
   const voided = transaction.status === 'cancelled' || transaction.status === 'failed';
@@ -28,8 +30,8 @@ export function TransactionItem({ transaction, onPress }: TransactionItemProps) 
           styles.icon,
           {
             backgroundColor: transaction.isIncoming
-              ? colors.dark.incomingSoft
-              : colors.dark.warningSoft,
+              ? colors.ui.incomingSoft
+              : colors.ui.warningSoft,
           },
         ]}
       >
@@ -69,7 +71,7 @@ export function TransactionItem({ transaction, onPress }: TransactionItemProps) 
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -128,4 +130,4 @@ const styles = StyleSheet.create({
     color: colors.text.muted,
     marginTop: 2,
   },
-});
+}));

@@ -20,7 +20,7 @@ import Animated, {
 import { useNavigation } from '@react-navigation/native';
 import { functions } from '../../services/firebase.config';
 import { triggerHaptic } from '../../services/haptics.service';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
 import { Springs } from '../../constants/springs';
 
 interface Agent {
@@ -50,6 +50,7 @@ const HARGEISA_AREAS = [
 ];
 
 function AnimatedAgentRow({ agent, index }: { agent: Agent; index: number }) {
+  const styles = useStyles();
   const opacity = useSharedValue(0);
   const y = useSharedValue(12);
 
@@ -108,6 +109,8 @@ function AnimatedAgentRow({ agent, index }: { agent: Agent; index: number }) {
 }
 
 export default function AgentLocatorScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const navigation = useNavigation();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -174,7 +177,7 @@ export default function AgentLocatorScreen() {
         <TextInput
           style={styles.searchInput}
           placeholder="Search by name or area..."
-          placeholderTextColor="rgba(255,255,255,0.3)"
+          placeholderTextColor={colors.ui.ink(0.3)}
           value={search}
           onChangeText={setSearch}
         />
@@ -203,7 +206,7 @@ export default function AgentLocatorScreen() {
       {/* Agent list */}
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator color={colors.dark.accentText || '#FF8A7A'} size="large" />
+          <ActivityIndicator color={colors.ui.accentText} size="large" />
         </View>
       ) : filtered.length === 0 ? (
         <View style={styles.center}>
@@ -220,7 +223,7 @@ export default function AgentLocatorScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor="rgba(255,255,255,0.4)"
+              tintColor={colors.ui.ink(0.4)}
             />
           }
           renderItem={({ item, index }) => (
@@ -232,13 +235,11 @@ export default function AgentLocatorScreen() {
   );
 }
 
-const ACCENT = '#FF8A7A';
-const INCOMING = '#34C77B';
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   header: {
     flexDirection: 'row',
@@ -252,41 +253,41 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.ui.ink(0.06),
     alignItems: 'center',
     justifyContent: 'center',
   },
   backArrow: {
     fontSize: 24,
-    color: '#FFFFFF',
+    color: colors.ui.text,
     lineHeight: 28,
   },
   headerText: { flex: 1 },
   headerTitle: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     letterSpacing: -0.5,
   },
   headerSub: {
     fontSize: 13,
-    color: 'rgba(255,255,255,0.45)',
+    color: colors.ui.ink(0.45),
     marginTop: 2,
   },
 
   searchWrap: {
     marginHorizontal: 20,
     marginBottom: 12,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.ui.ink(0.06),
     borderRadius: borderRadius.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: colors.ui.ink(0.1),
     paddingHorizontal: 14,
     height: 44,
     justifyContent: 'center',
   },
   searchInput: {
-    color: '#FFFFFF',
+    color: colors.ui.text,
     fontSize: 15,
     padding: 0,
   },
@@ -300,9 +301,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.ui.ink(0.06),
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: colors.ui.ink(0.1),
   },
   areaChipActive: {
     backgroundColor: 'rgba(111,155,255,0.18)',
@@ -311,10 +312,10 @@ const styles = StyleSheet.create({
   areaChipText: {
     fontSize: 13,
     fontWeight: '500',
-    color: 'rgba(255,255,255,0.5)',
+    color: colors.ui.ink(0.5),
   },
   areaChipTextActive: {
-    color: ACCENT,
+    color: colors.ui.accentText,
     fontWeight: '600',
   },
 
@@ -323,9 +324,9 @@ const styles = StyleSheet.create({
   agentCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: colors.ui.ink(0.04),
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: colors.ui.ink(0.08),
     borderRadius: 16,
     padding: 14,
     marginBottom: 10,
@@ -343,23 +344,23 @@ const styles = StyleSheet.create({
   agentAvatarText: {
     fontSize: 18,
     fontWeight: '700',
-    color: ACCENT,
+    color: colors.ui.accentText,
   },
   agentCenter: { flex: 1 },
   agentName: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     marginBottom: 2,
   },
   agentArea: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.45)',
+    color: colors.ui.ink(0.45),
     marginBottom: 2,
   },
   agentHours: {
     fontSize: 11,
-    color: 'rgba(255,255,255,0.3)',
+    color: colors.ui.ink(0.3),
     marginBottom: 6,
   },
   servicePills: { flexDirection: 'row', gap: 6 },
@@ -369,9 +370,9 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   cashInPill: { backgroundColor: 'rgba(52,199,123,0.15)', borderWidth: 1, borderColor: 'rgba(52,199,123,0.3)' },
-  cashInPillText: { fontSize: 10, fontWeight: '600', color: INCOMING },
+  cashInPillText: { fontSize: 10, fontWeight: '600', color: colors.ui.incoming },
   cashOutPill: { backgroundColor: 'rgba(111,155,255,0.15)', borderWidth: 1, borderColor: 'rgba(111,155,255,0.3)' },
-  cashOutPillText: { fontSize: 10, fontWeight: '600', color: ACCENT },
+  cashOutPillText: { fontSize: 10, fontWeight: '600', color: colors.ui.accentText },
 
   callBtn: {
     paddingHorizontal: 16,
@@ -381,9 +382,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(111,155,255,0.4)',
   },
-  callBtnText: { fontSize: 13, fontWeight: '600', color: ACCENT },
+  callBtnText: { fontSize: 13, fontWeight: '600', color: colors.ui.accentText },
 
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
-  emptyTitle: { fontSize: 17, fontWeight: '700', color: '#FFFFFF', marginBottom: 8 },
-  emptySub: { fontSize: 14, color: 'rgba(255,255,255,0.4)', textAlign: 'center' },
-});
+  emptyTitle: { fontSize: 17, fontWeight: '700', color: colors.ui.text, marginBottom: 8 },
+  emptySub: { fontSize: 14, color: colors.ui.ink(0.4), textAlign: 'center' },
+}));

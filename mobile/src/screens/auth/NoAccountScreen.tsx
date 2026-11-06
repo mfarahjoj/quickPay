@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from '../../components/SafeAreaView';
 import { useTranslation } from 'react-i18next';
-import { colors, typography, spacing } from '../../theme';
+import { typography, spacing, makeStyles } from '../../theme';
 
 interface Props {
   /** The number the code was sent to, as typed (E.164). */
@@ -17,6 +17,7 @@ interface Props {
  * mistyped number makes very confusing.
  */
 export default function NoAccountScreen({ phone, onCreate, onOtherNumber }: Props) {
+  const styles = useStyles();
   const { t } = useTranslation();
   return (
     <SafeAreaView style={styles.fullScreen}>
@@ -36,19 +37,19 @@ export default function NoAccountScreen({ phone, onCreate, onOtherNumber }: Prop
   );
 }
 
-const styles = StyleSheet.create({
-  fullScreen: { flex: 1, backgroundColor: colors.dark.canvas },
+const useStyles = makeStyles((colors) => StyleSheet.create({
+  fullScreen: { flex: 1, backgroundColor: colors.ui.canvas },
   body: { flex: 1, justifyContent: 'center', paddingHorizontal: spacing.xl },
-  title: { ...typography.h1, color: colors.dark.text, textAlign: 'center' },
-  subtitle: { ...typography.body, color: colors.dark.textDim, textAlign: 'center', marginTop: spacing.md },
+  title: { ...typography.h1, color: colors.ui.text, textAlign: 'center' },
+  subtitle: { ...typography.body, color: colors.ui.textDim, textAlign: 'center', marginTop: spacing.md },
   footer: { paddingHorizontal: spacing.xl, paddingBottom: spacing.xl, gap: spacing.md },
   primary: {
-    backgroundColor: colors.dark.accent,
+    backgroundColor: colors.ui.accent,
     borderRadius: 999,
     paddingVertical: spacing.md,
     alignItems: 'center',
   },
   primaryText: { ...typography.bodySemibold, color: '#FFFFFF' },
   link: { alignItems: 'center', padding: spacing.sm },
-  linkText: { ...typography.body, color: colors.dark.textDim },
-});
+  linkText: { ...typography.body, color: colors.ui.textDim },
+}));

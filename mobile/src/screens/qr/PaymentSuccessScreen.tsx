@@ -12,7 +12,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Button } from '../../components/Button';
 import { SuccessCheckIcon } from '../../components/icons/AuthIcons';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
 import { CURRENCY_SYMBOL } from '../../config/constants';
 import { triggerHaptic } from '../../services/haptics.service';
 import { Springs } from '../../constants/springs';
@@ -83,6 +83,8 @@ function ConfettiParticle({ dx, dy, color, size, delay }: ParticleConfig) {
 // ─── Main screen ──────────────────────────────────────────────
 
 export default function PaymentSuccessScreen({ navigation, route }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const { transactionId, amount, currency } = route.params;
 
@@ -112,9 +114,9 @@ export default function PaymentSuccessScreen({ navigation, route }: Props) {
   // Stable confetti particles
   const particles = useMemo<ParticleConfig[]>(() => {
     const particleColors = [
-      colors.dark.incoming,
-      colors.dark.accentText,
-      colors.dark.warning,
+      colors.ui.incoming,
+      colors.ui.accentText,
+      colors.ui.warning,
     ];
     return Array.from({ length: 12 }).map(() => ({
       dx: (Math.random() - 0.5) * 130,
@@ -123,7 +125,7 @@ export default function PaymentSuccessScreen({ navigation, route }: Props) {
       size: 4 + Math.random() * 3,
       delay: Math.floor(Math.random() * 250),
     }));
-  }, []);
+  }, [colors]);
 
   useEffect(() => {
     // Immediate: haptic + ring bloom
@@ -238,10 +240,10 @@ export default function PaymentSuccessScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
     justifyContent: 'center',
   },
   content: {
@@ -261,7 +263,7 @@ const styles = StyleSheet.create({
     height: 100,
     borderRadius: 50,
     borderWidth: 2,
-    borderColor: colors.dark.incoming,
+    borderColor: colors.ui.incoming,
   },
   confettiAnchor: {
     position: 'absolute',
@@ -273,40 +275,40 @@ const styles = StyleSheet.create({
   },
   title: {
     ...typography.h1,
-    color: colors.dark.text,
+    color: colors.ui.text,
     marginBottom: spacing.sm,
     textAlign: 'center',
   },
   subtitle: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     marginBottom: spacing.xxl,
     textAlign: 'center',
   },
   summary: {
     width: '100%',
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     padding: spacing.lg,
     borderRadius: borderRadius.lg,
     marginBottom: spacing.xl,
   },
   summaryAmount: {
     ...typography.h1,
-    color: colors.dark.incoming,
+    color: colors.ui.incoming,
     textAlign: 'center',
     marginBottom: spacing.xs,
   },
   summaryLabel: {
     ...typography.caption,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
     textAlign: 'center',
     marginBottom: spacing.md,
   },
   divider: {
     height: 1,
-    backgroundColor: colors.dark.divider,
+    backgroundColor: colors.ui.divider,
     marginVertical: spacing.md,
   },
   summaryRow: {
@@ -316,13 +318,13 @@ const styles = StyleSheet.create({
   },
   summaryKey: {
     ...typography.caption,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
   },
   summaryValue: {
     ...typography.bodySemibold,
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
   doneWrap: {
     width: '100%',
   },
-});
+}));

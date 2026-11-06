@@ -6,7 +6,7 @@ import { Button } from '../../components/Button';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import { useZaadTopups } from '../../hooks/useZaadTopups';
 import { formatLocal } from '../../services/mobileMoney.utils';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles } from '../../theme';
 
 interface Props {
   navigation: any;
@@ -21,6 +21,7 @@ interface Props {
  * soon" like eDahab and there's nothing to tap.
  */
 export default function LinkedAccountsScreen({ navigation }: Props) {
+  const styles = useStyles();
   const { t } = useTranslation();
   const { profile } = useUserProfile();
   const zaadOpen = useZaadTopups();
@@ -73,19 +74,19 @@ export default function LinkedAccountsScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.dark.canvas },
+const useStyles = makeStyles((colors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.ui.canvas },
   scroll: { flex: 1 },
   content: { padding: spacing.lg, paddingBottom: spacing.xxl },
   description: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     marginBottom: spacing.lg,
   },
   card: {
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
     marginBottom: spacing.md,
@@ -100,19 +101,19 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.dark.accentSoft,
+    backgroundColor: colors.ui.accentSoft,
     textAlign: 'center',
     lineHeight: 36,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
     marginRight: spacing.md,
     overflow: 'hidden',
   },
   providerText: { flex: 1 },
   providerName: {
     ...typography.bodySemibold,
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
-  number: { ...typography.body, color: colors.dark.textDim, marginTop: 2 },
-  status: { ...typography.body, color: colors.dark.textDim },
-  statusGood: { color: '#34C77B' },
-});
+  number: { ...typography.body, color: colors.ui.textDim, marginTop: 2 },
+  status: { ...typography.body, color: colors.ui.textDim },
+  statusGood: { color: colors.ui.incoming },
+}));

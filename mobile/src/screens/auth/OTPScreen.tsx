@@ -5,7 +5,7 @@ import { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import { verifyOTP, sendOTP } from '../../services/auth.service';
 import { AuthLayout, AuthHeader, CodeInput, useToast } from '../../components/auth';
 import { Button } from '../../components/Button';
-import { colors, typography, spacing } from '../../theme';
+import { typography, spacing, makeStyles } from '../../theme';
 
 interface Props {
   navigation: any;
@@ -20,6 +20,7 @@ interface Props {
 const RESEND_COOLDOWN = 60;
 
 export default function OTPScreen({ navigation, route }: Props) {
+  const styles = useStyles();
   const { t } = useTranslation();
   const { showToast } = useToast();
   const { phoneNumber, confirmation } = route.params;
@@ -121,7 +122,7 @@ export default function OTPScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   content: {
     justifyContent: 'center',
   },
@@ -129,7 +130,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 1.2,
-    color: colors.dark.accent,
+    color: colors.ui.accent,
   },
   button: {
     marginTop: spacing.xl,
@@ -144,17 +145,17 @@ const styles = StyleSheet.create({
   },
   resendText: {
     ...typography.body,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
   },
   countdownText: {
     ...typography.bodySemibold,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
   },
   resendButton: {
     padding: spacing.xs,
   },
   resendLink: {
     ...typography.bodySemibold,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
   },
-});
+}));

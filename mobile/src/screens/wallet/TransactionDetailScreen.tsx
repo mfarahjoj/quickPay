@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Share, TouchableOpacity } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Header, Button, Card } from '../../components';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles } from '../../theme';
 import { CURRENCY_SYMBOL } from '../../config/constants';
 import { Transaction } from '../../types';
 import { useAuth } from '../../hooks/useAuth';
@@ -13,6 +13,7 @@ interface Props {
 }
 
 export default function TransactionDetailScreen({ navigation, route }: Props) {
+  const styles = useStyles();
   const { t } = useTranslation();
   const transaction = route.params?.transaction;
   const { user } = useAuth();
@@ -132,10 +133,10 @@ export default function TransactionDetailScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   scroll: {
     flex: 1,
@@ -186,7 +187,7 @@ const styles = StyleSheet.create({
   },
   refunded: {
     ...typography.captionBold,
-    color: colors.dark.incoming,
+    color: colors.ui.incoming,
     marginBottom: spacing.xs,
   },
   helpRow: {
@@ -196,17 +197,17 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     padding: spacing.md,
     borderRadius: borderRadius.md,
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
   },
   helpText: {
     ...typography.bodySemibold,
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
   helpArrow: {
     ...typography.bodySemibold,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
   },
   detailsCard: {
     marginBottom: spacing.lg,
@@ -233,4 +234,4 @@ const styles = StyleSheet.create({
   shareButton: {
     marginTop: spacing.md,
   },
-});
+}));

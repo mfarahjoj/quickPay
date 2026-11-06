@@ -1,12 +1,12 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Pressable, ScrollView, RefreshControl, ActivityIndicator, Alert, useWindowDimensions, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Pressable, ScrollView, RefreshControl, ActivityIndicator, Alert, useWindowDimensions } from 'react-native';
 import Svg, { Path, Polygon } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import QRCode from 'react-native-qrcode-svg';
 import { useWallet } from '../../hooks/useWallet';
 import { useTransactions } from '../../hooks/useTransactions';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
 import { CURRENCY_SYMBOL } from '../../config/constants';
 import { Card } from '../../components/Card';
 import { TransactionItem } from '../../components/TransactionItem';
@@ -43,7 +43,8 @@ interface Props {
 
 const TAB_BAR_HEIGHT = 49;
 
-const CORAL = colors.dark.accent;
+// Brand coral: the same in light and dark.
+const CORAL = '#FF5043';
 
 // ─── Tile icons ───────────────────────────────────────────────
 
@@ -96,6 +97,8 @@ function CashGlyph({ size = 20, color = CORAL }: { size?: number; color?: string
 // ─── Compact empty activity state ─────────────────────────────
 
 function EmptyActivity({ message }: { message: string }) {
+  const colors = useColors();
+  const styles = useStyles();
   const spin = useSharedValue(0);
 
   useEffect(() => {
@@ -110,7 +113,7 @@ function EmptyActivity({ message }: { message: string }) {
     <View style={styles.emptyActivity}>
       <View style={styles.emptyOrbitWrap}>
         <Animated.View style={[styles.emptyOrbit, orbitStyle]} />
-        <BoltGlyph size={22} color="rgba(255,255,255,0.35)" />
+        <BoltGlyph size={22} color={colors.ui.ink(0.35)} />
       </View>
       <Text style={styles.emptyActivityText}>{message}</Text>
     </View>
@@ -144,6 +147,7 @@ function ActionTile({
   accessibilityLabel,
   children,
 }: ActionTileProps) {
+  const styles = useStyles();
   const enter = useSharedValue(0);
   const scale = useSharedValue(1);
   const flash = useSharedValue(0);
@@ -266,6 +270,8 @@ function ActionTile({
 }
 
 export default function DashboardScreen({ navigation }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const { height: windowHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -452,7 +458,6 @@ export default function DashboardScreen({ navigation }: Props) {
 
   return (
     <>
-      <StatusBar barStyle="light-content" backgroundColor="#000000" />
       <View style={styles.glow} pointerEvents="none" />
       <View style={styles.glowInner} pointerEvents="none" />
     <ScrollView
@@ -463,7 +468,7 @@ export default function DashboardScreen({ navigation }: Props) {
         <RefreshControl
           refreshing={refreshing}
           onRefresh={onRefresh}
-          tintColor={colors.dark.accent}
+          tintColor={colors.ui.accent}
         />
       }
     >
@@ -489,7 +494,7 @@ export default function DashboardScreen({ navigation }: Props) {
             accessibilityRole="button"
             accessibilityLabel={t('nav.screen.notifications')}
           >
-            <BellGlyph size={18} color={colors.dark.text} />
+            <BellGlyph size={18} color={colors.ui.text} />
           </TouchableOpacity>
           <LanguageSelector currentLanguage={profile?.preferredLanguage} compact />
         </View>
@@ -789,7 +794,7 @@ export default function DashboardScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   // ─── Screen ───
   glow: {
     position: 'absolute',
@@ -798,7 +803,7 @@ const styles = StyleSheet.create({
     width: 360,
     height: 360,
     borderRadius: 180,
-    backgroundColor: colors.dark.accent,
+    backgroundColor: colors.ui.accent,
     opacity: 0.1,
     zIndex: -1,
   },
@@ -809,13 +814,13 @@ const styles = StyleSheet.create({
     width: 220,
     height: 220,
     borderRadius: 110,
-    backgroundColor: colors.dark.accent,
+    backgroundColor: colors.ui.accent,
     opacity: 0.07,
     zIndex: -1,
   },
   container: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   content: {
     padding: spacing.lg,
@@ -825,50 +830,50 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
 
   // ─── Banners ───
   offlineBanner: {
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     padding: spacing.sm,
     borderRadius: borderRadius.md,
     marginBottom: spacing.sm,
   },
   offlineBannerText: {
     ...typography.caption,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     textAlign: 'center' as const,
   },
   errorBanner: {
-    backgroundColor: colors.dark.errorSoft,
+    backgroundColor: colors.ui.errorSoft,
     marginBottom: spacing.md,
     padding: spacing.md,
     borderRadius: borderRadius.md,
     borderLeftWidth: 4,
-    borderLeftColor: colors.dark.error,
+    borderLeftColor: colors.ui.error,
   },
   errorBannerText: {
     ...typography.bodySemibold,
-    color: colors.dark.error,
+    color: colors.ui.error,
   },
   businessBanner: {
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     marginBottom: spacing.md,
     padding: spacing.md,
     borderRadius: borderRadius.md,
   },
   businessBannerTitle: {
     ...typography.bodySemibold,
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
   businessBannerText: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     marginTop: 4,
   },
 
@@ -886,13 +891,13 @@ const styles = StyleSheet.create({
   },
   greetingSmall: {
     fontSize: 12,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
   },
   greetingName: {
     fontSize: 21,
     fontWeight: '700',
     letterSpacing: -0.5,
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
   headerActions: {
     flexDirection: 'row',
@@ -903,9 +908,9 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.ui.ink(0.1),
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.16)',
+    borderColor: colors.ui.ink(0.16),
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -917,14 +922,14 @@ const styles = StyleSheet.create({
   pendingSectionTitle: {
     ...typography.bodyLarge,
     fontWeight: '600',
-    color: colors.dark.text,
+    color: colors.ui.text,
     marginBottom: spacing.sm,
   },
   pendingCard: {
-    backgroundColor: colors.dark.warningSoft,
+    backgroundColor: colors.ui.warningSoft,
     borderRadius: borderRadius.md,
     borderLeftWidth: 4,
-    borderLeftColor: colors.dark.warning,
+    borderLeftColor: colors.ui.warning,
     padding: spacing.md,
     marginBottom: spacing.sm,
   },
@@ -935,16 +940,16 @@ const styles = StyleSheet.create({
   },
   pendingTitle: {
     ...typography.bodySemibold,
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
   pendingAmount: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     marginTop: spacing.xs,
   },
   pendingReview: {
     ...typography.captionBold,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
   },
 
   // ─── Balance (open, centered) ───
@@ -961,11 +966,11 @@ const styles = StyleSheet.create({
   },
   balanceLabel: {
     fontSize: 12,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
   },
   eyeIcon: {
     ...typography.captionBold,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
   },
   balanceAmountWrap: {
     alignItems: 'center',
@@ -975,7 +980,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: -2.5,
     lineHeight: 62,
-    color: colors.dark.text,
+    color: colors.ui.text,
     fontVariant: ['tabular-nums'],
   },
   // ─── Action tiles ───
@@ -990,9 +995,9 @@ const styles = StyleSheet.create({
   tilePress: {
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.ui.ink(0.1),
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.16)',
+    borderColor: colors.ui.ink(0.16),
     borderRadius: 18,
     paddingTop: 14,
     paddingBottom: 12,
@@ -1030,7 +1035,7 @@ const styles = StyleSheet.create({
   tileLabel: {
     fontSize: 11,
     fontWeight: '500',
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
 
   // ─── Activation nudge ───
@@ -1060,11 +1065,11 @@ const styles = StyleSheet.create({
   nudgeTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
   nudgeSubtitle: {
     fontSize: 11,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     marginTop: 1,
   },
   nudgeArrow: {
@@ -1091,11 +1096,11 @@ const styles = StyleSheet.create({
     borderRadius: 27,
     borderWidth: 1,
     borderStyle: 'dashed',
-    borderColor: 'rgba(255,255,255,0.18)',
+    borderColor: colors.ui.ink(0.18),
   },
   emptyActivityText: {
     fontSize: 12,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
     marginTop: spacing.sm,
   },
 
@@ -1116,24 +1121,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   balanceActionIconShow: {
-    backgroundColor: colors.dark.accentSoft,
+    backgroundColor: colors.ui.accentSoft,
   },
   balanceActionIconAdd: {
-    backgroundColor: colors.dark.incomingSoft,
+    backgroundColor: colors.ui.incomingSoft,
   },
   balanceActionIconPay: {
-    backgroundColor: colors.dark.warningSoft,
+    backgroundColor: colors.ui.warningSoft,
   },
   balanceActionIconCashOut: {
     backgroundColor: 'rgba(111,155,255,0.15)',
   },
   balanceActionIconText: {
     fontSize: 18,
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
   balanceActionLabel: {
     ...typography.captionBold,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
   },
 
   // ─── Section headers ───
@@ -1145,11 +1150,11 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     ...typography.h3,
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
   seeAll: {
     ...typography.captionBold,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
   },
 
   // ─── Transactions card ───
@@ -1157,8 +1162,8 @@ const styles = StyleSheet.create({
     padding: 0,
     overflow: 'hidden',
     marginBottom: spacing.xl,
-    backgroundColor: 'rgba(255,255,255,0.09)',
-    borderColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: colors.ui.ink(0.09),
+    borderColor: colors.ui.ink(0.16),
   },
   emptyWrapper: {
     padding: spacing.lg,
@@ -1170,18 +1175,18 @@ const styles = StyleSheet.create({
   // ─── Discover zone ───
   discoverSectionTitle: {
     ...typography.h3,
-    color: colors.dark.text,
+    color: colors.ui.text,
     marginBottom: spacing.md,
   },
   discoverRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderRadius: borderRadius.lg,
     padding: spacing.md,
     marginBottom: spacing.sm,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
   },
   discoverRowLast: {
     marginBottom: 0,
@@ -1195,45 +1200,45 @@ const styles = StyleSheet.create({
     marginRight: spacing.md,
   },
   discoverIconQr: {
-    backgroundColor: colors.dark.accentSoft,
+    backgroundColor: colors.ui.accentSoft,
   },
   discoverIconSend: {
-    backgroundColor: colors.dark.accentSoft,
+    backgroundColor: colors.ui.accentSoft,
   },
   discoverIconReceive: {
-    backgroundColor: colors.dark.incomingSoft,
+    backgroundColor: colors.ui.incomingSoft,
   },
   discoverIconAdd: {
-    backgroundColor: colors.dark.incomingSoft,
+    backgroundColor: colors.ui.incomingSoft,
   },
   discoverIconScan: {
-    backgroundColor: colors.dark.warningSoft,
+    backgroundColor: colors.ui.warningSoft,
   },
   discoverIconInsights: {
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
   },
   discoverIconAgent: {
     backgroundColor: 'rgba(111,155,255,0.12)',
   },
   discoverIcon: {
     fontSize: 18,
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
   discoverTextWrapper: {
     flex: 1,
   },
   discoverRowTitle: {
     ...typography.bodySemibold,
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
   discoverRowSubtitle: {
     ...typography.caption,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
     marginTop: 2,
   },
   chevron: {
     fontSize: 22,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
     fontWeight: '300',
     lineHeight: 26,
   },
@@ -1243,8 +1248,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.xl,
     paddingVertical: spacing.lg,
-    backgroundColor: 'rgba(255,255,255,0.09)',
-    borderColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: colors.ui.ink(0.09),
+    borderColor: colors.ui.ink(0.16),
   },
   qrHeader: {
     flexDirection: 'row',
@@ -1256,19 +1261,19 @@ const styles = StyleSheet.create({
   qrTitle: {
     ...typography.bodyLarge,
     fontWeight: '600',
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
   qrHideButton: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderRadius: borderRadius.full,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
   },
   qrHideText: {
     ...typography.captionBold,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
   },
   qrCodeWrapper: {
     padding: spacing.md,
@@ -1278,23 +1283,23 @@ const styles = StyleSheet.create({
   },
   qrHint: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     marginBottom: spacing.smPlus,
   },
   qrTimerPill: {
-    backgroundColor: colors.dark.accentSoft,
+    backgroundColor: colors.ui.accentSoft,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.full,
   },
   qrTimerPillWarning: {
-    backgroundColor: colors.dark.errorSoft,
+    backgroundColor: colors.ui.errorSoft,
   },
   qrTimerText: {
     ...typography.captionBold,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
   },
   qrTimerTextWarning: {
-    color: colors.dark.error,
+    color: colors.ui.error,
   },
-});
+}));

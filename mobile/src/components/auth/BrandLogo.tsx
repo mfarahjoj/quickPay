@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, View, Text } from 'react-native';
 import Svg, { Defs, RadialGradient, Stop, Rect } from 'react-native-svg';
 import { BrandMarkIcon } from '../icons/AuthIcons';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
 
 type LogoTheme = 'light' | 'dark';
 
@@ -23,6 +23,7 @@ export function BrandLogo({
   variant = 'customer',
   theme = 'light',
 }: BrandLogoProps) {
+  const styles = useStyles();
   const scale = useRef(new Animated.Value(animated ? 0.85 : 1)).current;
   const opacity = useRef(new Animated.Value(animated ? 0 : 1)).current;
 
@@ -58,13 +59,14 @@ export function BrandLogo({
 
 /** Soft ambient radial glow behind the splash logo (Apple "Pro" page feel) */
 function AmbientGlow({ size = 480 }: { size?: number }) {
+  const colors = useColors();
   return (
     <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
       <Defs>
         <RadialGradient id="glow" cx="50%" cy="50%" r="50%">
-          <Stop offset="0%" stopColor={colors.dark.accent} stopOpacity={0.38} />
-          <Stop offset="55%" stopColor={colors.dark.accent} stopOpacity={0.12} />
-          <Stop offset="100%" stopColor={colors.dark.accent} stopOpacity={0} />
+          <Stop offset="0%" stopColor={colors.ui.accent} stopOpacity={0.38} />
+          <Stop offset="55%" stopColor={colors.ui.accent} stopOpacity={0.12} />
+          <Stop offset="100%" stopColor={colors.ui.accent} stopOpacity={0} />
         </RadialGradient>
       </Defs>
       <Rect width={size} height={size} fill="url(#glow)" />
@@ -82,6 +84,7 @@ export function BrandSplash({
   message?: string;
   variant?: 'customer' | 'merchant';
 }) {
+  const styles = useStyles();
   const pulse = useRef(new Animated.Value(1)).current;
   const fade = useRef(new Animated.Value(0)).current;
 
@@ -115,14 +118,14 @@ export function BrandSplash({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   wrap: {
     alignItems: 'center',
   },
   iconBox: {
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.dark.accentSoft,
+    backgroundColor: colors.ui.accentSoft,
   },
   iconBoxDark: {
     justifyContent: 'center',
@@ -133,7 +136,7 @@ const styles = StyleSheet.create({
   },
   wordmark: {
     ...typography.h2,
-    color: colors.dark.text,
+    color: colors.ui.text,
     marginTop: spacing.md,
     fontWeight: '700',
   },
@@ -168,4 +171,4 @@ const styles = StyleSheet.create({
     color: colors.hero.textSecondary,
     marginTop: spacing.md,
   },
-});
+}));

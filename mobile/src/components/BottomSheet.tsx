@@ -7,7 +7,7 @@ import {
   StyleSheet,
   Dimensions,
 } from 'react-native';
-import { colors, borderRadius } from '../theme';
+import { borderRadius, makeStyles } from '../theme';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -24,6 +24,7 @@ export function BottomSheet({
   children,
   height = '50%',
 }: BottomSheetProps) {
+  const styles = useStyles();
   const sheetHeight =
     typeof height === 'string'
       ? (SCREEN_HEIGHT * parseInt(height, 10)) / 100
@@ -62,7 +63,7 @@ export function BottomSheet({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -89,4 +90,4 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
-});
+}));

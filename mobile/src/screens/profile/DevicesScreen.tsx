@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Header } from '../../components/Header';
-import { colors, typography, spacing } from '../../theme';
+import { typography, spacing, makeStyles, useColors } from '../../theme';
 import {
   listMyDevices,
   removeMyDevice,
@@ -28,6 +28,8 @@ import { logger } from '../../utils/logger';
  * recognise; removing also signs every other phone out.
  */
 export default function DevicesScreen({ navigation }: any) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const [devices, setDevices] = useState<TrustedDevice[] | null>(null);
   const [mine, setMine] = useState<string | null>(null);
@@ -107,7 +109,7 @@ export default function DevicesScreen({ navigation }: any) {
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.intro}>{t('devices.intro')}</Text>
         {devices === null ? (
-          <ActivityIndicator color={colors.dark.text} style={styles.spinner} />
+          <ActivityIndicator color={colors.ui.text} style={styles.spinner} />
         ) : error ? (
           <Text style={styles.error}>{error}</Text>
         ) : devices.length === 0 ? (
@@ -137,7 +139,7 @@ export default function DevicesScreen({ navigation }: any) {
                 {t('devices.lastUsed', { date: when(d.lastUsedAt) })} · {t('devices.added', { date: when(d.createdAt) })}
               </Text>
               {busy === d.deviceId ? (
-                <ActivityIndicator color={colors.dark.text} style={styles.rowSpinner} />
+                <ActivityIndicator color={colors.ui.text} style={styles.rowSpinner} />
               ) : (
                 <View style={styles.actions}>
                   <TouchableOpacity
@@ -161,28 +163,28 @@ export default function DevicesScreen({ navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.dark.canvas },
+const useStyles = makeStyles((colors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.ui.canvas },
   content: { padding: spacing.lg, paddingBottom: spacing.xxl },
-  intro: { ...typography.body, color: colors.dark.textDim, marginBottom: spacing.lg },
+  intro: { ...typography.body, color: colors.ui.textDim, marginBottom: spacing.lg },
   spinner: { marginTop: spacing.xl },
   rowSpinner: { marginTop: spacing.md, alignSelf: 'flex-start' },
-  error: { ...typography.body, color: colors.dark.error },
-  empty: { ...typography.body, color: colors.dark.textFaint },
+  error: { ...typography.body, color: colors.ui.error },
+  empty: { ...typography.body, color: colors.ui.textFaint },
   card: {
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderRadius: 16,
     padding: spacing.lg,
     marginBottom: spacing.md,
   },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  name: { ...typography.bodySemibold, color: colors.dark.text },
+  name: { ...typography.bodySemibold, color: colors.ui.text },
   badge: {
     ...typography.caption,
-    color: colors.dark.accentText,
-    backgroundColor: colors.dark.accentSoft,
+    color: colors.ui.accentText,
+    backgroundColor: colors.ui.accentSoft,
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 2,
@@ -190,13 +192,13 @@ const styles = StyleSheet.create({
   },
   nameInput: {
     ...typography.bodySemibold,
-    color: colors.dark.text,
+    color: colors.ui.text,
     borderBottomWidth: 1,
-    borderBottomColor: colors.dark.divider,
+    borderBottomColor: colors.ui.divider,
     paddingVertical: 4,
   },
-  meta: { ...typography.caption, color: colors.dark.textFaint, marginTop: 4 },
+  meta: { ...typography.caption, color: colors.ui.textFaint, marginTop: 4 },
   actions: { flexDirection: 'row', gap: spacing.xl, marginTop: spacing.md },
-  action: { ...typography.bodySemibold, color: colors.dark.accentText },
-  danger: { color: colors.dark.error },
-});
+  action: { ...typography.bodySemibold, color: colors.ui.accentText },
+  danger: { color: colors.ui.error },
+}));

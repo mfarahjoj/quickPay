@@ -31,7 +31,7 @@ import {
 import { markPinVerifiedThisInstall } from '../../hooks/usePinVerifiedThisInstall';
 import { markBiometricSetupDone } from '../../hooks/useBiometricSetupDone';
 import { logger } from '../../utils/logger';
-import { colors, typography, spacing } from '../../theme';
+import { typography, spacing, makeStyles } from '../../theme';
 
 type Step = 'pin' | 'biometric' | 'reset';
 
@@ -49,6 +49,7 @@ function getBiometricLabelKey(biometryType?: string): string {
  * Finishing sets both gates' flags, and AppNavigator moves on.
  */
 export default function WelcomeBackScreen() {
+  const styles = useStyles();
   const { t } = useTranslation();
   const [step, setStep] = useState<Step>('pin');
   const [pin, setPin] = useState('');
@@ -242,10 +243,10 @@ export default function WelcomeBackScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   fullScreen: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   centered: {
     justifyContent: 'center',
@@ -260,7 +261,7 @@ const styles = StyleSheet.create({
   },
   linkText: {
     ...typography.bodySemibold,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
   },
   signOutLink: {
     alignItems: 'center',
@@ -268,11 +269,11 @@ const styles = StyleSheet.create({
   },
   signOutText: {
     ...typography.body,
-    color: colors.dark.error,
+    color: colors.ui.error,
   },
   bioError: {
     ...typography.caption,
-    color: colors.dark.error,
+    color: colors.ui.error,
     textAlign: 'center',
     marginBottom: spacing.sm,
   },
@@ -288,6 +289,6 @@ const styles = StyleSheet.create({
   skipText: {
     fontSize: 14,
     fontWeight: '500',
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
   },
-});
+}));

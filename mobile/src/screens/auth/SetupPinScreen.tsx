@@ -11,7 +11,7 @@ import { isWeakPin } from '../../components/auth/CodeInput';
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
 import { PinKeypad } from '../../components/PinKeypad';
-import { colors, typography, spacing } from '../../theme';
+import { typography, spacing, makeStyles } from '../../theme';
 
 type Step = 'name' | 'enter' | 'confirm';
 
@@ -21,6 +21,7 @@ type Step = 'name' | 'enter' | 'confirm';
  * welcome-back when the account turned out to have one already.
  */
 export default function SetupPinScreen() {
+  const styles = useStyles();
   const { t } = useTranslation();
   const [step, setStep] = useState<Step>('name');
   const [fullName, setFullName] = useState('');
@@ -185,10 +186,10 @@ export default function SetupPinScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   fullScreen: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   backButton: {
     position: 'absolute',
@@ -199,7 +200,7 @@ const styles = StyleSheet.create({
   },
   backIcon: {
     fontSize: 32,
-    color: colors.dark.text,
+    color: colors.ui.text,
     lineHeight: 36,
   },
   button: {
@@ -208,9 +209,9 @@ const styles = StyleSheet.create({
   },
   submitError: {
     ...typography.caption,
-    color: colors.dark.error,
+    color: colors.ui.error,
     textAlign: 'center',
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.lg,
   },
-});
+}));

@@ -16,12 +16,13 @@ import {
 import { validatePin, PinLockoutError } from '../../services/auth.service';
 import { markBiometricSetupDone } from '../../hooks/useBiometricSetupDone';
 import ResetPinScreen from './ResetPinScreen';
-import { colors, typography, spacing } from '../../theme';
+import { typography, spacing, makeStyles } from '../../theme';
 
 type Step = 'prompt' | 'pin';
 
 /** Scanning-ring hero: dashed orbit, ripple, sweeping scan line, check pop. */
 function BiometricHero({ icon }: { icon: React.ReactNode }) {
+  const heroStyles = useHeroStyles();
   const spin = useRef(new Animated.Value(0)).current;
   const ripple = useRef(new Animated.Value(0)).current;
   const scan = useRef(new Animated.Value(0)).current;
@@ -99,7 +100,7 @@ function BiometricHero({ icon }: { icon: React.ReactNode }) {
   );
 }
 
-const heroStyles = StyleSheet.create({
+const useHeroStyles = makeStyles((colors) => StyleSheet.create({
   wrap: {
     width: 190,
     height: 190,
@@ -129,9 +130,9 @@ const heroStyles = StyleSheet.create({
     width: 130,
     height: 130,
     borderRadius: 65,
-    backgroundColor: '#1C1917',
+    backgroundColor: colors.ui.surface,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: colors.ui.ink(0.1),
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -160,7 +161,7 @@ const heroStyles = StyleSheet.create({
     fontWeight: '800',
     color: '#04342C',
   },
-});
+}));
 
 function getBiometricLabelKey(biometryType?: string): string {
   if (biometryType === BiometryTypes.FaceID) return 'biometric.faceId';
@@ -170,6 +171,7 @@ function getBiometricLabelKey(biometryType?: string): string {
 
 /** The Face ID offer after sign-in. Continue marks it answered and AppNavigator moves on. */
 export default function BiometricSetupScreen() {
+  const styles = useStyles();
   const { t } = useTranslation();
   const [available, setAvailable] = useState<boolean | null>(null);
   const [biometryType, setBiometryType] = useState<string | undefined>();
@@ -378,7 +380,7 @@ export default function BiometricSetupScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   centered: {
     justifyContent: 'center',
   },
@@ -388,14 +390,14 @@ const styles = StyleSheet.create({
   },
   promptError: {
     ...typography.caption,
-    color: colors.dark.error,
+    color: colors.ui.error,
     textAlign: 'center',
     marginBottom: spacing.sm,
   },
   footnote: {
     marginTop: spacing.lg,
     ...typography.caption,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
     lineHeight: 18,
     textAlign: 'center',
     paddingHorizontal: spacing.md,
@@ -408,7 +410,7 @@ const styles = StyleSheet.create({
   skipText: {
     fontSize: 14,
     fontWeight: '500',
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
   },
   forgotBtn: {
     alignSelf: 'center',
@@ -416,6 +418,6 @@ const styles = StyleSheet.create({
   },
   forgotText: {
     ...typography.bodySemibold,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
   },
-});
+}));

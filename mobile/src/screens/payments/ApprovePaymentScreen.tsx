@@ -23,7 +23,7 @@ import { approvePayment, rejectPayment } from '../../services/customerToken.serv
 import { approveApiCharge, getApiCharge } from '../../services/apiCharge.service';
 import { firestore } from '../../services/firebase.config';
 import { triggerHaptic } from '../../services/haptics.service';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
 import { CURRENCY_SYMBOL } from '../../config/constants';
 import { Springs } from '../../constants/springs';
 import { SuccessCheckIcon } from '../../components/icons/AuthIcons';
@@ -63,6 +63,8 @@ const formatClock = (seconds: number) =>
   `${Math.floor(seconds / 60)}:${(seconds % 60).toString().padStart(2, '0')}`;
 
 export default function ApprovePaymentScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const navigation = useNavigation();
   const route = useRoute<RouteProp<ApprovePaymentParams, 'ApprovePayment'>>();
@@ -387,7 +389,7 @@ export default function ApprovePaymentScreen() {
   if (!chargeLoaded) {
     return (
       <View style={[styles.container, styles.resultContainer]}>
-        <ActivityIndicator size="large" color={colors.dark.accent} />
+        <ActivityIndicator size="large" color={colors.ui.accent} />
         <Text style={[styles.requestLabel, styles.loadingLabel]}>
           {t('payments.approve.loadingCharge')}
         </Text>
@@ -551,7 +553,7 @@ export default function ApprovePaymentScreen() {
   const isSuccess = resultKind === 'approved';
   const isDeclined = resultKind === 'declined';
   const isClosed = resultKind === 'closed';
-  const ringColor = isSuccess ? colors.dark.incoming : isDeclined ? colors.dark.error : colors.dark.warning;
+  const ringColor = isSuccess ? colors.ui.incoming : isDeclined ? colors.ui.error : colors.ui.warning;
 
   return (
     <View style={[styles.container, styles.resultContainer]}>
@@ -625,10 +627,10 @@ export default function ApprovePaymentScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xxl,
   },
@@ -644,33 +646,33 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: colors.dark.accentSoft,
+    backgroundColor: colors.ui.accentSoft,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: spacing.sm,
   },
   merchantAvatarText: {
     ...typography.h1,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
   },
   merchantNameLarge: {
     ...typography.h1,
-    color: colors.dark.text,
+    color: colors.ui.text,
     textAlign: 'center',
     marginBottom: spacing.xs,
   },
   requestLabel: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
   },
   loadingLabel: {
     marginTop: spacing.md,
   },
 
   amountCard: {
-    backgroundColor: colors.dark.accentSoft,
+    backgroundColor: colors.ui.accentSoft,
     borderWidth: 1,
-    borderColor: colors.dark.accentBorder,
+    borderColor: colors.ui.accentBorder,
     borderRadius: borderRadius.xxl,
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.xl,
@@ -679,33 +681,33 @@ const styles = StyleSheet.create({
   },
   amountCardLabel: {
     ...typography.overline,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
     marginBottom: spacing.xs,
   },
   amountCardValue: {
     ...typography.balanceNumber,
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
   amountCardCurrency: {
     ...typography.caption,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
     marginTop: spacing.xs,
   },
   countdown: {
     ...typography.caption,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     marginTop: spacing.sm,
     textAlign: 'center',
     fontVariant: ['tabular-nums'],
   },
   countdownLapsed: {
-    color: colors.dark.error,
+    color: colors.ui.error,
   },
 
   detailsCard: {
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderRadius: borderRadius.xxl,
     padding: spacing.lg,
     marginBottom: spacing.lg,
@@ -718,11 +720,11 @@ const styles = StyleSheet.create({
   },
   detailLabel: {
     ...typography.body,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
   },
   detailValue: {
     ...typography.bodySemibold,
-    color: colors.dark.text,
+    color: colors.ui.text,
     textAlign: 'right',
     maxWidth: '60%',
   },
@@ -737,11 +739,11 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: colors.dark.divider,
+    backgroundColor: colors.ui.divider,
   },
 
   acceptButton: {
-    backgroundColor: colors.dark.accent,
+    backgroundColor: colors.ui.accent,
     borderRadius: borderRadius.lg,
     paddingVertical: spacing.md,
     alignItems: 'center',
@@ -756,7 +758,7 @@ const styles = StyleSheet.create({
   },
   declineButton: {
     borderWidth: 1,
-    borderColor: colors.dark.error,
+    borderColor: colors.ui.error,
     borderRadius: borderRadius.lg,
     paddingVertical: spacing.md,
     alignItems: 'center',
@@ -765,7 +767,7 @@ const styles = StyleSheet.create({
   },
   declineButtonText: {
     ...typography.h3,
-    color: colors.dark.error,
+    color: colors.ui.error,
   },
 
   pinHeader: {
@@ -774,17 +776,17 @@ const styles = StyleSheet.create({
   },
   pinTitle: {
     ...typography.h1,
-    color: colors.dark.text,
+    color: colors.ui.text,
     marginBottom: spacing.xs,
   },
   pinSubtitle: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     textAlign: 'center',
   },
   pinLabel: {
     ...typography.bodySemibold,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     textAlign: 'center',
     marginBottom: spacing.md,
   },
@@ -802,7 +804,7 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     ...typography.bodySemibold,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
   },
 
   resultContainer: {
@@ -825,27 +827,27 @@ const styles = StyleSheet.create({
   },
   resultTitle: {
     ...typography.h1,
-    color: colors.dark.text,
+    color: colors.ui.text,
     textAlign: 'center',
     marginBottom: spacing.xs,
   },
   resultAmount: {
     ...typography.balanceNumber,
-    color: colors.dark.text,
+    color: colors.ui.text,
     marginBottom: spacing.sm,
   },
   resultMessage: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     textAlign: 'center',
     paddingHorizontal: spacing.md,
     marginBottom: spacing.lg,
   },
   resultDetails: {
     width: '100%',
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderRadius: borderRadius.xxl,
     padding: spacing.lg,
     marginBottom: spacing.md,
@@ -858,11 +860,11 @@ const styles = StyleSheet.create({
   },
   resultDetailLabel: {
     ...typography.body,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
   },
   resultDetailValue: {
     ...typography.bodySemibold,
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
   retryLink: {
     marginTop: spacing.md,
@@ -870,6 +872,6 @@ const styles = StyleSheet.create({
   },
   retryLinkText: {
     ...typography.bodySemibold,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
   },
-});
+}));

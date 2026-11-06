@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Button } from './Button';
-import { colors, typography, spacing } from '../theme';
+import { typography, spacing, makeStyles } from '../theme';
 import {
   EmptyTransactionsIcon,
   EmptyNotificationsIcon,
@@ -32,7 +32,7 @@ function DefaultIcon({ variant }: { variant: EmptyVariant }) {
   }
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'center',
@@ -45,20 +45,20 @@ const styles = StyleSheet.create({
   },
   title: {
     ...typography.h3,
-    color: colors.dark.text,
+    color: colors.ui.text,
     textAlign: 'center',
     marginBottom: spacing.sm,
   },
   message: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     textAlign: 'center',
     marginBottom: spacing.xl,
   },
   button: {
     minWidth: 160,
   },
-});
+}));
 
 export function EmptyState({
   variant = 'generic',
@@ -68,6 +68,7 @@ export function EmptyState({
   actionLabel,
   onAction,
 }: EmptyStateProps) {
+  const styles = useStyles();
   return (
     <View style={styles.container}>
       <View style={styles.iconWrap}>

@@ -14,13 +14,15 @@ import { Camera, useCameraDevice } from 'react-native-vision-camera';
 import { requestCameraPermission, useQrScannerOutputs } from '../../hooks/useQrScannerOutputs';
 import { validateQRCode } from '../../services/qr.service';
 import { parseChargeLink } from '../../services/apiCharge.service';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
 
 interface Props {
   navigation: any;
 }
 
 export default function ScanQRScreen({ navigation }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const [hasPermission, setHasPermission] = useState(false);
   const [isScanning, setIsScanning] = useState(true);
@@ -183,7 +185,7 @@ export default function ScanQRScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000000',
@@ -253,7 +255,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 48,
     height: 48,
-    borderColor: colors.dark.incoming,
+    borderColor: colors.ui.incoming,
     borderWidth: 4,
   },
   topLeft: {
@@ -325,4 +327,4 @@ const styles = StyleSheet.create({
     color: colors.text.inverse,
     textAlign: 'center',
   },
-});
+}));

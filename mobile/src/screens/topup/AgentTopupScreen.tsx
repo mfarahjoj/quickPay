@@ -12,15 +12,13 @@ import firestore from '@react-native-firebase/firestore';
 import { useTranslation } from 'react-i18next';
 import { functions } from '../../services/firebase.config';
 import { triggerHaptic } from '../../services/haptics.service';
-import { colors } from '../../theme';
+import { makeStyles, useColors } from '../../theme';
 import { CURRENCY_SYMBOL } from '../../config/constants';
 import { SuccessCheckIcon } from '../../components/icons/AuthIcons';
 import { AnimatedXMark } from '../../components/icons/StatusIcons';
 
 type Step = 'amount' | 'processing' | 'code' | 'done' | 'error';
 
-const ACCENT = '#FF8A7A';
-const INCOMING = '#34C77B';
 const KEYPAD = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'];
 const TOPUP_REQUESTS = 'agentTopupRequests';
 
@@ -34,6 +32,8 @@ function shortConfirmation(id: string): string {
 }
 
 export default function AgentTopupScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const navigation = useNavigation<any>();
   const { t } = useTranslation();
   const [step, setStep] = useState<Step>('amount');
@@ -209,7 +209,7 @@ export default function AgentTopupScreen() {
   if (step === 'processing') {
     return (
       <View style={[styles.container, styles.resultCenter]}>
-        <ActivityIndicator size="large" color={ACCENT} />
+        <ActivityIndicator size="large" color={colors.ui.accentText} />
         <Text style={styles.processingText}>{t('topup.agent.generating')}</Text>
       </View>
     );
@@ -260,7 +260,7 @@ export default function AgentTopupScreen() {
           </View>
 
           <View style={styles.waitingRow}>
-            <ActivityIndicator size="small" color="rgba(255,255,255,0.5)" />
+            <ActivityIndicator size="small" color={colors.ui.ink(0.5)} />
             <Text style={styles.waitingText}>{t('topup.agent.waiting')}</Text>
           </View>
         </View>
@@ -319,8 +319,8 @@ export default function AgentTopupScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.dark.canvas },
+const useStyles = makeStyles((colors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.ui.canvas },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -333,65 +333,65 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.ui.ink(0.06),
     alignItems: 'center',
     justifyContent: 'center',
   },
-  backArrow: { fontSize: 24, color: '#FFFFFF', lineHeight: 28 },
-  headerTitle: { fontSize: 22, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.5 },
-  headerSub: { fontSize: 13, color: 'rgba(255,255,255,0.4)', marginTop: 2 },
+  backArrow: { fontSize: 24, color: colors.ui.text, lineHeight: 28 },
+  headerTitle: { fontSize: 22, fontWeight: '800', color: colors.ui.text, letterSpacing: -0.5 },
+  headerSub: { fontSize: 13, color: colors.ui.ink(0.4), marginTop: 2 },
 
   // Amount entry
   amountSection: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
-  amountLabel: { fontSize: 13, fontWeight: '600', letterSpacing: 0.5, textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', marginBottom: 16 },
+  amountLabel: { fontSize: 13, fontWeight: '600', letterSpacing: 0.5, textTransform: 'uppercase', color: colors.ui.ink(0.4), marginBottom: 16 },
   amountRow: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 10 },
-  amountCurrency: { fontSize: 36, fontWeight: '700', color: '#FFFFFF', marginBottom: 6, marginRight: 4 },
-  amountDisplay: { fontSize: 64, fontWeight: '800', color: '#FFFFFF', letterSpacing: -2 },
-  amountPlaceholder: { color: 'rgba(255,255,255,0.2)' },
-  amountHint: { fontSize: 13, color: 'rgba(255,255,255,0.35)' },
+  amountCurrency: { fontSize: 36, fontWeight: '700', color: colors.ui.text, marginBottom: 6, marginRight: 4 },
+  amountDisplay: { fontSize: 64, fontWeight: '800', color: colors.ui.text, letterSpacing: -2 },
+  amountPlaceholder: { color: colors.ui.ink(0.2) },
+  amountHint: { fontSize: 13, color: colors.ui.ink(0.35) },
 
   // Keypad
   keypad: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 24, gap: 12, justifyContent: 'center', paddingBottom: 24 },
-  key: { width: 88, height: 56, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.07)', alignItems: 'center', justifyContent: 'center' },
+  key: { width: 88, height: 56, borderRadius: 14, backgroundColor: colors.ui.ink(0.07), alignItems: 'center', justifyContent: 'center' },
   keyDelete: { backgroundColor: 'transparent' },
-  keyText: { fontSize: 22, fontWeight: '600', color: '#FFFFFF' },
-  keyDeleteText: { fontSize: 20, color: 'rgba(255,255,255,0.6)' },
+  keyText: { fontSize: 22, fontWeight: '600', color: colors.ui.text },
+  keyDeleteText: { fontSize: 20, color: colors.ui.ink(0.6) },
 
   footer: { paddingHorizontal: 24, paddingBottom: 36 },
-  continueBtn: { height: 56, borderRadius: 28, backgroundColor: ACCENT, alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch', marginTop: 28 },
+  continueBtn: { height: 56, borderRadius: 28, backgroundColor: colors.ui.accentText, alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch', marginTop: 28 },
   continueBtnDisabled: { opacity: 0.35 },
   continueBtnText: { fontSize: 17, fontWeight: '700', color: '#FFFFFF' },
 
   // Code + QR
   codeContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, gap: 20 },
   qrCard: { padding: 16, borderRadius: 20, backgroundColor: '#FFFFFF' },
-  codeBox: { width: '100%', backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', borderRadius: 20, padding: 20, alignItems: 'center', gap: 12 },
-  codeLabel: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, color: 'rgba(255,255,255,0.45)' },
+  codeBox: { width: '100%', backgroundColor: colors.ui.ink(0.05), borderWidth: 1, borderColor: colors.ui.ink(0.1), borderRadius: 20, padding: 20, alignItems: 'center', gap: 12 },
+  codeLabel: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, color: colors.ui.ink(0.45) },
   codeDigits: { flexDirection: 'row', gap: 8 },
   codeDigitBox: { width: 40, height: 50, borderRadius: 10, backgroundColor: 'rgba(255,138,122,0.12)', borderWidth: 1, borderColor: 'rgba(255,138,122,0.35)', alignItems: 'center', justifyContent: 'center' },
-  codeDigitText: { fontSize: 26, fontWeight: '800', color: ACCENT, letterSpacing: -0.5 },
-  codeAmount: { fontSize: 14, color: 'rgba(255,255,255,0.5)' },
+  codeDigitText: { fontSize: 26, fontWeight: '800', color: colors.ui.accentText, letterSpacing: -0.5 },
+  codeAmount: { fontSize: 14, color: colors.ui.ink(0.5) },
   timerRow: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, backgroundColor: 'rgba(52,199,123,0.1)', borderWidth: 1, borderColor: 'rgba(52,199,123,0.3)' },
   timerWarn: { backgroundColor: 'rgba(255,92,92,0.1)', borderColor: 'rgba(255,92,92,0.3)' },
-  timerText: { fontSize: 14, fontWeight: '600', color: INCOMING },
-  timerTextWarn: { color: '#FF6961' },
+  timerText: { fontSize: 14, fontWeight: '600', color: colors.ui.incoming },
+  timerTextWarn: { color: colors.ui.error },
   waitingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  waitingText: { fontSize: 13, color: 'rgba(255,255,255,0.45)' },
+  waitingText: { fontSize: 13, color: colors.ui.ink(0.45) },
 
   // Done
-  doneTitle: { fontSize: 24, fontWeight: '800', color: '#FFFFFF', marginTop: 20 },
-  doneAmount: { fontSize: 44, fontWeight: '800', color: INCOMING, letterSpacing: -2, marginTop: 8 },
-  confBox: { marginTop: 24, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, paddingVertical: 16, paddingHorizontal: 28 },
-  confLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)' },
-  confValue: { fontSize: 22, fontWeight: '800', color: '#FFFFFF', marginTop: 4, letterSpacing: 1 },
+  doneTitle: { fontSize: 24, fontWeight: '800', color: colors.ui.text, marginTop: 20 },
+  doneAmount: { fontSize: 44, fontWeight: '800', color: colors.ui.incoming, letterSpacing: -2, marginTop: 8 },
+  confBox: { marginTop: 24, alignItems: 'center', backgroundColor: colors.ui.ink(0.05), borderRadius: 16, paddingVertical: 16, paddingHorizontal: 28 },
+  confLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: colors.ui.ink(0.4) },
+  confValue: { fontSize: 22, fontWeight: '800', color: colors.ui.text, marginTop: 4, letterSpacing: 1 },
 
   // Result shared
   resultCenter: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  errorTitle: { fontSize: 22, fontWeight: '800', color: '#FFFFFF', marginTop: 20, marginBottom: 10 },
-  errorSub: { fontSize: 14, color: 'rgba(255,255,255,0.45)', textAlign: 'center', lineHeight: 21 },
-  retryBtn: { marginTop: 28, paddingHorizontal: 32, paddingVertical: 14, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.08)' },
-  retryText: { fontSize: 16, fontWeight: '600', color: '#FFFFFF' },
+  errorTitle: { fontSize: 22, fontWeight: '800', color: colors.ui.text, marginTop: 20, marginBottom: 10 },
+  errorSub: { fontSize: 14, color: colors.ui.ink(0.45), textAlign: 'center', lineHeight: 21 },
+  retryBtn: { marginTop: 28, paddingHorizontal: 32, paddingVertical: 14, borderRadius: 24, backgroundColor: colors.ui.ink(0.08) },
+  retryText: { fontSize: 16, fontWeight: '600', color: colors.ui.text },
   cashClaim: { marginTop: 18, padding: 8 },
-  cashClaimText: { fontSize: 14, fontWeight: '600', color: '#FF8A7A', textAlign: 'center' },
-  processingText: { fontSize: 16, color: 'rgba(255,255,255,0.5)', marginTop: 20 },
-});
+  cashClaimText: { fontSize: 14, fontWeight: '600', color: colors.ui.accentText, textAlign: 'center' },
+  processingText: { fontSize: 16, color: colors.ui.ink(0.5), marginTop: 20 },
+}));

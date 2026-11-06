@@ -27,7 +27,7 @@ import {
   startNumberLink,
   ussdUrl,
 } from '../../services/mobileMoney.service';
-import { colors } from '../../theme';
+import { makeStyles, useColors } from '../../theme';
 
 /**
  * Top up from Zaad, through Zapp's collection number.
@@ -44,11 +44,11 @@ import { colors } from '../../theme';
  */
 type Step = 'link' | 'activate' | 'amount' | 'send' | 'done' | 'error';
 
-const ACCENT = '#FF8A7A';
-const INCOMING = '#34C77B';
 const KEYPAD = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'];
 
 export default function ZaadTopupScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { t } = useTranslation();
@@ -164,7 +164,7 @@ export default function ZaadTopupScreen() {
         </View>
       </View>
 
-      {step === null && <ActivityIndicator color={ACCENT} style={styles.loading} />}
+      {step === null && <ActivityIndicator color={colors.ui.accentText} style={styles.loading} />}
 
       {step === 'link' && (
         <View style={styles.body}>
@@ -173,7 +173,7 @@ export default function ZaadTopupScreen() {
             value={numberText}
             onChangeText={setNumberText}
             placeholder="063 412 3456"
-            placeholderTextColor="rgba(255,255,255,0.25)"
+            placeholderTextColor={colors.ui.ink(0.25)}
             keyboardType="phone-pad"
             style={styles.input}
             autoFocus
@@ -235,7 +235,7 @@ export default function ZaadTopupScreen() {
 
       {step === 'done' && (
         <View style={[styles.body, styles.center]}>
-          <Text style={[styles.big, { color: INCOMING }]}>
+          <Text style={[styles.big, { color: colors.ui.incoming }]}>
             {credited !== null ? t('topup.zaad.doneTopup', { amount: dollars(credited) }) : t('topup.zaad.doneLinked')}
           </Text>
           <Primary label={t('common.done')} onPress={() => navigation.goBack()} />
@@ -253,6 +253,8 @@ export default function ZaadTopupScreen() {
 }
 
 function Primary({ label, onPress, busy, disabled }: { label: string; onPress: () => void; busy?: boolean; disabled?: boolean }) {
+  const colors = useColors();
+  const styles = useStyles();
   return (
     <TouchableOpacity
       style={[styles.primary, (disabled || busy) && styles.primaryDisabled]}
@@ -260,13 +262,14 @@ function Primary({ label, onPress, busy, disabled }: { label: string; onPress: (
       disabled={disabled || busy}
       activeOpacity={0.85}
     >
-      {busy ? <ActivityIndicator color="#0D0B0A" /> : <Text style={styles.primaryText}>{label}</Text>}
+      {busy ? <ActivityIndicator color={colors.ui.onSolid} /> : <Text style={styles.primaryText}>{label}</Text>}
     </TouchableOpacity>
   );
 }
 
 /** The Zaad code: dial it on Android, copy it on iOS (which can't dial USSD). */
 function DialPanel({ code }: { code: string | null }) {
+  const styles = useStyles();
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   if (!code) return <Text style={styles.hint}>{t('topup.zaad.noCode')}</Text>;
@@ -294,52 +297,54 @@ function DialPanel({ code }: { code: string | null }) {
 }
 
 function Waiting({ text }: { text: string }) {
+  const colors = useColors();
+  const styles = useStyles();
   return (
     <View style={styles.waiting}>
-      <ActivityIndicator color={ACCENT} />
+      <ActivityIndicator color={colors.ui.accentText} />
       <Text style={styles.waitingText}>{text}</Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.dark.canvas },
+const useStyles = makeStyles((colors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.ui.canvas },
   header: { flexDirection: 'row', alignItems: 'center', paddingTop: 60, paddingHorizontal: 20, paddingBottom: 12, gap: 12 },
   headerText: { flex: 1 },
   backBtn: {
-    width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.06)',
+    width: 36, height: 36, borderRadius: 18, backgroundColor: colors.ui.ink(0.06),
     alignItems: 'center', justifyContent: 'center',
   },
-  backArrow: { fontSize: 24, color: '#FFFFFF', lineHeight: 28 },
-  headerTitle: { fontSize: 22, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.5 },
-  headerSub: { fontSize: 13, color: 'rgba(255,255,255,0.4)', marginTop: 2 },
+  backArrow: { fontSize: 24, color: colors.ui.text, lineHeight: 28 },
+  headerTitle: { fontSize: 22, fontWeight: '800', color: colors.ui.text, letterSpacing: -0.5 },
+  headerSub: { fontSize: 13, color: colors.ui.ink(0.4), marginTop: 2 },
   loading: { marginTop: 80 },
   body: { paddingHorizontal: 20, paddingTop: 12, gap: 14 },
   center: { alignItems: 'stretch', marginTop: 60 },
-  label: { fontSize: 13, color: 'rgba(255,255,255,0.55)' },
+  label: { fontSize: 13, color: colors.ui.ink(0.55) },
   input: {
-    fontSize: 24, fontWeight: '700', color: '#FFFFFF', paddingVertical: 14, paddingHorizontal: 16,
-    borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', backgroundColor: 'rgba(255,255,255,0.05)',
+    fontSize: 24, fontWeight: '700', color: colors.ui.text, paddingVertical: 14, paddingHorizontal: 16,
+    borderRadius: 14, borderWidth: 1, borderColor: colors.ui.ink(0.12), backgroundColor: colors.ui.ink(0.05),
   },
-  hint: { fontSize: 14, color: 'rgba(255,255,255,0.55)', lineHeight: 20 },
-  big: { fontSize: 22, fontWeight: '800', color: '#FFFFFF', lineHeight: 28 },
-  amount: { fontSize: 48, fontWeight: '800', color: '#FFFFFF', textAlign: 'center', marginTop: 8 },
+  hint: { fontSize: 14, color: colors.ui.ink(0.55), lineHeight: 20 },
+  big: { fontSize: 22, fontWeight: '800', color: colors.ui.text, lineHeight: 28 },
+  amount: { fontSize: 48, fontWeight: '800', color: colors.ui.text, textAlign: 'center', marginTop: 8 },
   keypad: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 10 },
   key: {
     width: '31%', paddingVertical: 16, borderRadius: 14, alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: colors.ui.ink(0.05),
   },
-  keyText: { fontSize: 24, color: '#FFFFFF', fontWeight: '600' },
-  primary: { backgroundColor: ACCENT, borderRadius: 16, paddingVertical: 16, alignItems: 'center' },
+  keyText: { fontSize: 24, color: colors.ui.text, fontWeight: '600' },
+  primary: { backgroundColor: colors.ui.accentText, borderRadius: 16, paddingVertical: 16, alignItems: 'center' },
   primaryDisabled: { opacity: 0.4 },
-  primaryText: { fontSize: 17, fontWeight: '800', color: '#0D0B0A' },
+  primaryText: { fontSize: 17, fontWeight: '800', color: colors.ui.onSolid },
   dialBox: {
-    gap: 12, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    gap: 12, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: colors.ui.ink(0.1),
+    backgroundColor: colors.ui.ink(0.04),
   },
-  code: { fontSize: 20, fontWeight: '700', color: '#FFFFFF', textAlign: 'center', letterSpacing: 1 },
+  code: { fontSize: 20, fontWeight: '700', color: colors.ui.text, textAlign: 'center', letterSpacing: 1 },
   waiting: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 6 },
-  waitingText: { flex: 1, fontSize: 14, color: 'rgba(255,255,255,0.6)', lineHeight: 20 },
-  link: { fontSize: 14, color: ACCENT, textAlign: 'center', paddingVertical: 8 },
-  errorText: { fontSize: 16, color: '#FFFFFF', textAlign: 'center', lineHeight: 22 },
-});
+  waitingText: { flex: 1, fontSize: 14, color: colors.ui.ink(0.6), lineHeight: 20 },
+  link: { fontSize: 14, color: colors.ui.accentText, textAlign: 'center', paddingVertical: 8 },
+  errorText: { fontSize: 16, color: colors.ui.text, textAlign: 'center', lineHeight: 22 },
+}));

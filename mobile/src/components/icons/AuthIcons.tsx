@@ -1,14 +1,16 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated } from 'react-native';
 import Svg, { Path, Circle, Rect, G, Defs, LinearGradient, Stop, Ellipse, Polygon } from 'react-native-svg';
-import { colors } from '../../theme';
+import { useColors } from '../../theme';
 
 interface IconProps {
   size?: number;
   color?: string;
 }
 
-export function ChevronDownIcon({ size = 16, color = colors.text.tertiary }: IconProps) {
+export function ChevronDownIcon({ size = 16, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.text.tertiary;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M6 9l6 6 6-6" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
@@ -16,7 +18,9 @@ export function ChevronDownIcon({ size = 16, color = colors.text.tertiary }: Ico
   );
 }
 
-export function ChevronLeftIcon({ size = 24, color = colors.text.primary }: IconProps) {
+export function ChevronLeftIcon({ size = 24, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.text.primary;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M15 18l-6-6 6-6" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
@@ -24,7 +28,9 @@ export function ChevronLeftIcon({ size = 24, color = colors.text.primary }: Icon
   );
 }
 
-export function CheckIcon({ size = 20, color = colors.primary }: IconProps) {
+export function CheckIcon({ size = 20, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.primary;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M20 6L9 17l-5-5" stroke={color} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
@@ -32,7 +38,9 @@ export function CheckIcon({ size = 20, color = colors.primary }: IconProps) {
   );
 }
 
-export function CloseIcon({ size = 14, color = colors.text.primary }: IconProps) {
+export function CloseIcon({ size = 14, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.text.primary;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M18 6L6 18M6 6l12 12" stroke={color} strokeWidth={2.5} strokeLinecap="round" />
@@ -41,7 +49,9 @@ export function CloseIcon({ size = 14, color = colors.text.primary }: IconProps)
 }
 
 /** OTP screen — messaging bubble with 3 dots + signal arc */
-export function PhoneIcon({ size = 32, color = colors.primary }: IconProps) {
+export function PhoneIcon({ size = 32, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.primary;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       {/* bubble body */}
@@ -63,7 +73,9 @@ export function PhoneIcon({ size = 32, color = colors.primary }: IconProps) {
 }
 
 /** PIN setup — two-tone shield with padlock inside */
-export function ShieldIcon({ size = 32, color = colors.primary }: IconProps) {
+export function ShieldIcon({ size = 32, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.primary;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Defs>
@@ -89,7 +101,9 @@ export function ShieldIcon({ size = 32, color = colors.primary }: IconProps) {
 }
 
 /** App lock — two-tone padlock with keyhole */
-export function LockIcon({ size = 32, color = colors.primary }: IconProps) {
+export function LockIcon({ size = 32, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.primary;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Defs>
@@ -109,7 +123,9 @@ export function LockIcon({ size = 32, color = colors.primary }: IconProps) {
   );
 }
 
-export function WalletIcon({ size = 32, color = colors.primary }: IconProps) {
+export function WalletIcon({ size = 32, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.primary;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Rect x="3" y="6" width="18" height="14" rx="2" stroke={color} strokeWidth={1.8} />
@@ -119,7 +135,9 @@ export function WalletIcon({ size = 32, color = colors.primary }: IconProps) {
   );
 }
 
-export function BoltIcon({ size = 40, color = colors.primary }: IconProps) {
+export function BoltIcon({ size = 40, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.primary;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" stroke={color} strokeWidth={1.8} strokeLinejoin="round" />
@@ -127,7 +145,9 @@ export function BoltIcon({ size = 40, color = colors.primary }: IconProps) {
   );
 }
 
-export function ChartIcon({ size = 40, color = colors.primary }: IconProps) {
+export function ChartIcon({ size = 40, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.primary;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M4 19V5M4 19h16" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
@@ -137,7 +157,9 @@ export function ChartIcon({ size = 40, color = colors.primary }: IconProps) {
 }
 
 /** Biometric setup — Face ID with scan lines and two-tone treatment */
-export function FaceIdIcon({ size = 48, color = colors.primary }: IconProps) {
+export function FaceIdIcon({ size = 48, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.primary;
   const dim = size;
   return (
     <Svg width={dim} height={dim} viewBox="0 0 48 48" fill="none">
@@ -163,7 +185,9 @@ export function FaceIdIcon({ size = 48, color = colors.primary }: IconProps) {
 }
 
 /** Biometric setup — fingerprint with 8 gradient arcs and core dot */
-export function FingerprintIcon({ size = 48, color = colors.primary }: IconProps) {
+export function FingerprintIcon({ size = 48, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.primary;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Defs>
@@ -189,6 +213,7 @@ export function FingerprintIcon({ size = 48, color = colors.primary }: IconProps
 
 /** Completion moment — filled green circle + white checkmark + pulse ring */
 export function SuccessCheckIcon({ size = 64 }: { size?: number }) {
+  const colors = useColors();
   const pulseScale = useRef(new Animated.Value(1)).current;
   const pulseOpacity = useRef(new Animated.Value(0.28)).current;
 
@@ -236,7 +261,9 @@ export function SuccessCheckIcon({ size = 64 }: { size?: number }) {
   );
 }
 
-export function StoreIcon({ size = 32, color = colors.primary }: IconProps) {
+export function StoreIcon({ size = 32, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.primary;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M3 9l2-4h14l2 4" stroke={color} strokeWidth={1.8} strokeLinejoin="round" />
@@ -246,7 +273,9 @@ export function StoreIcon({ size = 32, color = colors.primary }: IconProps) {
   );
 }
 
-export function HandshakeIcon({ size = 28, color = colors.primary }: IconProps) {
+export function HandshakeIcon({ size = 28, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.primary;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path
@@ -260,7 +289,9 @@ export function HandshakeIcon({ size = 28, color = colors.primary }: IconProps) 
 }
 
 /** QR code — finder corners + module grid */
-export function QrCodeIcon({ size = 24, color = colors.text.primary }: IconProps) {
+export function QrCodeIcon({ size = 24, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.text.primary;
   const s = 2.2;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">

@@ -20,6 +20,7 @@ import { CodeInput } from '../../components/auth/CodeInput';
 import { getCurrentUser, sendOTP, verifyOTP } from '../../services/auth.service';
 import { finishPhoneChange, sendCodeToNewPhone, startPhoneChange } from '../../services/phoneChange.service';
 import { logger } from '../../utils/logger';
+import { makeStyles, useColors } from '../../theme';
 
 /**
  * Change phone number (review B5, E13). The account and its money stay; the
@@ -36,6 +37,8 @@ type Step = 'number' | 'oldCode' | 'id' | 'pin' | 'newCode';
 const ACCENT = '#FF5043';
 
 export default function ChangePhoneScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
   const currentPhone = getCurrentUser()?.phoneNumber ?? '';
@@ -194,7 +197,7 @@ export default function ChangePhoneScreen() {
           onComplete={step === 'oldCode' ? confirmOldCode : confirmNewCode}
           otpMode
         />
-        {busy ? <ActivityIndicator color="#FFFFFF" style={styles.spinner} /> : null}
+        {busy ? <ActivityIndicator color={colors.ui.text} style={styles.spinner} /> : null}
       </View>
     );
   } else if (step === 'id') {
@@ -209,7 +212,7 @@ export default function ChangePhoneScreen() {
           autoCorrect={false}
           maxLength={4}
           placeholder="····"
-          placeholderTextColor="rgba(255,255,255,0.25)"
+          placeholderTextColor={colors.ui.ink(0.25)}
           accessibilityLabel={t('changePhone.idTitle')}
         />
         <PrimaryButton label={t('common.continue')} disabled={idLast4.length !== 4} busy={busy} onPress={() => setStep('pin')} />
@@ -220,7 +223,7 @@ export default function ChangePhoneScreen() {
     body = (
       <View style={styles.center}>
         <PinInput value={pin} onChange={setPin} onComplete={busy ? undefined : submitPin} />
-        {busy ? <ActivityIndicator color="#FFFFFF" style={styles.spinner} /> : null}
+        {busy ? <ActivityIndicator color={colors.ui.text} style={styles.spinner} /> : null}
       </View>
     );
   }
@@ -243,6 +246,7 @@ export default function ChangePhoneScreen() {
 }
 
 function PrimaryButton({ label, disabled, busy, onPress }: { label: string; disabled?: boolean; busy?: boolean; onPress: () => void }) {
+  const styles = useStyles();
   return (
     <TouchableOpacity
       style={[styles.button, (disabled || busy) && styles.buttonDisabled]}
@@ -255,21 +259,21 @@ function PrimaryButton({ label, disabled, busy, onPress }: { label: string; disa
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#000000' },
+const useStyles = makeStyles((colors) => StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.ui.canvas },
   flex: { flex: 1 },
   back: { paddingHorizontal: 16, paddingVertical: 8, alignSelf: 'flex-start' },
-  backIcon: { fontSize: 32, color: '#FFFFFF', lineHeight: 36 },
+  backIcon: { fontSize: 32, color: colors.ui.text, lineHeight: 36 },
   content: { paddingHorizontal: 24, paddingBottom: 48 },
   center: { alignItems: 'center', marginTop: 28 },
-  title: { fontSize: 26, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.5 },
-  subtitle: { fontSize: 15, color: 'rgba(255,255,255,0.6)', marginTop: 8, lineHeight: 21 },
+  title: { fontSize: 26, fontWeight: '800', color: colors.ui.text, letterSpacing: -0.5 },
+  subtitle: { fontSize: 15, color: colors.ui.ink(0.6), marginTop: 8, lineHeight: 21 },
   phoneInput: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.2)',
+    borderBottomColor: colors.ui.ink(0.2),
     paddingVertical: 12,
     marginTop: 28,
     marginBottom: 20,
@@ -277,21 +281,21 @@ const styles = StyleSheet.create({
   idInput: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     textAlign: 'center',
     letterSpacing: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.2)',
+    borderBottomColor: colors.ui.ink(0.2),
     paddingVertical: 12,
     marginTop: 28,
   },
   choice: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 12 },
-  radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)' },
+  radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: colors.ui.ink(0.4) },
   radioOn: { borderColor: ACCENT, backgroundColor: ACCENT },
-  choiceText: { flex: 1, fontSize: 15, color: '#FFFFFF' },
-  note: { fontSize: 13, color: 'rgba(255,255,255,0.45)', marginTop: 12, lineHeight: 19 },
+  choiceText: { flex: 1, fontSize: 15, color: colors.ui.text },
+  note: { fontSize: 13, color: colors.ui.ink(0.45), marginTop: 12, lineHeight: 19 },
   spinner: { marginTop: 20 },
-  error: { fontSize: 14, color: '#FF6961', marginTop: 16, lineHeight: 20 },
+  error: { fontSize: 14, color: colors.ui.error, marginTop: 16, lineHeight: 20 },
   button: {
     height: 56,
     borderRadius: 28,
@@ -302,4 +306,4 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: { opacity: 0.4 },
   buttonText: { fontSize: 17, fontWeight: '700', color: '#FFFFFF' },
-});
+}));

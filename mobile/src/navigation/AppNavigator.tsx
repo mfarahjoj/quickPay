@@ -1,6 +1,12 @@
-import React, { useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
+import {
+  NavigationContainer,
+  createNavigationContainerRef,
+  DarkTheme,
+  DefaultTheme,
+  type Theme,
+} from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useAuth } from '../hooks/useAuth';
@@ -16,7 +22,7 @@ import { hasDeviceCredential } from '../services/device.service';
 import { labelTrustedDevice, registerTrustedDevice, signOut } from '../services/auth.service';
 import { View, StyleSheet, ActivityIndicator, Linking, BackHandler, Platform } from 'react-native';
 import { parsePaymentLink, type PaymentLink } from '../services/paymentLink.service';
-import { colors } from '../theme';
+import { makeStyles, useColors, useTheme } from '../theme';
 import OnboardingScreen from '../screens/onboarding/OnboardingScreen';
 import { Springs } from '../constants/springs';
 import { HomeTabIcon, PayTabIcon, HistoryTabIcon, ProfileTabIcon } from '../components/icons/TabIcons';
@@ -155,6 +161,7 @@ function AuthStackNavigator({
 // ─── Main tabs ──────────────────────────────────────────────
 
 function MainTabs() {
+  const colors = useColors();
   const { t } = useTranslation();
 
   return (
@@ -227,15 +234,16 @@ function MainTabs() {
 // ─── Main stack (tabs + detail screens) ─────────────────────
 
 function MainStackNavigator() {
+  const colors = useColors();
   const { t } = useTranslation();
 
   return (
     <MainStack.Navigator
       screenOptions={{
-        cardStyle: { backgroundColor: colors.dark.canvas },
-        headerStyle: { backgroundColor: colors.dark.canvas },
-        headerTitleStyle: { fontWeight: '700', color: colors.dark.text },
-        headerTintColor: colors.dark.text,
+        cardStyle: { backgroundColor: colors.ui.canvas },
+        headerStyle: { backgroundColor: colors.ui.canvas },
+        headerTitleStyle: { fontWeight: '700', color: colors.ui.text },
+        headerTintColor: colors.ui.text,
         transitionSpec: {
           open:  { animation: 'spring', config: { ...Springs.transition, mass: 1, overshootClamping: false, restDisplacementThreshold: 0.001, restSpeedThreshold: 0.01 } },
           close: { animation: 'spring', config: { ...Springs.transition, mass: 1, overshootClamping: false, restDisplacementThreshold: 0.001, restSpeedThreshold: 0.01 } },
@@ -425,6 +433,8 @@ function MainStackNavigator() {
 // ─── Root navigator ─────────────────────────────────────────
 
 function BootstrapLoading() {
+  const colors = useColors();
+  const styles = useStyles();
   return (
     <View style={styles.bootstrapLoading}>
       <ActivityIndicator size="large" color={colors.action.primary} />
@@ -433,6 +443,23 @@ function BootstrapLoading() {
 }
 
 export default function AppNavigator() {
+  const styles = useStyles();
+  const { scheme, colors } = useTheme();
+  // What shows behind and between screens matches the canvas.
+  const navigationTheme = useMemo<Theme>(() => {
+    const base = scheme === 'dark' ? DarkTheme : DefaultTheme;
+    return {
+      ...base,
+      colors: {
+        ...base.colors,
+        primary: colors.ui.accent,
+        background: colors.ui.canvas,
+        card: colors.ui.canvas,
+        text: colors.ui.text,
+        border: colors.ui.divider,
+      },
+    };
+  }, [scheme, colors]);
   const { user, loading: authLoading } = useAuth();
   useIdleSignOut(!!user);
   useDeviceIntegrity(!!user);
@@ -633,7 +660,11 @@ export default function AppNavigator() {
     }
 
     const app = (
-      <NavigationContainer ref={navigationRef} onReady={() => setNavReadyTick((n) => n + 1)}>
+      <NavigationContainer
+        ref={navigationRef}
+        theme={navigationTheme}
+        onReady={() => setNavReadyTick((n) => n + 1)}
+      >
         <RootStack.Navigator screenOptions={{ headerShown: false }}>
           {user ? (
             <RootStack.Screen name="Main" component={MainStackNavigator} />
@@ -684,7 +715,7 @@ export default function AppNavigator() {
 
 // ─── Styles ─────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   fill: {
     flex: 1,
   },
@@ -695,6 +726,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.primary,
   },
   lockCover: {
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
-});
+}));

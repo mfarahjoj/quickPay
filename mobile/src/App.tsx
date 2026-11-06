@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { Alert, Linking, StyleSheet } from 'react-native';
+import { Alert, Linking, StatusBar, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from 'react-i18next';
 import { guardFreshInstall } from './services/installGuard';
@@ -15,6 +15,7 @@ import { registerForPushNotifications } from './services/notification.service';
 import crashlytics from '@react-native-firebase/crashlytics';
 import { firebase } from '@react-native-firebase/app-check';
 import { parseChargeLink } from './services/apiCharge.service';
+import { ThemeProvider, useTheme } from './theme';
 
 /** Give up on a pending deep link if the customer hasn't signed in by then. */
 const PENDING_LINK_TIMEOUT_MS = 2 * 60 * 1000;
@@ -166,8 +167,14 @@ function AppContent() {
   // After the App Check setup above: the gate's first read should carry a token.
   const updateGate = useUpdateGate();
 
+  const { scheme, colors } = useTheme();
+
   return (
-    <GestureHandlerRootView style={styles.root}>
+    <GestureHandlerRootView style={[styles.root, { backgroundColor: colors.ui.canvas }]}>
+      <StatusBar
+        barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'}
+        backgroundColor={colors.ui.canvas}
+      />
       <SafeAreaProvider>
         <ToastProvider>
           <LanguageSync />
@@ -188,7 +195,7 @@ export default function App() {
   useEffect(() => {
     guardFreshInstall().finally(() => setInstallChecked(true));
   }, []);
-  return installChecked ? <AppContent /> : null;
+  return <ThemeProvider>{installChecked ? <AppContent /> : null}</ThemeProvider>;
 }
 
 const styles = StyleSheet.create({

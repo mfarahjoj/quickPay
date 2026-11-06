@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Card, Button, PinInput } from '../../components';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
 import { CURRENCY_SYMBOL, PHONE_PREFIX } from '../../config/constants';
 import { useAuth } from '../../hooks/useAuth';
 import { triggerHaptic } from '../../services/haptics.service';
@@ -22,6 +22,8 @@ type Provider = 'zaad' | 'edahab';
 type Step = 'provider' | 'amount' | 'phone' | 'pin' | 'processing' | 'success';
 
 export default function MobileMoneyScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const { user } = useAuth();
 
@@ -309,10 +311,10 @@ export default function MobileMoneyScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   content: {
     padding: spacing.md,
@@ -320,16 +322,16 @@ const styles = StyleSheet.create({
   },
   title: {
     ...typography.h1,
-    color: colors.dark.text,
+    color: colors.ui.text,
     marginBottom: spacing.md,
     marginTop: spacing.sm,
   },
   tabRow: {
     flexDirection: 'row',
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderRadius: borderRadius.md,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     padding: 4,
     marginBottom: spacing.lg,
   },
@@ -341,11 +343,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tabActive: {
-    backgroundColor: colors.dark.accent,
+    backgroundColor: colors.ui.accent,
   },
   tabText: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     fontWeight: '600',
   },
   tabTextActive: {
@@ -353,7 +355,7 @@ const styles = StyleSheet.create({
   },
   stepTitle: {
     ...typography.bodyLarge,
-    color: colors.dark.text,
+    color: colors.ui.text,
     fontWeight: '600',
     marginBottom: spacing.md,
   },
@@ -366,10 +368,10 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: spacing.md,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderRadius: borderRadius.lg,
     alignItems: 'center',
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
   },
   providerCardZaad: {
     borderColor: 'rgba(52,199,123,0.4)',
@@ -393,12 +395,12 @@ const styles = StyleSheet.create({
   },
   providerName: {
     ...typography.bodyLarge,
-    color: colors.dark.text,
+    color: colors.ui.text,
     fontWeight: '600',
   },
   providerSub: {
     ...typography.caption,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
     marginTop: spacing.xs,
   },
   providerCheck: {
@@ -419,7 +421,7 @@ const styles = StyleSheet.create({
   providerBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing.smPlus,
     paddingVertical: spacing.sm,
@@ -434,11 +436,11 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     ...typography.bodySemibold,
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
   amountLarge: {
     ...typography.balanceNumber,
-    color: colors.dark.text,
+    color: colors.ui.text,
     textAlign: 'center',
     marginVertical: spacing.smPlus,
     fontVariant: ['tabular-nums'],
@@ -453,19 +455,19 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: borderRadius.md,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
-    backgroundColor: colors.dark.glass,
+    borderColor: colors.ui.glassBorder,
+    backgroundColor: colors.ui.glass,
     justifyContent: 'center',
     alignItems: 'center',
   },
   keyText: {
     ...typography.bodyLarge,
-    color: colors.dark.text,
+    color: colors.ui.text,
     fontWeight: '600',
   },
   phoneHint: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     marginBottom: spacing.md,
   },
   phoneRow: {
@@ -477,15 +479,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.dark.glassRaised,
+    backgroundColor: colors.ui.glassRaised,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderTopLeftRadius: borderRadius.md,
     borderBottomLeftRadius: borderRadius.md,
   },
   prefixText: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     fontWeight: '600',
   },
   phoneInput: {
@@ -493,17 +495,17 @@ const styles = StyleSheet.create({
     height: 44,
     borderWidth: 1,
     borderLeftWidth: 0,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderTopRightRadius: borderRadius.md,
     borderBottomRightRadius: borderRadius.md,
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     paddingHorizontal: spacing.md,
-    color: colors.dark.text,
+    color: colors.ui.text,
     ...typography.body,
   },
   pinSubtitle: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     textAlign: 'center',
     marginBottom: spacing.lg,
   },
@@ -519,7 +521,7 @@ const styles = StyleSheet.create({
   },
   processingText: {
     ...typography.bodyLarge,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     marginTop: spacing.md,
   },
   successCard: {
@@ -527,22 +529,22 @@ const styles = StyleSheet.create({
   },
   successIcon: {
     fontSize: 42,
-    color: colors.dark.incoming,
+    color: colors.ui.incoming,
   },
   successTitle: {
     ...typography.h2,
-    color: colors.dark.text,
+    color: colors.ui.text,
     marginTop: spacing.sm,
   },
   successAmount: {
     ...typography.balanceNumber,
-    color: colors.dark.text,
+    color: colors.ui.text,
     marginTop: spacing.sm,
     fontVariant: ['tabular-nums'],
   },
   successProvider: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     marginTop: spacing.xs,
   },
-});
+}));

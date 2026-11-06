@@ -4,7 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { useZaadTopups } from '../../hooks/useZaadTopups';
 import { triggerHaptic } from '../../services/haptics.service';
-import { colors } from '../../theme';
+import { makeStyles } from '../../theme';
 
 interface Method {
   key: string;
@@ -36,6 +36,7 @@ const METHODS: Method[] = [
 ];
 
 export default function TopUpMethodScreen() {
+  const styles = useStyles();
   const navigation = useNavigation<any>();
   const { t } = useTranslation();
   const zaadOpen = useZaadTopups();
@@ -79,8 +80,8 @@ export default function TopUpMethodScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.dark.canvas },
+const useStyles = makeStyles((colors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.ui.canvas },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -93,22 +94,22 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.ui.ink(0.06),
     alignItems: 'center',
     justifyContent: 'center',
   },
-  backArrow: { fontSize: 24, color: '#FFFFFF', lineHeight: 28 },
-  headerTitle: { fontSize: 22, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.5 },
-  headerSub: { fontSize: 13, color: 'rgba(255,255,255,0.4)', marginTop: 2 },
+  backArrow: { fontSize: 24, color: colors.ui.text, lineHeight: 28 },
+  headerTitle: { fontSize: 22, fontWeight: '800', color: colors.ui.text, letterSpacing: -0.5 },
+  headerSub: { fontSize: 13, color: colors.ui.ink(0.4), marginTop: 2 },
 
   list: { paddingHorizontal: 20, gap: 12, marginTop: 8 },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: colors.ui.ink(0.05),
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: colors.ui.ink(0.1),
     borderRadius: 18,
     padding: 18,
   },
@@ -122,7 +123,7 @@ const styles = StyleSheet.create({
   },
   cardGlyph: { fontSize: 24 },
   cardText: { flex: 1 },
-  cardTitle: { fontSize: 17, fontWeight: '700', color: '#FFFFFF' },
-  cardSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.45)', marginTop: 3, lineHeight: 18 },
-  cardArrow: { fontSize: 26, color: 'rgba(255,255,255,0.35)', fontWeight: '300' },
-});
+  cardTitle: { fontSize: 17, fontWeight: '700', color: colors.ui.text },
+  cardSubtitle: { fontSize: 13, color: colors.ui.ink(0.45), marginTop: 3, lineHeight: 18 },
+  cardArrow: { fontSize: 26, color: colors.ui.ink(0.35), fontWeight: '300' },
+}));

@@ -13,7 +13,7 @@ import { getDeviceCredential } from '../../services/device.service';
 import { setPendingSetupPin } from '../../services/biometric.service';
 import { accountLine } from '../../services/accountLabel';
 import { logger } from '../../utils/logger';
-import { colors, typography, spacing } from '../../theme';
+import { typography, spacing, makeStyles } from '../../theme';
 
 interface Props {
   /** Fall back to the phone + SMS code flow. */
@@ -29,6 +29,7 @@ interface Props {
  * onComplete, because signing in is the completion.
  */
 export default function PinLoginScreen({ onUseCode, onBack }: Props) {
+  const styles = useStyles();
   const { t } = useTranslation();
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
@@ -122,10 +123,10 @@ export default function PinLoginScreen({ onUseCode, onBack }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   fullScreen: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   footer: {
     alignItems: 'center',
@@ -139,18 +140,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: colors.dark.accentText,
+    borderColor: colors.ui.accentText,
   },
   wrongAccountHint: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     textAlign: 'center',
     paddingHorizontal: spacing.xl,
     marginBottom: spacing.sm,
   },
   linkText: {
     ...typography.bodySemibold,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
   },
   backLink: {
     alignItems: 'center',
@@ -158,6 +159,6 @@ const styles = StyleSheet.create({
   },
   backText: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
   },
-});
+}));

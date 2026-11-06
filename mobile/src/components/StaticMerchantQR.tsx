@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import QRCode from 'react-native-qrcode-svg';
-import { colors, typography, spacing, borderRadius } from '../theme';
+import { typography, spacing, borderRadius, makeStyles, useColors } from '../theme';
 import { useAuth } from '../hooks/useAuth';
 
 const STATIC_QR_KEY = '@quickpay_static_merchant_qr';
@@ -12,6 +12,8 @@ interface Props {
 }
 
 export function StaticMerchantQR({ merchantName }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { user } = useAuth();
   const [qrData, setQrData] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -75,7 +77,7 @@ export function StaticMerchantQR({ merchantName }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     alignItems: 'center',
     padding: spacing.lg,
@@ -107,4 +109,4 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     textAlign: 'center',
   },
-});
+}));
