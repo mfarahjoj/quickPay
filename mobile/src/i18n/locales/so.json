@@ -99,7 +99,6 @@
   "common.cameraPermissionMessage": "Zapp Pay waxay u baahan tahay gelitaanka kaamirada si ay u sawirto QR-yada. Fadlan ka daaro Settings.",
   "common.cameraPermissionMerchant": "Gelitaanka kaamirada ayaa loo baahan yahay si loo sawiro QR-yada macaamiisha.",
   "common.cameraPermissionDenied": "Ogolaanshaha kaamirada ayaa loo baahan yahay",
-  "common.failedRequestPermission": "Waa fashilmay codsiga ogolaanshaha kaamirada.",
   "common.settingUpCamera": "Waa la dejinayaa kaamirada...",
   "common.positionQrInFrame": "Ku dhig koodhka QR gudaha qaabka",
   "common.invalidQrCode": "Koodhkan QR ma ansaxna",
@@ -426,7 +425,6 @@
   "nav.tab.paymentsAccessibility": "Tab-ka lacag bixinta",
   "nav.tab.historyAccessibility": "Tab-ka taariikhda hawlaha",
   "nav.tab.profileAccessibility": "Tab-ka profile-ka",
-  "nav.screen.scanQr": "Sawir koodhka QR",
   "nav.screen.confirmPayment": "Xaqiiji lacag bixinta",
   "nav.screen.paymentSuccessful": "Lacag bixintu waa guulaysatay",
   "nav.screen.topUp": "Ku dar",
@@ -776,9 +774,6 @@
   "payments.myQr.refreshing": "Waa la cusboonaysiinayaa...",
   "payments.myQr.loadFailed": "Waa fashilmay sameynta QR",
   "qr.scan.title": "Sawir koodhka QR",
-  "qr.scan.permissionRequired": "Ogolaanshaha kaamirada ayaa loo baahan yahay",
-  "qr.scan.permissionTitle": "Ogolaanshaha kaamirada ayaa loo baahan yahay",
-  "qr.scan.permissionMessage": "Zapp Pay waxay u baahan tahay gelitaanka kaamirada si ay u sawirto QR-yada. Fadlan ka daaro Settings.",
   "qr.scan.instruction": "Ku dhig koodhka QR gudaha qaabka",
   "qr.scan.invalidQr": "Koodhkan QR ma ansaxna",
   "qr.scan.tryAgain": "Isku day mar kale",
@@ -1243,5 +1238,11 @@
   "auth.noAccount.create": "Samee akoon",
   "auth.noAccount.otherNumber": "Isticmaal nambar kale",
   "dashboard.businessAccount.title": "Kani waa akoon ganacsi",
-  "dashboard.businessAccount.body": "Lacag qaadashada, QR-ka dukaankaaga iyo lacag bixinta macaamiisha waxay ku jiraan Zapp Pay Merchant."
+  "dashboard.businessAccount.body": "Lacag qaadashada, QR-ka dukaankaaga iyo lacag bixinta macaamiisha waxay ku jiraan Zapp Pay Merchant.",
+  "qr.scan.cameraOff": "Kamaraddu way xidhan tahay. Ka shid Settings-ka si aad u iskaan garayso.",
+  "qr.scan.noCamera": "Kamarada taleefankan lama heli karo.",
+  "qr.scan.openSettings": "Fur Settings",
+  "qr.scan.checking": "Koodhka waa la hubinayaa…",
+  "qr.scan.flashlight": "Toosh",
+  "qr.scan.close": "Xidh"
 }

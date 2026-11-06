@@ -228,13 +228,13 @@ function MainStackNavigator() {
       <MainStack.Screen
         name="ScanCharge"
         getComponent={() => require('../screens/scan/ScanCustomerScreen').default}
-        options={{ title: t('navigation.tabs.scanAndCharge') }}
+        options={{ headerShown: false }}
       />
       <MainStack.Screen
         name="ScanCashOut"
         getComponent={() => require('../screens/scan/ScanCustomerScreen').default}
         initialParams={{ purpose: 'cash_out' }}
-        options={{ title: t('scan.cashOut.scanTitle') }}
+        options={{ headerShown: false }}
       />
       <MainStack.Screen
         name="ConfirmCashOut"

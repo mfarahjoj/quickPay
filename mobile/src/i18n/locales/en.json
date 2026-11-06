@@ -99,7 +99,6 @@
   "common.cameraPermissionMessage": "Zapp Pay needs camera access to scan QR codes. Please enable it in Settings.",
   "common.cameraPermissionMerchant": "Camera access is needed to scan customer QR codes.",
   "common.cameraPermissionDenied": "Camera permission required",
-  "common.failedRequestPermission": "Failed to request camera permission.",
   "common.settingUpCamera": "Setting up camera...",
   "common.positionQrInFrame": "Position QR code inside the frame",
   "common.invalidQrCode": "This QR code is not valid",
@@ -426,7 +425,6 @@
   "nav.tab.paymentsAccessibility": "Payments tab",
   "nav.tab.historyAccessibility": "Transaction history tab",
   "nav.tab.profileAccessibility": "Profile tab",
-  "nav.screen.scanQr": "Scan QR Code",
   "nav.screen.confirmPayment": "Confirm Payment",
   "nav.screen.paymentSuccessful": "Payment Successful",
   "nav.screen.topUp": "Top Up",
@@ -802,9 +800,6 @@
   "payments.myQr.refreshing": "Refreshing...",
   "payments.myQr.loadFailed": "Failed to generate QR",
   "qr.scan.title": "Scan QR Code",
-  "qr.scan.permissionRequired": "Camera permission required",
-  "qr.scan.permissionTitle": "Camera Permission Required",
-  "qr.scan.permissionMessage": "Zapp Pay needs camera access to scan QR codes. Please enable it in Settings.",
   "qr.scan.instruction": "Position QR code inside the frame",
   "qr.scan.invalidQr": "This QR code is not valid",
   "qr.scan.tryAgain": "Try Again",
@@ -1243,5 +1238,11 @@
   "auth.noAccount.create": "Create an account",
   "auth.noAccount.otherNumber": "Use a different number",
   "dashboard.businessAccount.title": "This is a business account",
-  "dashboard.businessAccount.body": "Taking payments, your shop QR and customer cash-outs are in Zapp Pay Merchant."
+  "dashboard.businessAccount.body": "Taking payments, your shop QR and customer cash-outs are in Zapp Pay Merchant.",
+  "qr.scan.cameraOff": "Camera access is off. Turn it on in Settings to scan.",
+  "qr.scan.noCamera": "This phone's camera isn't available.",
+  "qr.scan.openSettings": "Open Settings",
+  "qr.scan.checking": "Checking the code…",
+  "qr.scan.flashlight": "Flashlight",
+  "qr.scan.close": "Close"
 }

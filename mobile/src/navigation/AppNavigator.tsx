@@ -281,7 +281,7 @@ function MainStackNavigator() {
       <MainStack.Screen
         name="ScanQR"
         getComponent={() => require('../screens/qr/ScanQRScreen').default}
-        options={{ title: t('nav.screen.scanQr'), presentation: 'modal' }}
+        options={{ headerShown: false, presentation: 'modal' }}
       />
       <MainStack.Screen
         name="PaymentConfirm"
