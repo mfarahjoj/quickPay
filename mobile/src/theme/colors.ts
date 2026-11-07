@@ -60,33 +60,58 @@ function lightInkAlpha(alpha: number) {
   return Math.round(Math.min(1, Math.max(0, (255 - grey) / (255 - 20))) * 1000) / 1000;
 }
 
-// Light: white canvas, ink-tinted cards, warm ink text. Green, amber and red
-// are darker than on black so they still read as text on white.
+// Light: a cool grey canvas with flat white cards and near-black ink.
+// Buttons and links use a deep coral (#D9362B), on which white text passes
+// 4.5:1; the bright brand coral lives in the coral wallpaper (`wallpaper`).
+// Every text colour, green, amber and red included, passes 4.5:1 on the grey.
 const light: Palette = {
-  canvas: '#FFFFFF',
+  canvas: '#F1F1F4',
   surface: '#FFFFFF',
-  glass: 'rgba(20,17,15,0.04)',
-  glassRaised: 'rgba(20,17,15,0.07)',
-  glassBorder: 'rgba(20,17,15,0.08)',
-  glassBorderStrong: 'rgba(20,17,15,0.16)',
-  divider: 'rgba(20,17,15,0.07)',
-  text: '#14110F',
-  textDim: 'rgba(20,17,15,0.64)',
-  textFaint: 'rgba(20,17,15,0.5)',
-  ink: (alpha: number) => `rgba(20,17,15,${lightInkAlpha(alpha)})`,
-  solid: '#14110F',
+  glass: '#FFFFFF',
+  glassRaised: '#F7F7F9',
+  glassBorder: '#E6E6EB',
+  glassBorderStrong: '#D3D3DA',
+  divider: '#EDEDF2',
+  text: '#111114',
+  textDim: '#5E5E67',
+  textFaint: '#6A6A73',
+  ink: (alpha: number) => `rgba(17,17,20,${lightInkAlpha(alpha)})`,
+  solid: '#D9362B',
   onSolid: '#FFFFFF',
-  accent: '#FF5043',
-  accentText: '#D63A2F',
-  accentSoft: 'rgba(255,80,67,0.12)',
-  accentBorder: 'rgba(255,80,67,0.35)',
-  incoming: '#15894A',
-  incomingSoft: 'rgba(21,137,74,0.12)',
-  warning: '#A86400',
+  accent: '#D9362B',
+  accentText: '#C4352A',
+  accentSoft: 'rgba(217,54,43,0.1)',
+  accentBorder: 'rgba(217,54,43,0.3)',
+  incoming: '#13803F',
+  incomingSoft: 'rgba(19,128,63,0.12)',
+  warning: '#9A5B00',
   warningSoft: 'rgba(245,166,35,0.16)',
-  error: '#D92D20',
-  errorSoft: 'rgba(217,45,32,0.1)',
+  error: '#C42B1F',
+  errorSoft: 'rgba(196,43,31,0.1)',
 };
+
+/**
+ * The coral wallpaper behind the light Home header and the Paid screen. It
+ * runs from the brand coral into raspberry, deep enough wherever text sits
+ * for white text to pass 4.5:1. Buttons and pills drawn on it are smoked
+ * glass (`glass`, `glassBorder`).
+ */
+export const wallpaper = {
+  top: '#EC4430',
+  colors: ['#EC4430', '#CD2F36', '#A3223F'],
+  glass: 'rgba(20,17,15,0.2)',
+  glassBorder: 'rgba(255,255,255,0.16)',
+};
+
+/** Soft fill and strong mark pairs for avatars and widgets in light mode. */
+export const tints = {
+  coral: { fill: '#FFEAE6', mark: '#C4352A' },
+  green: { fill: '#E3F6EA', mark: '#13803F' },
+  blue: { fill: '#E8EFFF', mark: '#2F5BD3' },
+  amber: { fill: '#FFF1D9', mark: '#9A5B00' },
+  grey: { fill: '#EEEEF2', mark: '#55555E' },
+};
+export type Tint = (typeof tints)[keyof typeof tints];
 
 function buildColors(ui: Palette, scheme: Scheme) {
   const isDark = scheme === 'dark';
@@ -98,7 +123,7 @@ function buildColors(ui: Palette, scheme: Scheme) {
 
     background: {
       primary: ui.canvas,
-      secondary: isDark ? '#0B0B0F' : '#F6F5F3',
+      secondary: isDark ? '#0B0B0F' : '#FFFFFF',
       tertiary: ui.glass,
       gradient: [primitive.coral, '#FF7B6B'],
     },
@@ -115,8 +140,9 @@ function buildColors(ui: Palette, scheme: Scheme) {
       dark: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(20,17,15,0.4)',
       default: ui.glassBorder,
     },
+    // Light buttons use the deep coral, which white text reads on.
     action: {
-      primary: primitive.coral,
+      primary: isDark ? primitive.coral : ui.accent,
       primaryText: primitive.white,
     },
     status: {
@@ -154,12 +180,13 @@ function buildColors(ui: Palette, scheme: Scheme) {
           accentGradient: ['#FF5043', '#FF8A7A', '#FFB3AA'],
         },
 
-    // Backward-compatible aliases.
-    primary: primitive.coral,
-    primaryDark: primitive.coralDark,
+    // Backward-compatible aliases. In light, coral text and the gradient
+    // buttons use the deep coral, so white and coral text both stay readable.
+    primary: isDark ? primitive.coral : ui.accent,
+    primaryDark: isDark ? primitive.coralDark : '#B82D23',
     primaryLight: ui.accentSoft,
-    primaryGradientStart: primitive.coral,
-    primaryGradientEnd: '#FF7B6B',
+    primaryGradientStart: isDark ? primitive.coral : ui.accent,
+    primaryGradientEnd: isDark ? '#FF7B6B' : '#C42F25',
     success: ui.incoming,
     successDark: isDark ? '#178244' : '#106B39',
     successLight: ui.incomingSoft,

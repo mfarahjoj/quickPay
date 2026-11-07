@@ -12,15 +12,17 @@ import { BottomSheet } from './BottomSheet';
 import { SUPPORTED_LANGUAGES } from '../i18n/languages';
 import { applyLanguage } from '../i18n';
 import { functions } from '../services/firebase.config';
-import { typography, spacing, borderRadius, makeStyles, useColors } from '../theme';
+import { typography, spacing, borderRadius, makeStyles, useColors, wallpaper } from '../theme';
 import type { PreferredLanguage } from '../types';
 
 interface LanguageSelectorProps {
   currentLanguage?: PreferredLanguage;
   compact?: boolean;
+  /** 'onColor': smoked glass with white marks, for the coral wallpaper. */
+  tone?: 'default' | 'onColor';
 }
 
-export function LanguageSelector({ currentLanguage = 'en', compact = false }: LanguageSelectorProps) {
+export function LanguageSelector({ currentLanguage = 'en', compact = false, tone = 'default' }: LanguageSelectorProps) {
   const colors = useColors();
   const styles = useStyles();
   const { t, i18n } = useTranslation();
@@ -60,14 +62,14 @@ export function LanguageSelector({ currentLanguage = 'en', compact = false }: La
   return (
     <>
       <TouchableOpacity
-        style={[styles.trigger, compact && styles.triggerCompact]}
+        style={[styles.trigger, compact && styles.triggerCompact, tone === 'onColor' && styles.triggerOnColor]}
         onPress={() => setVisible(true)}
         accessibilityLabel={t('language.selectLanguage')}
         activeOpacity={0.7}
       >
         <Text style={styles.triggerFlag}>{current.flag}</Text>
         {!compact && <Text style={styles.triggerLabel}>{current.nativeName}</Text>}
-        <Text style={styles.triggerChevron}>▾</Text>
+        <Text style={[styles.triggerChevron, tone === 'onColor' && styles.triggerChevronOnColor]}>▾</Text>
       </TouchableOpacity>
 
       <BottomSheet visible={visible} onClose={() => setVisible(false)} height="45%">
@@ -115,6 +117,16 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
   },
   triggerCompact: {
     paddingHorizontal: spacing.sm,
+  },
+  triggerOnColor: {
+    height: 40,
+    paddingVertical: 0,
+    paddingHorizontal: 12,
+    backgroundColor: wallpaper.glass,
+    borderColor: wallpaper.glassBorder,
+  },
+  triggerChevronOnColor: {
+    color: '#FFFFFF',
   },
   triggerFlag: {
     fontSize: 18,

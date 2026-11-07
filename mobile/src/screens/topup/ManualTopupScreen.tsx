@@ -517,9 +517,11 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
     overflow: 'hidden',
     marginTop: spacing.md,
   },
+  // A gradient doesn't grow to fit its label, so it gets a fixed height.
   buttonGradient: {
-    paddingVertical: spacing.lg,
+    height: 56,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   buttonDisabled: {
     opacity: 0.6,

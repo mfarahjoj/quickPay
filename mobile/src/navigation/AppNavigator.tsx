@@ -68,6 +68,7 @@ type MainStackParamList = {
     amount: number;
     currency: string;
     merchantId?: string;
+    merchantName?: string;
   };
   ManualTopup: undefined;
   TopUpMethod: undefined;
@@ -164,13 +165,16 @@ function AuthStackNavigator({
 
 function MainTabs() {
   const colors = useColors();
+  const { scheme } = useTheme();
   const { t } = useTranslation();
+  // Light: a white bar, the current tab in ink and the rest in grey.
+  const light = scheme === 'light';
 
   return (
     <Tab.Navigator
       screenOptions={{
-        tabBarActiveTintColor: colors.action.primary,
-        tabBarInactiveTintColor: '#9A9AA0',
+        tabBarActiveTintColor: light ? colors.ui.text : colors.action.primary,
+        tabBarInactiveTintColor: light ? colors.ui.textFaint : '#9A9AA0',
         headerStyle: { backgroundColor: colors.background.primary },
         headerTitleStyle: { fontWeight: '700', color: colors.text.primary },
         headerTintColor: colors.text.primary,
@@ -184,8 +188,8 @@ function MainTabs() {
           paddingTop: 6,
         },
         tabBarStyle: {
-          backgroundColor: colors.background.primary,
-          borderTopColor: colors.border.light,
+          backgroundColor: light ? colors.ui.surface : colors.background.primary,
+          borderTopColor: light ? colors.ui.glassBorder : colors.border.light,
           borderTopWidth: StyleSheet.hairlineWidth,
           height: 88,
           paddingBottom: 28,

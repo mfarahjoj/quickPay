@@ -81,6 +81,7 @@ export default function PaymentConfirmScreen({ navigation, route }: Props) {
         amount,
         currency,
         merchantId: result.merchantId,
+        merchantName,
       });
     } catch (err: any) {
       setError(cooldownMessage(err, t) ?? (err.message || t('qr.confirm.paymentFailed')));
@@ -268,9 +269,11 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
     borderRadius: borderRadius.lg,
     overflow: 'hidden',
   },
+  // A gradient doesn't grow to fit its label, so it gets a fixed height.
   confirmGradient: {
-    paddingVertical: spacing.lg,
+    height: 56,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   buttonDisabled: {
     opacity: 0.6,

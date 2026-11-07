@@ -1,12 +1,13 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Pressable, ScrollView, RefreshControl, ActivityIndicator, Alert, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Pressable, ScrollView, RefreshControl, ActivityIndicator, Alert, StatusBar, useWindowDimensions } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import Svg, { Path, Polygon } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import QRCode from 'react-native-qrcode-svg';
 import { useWallet } from '../../hooks/useWallet';
 import { useTransactions } from '../../hooks/useTransactions';
-import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles, useColors, useTheme, wallpaper, tints } from '../../theme';
 import { CURRENCY_SYMBOL } from '../../config/constants';
 import { Card } from '../../components/Card';
 import { TransactionItem } from '../../components/TransactionItem';
@@ -36,6 +37,10 @@ import Animated, {
 } from 'react-native-reanimated';
 import { AnimatedNumber } from '../../components/AnimatedNumber';
 import { Springs } from '../../constants/springs';
+import { LightHomeHeader } from '../../components/home/LightHomeHeader';
+import { HomeWidgets } from '../../components/home/HomeWidgets';
+import { ChevronIcon, PinIcon, SendIcon } from '../../components/icons/LineIcons';
+import { initialsOf } from '../../utils/initials';
 
 interface Props {
   navigation: any;
@@ -272,20 +277,30 @@ function ActionTile({
 export default function DashboardScreen({ navigation }: Props) {
   const colors = useColors();
   const styles = useStyles();
+  const lightStyles = useLightStyles();
+  // Light mode has its own Home: the coral header, cards and widgets.
+  const { scheme } = useTheme();
+  const isLight = scheme === 'light';
+  const isFocused = useIsFocused();
   const { t } = useTranslation();
   const { height: windowHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { wallet, loading: walletLoading, error: walletError, refreshBalance } = useWallet();
-  const { transactions, loading: txLoading, error: txError, refresh: refreshTx } = useTransactions(undefined, 5);
+  // 30 rows: the light Home's spending card counts the last seven days.
+  const { transactions, loading: txLoading, error: txError, refresh: refreshTx } = useTransactions(undefined, 30);
   const [refreshing, setRefreshing] = useState(false);
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [idleTick, setIdleTick] = useState(0);
+  // Light Home: the status bar turns dark once the coral header has scrolled away.
+  const [headerHeight, setHeaderHeight] = useState(0);
+  const [pastHeader, setPastHeader] = useState(false);
 
-  // Idle attractor: nudge one action tile every few seconds
+  // Idle attractor: nudge one action tile every few seconds (dark Home only).
   useEffect(() => {
+    if (isLight) return;
     const interval = setInterval(() => setIdleTick((v) => v + 1), 4200);
     return () => clearInterval(interval);
-  }, []);
+  }, [isLight]);
   const { requests: pendingRequests } = usePaymentRequests();
   const { isConnected } = useNetworkStatus();
   const { profile, firstName } = useUserProfile();
@@ -456,6 +471,234 @@ export default function DashboardScreen({ navigation }: Props) {
     setBalanceVisible((prev) => !prev);
   };
 
+  const offlineBanner = !isConnected && (
+    <View style={styles.offlineBanner}>
+      <Text style={styles.offlineBannerText}>{t('dashboard.offlineMessage')}</Text>
+    </View>
+  );
+  const errorBanner = errorMessage != null && (
+    <TouchableOpacity style={styles.errorBanner} onPress={onRefresh}>
+      <Text style={styles.errorBannerText}>{t('dashboard.errorRetry')}</Text>
+    </TouchableOpacity>
+  );
+  const businessBanner = profile && profile.accountType !== 'customer' && (
+    <View style={styles.businessBanner}>
+      <Text style={styles.businessBannerTitle}>{t('dashboard.businessAccount.title')}</Text>
+      <Text style={styles.businessBannerText}>{t('dashboard.businessAccount.body')}</Text>
+    </View>
+  );
+  const pendingSection = pendingRequests.length > 0 && (
+    <View style={styles.pendingSection}>
+      <Text style={styles.pendingSectionTitle}>{t('dashboard.pendingRequests')}</Text>
+      {pendingRequests.map((req) => (
+        <TouchableOpacity
+          key={req.id}
+          style={styles.pendingCard}
+          onPress={() => {
+            triggerHaptic('light');
+            navigation.navigate('ApprovePayment', {
+              requestId: req.id,
+              merchantName: req.merchantName,
+              amount: req.amount,
+              currency: req.currency,
+              createdAt: req.createdAt.toISOString(),
+              ...(req.reference ? { reference: req.reference } : {}),
+            });
+          }}
+        >
+          <View style={styles.pendingCardContent}>
+            <View>
+              <Text style={styles.pendingTitle}>{req.merchantName}</Text>
+              <Text style={styles.pendingAmount}>
+                {CURRENCY_SYMBOL}{(req.amount / 100).toFixed(2)}
+              </Text>
+            </View>
+            <Text style={styles.pendingReview}>{t('common.review')}</Text>
+          </View>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+  const nudge = (wallet?.balance ?? 0) === 0 && (
+    <TouchableOpacity
+      style={styles.nudgeBanner}
+      activeOpacity={0.85}
+      onPress={() => { triggerHaptic('light'); navigation.navigate('TopUpMethod'); }}
+    >
+      <View style={styles.nudgeIcon}>
+        <BoltGlyph size={20} color="#FFFFFF" />
+      </View>
+      <View style={styles.nudgeText}>
+        <Text style={styles.nudgeTitle}>{t('dashboard.firstTopUpTitle')}</Text>
+        <Text style={styles.nudgeSubtitle}>{t('dashboard.firstTopUpSubtitle')}</Text>
+      </View>
+      <Text style={styles.nudgeArrow}>→</Text>
+    </TouchableOpacity>
+  );
+  const qrCard = qrVisible && qrValue ? (
+    <View ref={qrCardRef} collapsable={false}>
+      <Card style={styles.qrCard}>
+      <View style={styles.qrHeader}>
+        <Text style={styles.qrTitle}>{t('dashboard.myQrCode')}</Text>
+        <TouchableOpacity
+          onPress={hideQr}
+          style={styles.qrHideButton}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.hide')}
+        >
+          <Text style={styles.qrHideText}>{t('common.hide')}</Text>
+        </TouchableOpacity>
+      </View>
+      <View
+        style={styles.qrCodeWrapper}
+        accessible
+        accessibilityRole="image"
+        accessibilityLabel={t('dashboard.myQrCode')}
+      >
+        <QRCode
+          value={qrValue}
+          size={180}
+          backgroundColor="#FFFFFF"
+          color="#000000"
+        />
+      </View>
+      <Text style={styles.qrHint}>{t('dashboard.qrHint')}</Text>
+      <View style={[styles.qrTimerPill, qrSecondsLeft <= 10 && styles.qrTimerPillWarning]}>
+        <Text style={[styles.qrTimerText, qrSecondsLeft <= 10 && styles.qrTimerTextWarning]}>
+          {t('dashboard.qrTimer', { seconds: qrSecondsLeft })}
+        </Text>
+      </View>
+    </Card>
+    </View>
+  ) : null;
+
+  if (isLight) {
+    return (
+      <>
+        {isFocused && (
+          <StatusBar
+            animated
+            barStyle={pastHeader ? 'dark-content' : 'light-content'}
+            backgroundColor={pastHeader ? colors.ui.canvas : wallpaper.top}
+          />
+        )}
+        <ScrollView
+          ref={scrollRef}
+          style={lightStyles.container}
+          contentContainerStyle={lightStyles.content}
+          scrollEventThrottle={32}
+          onScroll={(e) => {
+            const past = headerHeight > 0 && e.nativeEvent.contentOffset.y > headerHeight - insets.top;
+            if (past !== pastHeader) setPastHeader(past);
+          }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#FFFFFF"
+              colors={[colors.ui.accent]}
+              progressViewOffset={insets.top}
+            />
+          }
+        >
+          <View ref={scrollContentRef} collapsable={false}>
+            <LightHomeHeader
+              onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
+              topInset={insets.top}
+              initials={initialsOf(profile?.fullName)}
+              balance={wallet?.balance ?? 0}
+              currency={wallet?.currency || 'USD'}
+              balanceVisible={balanceVisible}
+              onToggleBalance={onToggleBalance}
+              language={profile?.preferredLanguage}
+              qrLoading={qrLoading}
+              contentStyle={balanceCardStyle}
+              onProfile={() => { triggerHaptic('light'); navigation.navigate('Profile'); }}
+              onNotifications={() => { triggerHaptic('light'); navigation.navigate('Notifications'); }}
+              onShowQr={showQr}
+              onTopUp={() => { triggerHaptic('light'); navigation.navigate('TopUpMethod'); }}
+              onPay={() => { triggerHaptic('light'); navigation.navigate('ScanQR'); }}
+              onGetCash={() => { triggerHaptic('light'); navigation.navigate('CashOut'); }}
+            />
+
+            <View style={lightStyles.body}>
+              {offlineBanner}
+              {errorBanner}
+              {businessBanner}
+              {pendingSection}
+              {nudge}
+              {qrCard}
+
+              <View style={lightStyles.card}>
+                {txLoading ? (
+                  <ActivityIndicator style={lightStyles.loader} color={colors.ui.accent} />
+                ) : transactions.length === 0 ? (
+                  <EmptyActivity message={t('dashboard.noTransactionsMessage')} />
+                ) : (
+                  transactions.slice(0, 3).map((tx: Transaction) => (
+                    <TransactionItem
+                      key={tx.id}
+                      transaction={tx}
+                      onPress={() => navigation.navigate('TransactionDetail', { transaction: tx })}
+                    />
+                  ))
+                )}
+                <TouchableOpacity
+                  style={lightStyles.seeAll}
+                  onPress={() => navigation.navigate('History')}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                >
+                  <Text style={lightStyles.seeAllText}>{t('dashboard.seeAll')}</Text>
+                </TouchableOpacity>
+              </View>
+
+              <HomeWidgets
+                transactions={transactions}
+                onSpending={() => { triggerHaptic('light'); navigation.navigate('Insights'); }}
+                onInvite={() => { triggerHaptic('light'); navigation.navigate('Invite'); }}
+              />
+
+              <View style={lightStyles.card}>
+                <TouchableOpacity
+                  style={lightStyles.linkRow}
+                  onPress={() => { triggerHaptic('light'); navigation.navigate('Payments'); }}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                >
+                  <View style={[lightStyles.linkIcon, { backgroundColor: tints.blue.fill }]}>
+                    <SendIcon size={19} color={tints.blue.mark} strokeWidth={1.9} />
+                  </View>
+                  <View style={lightStyles.linkText}>
+                    <Text style={lightStyles.linkTitle}>{t('common.send')}</Text>
+                    <Text style={lightStyles.linkSub}>{t('dashboard.sendText')}</Text>
+                  </View>
+                  <ChevronIcon size={18} color={colors.ui.textFaint} />
+                </TouchableOpacity>
+                <View style={lightStyles.linkDivider} />
+                <TouchableOpacity
+                  style={lightStyles.linkRow}
+                  onPress={() => { triggerHaptic('light'); navigation.navigate('AgentLocator'); }}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                >
+                  <View style={[lightStyles.linkIcon, { backgroundColor: tints.amber.fill }]}>
+                    <PinIcon size={19} color={tints.amber.mark} strokeWidth={1.9} />
+                  </View>
+                  <View style={lightStyles.linkText}>
+                    <Text style={lightStyles.linkTitle}>{t('dashboard.findAgent')}</Text>
+                    <Text style={lightStyles.linkSub}>{t('dashboard.findAgentText')}</Text>
+                  </View>
+                  <ChevronIcon size={18} color={colors.ui.textFaint} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </ScrollView>
+      </>
+    );
+  }
+
   return (
     <>
       <View style={styles.glow} pointerEvents="none" />
@@ -473,11 +716,7 @@ export default function DashboardScreen({ navigation }: Props) {
       }
     >
       <View ref={scrollContentRef} collapsable={false}>
-      {!isConnected && (
-        <View style={styles.offlineBanner}>
-          <Text style={styles.offlineBannerText}>{t('dashboard.offlineMessage')}</Text>
-        </View>
-      )}
+      {offlineBanner}
 
       {/* Header */}
       <View style={styles.headerRow}>
@@ -500,55 +739,15 @@ export default function DashboardScreen({ navigation }: Props) {
         </View>
       </View>
 
-      {errorMessage != null && (
-        <TouchableOpacity style={styles.errorBanner} onPress={onRefresh}>
-          <Text style={styles.errorBannerText}>{t('dashboard.errorRetry')}</Text>
-        </TouchableOpacity>
-      )}
+      {errorBanner}
 
       {/* One phone number is one account in both apps: a shop or agent that
           opens this app sees its business account, where Show QR and the
           customer cash-out don't apply. */}
-      {profile && profile.accountType !== 'customer' && (
-        <View style={styles.businessBanner}>
-          <Text style={styles.businessBannerTitle}>{t('dashboard.businessAccount.title')}</Text>
-          <Text style={styles.businessBannerText}>{t('dashboard.businessAccount.body')}</Text>
-        </View>
-      )}
+      {businessBanner}
 
       {/* Pending requests */}
-      {pendingRequests.length > 0 && (
-        <View style={styles.pendingSection}>
-          <Text style={styles.pendingSectionTitle}>{t('dashboard.pendingRequests')}</Text>
-          {pendingRequests.map((req) => (
-            <TouchableOpacity
-              key={req.id}
-              style={styles.pendingCard}
-              onPress={() => {
-                triggerHaptic('light');
-                navigation.navigate('ApprovePayment', {
-                  requestId: req.id,
-                  merchantName: req.merchantName,
-                  amount: req.amount,
-                  currency: req.currency,
-                  createdAt: req.createdAt.toISOString(),
-                  ...(req.reference ? { reference: req.reference } : {}),
-                });
-              }}
-            >
-              <View style={styles.pendingCardContent}>
-                <View>
-                  <Text style={styles.pendingTitle}>{req.merchantName}</Text>
-                  <Text style={styles.pendingAmount}>
-                    {CURRENCY_SYMBOL}{(req.amount / 100).toFixed(2)}
-                  </Text>
-                </View>
-                <Text style={styles.pendingReview}>{t('common.review')}</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
+      {pendingSection}
 
       {/* ─── PRIMARY ZONE: Balance (open, no card) ─── */}
       <Animated.View style={balanceCardStyle}>
@@ -616,61 +815,11 @@ export default function DashboardScreen({ navigation }: Props) {
         </View>
 
         {/* Activation nudge for empty wallets */}
-        {(wallet?.balance ?? 0) === 0 && (
-          <TouchableOpacity
-            style={styles.nudgeBanner}
-            activeOpacity={0.85}
-            onPress={() => { triggerHaptic('light'); navigation.navigate('TopUpMethod'); }}
-          >
-            <View style={styles.nudgeIcon}>
-              <BoltGlyph size={20} color="#FFFFFF" />
-            </View>
-            <View style={styles.nudgeText}>
-              <Text style={styles.nudgeTitle}>{t('dashboard.firstTopUpTitle')}</Text>
-              <Text style={styles.nudgeSubtitle}>{t('dashboard.firstTopUpSubtitle')}</Text>
-            </View>
-            <Text style={styles.nudgeArrow}>→</Text>
-          </TouchableOpacity>
-        )}
+        {nudge}
       </Animated.View>
 
       {/* Inline QR — shown right below balance for quick access */}
-      {qrVisible && qrValue ? (
-        <View ref={qrCardRef} collapsable={false}>
-          <Card style={styles.qrCard}>
-          <View style={styles.qrHeader}>
-            <Text style={styles.qrTitle}>{t('dashboard.myQrCode')}</Text>
-            <TouchableOpacity
-              onPress={hideQr}
-              style={styles.qrHideButton}
-              accessibilityRole="button"
-              accessibilityLabel={t('common.hide')}
-            >
-              <Text style={styles.qrHideText}>{t('common.hide')}</Text>
-            </TouchableOpacity>
-          </View>
-          <View
-            style={styles.qrCodeWrapper}
-            accessible
-            accessibilityRole="image"
-            accessibilityLabel={t('dashboard.myQrCode')}
-          >
-            <QRCode
-              value={qrValue}
-              size={180}
-              backgroundColor="#FFFFFF"
-              color="#000000"
-            />
-          </View>
-          <Text style={styles.qrHint}>{t('dashboard.qrHint')}</Text>
-          <View style={[styles.qrTimerPill, qrSecondsLeft <= 10 && styles.qrTimerPillWarning]}>
-            <Text style={[styles.qrTimerText, qrSecondsLeft <= 10 && styles.qrTimerTextWarning]}>
-              {t('dashboard.qrTimer', { seconds: qrSecondsLeft })}
-            </Text>
-          </View>
-        </Card>
-        </View>
-      ) : null}
+      {qrCard}
 
       {/* ─── ACTIVITY ZONE: Transactions ─── */}
       <View style={styles.sectionHeader}>
@@ -687,7 +836,7 @@ export default function DashboardScreen({ navigation }: Props) {
           <EmptyActivity message={t('dashboard.noTransactionsMessage')} />
         ) : (
           <View>
-            {transactions.map((tx: Transaction) => (
+            {transactions.slice(0, 5).map((tx: Transaction) => (
               <TransactionItem
                 key={tx.id}
                 transaction={tx}
@@ -1301,5 +1450,76 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
   },
   qrTimerTextWarning: {
     color: colors.ui.error,
+  },
+}));
+
+// ─── Light Home: flat white cards on the grey page ────────────
+const useLightStyles = makeStyles((colors) => StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.ui.canvas,
+  },
+  content: {
+    paddingBottom: spacing.xl,
+  },
+  body: {
+    paddingHorizontal: 16,
+  },
+  card: {
+    backgroundColor: colors.ui.surface,
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  loader: {
+    marginVertical: 28,
+  },
+  seeAll: {
+    height: 48,
+    marginTop: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderTopWidth: 1,
+    borderTopColor: colors.ui.divider,
+  },
+  seeAllText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.ui.accent,
+  },
+  linkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    minHeight: 64,
+  },
+  linkIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  linkText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  linkTitle: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
+    color: colors.ui.text,
+  },
+  linkSub: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.ui.textFaint,
+  },
+  linkDivider: {
+    height: 1,
+    marginLeft: 52,
+    backgroundColor: colors.ui.divider,
   },
 }));

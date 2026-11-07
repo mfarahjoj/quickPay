@@ -21,10 +21,15 @@ import {
   isBiometricAvailable,
   prepareBiometricApproval,
 } from '../../services/biometric.service';
-import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { typography, spacing, borderRadius, makeStyles, useColors, useTheme, tints } from '../../theme';
 import { CURRENCY_SYMBOL } from '../../config/constants';
 import { PinInput } from '../../components/PinInput';
 import { Header } from '../../components/Header';
+import { AmountCaret, AmountKeypad } from '../../components/AmountKeypad';
+import { BackIcon, StoreIcon } from '../../components/icons/LineIcons';
+import { pressAmountKey } from '../../utils/amountKeypad';
+import { useWallet } from '../../hooks/useWallet';
 
 interface Props {
   navigation: any;
@@ -48,8 +53,14 @@ function getBiometricLabelKey(biometryType?: string): string {
 export default function EnterAmountScreen({ navigation, route }: Props) {
   const colors = useColors();
   const styles = useStyles();
+  const lightStyles = useLightStyles();
   const { t } = useTranslation();
   const { merchantId, merchantName, currency } = route.params;
+  // Light mode types the amount on its own keypad, under an amount card.
+  const { scheme } = useTheme();
+  const isLight = scheme === 'light';
+  const insets = useSafeAreaInsets();
+  const { wallet } = useWallet();
 
   const [amount, setAmount] = useState('');
   const [step, setStep] = useState<Step>('amount');
@@ -110,6 +121,7 @@ export default function EnterAmountScreen({ navigation, route }: Props) {
         amount: parsedAmount,
         currency,
         merchantId,
+        merchantName,
       });
     } catch (err: any) {
       setError(cooldownMessage(err, t) ?? (err.message || t('qr.confirm.paymentFailed')));
@@ -142,6 +154,84 @@ export default function EnterAmountScreen({ navigation, route }: Props) {
       setError(t('qr.enterAmount.biometricFailed'));
     }
   };
+
+  if (step === 'amount' && isLight) {
+    const payLabel = `${CURRENCY_SYMBOL}${(isValidAmount ? parsedAmount : 0).toFixed(2)}`;
+    return (
+      <View style={[lightStyles.container, { paddingTop: insets.top + 6, paddingBottom: insets.bottom + 16 }]}>
+        <TouchableOpacity
+          style={lightStyles.back}
+          onPress={() => navigation.goBack()}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.back')}
+        >
+          <BackIcon size={24} color={colors.ui.text} />
+        </TouchableOpacity>
+
+        <View style={lightStyles.merchant}>
+          <View style={lightStyles.merchantAvatar}>
+            <StoreIcon size={26} color={tints.amber.mark} strokeWidth={1.8} />
+          </View>
+          <Text style={lightStyles.merchantName} numberOfLines={2}>
+            {merchantName}
+          </Text>
+          <Text style={lightStyles.merchantSub}>{t('qr.enterAmount.zappMerchant')}</Text>
+        </View>
+
+        <View style={lightStyles.amountCard}>
+          <Text style={lightStyles.cardLabel}>{t('qr.enterAmount.youPay')}</Text>
+          <View style={lightStyles.amountRow}>
+            <View style={lightStyles.amountWrap}>
+              <Text
+                style={[lightStyles.amountText, !amount && lightStyles.amountEmpty]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+              >
+                {CURRENCY_SYMBOL}
+                {amount || '0'}
+              </Text>
+              <AmountCaret color={colors.ui.accent} height={44} />
+            </View>
+            <View style={lightStyles.currencyPill}>
+              <View style={lightStyles.currencyCoin}>
+                <Text style={lightStyles.currencyCoinText}>{CURRENCY_SYMBOL}</Text>
+              </View>
+              <Text style={lightStyles.currencyText}>{currency}</Text>
+            </View>
+          </View>
+          <View style={lightStyles.cardDivider} />
+          <View style={lightStyles.balanceRow}>
+            <Text style={lightStyles.balanceKey}>{t('qr.enterAmount.balance')}</Text>
+            <Text style={lightStyles.balanceValue}>
+              {wallet ? `${CURRENCY_SYMBOL}${wallet.balance.toFixed(2)}` : '—'}
+            </Text>
+          </View>
+        </View>
+
+        {error && <Text style={styles.errorText}>{error}</Text>}
+
+        <View style={lightStyles.spacer} />
+
+        <AmountKeypad
+          onKey={(key) => {
+            setError(null);
+            setAmount((current) => pressAmountKey(current, key));
+          }}
+          onClear={() => setAmount('')}
+        />
+        <TouchableOpacity
+          style={[lightStyles.payButton, !isValidAmount && styles.buttonDisabled]}
+          onPress={handleContinue}
+          disabled={!isValidAmount}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+        >
+          <Text style={lightStyles.payText}>{t('qr.enterAmount.payAmount', { amount: payLabel })}</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   if (step === 'amount') {
     return (
@@ -342,9 +432,11 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
     overflow: 'hidden',
     marginTop: spacing.md,
   },
+  // A gradient doesn't grow to fit its label, so it gets a fixed height.
   gradientButton: {
-    paddingVertical: spacing.lg,
+    height: 56,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   continueText: {
     ...typography.h3,
@@ -430,5 +522,150 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
   cancelText: {
     ...typography.bodySemibold,
     color: colors.ui.textDim,
+  },
+}));
+
+// ─── Light amount step: an amount card over the keypad ────────
+const useLightStyles = makeStyles((colors) => StyleSheet.create({
+  container: {
+    flex: 1,
+    paddingHorizontal: 16,
+    backgroundColor: colors.ui.canvas,
+  },
+  back: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+  },
+  merchant: {
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  merchantAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: tints.amber.fill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  merchantName: {
+    marginTop: 10,
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: '700',
+    color: colors.ui.text,
+    textAlign: 'center',
+  },
+  merchantSub: {
+    marginTop: 2,
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.ui.textFaint,
+  },
+  amountCard: {
+    marginTop: 22,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 16,
+    borderRadius: 24,
+    backgroundColor: colors.ui.surface,
+  },
+  cardLabel: {
+    fontSize: 13,
+    lineHeight: 16,
+    color: colors.ui.textFaint,
+  },
+  amountRow: {
+    marginTop: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  amountWrap: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  amountText: {
+    flexShrink: 1,
+    fontSize: 52,
+    lineHeight: 60,
+    fontWeight: '700',
+    letterSpacing: -2,
+    color: colors.ui.text,
+    fontVariant: ['tabular-nums'],
+  },
+  amountEmpty: {
+    color: colors.ui.textFaint,
+  },
+  currencyPill: {
+    height: 34,
+    paddingLeft: 6,
+    paddingRight: 12,
+    borderRadius: 17,
+    backgroundColor: colors.ui.canvas,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  currencyCoin: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.ui.incoming,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  currencyCoinText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  currencyText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.ui.text,
+  },
+  cardDivider: {
+    height: 1,
+    marginTop: 14,
+    marginBottom: 12,
+    backgroundColor: colors.ui.divider,
+  },
+  balanceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  balanceKey: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.ui.textFaint,
+  },
+  balanceValue: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '600',
+    color: colors.ui.text,
+    fontVariant: ['tabular-nums'],
+  },
+  spacer: {
+    flex: 1,
+    minHeight: 12,
+  },
+  payButton: {
+    marginTop: 16,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.ui.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  payText: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '600',
   },
 }));

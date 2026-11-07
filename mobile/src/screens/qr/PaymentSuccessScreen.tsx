@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, Share, TouchableOpacity } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import Animated, {
   useSharedValue,
@@ -12,7 +13,9 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Button } from '../../components/Button';
 import { SuccessCheckIcon } from '../../components/icons/AuthIcons';
-import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles, useColors, useTheme, wallpaper } from '../../theme';
+import { Wallpaper } from '../../components/Wallpaper';
+import { CheckIcon, ShareIcon } from '../../components/icons/LineIcons';
 import { CURRENCY_SYMBOL } from '../../config/constants';
 import { triggerHaptic } from '../../services/haptics.service';
 import { Springs } from '../../constants/springs';
@@ -26,6 +29,7 @@ interface Props {
       amount: number;
       currency: string;
       merchantId?: string;
+      merchantName?: string;
     };
   };
 }
@@ -86,7 +90,13 @@ export default function PaymentSuccessScreen({ navigation, route }: Props) {
   const colors = useColors();
   const styles = useStyles();
   const { t } = useTranslation();
-  const { transactionId, amount, currency } = route.params;
+  const { transactionId, amount, currency, merchantName } = route.params;
+  // Light mode celebrates on the coral wallpaper.
+  const { scheme } = useTheme();
+  const isLight = scheme === 'light';
+  const insets = useSafeAreaInsets();
+  const lightStyles = useLightStyles();
+  const [paidAt] = useState(() => new Date());
 
   // Content stagger shared values
   const titleOpacity = useSharedValue(0);
@@ -180,6 +190,82 @@ export default function PaymentSuccessScreen({ navigation, route }: Props) {
     triggerHaptic('light');
     navigation.navigate('MainTabs', { screen: 'Home' });
   };
+
+  const amountText = `${CURRENCY_SYMBOL}${amount.toFixed(2)}`;
+  const reference = transactionId.slice(0, 12);
+
+  const handleShare = () => {
+    triggerHaptic('light');
+    Share.share({
+      title: t('payments.receiptShareTitle'),
+      message: t('qr.success.shareMessage', {
+        amount: amountText,
+        merchant: merchantName || t('common.merchant'),
+        reference,
+      }),
+    }).catch(() => undefined);
+  };
+
+  if (isLight) {
+    const time = paidAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const day = paidAt.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+    return (
+      <View style={lightStyles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={wallpaper.top} />
+        <Wallpaper />
+        <View style={[lightStyles.body, { paddingTop: insets.top + 56, paddingBottom: insets.bottom + 16 }]}>
+          <View style={lightStyles.hero}>
+            <View style={lightStyles.ringOuter} />
+            <View style={lightStyles.ringInner} />
+            <Animated.View style={[lightStyles.bloom, ringStyle]} pointerEvents="none" />
+            <View style={lightStyles.checkCircle}>
+              <CheckIcon size={46} color={colors.ui.accent} strokeWidth={2.6} />
+            </View>
+          </View>
+
+          <Animated.View style={[lightStyles.titleBlock, titleStyle]}>
+            <Text style={lightStyles.title}>{t('qr.success.paid')}</Text>
+            <Text style={lightStyles.subtitle}>
+              {merchantName ? t('qr.success.paidTo', { amount: amountText, merchant: merchantName }) : amountText}
+            </Text>
+          </Animated.View>
+
+          <Animated.View style={[lightStyles.card, cardStyle]}>
+            <View style={[lightStyles.row, lightStyles.rowDivider]}>
+              <Text style={lightStyles.rowKey}>{t('qr.success.reference')}</Text>
+              <Text style={lightStyles.rowValue}>{reference}</Text>
+            </View>
+            <View style={lightStyles.row}>
+              <Text style={lightStyles.rowKey}>{t('qr.success.date')}</Text>
+              <Text style={lightStyles.rowValue}>{`${day}, ${time}`}</Text>
+            </View>
+          </Animated.View>
+
+          <View style={lightStyles.spacer} />
+
+          <Animated.View style={[lightStyles.buttons, buttonStyle]}>
+            <TouchableOpacity
+              style={lightStyles.shareButton}
+              onPress={handleShare}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+            >
+              <ShareIcon size={20} color="#FFFFFF" strokeWidth={2.1} />
+              <Text style={lightStyles.shareText}>{t('common.share')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={lightStyles.doneButton}
+              onPress={handleDone}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+            >
+              <Text style={lightStyles.doneText}>{t('qr.success.done')}</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -326,5 +412,145 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
   },
   doneWrap: {
     width: '100%',
+  },
+}));
+
+// ─── Light: the coral wallpaper, a white check, a white receipt ─
+const useLightStyles = makeStyles((colors) => StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: wallpaper.top,
+  },
+  body: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  hero: {
+    alignSelf: 'center',
+    width: 196,
+    height: 196,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ringOuter: {
+    position: 'absolute',
+    width: 196,
+    height: 196,
+    borderRadius: 98,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  ringInner: {
+    position: 'absolute',
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+  },
+  bloom: {
+    position: 'absolute',
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.9)',
+  },
+  checkCircle: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#500A1E',
+    shadowOpacity: 0.35,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
+  },
+  titleBlock: {
+    marginTop: 18,
+    alignItems: 'center',
+  },
+  title: {
+    color: '#FFFFFF',
+    fontSize: 36,
+    lineHeight: 42,
+    fontWeight: '700',
+    letterSpacing: -1,
+  },
+  subtitle: {
+    marginTop: 6,
+    color: '#FFFFFF',
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  card: {
+    marginTop: 28,
+    paddingHorizontal: 18,
+    paddingVertical: 4,
+    borderRadius: 24,
+    backgroundColor: colors.ui.surface,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    minHeight: 50,
+  },
+  rowDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.ui.divider,
+  },
+  rowKey: {
+    fontSize: 14,
+    color: colors.ui.textFaint,
+  },
+  rowValue: {
+    flexShrink: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.ui.text,
+    textAlign: 'right',
+    fontVariant: ['tabular-nums'],
+  },
+  spacer: {
+    flex: 1,
+  },
+  buttons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  shareButton: {
+    flex: 1,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(20,17,15,0.22)',
+    borderWidth: 1,
+    borderColor: wallpaper.glassBorder,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  shareText: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  doneButton: {
+    flex: 1,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  doneText: {
+    color: colors.ui.text,
+    fontSize: 17,
+    fontWeight: '600',
   },
 }));

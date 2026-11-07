@@ -440,7 +440,8 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
   currencyPrefix: { ...typography.display, color: colors.ui.textFaint, marginRight: spacing.sm },
   amountInput: { flex: 1, ...typography.display, color: colors.ui.text, padding: 0 },
   chargeButton: { borderRadius: borderRadius.lg, overflow: 'hidden' },
-  gradientButton: { paddingVertical: spacing.lg, alignItems: 'center' },
+  // A gradient doesn't grow to fit its label, so it gets a fixed height.
+  gradientButton: { height: 56, alignItems: 'center', justifyContent: 'center' },
   chargeButtonText: { ...typography.h3, color: colors.text.inverse, fontWeight: '600' },
   buttonDisabled: { opacity: 0.5 },
 
