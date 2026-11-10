@@ -1042,7 +1042,7 @@
   "topup.agent.amountHint": "ستدفع هذا المبلغ نقداً للوكيل",
   "topup.agent.generating": "جارٍ إنشاء رمزك…",
   "topup.agent.showAgentTitle": "أظهر للوكيل",
-  "topup.agent.orEnterCode": "أو أعطه هذا الرمز",
+  "topup.agent.orEnterCode": "أو أخبره بهذا الرمز ورقم هاتفك",
   "topup.agent.payAgent": "ادفع للوكيل {{amount}} نقداً",
   "topup.agent.expiresIn": "ينتهي خلال {{time}}",
   "topup.agent.waiting": "في انتظار تأكيد الوكيل…",

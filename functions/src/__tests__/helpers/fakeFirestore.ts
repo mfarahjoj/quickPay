@@ -53,6 +53,8 @@ export interface FakeDb {
   store: Map<string, Data>;
   get(path: string): Data | undefined;
   collection(name: string): any;
+  /** A document by its full path, "config/collection". */
+  doc(path: string): any;
   runTransaction: jest.Mock;
   batch(): any;
 }
@@ -66,6 +68,7 @@ export function fakeFirestore(seed: Record<string, Data> = {}): FakeDb {
     id: path.split("/").pop()!,
     ref: ref(path.split("/").slice(0, -1).join("/"), path.split("/").pop()),
     data: () => (store.has(path) ? { ...store.get(path) } : undefined),
+    get: (field: string) => (store.has(path) ? fieldAt(store.get(path)!, field) : undefined),
   });
 
   const write = {
@@ -199,6 +202,10 @@ export function fakeFirestore(seed: Record<string, Data> = {}): FakeDb {
     store,
     get: (path: string) => store.get(path),
     collection,
+    doc: (path: string) => {
+      const parts = path.split("/");
+      return ref(parts.slice(0, -1).join("/"), parts[parts.length - 1]);
+    },
     runTransaction,
     batch,
   };

@@ -22,9 +22,11 @@ type Step = 'amount' | 'processing' | 'code' | 'done' | 'error';
 const KEYPAD = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'];
 const TOPUP_REQUESTS = 'agentTopupRequests';
 
-// Encoded in the QR the agent scans; the 6-digit code stays the source of truth.
-function qrPayload(code: string): string {
-  return JSON.stringify({ type: 'zapp_topup', code });
+// Encoded in the QR the agent scans. The id names this one request, so the
+// code can't be confirmed against another customer's; typing the code by hand,
+// the agent gives the customer's phone number instead.
+function qrPayload(id: string, code: string): string {
+  return JSON.stringify({ type: 'zapp_topup', id, code });
 }
 
 function shortConfirmation(id: string): string {
@@ -230,7 +232,7 @@ export default function AgentTopupScreen() {
         <View style={styles.codeContainer}>
           <View style={styles.qrCard}>
             <QRCode
-              value={qrPayload(otpCode)}
+              value={qrPayload(requestId, otpCode)}
               size={188}
               color="#000000"
               backgroundColor="#FFFFFF"

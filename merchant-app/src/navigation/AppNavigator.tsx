@@ -62,6 +62,7 @@ type MerchantStackParamList = {
   AutoPayout: undefined;
   Statement: undefined;
   MoveToFloat: undefined;
+  BuyFloatZaad: undefined;
   Security: undefined;
   Devices: undefined;
   ChangePhone: undefined;
@@ -288,6 +289,11 @@ function MainStackNavigator() {
       <MainStack.Screen
         name="MoveToFloat"
         getComponent={() => require('../screens/agent/MoveToFloatScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="BuyFloatZaad"
+        getComponent={() => require('../screens/agent/BuyFloatZaadScreen').default}
         options={{ headerShown: false }}
       />
       <MainStack.Screen

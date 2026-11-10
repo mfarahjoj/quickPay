@@ -19,10 +19,22 @@ import { formatCents } from '../../utils/money';
 import { useExitGuard } from '../../hooks/useExitGuard';
 import { isWrongPin, pinActionErrorKey } from '../../utils/errors';
 
-type Step = 'capture' | 'pin' | 'processing' | 'success' | 'error';
+type Step = 'capture' | 'checking' | 'review' | 'pin' | 'processing' | 'success' | 'error';
 
 interface Props {
   navigation: any;
+}
+
+/** Which request the code is for. The server refuses a bare code. */
+type Target =
+  | { otpCode: string; requestId: string }
+  | { otpCode: string; customerPhone: string };
+
+interface Preview {
+  requestId: string;
+  amount: number;
+  currency: string;
+  customerName: string;
 }
 
 interface Result {
@@ -32,14 +44,13 @@ interface Result {
   confirmationId: string;
 }
 
-// Accepts the QR JSON payload {type:'zapp_topup',code} or a raw 6-digit code.
-function extractCode(value: string): string | null {
-  const raw = value.trim();
-  if (/^\d{6}$/.test(raw)) return raw;
+/** The customer's QR: {type:'zapp_topup', id, code}. Older apps leave out the id. */
+function parseTopupQr(value: string): { otpCode: string; requestId?: string } | null {
   try {
-    const obj = JSON.parse(raw);
+    const obj = JSON.parse(value.trim());
     if (obj && obj.type === 'zapp_topup' && /^\d{6}$/.test(String(obj.code))) {
-      return String(obj.code);
+      const id = typeof obj.id === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(obj.id) ? obj.id : undefined;
+      return { otpCode: String(obj.code), requestId: id };
     }
   } catch {
     // not JSON
@@ -47,24 +58,36 @@ function extractCode(value: string): string | null {
   return null;
 }
 
+// Loose client check; the server normalises and decides.
+const phoneLooksValid = (v: string) => v.replace(/\D/g, '').length >= 7;
+
 function shortConfirmation(id: string): string {
   return `ZP-${id.slice(-6).toUpperCase()}`;
 }
 
+/**
+ * Top up a customer who has a top-up code in their Zapp app.
+ *
+ * capture → checking → review → pin → processing → success. The review step
+ * shows the customer's name and the amount *before* the agent takes the cash
+ * or enters their PIN, and the confirm is refused for any other amount: the
+ * customer chooses the amount, but the agent's float pays it.
+ */
 export default function ConfirmTopupScreen({ navigation }: Props) {
   const { t } = useTranslation();
   const [step, setStep] = useState<Step>('capture');
-  const [manual, setManual] = useState('');
-  const [result, setResult] = useState<Result | null>(null);
-  const [errorMsg, setErrorMsg] = useState('');
-  // The customer's 6-digit code typed instead of scanned.
   const [typing, setTyping] = useState(false);
+  const [manualCode, setManualCode] = useState('');
+  const [manualPhone, setManualPhone] = useState('');
   const [scanError, setScanError] = useState<string | null>(null);
-  // The code identifies the customer's request; the PIN proves the person
-  // holding the phone is the agent whose float is about to be spent.
-  const [pendingCode, setPendingCode] = useState('');
+  // An older customer app's QR has no request id: ask for the phone instead.
+  const [needPhoneFor, setNeedPhoneFor] = useState<string | null>(null);
+  const [target, setTarget] = useState<Target | null>(null);
+  const [preview, setPreview] = useState<Preview | null>(null);
   const [pin, setPin] = useState('');
   const [pinError, setPinError] = useState('');
+  const [result, setResult] = useState<Result | null>(null);
+  const [errorMsg, setErrorMsg] = useState('');
   const isProcessing = useRef(false);
 
   useFocusEffect(
@@ -74,77 +97,111 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
     }, []),
   );
 
-  const confirm = useCallback(async (code: string, agentPin: string) => {
+  const startOver = useCallback(() => {
+    setStep('capture');
+    setTarget(null);
+    setPreview(null);
+    setPin('');
+    setPinError('');
+    setErrorMsg('');
+    setScanError(null);
+    setManualCode('');
+    setManualPhone('');
+    setNeedPhoneFor(null);
+    isProcessing.current = false;
+  }, []);
+
+  const fail = useCallback((e: any) => {
+    setErrorMsg(t(pinActionErrorKey(e)));
+    setStep('error');
+  }, [t]);
+
+  /** Ask the server what this code is for, before any cash changes hands. */
+  const check = useCallback(async (next: Target) => {
     if (isProcessing.current) return;
+    isProcessing.current = true;
+    setTarget(next);
+    setStep('checking');
+    try {
+      const res = await functions().httpsCallable('previewAgentTopup')(next);
+      const data = (res.data as any).data as Preview;
+      // From here on the request is named by id, whichever way it was found.
+      setTarget({ otpCode: next.otpCode, requestId: data.requestId });
+      setPreview(data);
+      triggerHaptic('medium');
+      setStep('review');
+    } catch (e: any) {
+      fail(e);
+    } finally {
+      isProcessing.current = false;
+    }
+  }, [fail]);
+
+  const confirm = useCallback(async (agentPin: string) => {
+    if (isProcessing.current || !target || !preview) return;
     isProcessing.current = true;
     setStep('processing');
     try {
-      const fn = functions().httpsCallable('agentConfirmTopup');
-      const res = await fn({ otpCode: code, agentPin });
+      const res = await functions().httpsCallable('agentConfirmTopup')({
+        ...target,
+        agentPin,
+        expectedAmount: preview.amount,
+      });
       setResult((res.data as any).data);
+      triggerHaptic('success');
       setStep('success');
     } catch (e: any) {
-      // The PIN is checked before the code is looked up, so a wrong PIN costs
-      // no code guess: keep the scanned code and ask for the PIN again.
+      // The PIN is checked before the code, so a wrong PIN costs no code
+      // guess: keep the request and ask for the PIN again.
       if (isWrongPin(e)) {
         setPinError(t('errors.wrongPin'));
         setStep('pin');
       } else {
-        setErrorMsg(t(pinActionErrorKey(e)));
-        setStep('error');
+        fail(e);
       }
     } finally {
       setPin('');
       isProcessing.current = false;
     }
-  }, [t]);
+  }, [target, preview, t, fail]);
 
-  const askForPin = useCallback((code: string) => {
-    setPendingCode(code);
-    setPin('');
-    setPinError('');
-    setStep('pin');
-  }, []);
-
-  const cancelPin = () => {
-    setPin('');
-    setPinError('');
-    setPendingCode('');
-    setScanError(null);
-    isProcessing.current = false;
-    setStep('capture');
-  };
-
-  // Confirming spends the agent's float: while that runs nothing leaves, and
-  // back from the PIN step returns to the scanner instead of closing.
+  // Nothing leaves while float is being spent; back from review or the PIN
+  // returns to the scanner instead of closing.
   useExitGuard(navigation, {
-    blocked: step === 'processing',
-    onExit: step === 'pin' ? cancelPin : undefined,
+    blocked: step === 'processing' || step === 'checking',
+    onExit: step === 'pin' || step === 'review' ? startOver : undefined,
   });
 
   const handleScan = useCallback(
     (value: string) => {
       if (isProcessing.current) return;
-      const code = extractCode(value);
-      if (!code) {
+      const scanned = parseTopupQr(value);
+      if (!scanned) {
         setScanError(t('topup.confirm.notTopupCode'));
         return;
       }
-      triggerHaptic('medium');
-      askForPin(code);
+      if (scanned.requestId) {
+        check({ otpCode: scanned.otpCode, requestId: scanned.requestId });
+      } else {
+        // Old customer app: the code alone can't say whose it is.
+        setNeedPhoneFor(scanned.otpCode);
+        setManualCode(scanned.otpCode);
+        setTyping(true);
+      }
     },
-    [askForPin, t],
+    [check, t],
   );
 
-  const handleManual = () => {
-    const code = extractCode(manual);
-    if (!code) {
-      setScanError(t('agent.enterCustomerCode'));
-      return;
-    }
-    askForPin(code);
+  const manualValid = /^\d{6}$/.test(manualCode) && phoneLooksValid(manualPhone);
+
+  const submitManual = () => {
+    if (!manualValid) return;
+    setTyping(false);
+    setNeedPhoneFor(null);
+    check({ otpCode: manualCode, customerPhone: manualPhone.trim() });
   };
 
+  // ── Success ──
   if (step === 'success' && result) {
     return (
       <DarkScreen edges={[]} contentStyle={styles.resultWrap}>
@@ -171,6 +228,7 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
     );
   }
 
+  // ── Error ──
   if (step === 'error') {
     return (
       <DarkScreen edges={[]} contentStyle={styles.resultWrap}>
@@ -180,17 +238,7 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
         <Text style={styles.resultTitle}>{t('agent.couldNotConfirm')}</Text>
         <Text style={styles.resultSub}>{errorMsg}</Text>
         <View style={styles.resultBtn}>
-          <PillButton
-            label={t('common.tryAgain')}
-            variant="glass"
-            onPress={() => {
-              setStep('capture');
-              setManual('');
-              setErrorMsg('');
-              setScanError(null);
-              isProcessing.current = false;
-            }}
-          />
+          <PillButton label={t('common.tryAgain')} variant="glass" onPress={startOver} />
           <PillButton
             label={t('common.close')}
             variant="glass"
@@ -202,33 +250,70 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
     );
   }
 
-  if (step === 'pin') {
+  // ── Review: who and how much, before the cash ──
+  if (step === 'review' && preview) {
+    return (
+      <DarkScreen edges={[]} contentStyle={styles.resultWrap}>
+        <Text style={styles.reviewLabel}>{t('topup.confirm.reviewLabel')}</Text>
+        <Text style={styles.reviewAmount}>{formatCents(preview.amount)}</Text>
+        <Text style={styles.reviewName}>{preview.customerName}</Text>
+        <GlassCard style={styles.reviewCard}>
+          <Text style={styles.reviewHint}>
+            {t('topup.confirm.reviewHint', { amount: formatCents(preview.amount) })}
+          </Text>
+        </GlassCard>
+        <View style={styles.resultBtn}>
+          <PillButton
+            label={t('topup.confirm.cashReceived', { amount: formatCents(preview.amount) })}
+            onPress={() => {
+              setPin('');
+              setPinError('');
+              setStep('pin');
+            }}
+          />
+          <PillButton
+            label={t('common.cancel')}
+            variant="glass"
+            onPress={startOver}
+            style={styles.secondBtn}
+          />
+        </View>
+      </DarkScreen>
+    );
+  }
+
+  // ── PIN ──
+  if (step === 'pin' && preview) {
     return (
       <DarkScreen edges={[]} contentStyle={styles.resultWrap}>
         <Text style={styles.resultTitle}>{t('topup.confirm.pinTitle')}</Text>
-        <Text style={styles.resultSub}>{t('topup.confirm.pinSubtitle')}</Text>
+        <Text style={styles.resultSub}>
+          {t('topup.confirm.pinFor', { amount: formatCents(preview.amount), name: preview.customerName })}
+        </Text>
         <PinInput
           value={pin}
           onChange={(value) => {
             setPin(value);
             if (pinError) setPinError('');
           }}
-          onComplete={(entered) => confirm(pendingCode, entered)}
+          onComplete={confirm}
           style={styles.pinInput}
         />
         {pinError ? <Text style={styles.pinError}>{pinError}</Text> : null}
         <View style={styles.resultBtn}>
-          <PillButton label={t('common.cancel')} variant="glass" onPress={cancelPin} />
+          <PillButton label={t('common.cancel')} variant="glass" onPress={startOver} />
         </View>
       </DarkScreen>
     );
   }
 
-  if (step === 'processing') {
+  if (step === 'processing' || step === 'checking') {
     return (
       <DarkScreen edges={[]} contentStyle={styles.resultWrap}>
         <ActivityIndicator size="large" color={ACCENT} />
-        <Text style={styles.processingText}>{t('topup.confirm.processing')}</Text>
+        <Text style={styles.processingText}>
+          {t(step === 'checking' ? 'topup.confirm.checking' : 'topup.confirm.processing')}
+        </Text>
       </DarkScreen>
     );
   }
@@ -240,7 +325,7 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
         hint={t('topup.confirm.scanHint')}
         onScan={handleScan}
         onClose={() => navigation.goBack()}
-        scanning={!typing}
+        scanning={!typing && step === 'capture'}
         error={scanError}
         onDismissError={() => setScanError(null)}
       >
@@ -250,20 +335,30 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
       </QrScannerView>
       <CodeSheet
         visible={typing}
-        title={t('agent.enterCustomerCode')}
-        value={manual}
+        title={t(needPhoneFor ? 'topup.confirm.oldQrPhone' : 'topup.confirm.phoneAndCode')}
+        also={{
+          value: manualPhone,
+          onChangeText: (v) => {
+            setManualPhone(v.replace(/[^\d+ ]/g, '').slice(0, 20));
+            setScanError(null);
+          },
+          placeholder: '063 412 0987',
+          keyboardType: 'phone-pad',
+          maxLength: 20,
+        }}
+        value={manualCode}
         onChangeText={(v) => {
-          setManual(v.replace(/\D/g, '').slice(0, 6));
+          setManualCode(v.replace(/\D/g, '').slice(0, 6));
           setScanError(null);
         }}
         placeholder="000000"
-        submitLabel={t('topup.confirm.submit')}
-        onSubmit={() => {
+        submitLabel={t('topup.confirm.check')}
+        onSubmit={submitManual}
+        onClose={() => {
           setTyping(false);
-          handleManual();
+          setNeedPhoneFor(null);
         }}
-        onClose={() => setTyping(false)}
-        submitDisabled={extractCode(manual) === null}
+        submitDisabled={!manualValid}
         keyboardType="number-pad"
         maxLength={6}
         digits
@@ -282,6 +377,11 @@ const styles = StyleSheet.create({
   resultTitle: { fontSize: 24, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.5, textAlign: 'center', marginTop: 20 },
   resultAmount: { fontSize: 44, fontWeight: '800', color: '#34C77B', letterSpacing: -2, marginTop: 8 },
   resultSub: { fontSize: 15, color: TEXT_DIM, textAlign: 'center', marginTop: 6 },
+  reviewLabel: { fontSize: 12, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: TEXT_FAINT },
+  reviewAmount: { fontSize: 52, fontWeight: '800', color: '#FFFFFF', letterSpacing: -2, marginTop: 8 },
+  reviewName: { fontSize: 20, fontWeight: '700', color: '#FFFFFF', marginTop: 4, textAlign: 'center' },
+  reviewCard: { marginTop: 24, padding: 16, width: '100%' },
+  reviewHint: { fontSize: 15, lineHeight: 21, color: TEXT_DIM, textAlign: 'center' },
   confCard: { marginTop: 20, padding: 16, alignItems: 'center', width: '100%' },
   confLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: TEXT_FAINT },
   confValue: { fontSize: 22, fontWeight: '800', color: '#FFFFFF', marginTop: 4, letterSpacing: 1 },

@@ -67,7 +67,7 @@ export { cancelCashOut } from "./topup/cancelCashOut";
 // Returns unclaimed cash-out holds and closes stale top-up codes, every 5 minutes
 export { expireAgentRequests } from "./topup/expireAgentRequests";
 export { customerRequestAgentTopup } from "./topup/customerRequestAgentTopup";
-export { agentConfirmTopup } from "./topup/agentConfirmTopup";
+export { agentConfirmTopup, previewAgentTopup } from "./topup/agentConfirmTopup";
 
 // Mobile money top-up & cash-out (Zaad/eDahab)
 //

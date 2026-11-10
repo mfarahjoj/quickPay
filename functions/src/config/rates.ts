@@ -53,6 +53,7 @@ export interface Rates {
   topupMaxCents: number;
   linkActivationCents: number;
   linkChangeCooldownHours: number;
+  agentFloatTopupMaxCents: number;
 }
 
 export type RateGroup =
@@ -432,6 +433,15 @@ export const RATE_FIELDS: { [K in keyof Rates]: RateFieldSpec } = {
     min: 0,
     max: 168,
     unit: "hours",
+  },
+  agentFloatTopupMaxCents: {
+    group: "Zaad and eDahab top-ups",
+    label: "Largest float purchase by an agent",
+    help: "An agent who sends Zaad or eDahab from their linked number to the collection number buys that much float. A payment above this isn't credited; it waits for an admin.",
+    kind: "cents",
+    default: 200000,
+    min: 1000,
+    max: 2000000,
   },
 };
 

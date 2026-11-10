@@ -23,13 +23,23 @@ admin-issued and reconciled, but a shop's balance is just its sales.
      5 requests an hour and 15 a day.
    - Writes `agentTopupRequests/{id}` with status `pending`, a 6-digit code and a
      30-minute expiry. **No money moves.**
-   - The app shows a QR `{type:'zapp_topup', code}` and the digits.
-2. **Customer** hands the agent cash.
-3. **Agent** scans the QR or types the code, then enters their PIN (`agentConfirmTopup`).
-   - Guards: App Check, agent PIN, agent role and active status, request pending and
-     not expired, agent ≠ customer, agent float ≥ amount.
+   - The app shows a QR `{type:'zapp_topup', id, code}` and the digits.
+2. **Agent** scans the QR, or types the customer's phone number with the code
+   (`previewAgentTopup`). A bare code is refused: codes are random, so two waiting
+   customers can hold the same one.
+   - The agent's app shows the customer's name and **the amount**, and says to take the
+     cash first. Float too low is said here, before any cash changes hands.
+   - The guess counts against the agent's code lockout. The request records
+     `scannedBy`/`scannedAt`.
+3. **Customer** hands the agent the cash; the agent taps "I have the $X" and enters
+   their PIN (`agentConfirmTopup`).
+   - Guards: App Check, agent PIN, agent role and active status, the call names one
+     request, the code matches it, **`expectedAmount` equals the request's amount**,
+     pending and not expired, agent ≠ customer, customer active, agent float ≥ amount.
    - One Firestore transaction posts `agenttopup_{id}`, marks the request completed and
      writes the `transactions` row with both participants.
+   - Before 2026-11-10 the agent learned the amount from the success screen: a customer
+     could ask for $500, hand over $50, and the agent's float paid $500.
 4. **Expiry:** `expireAgentRequests` (every 5 minutes) marks stale requests `expired`
    so an old code can't be confirmed later. No money to return.
 
@@ -80,9 +90,11 @@ PIN costs no code guess:
 4. Agent role is `topup_agent` or `agent_merchant`, and the agent is active.
 5. `verifyUserPin`, then the agent's OTP lockout (`assertNotOtpLocked`).
 6. Resolve the request: by id, or phone → user → their pending request.
-7. Constant-time code comparison. A wrong code records an OTP failure against the agent
-   and increments `failedAttempts` on the request. **At 5 the request is released**,
-   reason `too_many_attempts`.
+7. Constant-time code comparison. Each attempt is counted before the compare, on the
+   request (`failedAttempts`), per agent (`attemptsBy`) and in `attemptLog` (who, when).
+   **One agent gets 3**, so no single agent can lock a customer's cash-out; **at 5 in all
+   the request is released**, reason `too_many_attempts`. A right code gives its attempt
+   back, so a retry after a dropped reply costs nothing.
 8. The request is pending and not expired (an expired one is released on the spot),
    agent ≠ customer, and the customer is still active.
 9. One transaction posts the settle entry, marks the request `completed` and updates the
@@ -135,10 +147,41 @@ check catches drift.
 | Stolen phone, wrong PIN | — | PIN on every debit; PIN-reset cooldown blocks cash-out after a reset |
 | Forged client | — | App Check enforced on every callable |
 
+| Customer asks for more than they hand over | Agent saw the amount only after confirming | `previewAgentTopup` shows name and amount first; confirm refused unless `expectedAmount` matches |
+| Two customers with the same top-up code | Confirm by code alone credited either one | Every call names one request (QR id or phone + code) |
+| Cash taken, top-up never confirmed | Dispute had nobody to answer it | It goes to the agent recorded in `scannedBy` |
+| One agent locking a stranger's cash-out | 5 wrong codes from one agent returned the money | 3 per agent, 5 per request, every attempt logged |
+| Manual top-up retried after a lost reply | Second post from float | `idempotencyKey` (agent-scoped) → same transaction id, posted once |
+| Agent reads a customer's balance | `manualTopup` replied with `newBalance` | Removed from the reply |
+| Agent walks the phone book | `lookupUserByPhone` unlimited, showed frozen accounts | 60/hour, 300/day per agent; closed and frozen read as not found |
+
+## Agents buy float with Zaad (2026-11-10, not deployed)
+
+Without a Zaad API, through the same collection number and listener phone as customer
+Zaad top-ups (`functions/src/mobileMoney/`):
+
+1. In Zapp Pay Merchant, **Float → Buy with Zaad** (shown only when `config/app_client`
+   has `merchant.zaadFloat: true`). The agent links their Zaad number and proves it with
+   the activation payment, exactly like a customer (`startNumberLink`).
+2. The agent sends Zaad from that number to the collection number (prefilled `*880*…#`).
+3. The listener phone forwards Telesom's SMS; `processReceipt` matches the sender. **When
+   the linked account is an agent, the money goes to their float**, not their wallet:
+   entry `mmfloat_{receipt}`, type `float_issue`, `float:zaad` → `agent:{uid}`, the same
+   accounts as the ops float desk. The role is read at the time of payment.
+4. Limit: `agentFloatTopupMaxCents` (default $2,000, in the console). Above it, or from an
+   unknown number, the payment waits in `platform:mm_suspense`; an admin assigning it to
+   an agent posts `mmassignfloat_{receipt}` into their float.
+
+Each SMS credits once (keyed by Zaad's transaction ID). Ops still reconcile `float:zaad`
+against the real Zaad balance of the collection SIM.
+
+**Before it works:** the SMS parser needs real Zaad samples, the listener functions
+(`startNumberLink`, `getTopupInstructions`, `mobileMoneyListener`, `adminAssignMobileMoney`
+and the rest of the mobile-money desk) need deploying, and `config/collection` needs the
+collection number. Then set `merchant.zaadFloat: true`.
+
 ### Known gaps (not fixed here)
 - **Daily cash-out velocity per agent.** Agent caps rely on float size and admin review.
-- **Agent sees the amount only after confirming.** M-Pesa shows the agent the amount and
-  name before the PIN. A preview call would cost a lookup but help agents catch mistakes.
 - **Customer-side approval.** bKash and Alipay push "Agent X is paying you $15, approve?"
   to the customer. The QR plus cancel covers most of this risk. Worth revisiting if
   disputes appear.
@@ -159,6 +202,11 @@ message telling the agent to update:
 3. Ship both apps. The customer app shows the QR; the merchant app scans it or takes
    phone + code. Both carry the App Check `AppDelegate` fix, so release builds need a
    real-device check.
+
+**2026-11-10 hardening** (not deployed): deploy `previewAgentTopup`, `agentConfirmTopup`,
+`agentConfirmCashOut`, `manualTopup`, `lookupUserByPhone`, `openDispute` together with the
+new merchant build. Old merchant builds can no longer confirm top-ups by code (they're told
+to update); their phone-number top-ups still work without a key.
 
 Code: `functions/src/topup/` · Tests: `functions/src/__tests__/cashOutFlow.test.ts`,
 `agentConfirmPin.test.ts`.

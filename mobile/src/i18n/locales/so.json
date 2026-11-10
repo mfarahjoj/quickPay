@@ -1042,7 +1042,7 @@
   "topup.agent.amountHint": "Wakiilka waxaad siin doontaa lacag caddaan ah",
   "topup.agent.generating": "Waxaa la abuurayaa koodkaaga…",
   "topup.agent.showAgentTitle": "Tus Wakiilka",
-  "topup.agent.orEnterCode": "Ama sii koodkan",
+  "topup.agent.orEnterCode": "Ama u sheeg koodkan iyo lambarka taleefankaaga",
   "topup.agent.payAgent": "Sii wakiilka {{amount}} lacag caddaan ah",
   "topup.agent.expiresIn": "Wuxuu dhacayaa {{time}} gudahood",
   "topup.agent.waiting": "Sugaya wakiilka inuu xaqiijiyo…",

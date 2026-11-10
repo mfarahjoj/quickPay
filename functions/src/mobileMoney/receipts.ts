@@ -1,6 +1,7 @@
 import * as admin from "firebase-admin";
 import { prepareJournalEntry, WalletNotFoundError } from "../ledger";
-import { getRates } from "../config/rates";
+import { getRates, Rates } from "../config/rates";
+import { isAgentRole } from "../utils/roles";
 import { notifyTopupCompleted } from "../utils/notifications";
 import { Transaction } from "../types";
 import {
@@ -8,6 +9,8 @@ import {
   LinkedNumber,
   ReceivedPayment,
   decideReceipt,
+  floatEntry,
+  limitsFor,
   linkId,
   receiptId,
   suspenseEntry,
@@ -36,13 +39,13 @@ export interface ReceiptOutcome {
  * the journal entry are both keyed by it.
  */
 export async function processReceipt(payment: ReceivedPayment): Promise<ReceiptOutcome> {
-  const limits = await getRates();
+  const rates = await getRates();
   try {
-    return await post(payment, limits, null);
+    return await post(payment, rates, null);
   } catch (error) {
     // The linked customer has no wallet (never finished sign-up): hold it.
     if (error instanceof WalletNotFoundError) {
-      return post(payment, limits, { action: "suspense", reason: "no_wallet", uid: null });
+      return post(payment, rates, { action: "suspense", reason: "no_wallet", uid: null });
     }
     throw error;
   }
@@ -50,7 +53,7 @@ export async function processReceipt(payment: ReceivedPayment): Promise<ReceiptO
 
 async function post(
   payment: ReceivedPayment,
-  limits: { topupMinCents: number; topupMaxCents: number },
+  rates: Rates,
   forced: Decision | null
 ): Promise<ReceiptOutcome> {
   const db = admin.firestore();
@@ -70,7 +73,12 @@ async function post(
     }
     const linkSnap = await tx.get(linkRef);
     const link = linkSnap.exists ? (linkSnap.data() as LinkedNumber) : null;
-    const decision = forced ?? decideReceipt(payment, link, limits);
+    // An agent's own number buys them float rather than topping up their
+    // wallet, under the agents' float limit. Read now, so a role granted or
+    // removed since the number was linked is what counts.
+    const owner = link ? (await tx.get(db.collection("users").doc(link.uid))).data() : undefined;
+    const forFloat = isAgentRole(owner?.accountType);
+    const decision = forced ?? decideReceipt(payment, link, limitsFor(rates, forFloat));
     const now = admin.firestore.Timestamp.now();
     const base = {
       provider: payment.provider,
@@ -98,13 +106,15 @@ async function post(
       return { receiptId: id, status: "held", uid: null, reason: decision.reason, duplicate: false, notify: false };
     }
 
-    const entry = topupEntry(payment, decision.uid, transactionId);
+    const entry = forFloat
+      ? floatEntry(payment, decision.uid, transactionId)
+      : topupEntry(payment, decision.uid, transactionId);
     const prepared = await prepareJournalEntry(tx, entry);
     prepared.write(tx);
     const label = payment.provider === "zaad" ? "Zaad" : "eDahab";
     const row: Transaction = {
       type: "topup",
-      kind: "mobile_money_topup",
+      kind: forFloat ? "float" : "mobile_money_topup",
       fromUserId: payment.provider,
       toUserId: decision.uid,
       participants: [decision.uid],
@@ -113,7 +123,9 @@ async function post(
       status: "completed",
       description: decision.action === "activate"
         ? `${label} number linked`
-        : `${label} top-up`,
+        : forFloat
+          ? `Float bought with ${label}`
+          : `${label} top-up`,
       reference: payment.operatorTxnId,
       journalEntryId: entry.entryId,
       createdAt: now,
@@ -125,6 +137,7 @@ async function post(
       status: "credited",
       reason: decision.action === "activate" ? "activation" : null,
       uid: decision.uid,
+      ...(forFloat ? { creditedTo: "float" } : {}),
       transactionId,
       journalEntryId: entry.entryId,
     });

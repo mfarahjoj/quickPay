@@ -16,6 +16,7 @@ import { useWallet } from '../../hooks/useWallet';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useMerchantProfile } from '../../hooks/useMerchantProfile';
 import { useFloat } from '../../hooks/useFloat';
+import { useZaadFloatOn } from '../../hooks/useZaadFloatOn';
 import { useAuth } from '../../hooks/useAuth';
 import { needsReply, useMyDisputes } from '../../services/dispute.service';
 import { LanguageSelector } from '../../components/LanguageSelector';
@@ -109,6 +110,8 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
   const isAgentRole = accountType === 'topup_agent' || accountType === 'agent_merchant';
   // Agents hold float apart from their sales and earnings.
   const { floatCents } = useFloat(isAgentRole, wallet?.lastTransactionAt?.getTime());
+  // Buying float with Zaad, once the collection number is live.
+  const zaadFloat = useZaadFloatOn();
 
   // One button per job. Receive also scans a customer's code; Cash in also
   // finds a customer by phone; Cash out also takes a cash-out code, for
@@ -221,9 +224,16 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
                 <Text style={styles.floatAmount}>{floatCents === null ? '…' : money(floatCents / 100)}</Text>
                 <Text style={styles.floatHint}>{t('dashboard.float.hint')}</Text>
               </View>
-              <TouchableOpacity style={styles.floatButton} onPress={() => navigation.navigate('MoveToFloat')} activeOpacity={0.8}>
-                <Text style={styles.floatButtonText}>{t('dashboard.float.move')}</Text>
-              </TouchableOpacity>
+              <View style={styles.floatButtons}>
+                {zaadFloat ? (
+                  <TouchableOpacity style={styles.floatButton} onPress={() => navigation.navigate('BuyFloatZaad')} activeOpacity={0.8}>
+                    <Text style={styles.floatButtonText}>{t('dashboard.float.buyZaad')}</Text>
+                  </TouchableOpacity>
+                ) : null}
+                <TouchableOpacity style={styles.floatButton} onPress={() => navigation.navigate('MoveToFloat')} activeOpacity={0.8}>
+                  <Text style={styles.floatButtonText}>{t('dashboard.float.move')}</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
 
@@ -483,6 +493,7 @@ const styles = StyleSheet.create({
   floatLabel: { fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.45)', letterSpacing: 1, textTransform: 'uppercase' },
   floatAmount: { fontSize: 24, fontWeight: '800', color: '#FFFFFF', marginTop: 4, letterSpacing: -0.5 },
   floatHint: { fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 4, lineHeight: 16 },
+  floatButtons: { gap: 8, alignItems: 'flex-end' },
   floatButton: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 999, backgroundColor: '#1A56FF' },
   floatButtonText: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
   disputeBanner: {

@@ -17,6 +17,8 @@ import { SuccessCheckIcon, CloseIcon, TopUpIcon } from '../../components/icons/A
 import { lookupCustomer, topupCustomer } from '../../services/topup.service';
 import type { CustomerLookupResult, TopupResult } from '../../services/topup.service';
 import { CURRENCY_SYMBOL, MAX_TOPUP_AMOUNT } from '../../config/constants';
+import { newIdempotencyKey } from '../../utils/idempotency';
+import { isWrongPin, pinActionErrorKey } from '../../utils/errors';
 
 type Step = 'lookup' | 'amount' | 'pin' | 'result';
 type PaymentMethod = 'cash' | 'zaad' | 'edahab';
@@ -59,7 +61,12 @@ export default function TopupCustomerScreen({ navigation }: { navigation: any })
   const [reference, setReference] = useState('');
 
   const [pin, setPin] = useState('');
+  const [pinError, setPinError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  // One per top-up, kept across "Try again": if the first attempt went
+  // through and only its reply was lost, the retry returns it instead of
+  // paying the customer a second time from this agent's float.
+  const [topupKey, setTopupKey] = useState(newIdempotencyKey);
 
   const [topupResult, setTopupResult] = useState<TopupResult | null>(null);
   const [resultError, setResultError] = useState<string | null>(null);
@@ -119,6 +126,9 @@ export default function TopupCustomerScreen({ navigation }: { navigation: any })
       );
       return;
     }
+    // A new amount (or customer) is a new top-up.
+    setTopupKey(newIdempotencyKey());
+    setPinError('');
     setStep('pin');
   };
 
@@ -132,12 +142,18 @@ export default function TopupCustomerScreen({ navigation }: { navigation: any })
         agentPin: enteredPin,
         paymentMethod,
         reference: reference || undefined,
+        idempotencyKey: topupKey,
       });
       setTopupResult(result);
       setResultError(null);
       setStep('result');
     } catch (e: any) {
-      setResultError(e.message || t('topup.alerts.topupFailedMessage'));
+      if (isWrongPin(e)) {
+        setPin('');
+        setPinError(t('errors.wrongPin'));
+        return;
+      }
+      setResultError(t(pinActionErrorKey(e)));
       setStep('result');
     } finally {
       setSubmitting(false);
@@ -244,7 +260,16 @@ export default function TopupCustomerScreen({ navigation }: { navigation: any })
           <Receipt label={t('topup.pin.method')} value={methodLabel(paymentMethod)} />
         </GlassCard>
 
-        <PinInput value={pin} onChange={setPin} onComplete={handlePinComplete} style={styles.pinInput} />
+        <PinInput
+          value={pin}
+          onChange={(v) => {
+            setPin(v);
+            if (pinError) setPinError('');
+          }}
+          onComplete={handlePinComplete}
+          style={styles.pinInput}
+        />
+        {pinError ? <Text style={styles.pinError}>{pinError}</Text> : null}
 
         {submitting && <ActivityIndicator color={ACCENT} style={{ marginTop: 20 }} />}
 
@@ -555,6 +580,7 @@ const styles = StyleSheet.create({
     marginBottom: 28,
   },
   pinInput: { width: '100%' },
+  pinError: { fontSize: 14, color: '#FF6961', textAlign: 'center', marginTop: 16 },
 
   resultWrap: {
     flexGrow: 1,

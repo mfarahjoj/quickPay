@@ -130,11 +130,15 @@ export async function describeDisputable(
       { reason: "not_uncredited" }
     );
   }
+  // Nobody confirmed it, but the agent whose app was shown this request
+  // (previewAgentTopup) is on record: the claim is theirs to answer. With no
+  // scan on record there is nobody, and it goes straight to ops.
+  const scannedBy =
+    typeof req.scannedBy === "string" && req.scannedBy && req.scannedBy !== uid ? req.scannedBy : null;
   return {
     disputedKind: "uncredited_cash_in",
     side: "payee",
-    // Nobody confirmed it, so there is no known agent to answer.
-    against: null,
+    against: scannedBy,
     transactionAmountCents: req.amount,
     happenedAt: req.createdAt?.toMillis?.(),
     disputeId: `atr_${agentTopupRequestId}_${uid}`,

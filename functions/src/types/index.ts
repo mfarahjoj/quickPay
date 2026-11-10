@@ -598,10 +598,18 @@ export interface CashOutRequest {
   feeCents?: number;
   /**
    * Code attempts against this request, by any agent, counted before each
-   * comparison (so a successful one is counted too). The fifth wrong one
+   * comparison and given back when the code was right. The fifth wrong one
    * returns the money; no attempt past the fifth is compared at all.
    */
   failedAttempts?: number;
+  /**
+   * The same attempts by agent: `{ [agentId]: count }`. One agent gets fewer
+   * than the request allows in total, so no single agent can lock a
+   * customer's cash-out by themselves.
+   */
+  attemptsBy?: Record<string, number>;
+  /** Who tried a code and when, in order, for ops. At most one per attempt. */
+  attemptLog?: Array<{ agentId: string; at: FirebaseFirestore.Timestamp }>;
   /** Why held money went back to the customer. */
   releaseReason?: CashOutReleaseReason;
   releasedAt?: FirebaseFirestore.Timestamp;
@@ -626,4 +634,11 @@ export interface AgentTopupRequest {
   confirmationId?: string; // Unique id recorded on confirmation (= transactionId)
   transactionId?: string;
   completedAt?: FirebaseFirestore.Timestamp;
+  /**
+   * The last agent whose app was shown this request (previewAgentTopup), and
+   * when. If the customer's cash is taken and the top-up never confirmed,
+   * this is who their dispute is raised against.
+   */
+  scannedBy?: string;
+  scannedAt?: FirebaseFirestore.Timestamp;
 }

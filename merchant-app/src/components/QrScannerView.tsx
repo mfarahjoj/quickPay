@@ -316,6 +316,17 @@ interface CodeSheetProps {
   maxLength?: number;
   /** Large spaced digits for a short code; small text for pasted data. */
   digits?: boolean;
+  /**
+   * A second line asked for with the code, shown above it: the customer's
+   * phone number, which says whose code it is.
+   */
+  also?: {
+    value: string;
+    onChangeText: (value: string) => void;
+    placeholder: string;
+    keyboardType?: KeyboardTypeOptions;
+    maxLength?: number;
+  };
 }
 
 /** Typing a code instead of scanning it, above the keyboard. */
@@ -333,6 +344,7 @@ export function CodeSheet({
   keyboardType,
   maxLength,
   digits,
+  also,
 }: CodeSheetProps) {
   const insets = useSafeAreaInsets();
   return (
@@ -342,6 +354,22 @@ export function CodeSheet({
         <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
           <View style={styles.sheetHandle} />
           <Text style={styles.sheetTitle}>{title}</Text>
+          {also ? (
+            <TextInput
+              style={[styles.sheetInput, styles.sheetLine]}
+              value={also.value}
+              onChangeText={also.onChangeText}
+              placeholder={also.placeholder}
+              placeholderTextColor="rgba(255,255,255,0.25)"
+              keyboardType={also.keyboardType}
+              maxLength={also.maxLength}
+              autoFocus
+              autoCorrect={false}
+              autoCapitalize="none"
+              textAlign="center"
+              keyboardAppearance="dark"
+            />
+          ) : null}
           <TextInput
             style={[styles.sheetInput, digits ? styles.sheetDigits : styles.sheetText]}
             value={value}
@@ -350,7 +378,7 @@ export function CodeSheet({
             placeholderTextColor="rgba(255,255,255,0.25)"
             keyboardType={keyboardType}
             maxLength={maxLength}
-            autoFocus
+            autoFocus={!also}
             autoCorrect={false}
             autoCapitalize="none"
             multiline={!digits}
@@ -483,5 +511,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   sheetDigits: { height: 64, fontSize: 30, fontWeight: '800', letterSpacing: 10 },
+  sheetLine: { height: 56, fontSize: 20, fontWeight: '700', letterSpacing: 0.5 },
   sheetText: { minHeight: 88, fontSize: 14, paddingTop: 14, textAlignVertical: 'top' },
 });

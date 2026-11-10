@@ -13,12 +13,17 @@
  *   anything else               → held in platform:mm_suspense until an
  *                                 admin assigns it or refunds the sender
  *
+ * When the linked account is an agent's, "credited" means their float
+ * (agent:{uid}), not their wallet: that is how an agent buys float with Zaad
+ * instead of a trip to ops (floatEntry below). Agents have their own, larger
+ * limit (`agentFloatTopupMaxCents`).
+ *
  * Every movement is one journal entry keyed by the operator's transaction ID,
  * so the same SMS can never credit twice. This file is pure: no Firestore.
  */
 
 import { JournalEntryInput, JournalLine } from "../ledger";
-import { mobileMoneyFloat, userAccount, MOBILE_MONEY_SUSPENSE } from "../ledger/accounts";
+import { agentAccount, mobileMoneyFloat, userAccount, MOBILE_MONEY_SUSPENSE } from "../ledger/accounts";
 
 export type Provider = "zaad" | "edahab";
 export const PROVIDERS: readonly Provider[] = ["zaad", "edahab"];
@@ -124,6 +129,57 @@ export function topupEntry(p: ReceivedPayment, uid: string, transactionId: strin
     "system",
     { transactionId, receiptId: receiptId(p.provider, p.operatorTxnId) }
   );
+}
+
+/**
+ * Real money reached the collection number from an agent's own number: it
+ * buys them float. The same accounts as the ops float desk's issue
+ * (float:{provider} → agent:{uid}), backed by money Zapp now holds.
+ */
+export function floatEntry(p: ReceivedPayment, uid: string, transactionId: string): JournalEntryInput {
+  return entry(
+    `mmfloat_${receiptId(p.provider, p.operatorTxnId)}`,
+    "float_issue",
+    [
+      { account: mobileMoneyFloat(p.provider), debit: p.amountCents, credit: 0 },
+      { account: agentAccount(uid), debit: 0, credit: p.amountCents },
+    ],
+    `Float bought with ${p.provider === "zaad" ? "Zaad" : "eDahab"}`,
+    "system",
+    { transactionId, receiptId: receiptId(p.provider, p.operatorTxnId) }
+  );
+}
+
+/** An admin gives a held payment to the agent it came from, as float. */
+export function assignFloatEntry(
+  receipt: string,
+  amountCents: number,
+  uid: string,
+  adminUid: string,
+  transactionId: string
+): JournalEntryInput {
+  return entry(
+    `mmassignfloat_${receipt}`,
+    "float_issue",
+    [
+      { account: MOBILE_MONEY_SUSPENSE, debit: amountCents, credit: 0 },
+      { account: agentAccount(uid), debit: 0, credit: amountCents },
+    ],
+    "Float bought with mobile money, matched by Zapp",
+    adminUid,
+    { transactionId, receiptId: receipt }
+  );
+}
+
+/** The limits that apply to a payment for an agent's float, or a customer's wallet. */
+export function limitsFor(
+  rates: { topupMinCents: number; topupMaxCents: number; agentFloatTopupMaxCents: number },
+  forFloat: boolean
+): TopupLimits {
+  return {
+    topupMinCents: rates.topupMinCents,
+    topupMaxCents: forFloat ? rates.agentFloatTopupMaxCents : rates.topupMaxCents,
+  };
 }
 
 /** Real money arrived that can't be credited yet: held, never dropped. */

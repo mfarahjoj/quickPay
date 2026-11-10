@@ -1042,7 +1042,7 @@
   "topup.agent.amountHint": "You'll pay the agent this in cash",
   "topup.agent.generating": "Generating your code…",
   "topup.agent.showAgentTitle": "Show the Agent",
-  "topup.agent.orEnterCode": "Or give them this code",
+  "topup.agent.orEnterCode": "Or tell them this code and your phone number",
   "topup.agent.payAgent": "Pay the agent {{amount}} in cash",
   "topup.agent.expiresIn": "Expires in {{time}}",
   "topup.agent.waiting": "Waiting for the agent to confirm…",

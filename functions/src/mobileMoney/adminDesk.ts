@@ -7,7 +7,8 @@ import { prepareJournalEntry } from "../ledger";
 import { encrypt } from "../utils/encryption";
 import { notifyTopupCompleted } from "../utils/notifications";
 import { Transaction } from "../types";
-import { Provider, assignEntry, isProvider, normaliseSomaliMsisdn, refundEntry } from "./core";
+import { Provider, assignEntry, assignFloatEntry, isProvider, normaliseSomaliMsisdn, refundEntry } from "./core";
+import { isAgentRole } from "../utils/roles";
 import { LISTENER_DEVICES, LISTENER_SMS, RECEIPTS } from "./receipts";
 import { COLLECTION_CONFIG } from "./linking";
 import { ENCRYPTION_KEY, PIN_PEPPER } from "../config/secrets";
@@ -57,21 +58,27 @@ export const adminAssignMobileMoney = https.onCall({ enforceAppCheck: true }, as
     if (r.currency !== "USD") throw new https.HttpsError("failed-precondition", "Only dollar payments can be credited for now");
     const userSnap = await tx.get(db.collection("users").doc(uid));
     if (!userSnap.exists) throw new https.HttpsError("not-found", "No such customer");
+    // Money from an agent buys float, as it would have if it had matched.
+    const forFloat = isAgentRole(userSnap.get("accountType"));
 
-    const entry = assignEntry(receiptId, r.amountCents, uid, actor.uid, transactionId);
+    const entry = forFloat
+      ? assignFloatEntry(receiptId, r.amountCents, uid, actor.uid, transactionId)
+      : assignEntry(receiptId, r.amountCents, uid, actor.uid, transactionId);
     const prepared = await prepareJournalEntry(tx, entry);
     prepared.write(tx);
     const now = admin.firestore.Timestamp.now();
     tx.set(db.collection("transactions").doc(transactionId), {
       type: "topup",
-      kind: "mobile_money_topup",
+      kind: forFloat ? "float" : "mobile_money_topup",
       fromUserId: r.provider,
       toUserId: uid,
       participants: [uid],
       amount: r.amountCents,
       currency: r.currency,
       status: "completed",
-      description: `${r.provider === "zaad" ? "Zaad" : "eDahab"} top-up`,
+      description: forFloat
+        ? `Float bought with ${r.provider === "zaad" ? "Zaad" : "eDahab"}`
+        : `${r.provider === "zaad" ? "Zaad" : "eDahab"} top-up`,
       reference: r.operatorTxnId,
       journalEntryId: entry.entryId,
       createdAt: now,
@@ -84,7 +91,7 @@ export const adminAssignMobileMoney = https.onCall({ enforceAppCheck: true }, as
       target: { type: "mobile_money_receipt", id: receiptId },
       reason,
       before: { status: "held" },
-      after: { status: "assigned", uid, amountCents: r.amountCents },
+      after: { status: "assigned", uid, amountCents: r.amountCents, ...(forFloat ? { creditedTo: "float" } : {}) },
       journalEntryId: entry.entryId,
     });
     return { amountCents: r.amountCents as number, currency: r.currency as string, provider: r.provider as string };

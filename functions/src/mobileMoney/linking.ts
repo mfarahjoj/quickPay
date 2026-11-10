@@ -3,7 +3,8 @@ import { https } from "firebase-functions/v2";
 import { requireAuth } from "../utils/validation";
 import { resolveAccountStatus } from "../utils/accountStatus";
 import { getRates } from "../config/rates";
-import { LinkedNumber, Provider, isProvider, linkId, normaliseSomaliMsisdn } from "./core";
+import { LinkedNumber, Provider, isProvider, limitsFor, linkId, normaliseSomaliMsisdn } from "./core";
+import { isAgentRole } from "../utils/roles";
 import { LINKED_NUMBERS } from "./receipts";
 
 export const COLLECTION_CONFIG = "config/collection";
@@ -47,6 +48,8 @@ export const startNumberLink = https.onCall({ enforceAppCheck: true }, async (re
   const to = await collectionNumber(provider);
   if (!to) throw new https.HttpsError("unavailable", "Top-ups by this method aren't open yet");
   const rates = await getRates();
+  const creditsFloat = isAgentRole(userSnap.get("accountType"));
+  const limits = limitsFor(rates, creditsFloat);
 
   const db = admin.firestore();
   const ref = db.collection(LINKED_NUMBERS).doc(linkId(provider, msisdn));
@@ -102,8 +105,10 @@ export const startNumberLink = https.onCall({ enforceAppCheck: true }, async (re
       collectionNumber: to,
       activationCents: rates.linkActivationCents,
       dialCode: verified ? null : dialCode(provider, to, rates.linkActivationCents),
-      topupMinCents: rates.topupMinCents,
-      topupMaxCents: rates.topupMaxCents,
+      topupMinCents: limits.topupMinCents,
+      topupMaxCents: limits.topupMaxCents,
+      // Where money from this number goes: an agent's float, or the wallet.
+      creditsFloat,
     },
   };
 });
@@ -116,10 +121,14 @@ export const getTopupInstructions = https.onCall({ enforceAppCheck: true }, asyn
   if (!isProvider(provider)) throw new https.HttpsError("invalid-argument", "Choose Zaad or eDahab");
   const amountCents = request.data?.amountCents;
   const rates = await getRates();
-  if (!Number.isInteger(amountCents) || amountCents < rates.topupMinCents || amountCents > rates.topupMaxCents) {
+  const caller = (await admin.firestore().collection("users").doc(uid).get()).data();
+  const creditsFloat = isAgentRole(caller?.accountType);
+  const limits = limitsFor(rates, creditsFloat);
+  if (!Number.isInteger(amountCents) || amountCents < limits.topupMinCents || amountCents > limits.topupMaxCents) {
     throw new https.HttpsError(
       "invalid-argument",
-      `Top up between $${(rates.topupMinCents / 100).toFixed(2)} and $${(rates.topupMaxCents / 100).toFixed(2)}`
+      `Top up between $${(limits.topupMinCents / 100).toFixed(2)} and $${(limits.topupMaxCents / 100).toFixed(2)}`,
+      { reason: "amount_out_of_range", minCents: limits.topupMinCents, maxCents: limits.topupMaxCents }
     );
   }
   const to = await collectionNumber(provider);
@@ -135,6 +144,7 @@ export const getTopupInstructions = https.onCall({ enforceAppCheck: true }, asyn
       collectionNumber: to,
       amountCents,
       dialCode: dialCode(provider, to, amountCents),
+      creditsFloat,
     },
   };
 });

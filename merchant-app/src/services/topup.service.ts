@@ -15,13 +15,14 @@ export interface TopupRequest {
   paymentMethod: 'cash' | 'zaad' | 'edahab';
   reference?: string;
   notes?: string;
+  /** One per top-up, sent again on every retry of it (utils/idempotency.ts). */
+  idempotencyKey: string;
 }
 
 export interface TopupResult {
   transactionId: string;
   userId: string;
   amount: number;
-  newBalance: number;
 }
 
 export async function lookupCustomer(phoneNumber: string): Promise<CustomerLookupResult> {
@@ -54,6 +55,8 @@ export async function topupCustomer(request: TopupRequest): Promise<TopupResult>
     return data.data;
   } catch (error: any) {
     logger.error('Top-up customer error:', error);
-    throw new Error(error.message || 'Failed to top up customer');
+    // Rethrown untouched: the screen reads its code to word it, and sends
+    // a wrong PIN back to the keypad.
+    throw error;
   }
 }
