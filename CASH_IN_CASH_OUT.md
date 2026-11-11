@@ -155,7 +155,7 @@ check catches drift.
 | Agent reads a customer's balance | `manualTopup` replied with `newBalance` | Removed from the reply |
 | Agent walks the phone book | `lookupUserByPhone` unlimited, showed frozen accounts | 60/hour, 300/day per agent; closed and frozen read as not found |
 
-## Agents buy float with Zaad (2026-11-10, not deployed)
+## Agents buy float with Zaad (2026-11-10, functions deployed 2026-11-11, switched off)
 
 Without a Zaad API, through the same collection number and listener phone as customer
 Zaad top-ups (`functions/src/mobileMoney/`):
@@ -175,10 +175,10 @@ Zaad top-ups (`functions/src/mobileMoney/`):
 Each SMS credits once (keyed by Zaad's transaction ID). Ops still reconcile `float:zaad`
 against the real Zaad balance of the collection SIM.
 
-**Before it works:** the SMS parser needs real Zaad samples, the listener functions
-(`startNumberLink`, `getTopupInstructions`, `mobileMoneyListener`, `adminAssignMobileMoney`
-and the rest of the mobile-money desk) need deploying, and `config/collection` needs the
-collection number. Then set `merchant.zaadFloat: true`.
+**Before it works:** the SMS parser needs real Zaad samples, a listener phone needs
+registering, and `config/collection` needs the collection number. Then set
+`merchant.zaadFloat: true`. The functions (`startNumberLink`, `getTopupInstructions`,
+`mobileMoneyListener` and the mobile-money desk) went to prod on 2026-11-11.
 
 ### Known gaps (not fixed here)
 - **Daily cash-out velocity per agent.** Agent caps rely on float size and admin review.
@@ -203,7 +203,7 @@ message telling the agent to update:
    phone + code. Both carry the App Check `AppDelegate` fix, so release builds need a
    real-device check.
 
-**2026-11-10 hardening** (not deployed): deploy `previewAgentTopup`, `agentConfirmTopup`,
+**2026-11-10 hardening** (functions deployed 2026-11-11 from 011363b; merchant build to follow): `previewAgentTopup`, `agentConfirmTopup`,
 `agentConfirmCashOut`, `manualTopup`, `lookupUserByPhone`, `openDispute` together with the
 new merchant build. Old merchant builds can no longer confirm top-ups by code (they're told
 to update); their phone-number top-ups still work without a key.
