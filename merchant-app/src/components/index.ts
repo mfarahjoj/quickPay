@@ -10,5 +10,7 @@ export { Header } from './Header';
 export { EmptyState } from './EmptyState';
 export { TransactionItem } from './TransactionItem';
 export { LanguageSelector } from './LanguageSelector';
+export { AmountKeypad } from './AmountKeypad';
+export { ReceiptScanner } from './ReceiptScanner';
 export { DarkScreen, ScreenHeader, GlassCard, PillButton, ACCENT, GLASS, GLASS_BORDER, TEXT_DIM, TEXT_FAINT } from './DarkScreen';
 export * from './auth';

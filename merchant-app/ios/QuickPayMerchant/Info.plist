@@ -57,7 +57,7 @@
 		<true/>
 	</dict>
 	<key>NSCameraUsageDescription</key>
-	<string>We need camera access to scan QR codes for payments</string>
+	<string>We need camera access to scan QR codes for payments and to read receipts</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>We use Face ID to securely authenticate your payments</string>
 	<key>NSPhotoLibraryUsageDescription</key>

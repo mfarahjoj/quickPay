@@ -271,6 +271,45 @@ export function QrIcon({ size = 24, color = colors.primary }: IconProps) {
   );
 }
 
+/** Receipt — torn-edge till slip, for Scan receipt */
+export function ReceiptIcon({ size = 24, color = colors.primary }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M6 3h12v18l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4L6 21V3z"
+        stroke={color}
+        strokeWidth={1.8}
+        strokeLinejoin="round"
+      />
+      <Path d="M9 8h6M9 12h6M9 16h3" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+/** Backspace — keypad delete */
+export function BackspaceIcon({ size = 24, color = colors.primary }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M9 5h10a2 2 0 012 2v10a2 2 0 01-2 2H9l-6-7 6-7z"
+        stroke={color}
+        strokeWidth={1.8}
+        strokeLinejoin="round"
+      />
+      <Path d="M12 10l4 4M16 10l-4 4" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+/** Torch — camera light toggle */
+export function TorchIcon({ size = 24, color = colors.primary }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M13 2L5 13h6l-1 9 8-11h-6l1-9z" stroke={color} strokeWidth={1.8} strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
 /** Scan — camera viewfinder with center dot */
 export function ScanIcon({ size = 24, color = colors.primary }: IconProps) {
   return (
