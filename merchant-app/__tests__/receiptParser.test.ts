@@ -1,5 +1,6 @@
 import {
   buildRows,
+  estimateSkew,
   findIdentifiers,
   findTotalCents,
   identifierToReference,
@@ -85,6 +86,52 @@ describe('receiptParser', () => {
 
     it('builds a reference the customer will recognise', () => {
       expect(identifierToReference(parsed.identifiers[0])).toBe('Invoice No 37841');
+    });
+  });
+
+  // The same receipt photographed at an angle. Upright boxes around tilted
+  // lines overlap their neighbours, so the left and right columns can only be
+  // paired by straightening the page from each line's true corners.
+  describe('tilted photo', () => {
+    const tilt = (lines: OcrLine[], degrees: number): OcrLine[] => {
+      const a = (degrees * Math.PI) / 180;
+      const turn = (x: number, y: number) => ({
+        x: 800 + (x - 800) * Math.cos(a) - (y - 1000) * Math.sin(a),
+        y: 1000 + (x - 800) * Math.sin(a) + (y - 1000) * Math.cos(a),
+      });
+      return lines.map(({ text, frame }) => {
+        const f = frame!;
+        return {
+          text,
+          corners: {
+            topLeft: turn(f.left, f.top),
+            topRight: turn(f.left + f.width, f.top),
+            bottomLeft: turn(f.left, f.top + f.height),
+            bottomRight: turn(f.left + f.width, f.top + f.height),
+          },
+        };
+      });
+    };
+
+    it('measures the tilt', () => {
+      expect((estimateSkew(tilt(KOFIA, 12)) * 180) / Math.PI).toBeCloseTo(12, 5);
+      expect((estimateSkew(tilt(KOFIA, -30)) * 180) / Math.PI).toBeCloseTo(-30, 5);
+    });
+
+    it.each([4, 12, 25, 40, -8, -20, -40])('reads the receipt the same at %i degrees', (degrees) => {
+      const level = parseReceipt(KOFIA);
+      const tilted = parseReceipt(tilt(KOFIA, degrees));
+      expect(tilted.rows).toEqual(level.rows);
+      expect(tilted.amountCents).toBe(256);
+      expect(tilted.identifiers[0]).toEqual({ kind: 'invoice', label: 'Invoice No', value: '37841' });
+    });
+
+    it('is not thrown by a short line that reports a wild slope', () => {
+      const lines = tilt(KOFIA, 10);
+      const tax = lines.find((l) => l.text === '.06')!;
+      tax.corners!.topRight.y += 40;
+      tax.corners!.bottomRight.y += 40;
+      expect(parseReceipt(lines).amountCents).toBe(256);
     });
   });
 

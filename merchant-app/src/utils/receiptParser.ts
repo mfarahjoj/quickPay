@@ -20,9 +20,25 @@ export interface OcrFrame {
   height: number;
 }
 
+export interface OcrPoint {
+  x: number;
+  y: number;
+}
+
+/** The four corners of a line as printed, which need not be level. */
+export interface OcrCorners {
+  topLeft: OcrPoint;
+  topRight: OcrPoint;
+  bottomLeft: OcrPoint;
+  bottomRight: OcrPoint;
+}
+
 export interface OcrLine {
   text: string;
+  /** Upright box around the line. Inflated when the line is tilted. */
   frame?: OcrFrame;
+  /** True corners of the line. Preferred over `frame` when present. */
+  corners?: OcrCorners;
 }
 
 export interface ReceiptIdentifier {
@@ -50,10 +66,88 @@ export const REFERENCE_MAX_LENGTH = 40;
 
 // ── Rows ──────────────────────────────────────────────────────────────────
 
+interface Placed {
+  text: string;
+  /** Position along the print direction. */
+  along: number;
+  /** Position down the page, across the print direction. */
+  down: number;
+  /** Height of the printed line itself. */
+  height: number;
+}
+
+const dist = (a: OcrPoint, b: OcrPoint) => Math.hypot(b.x - a.x, b.y - a.y);
+
+/**
+ * How far the receipt is rotated in the photo, in radians. Each line reports
+ * its own slope; long lines know theirs far better than a three-character
+ * ".06" does, so the answer is the median slope weighted by line length.
+ */
+export function estimateSkew(lines: OcrLine[]): number {
+  const slopes = lines
+    .filter((l) => l.corners)
+    .map((l) => {
+      const { topLeft, topRight } = l.corners!;
+      return {
+        angle: Math.atan2(topRight.y - topLeft.y, topRight.x - topLeft.x),
+        weight: dist(topLeft, topRight),
+      };
+    })
+    .filter((s) => s.weight > 0)
+    .sort((a, b) => a.angle - b.angle);
+
+  const total = slopes.reduce((sum, s) => sum + s.weight, 0);
+  if (total === 0) return 0;
+
+  let seen = 0;
+  for (const s of slopes) {
+    seen += s.weight;
+    if (seen >= total / 2) return s.angle;
+  }
+  return 0;
+}
+
+/**
+ * Put every line into the receipt's own axes. With corners, the photo's tilt
+ * is measured and undone, so a receipt held at an angle lines up exactly as a
+ * level one does. Without corners, the upright frames are used as they are.
+ */
+function place(lines: OcrLine[]): Placed[] | null {
+  if (lines.every((l) => l.corners)) {
+    const skew = estimateSkew(lines);
+    const cos = Math.cos(skew);
+    const sin = Math.sin(skew);
+    return lines.map((l) => {
+      const { topLeft, topRight, bottomLeft, bottomRight } = l.corners!;
+      const cx = (topLeft.x + topRight.x + bottomLeft.x + bottomRight.x) / 4;
+      const cy = (topLeft.y + topRight.y + bottomLeft.y + bottomRight.y) / 4;
+      const halfWidth = dist(topLeft, topRight) / 2;
+      return {
+        text: l.text,
+        // Left edge, so two columns on one row keep their printed order.
+        along: cx * cos + cy * sin - halfWidth,
+        down: -cx * sin + cy * cos,
+        height: Math.max((dist(topLeft, bottomLeft) + dist(topRight, bottomRight)) / 2, 1),
+      };
+    });
+  }
+
+  if (lines.every((l) => l.frame)) {
+    return lines.map((l) => ({
+      text: l.text,
+      along: l.frame!.left,
+      down: l.frame!.top + l.frame!.height / 2,
+      height: Math.max(l.frame!.height, 1),
+    }));
+  }
+
+  return null;
+}
+
 /**
  * Receipts are tables: "Total with Tax:" sits at the left edge and "2.56" at
  * the right, and OCR engines hand those back as separate lines. Rebuild the
- * printed rows by grouping lines whose vertical centres line up.
+ * printed rows by grouping lines that sit at the same height on the paper.
  */
 export function buildRows(lines: OcrLine[]): string[] {
   const clean = lines
@@ -61,32 +155,27 @@ export function buildRows(lines: OcrLine[]): string[] {
     .filter((l) => l.text.length > 0);
 
   if (clean.length === 0) return [];
-  if (clean.some((l) => !l.frame)) return clean.map((l) => l.text);
 
-  const items = clean
-    .map((l) => ({
-      text: l.text,
-      left: l.frame!.left,
-      height: Math.max(l.frame!.height, 1),
-      cy: l.frame!.top + l.frame!.height / 2,
-    }))
-    .sort((a, b) => a.cy - b.cy);
+  const placed = place(clean);
+  if (!placed) return clean.map((l) => l.text);
 
-  const rows: { cy: number; height: number; items: typeof items }[] = [];
+  const items = placed.sort((a, b) => a.down - b.down);
+
+  const rows: { down: number; height: number; items: Placed[] }[] = [];
   for (const item of items) {
     const row = rows[rows.length - 1];
-    if (row && Math.abs(item.cy - row.cy) < Math.min(row.height, item.height) * 0.6) {
+    if (row && Math.abs(item.down - row.down) < Math.min(row.height, item.height) * 0.6) {
       row.items.push(item);
-      row.cy = row.items.reduce((sum, i) => sum + i.cy, 0) / row.items.length;
+      row.down = row.items.reduce((sum, i) => sum + i.down, 0) / row.items.length;
       row.height = Math.min(row.height, item.height);
     } else {
-      rows.push({ cy: item.cy, height: item.height, items: [item] });
+      rows.push({ down: item.down, height: item.height, items: [item] });
     }
   }
 
   return rows.map((row) =>
     row.items
-      .sort((a, b) => a.left - b.left)
+      .sort((a, b) => a.along - b.along)
       .map((i) => i.text)
       .join(' ')
   );

@@ -31,8 +31,10 @@ RCT_EXPORT_MODULE()
 }
 
 /// Resolves with one entry per recognised line: { text, frame: { left, top,
-/// width, height } }, in pixels of the upright image with the origin at the
-/// top left. The photo never leaves the device.
+/// width, height }, corners: { topLeft, topRight, bottomLeft, bottomRight } },
+/// in pixels of the upright image with the origin at the top left. `corners`
+/// follow the line as printed, so a receipt photographed at an angle can be
+/// straightened by the caller. The photo never leaves the device.
 RCT_EXPORT_METHOD(recognize:(nonnull NSString *)path
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
@@ -81,10 +83,19 @@ RCT_EXPORT_METHOD(recognize:(nonnull NSString *)path
       if (candidate == nil || candidate.string.length == 0) {
         continue;
       }
-      // Vision's box is normalised with the origin at the bottom left.
+      // Vision's geometry is normalised with the origin at the bottom left.
       CGRect box = observation.boundingBox;
+      NSDictionary * (^point)(CGPoint) = ^NSDictionary *(CGPoint p) {
+        return @{ @"x": @(p.x * width), @"y": @((1.0 - p.y) * height) };
+      };
       [lines addObject:@{
         @"text": candidate.string,
+        @"corners": @{
+          @"topLeft": point(observation.topLeft),
+          @"topRight": point(observation.topRight),
+          @"bottomLeft": point(observation.bottomLeft),
+          @"bottomRight": point(observation.bottomRight),
+        },
         @"frame": @{
           @"left": @(box.origin.x * width),
           @"top": @((1.0 - box.origin.y - box.size.height) * height),
