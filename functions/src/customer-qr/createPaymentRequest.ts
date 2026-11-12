@@ -8,6 +8,7 @@ import {
   validateCurrency,
 } from "../utils/validation";
 import { sendPushNotification } from "../utils/notifications";
+import { cleanReference, guardPaidReference } from "../utils/paidReferences";
 import {
   ApiResponse,
   CustomerToken,
@@ -20,6 +21,9 @@ interface CreatePaymentRequestInput {
   amount: number; // In cents
   currency: string;
   reference?: string;
+  /** As on generateQRCode: refuse if this reference has been paid. */
+  checkPaidReference?: boolean;
+  confirmPaidReference?: boolean;
 }
 
 export const createPaymentRequest = https.onCall(
@@ -53,7 +57,8 @@ export const createPaymentRequest = https.onCall(
     // Stop a frozen merchant raising new charges against customers.
     assertAccountActive(merchant);
 
-    const { tokenId, amount, currency, reference } = request.data;
+    const { tokenId, amount, currency } = request.data;
+    const reference = cleanReference(request.data.reference);
 
     if (!tokenId) {
       throw new https.HttpsError("invalid-argument", "Token ID is required");
@@ -70,6 +75,12 @@ export const createPaymentRequest = https.onCall(
         "Currency must be USD or SLS"
       );
     }
+
+    // Before the customer is asked to pay: a warning is cheaper than a refund.
+    await guardPaidReference(db, merchantId, reference, {
+      check: request.data.checkPaidReference,
+      confirmed: request.data.confirmPaidReference,
+    });
 
     const tokenDoc = await db.collection("customerTokens").doc(tokenId).get();
     if (!tokenDoc.exists) {

@@ -14,6 +14,8 @@ interface TransactionResponse {
   status: TransactionStatus;
   description: string;
   reference?: string;
+  /** Zapp receipt number, e.g. "ZP-7K3M-9QX2". Absent on older payments. */
+  receiptNumber?: string;
   createdAt: Date;
   completedAt?: Date;
   isIncoming: boolean;
@@ -141,6 +143,7 @@ export const getTransactions = https.onCall(
           status: data.status,
           description: data.description,
           reference: data.reference,
+          receiptNumber: data.receiptNumber,
           createdAt: data.createdAt.toDate(),
           completedAt: data.completedAt?.toDate(),
           isIncoming,

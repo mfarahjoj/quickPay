@@ -38,7 +38,7 @@ export function UserSearch({ selectedId, onSelect }: Props) {
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="+252… , uid, or name"
+          placeholder="+252… , uid, receipt (ZP-…), or name"
           aria-label="Search customers"
         />
         <button className="primary" type="submit" disabled={busy}>

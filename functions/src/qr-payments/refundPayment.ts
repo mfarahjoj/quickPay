@@ -13,6 +13,7 @@ import {
   InsufficientBalanceError,
   WalletNotFoundError,
 } from "../ledger";
+import { claimReceiptNumber, reserveReceiptNumber } from "../utils/receiptNumber";
 
 interface RefundRequest {
   transactionId: string;
@@ -21,6 +22,7 @@ interface RefundRequest {
 
 interface RefundResponse {
   refundTransactionId: string;
+  receiptNumber: string;
   amount: number; // Gross amount refunded, in dollars
 }
 
@@ -95,8 +97,12 @@ export const refundPayment = https.onCall(
       const currency = original.currency;
 
       const refundTransactionId = db.collection("transactions").doc().id;
+      let receiptNumber: string;
 
       await db.runTransaction(async (tx) => {
+        // A read, so it goes before any write. A retried attempt claims afresh.
+        receiptNumber = await claimReceiptNumber(tx, db);
+
         // Re-read the original under lock to keep the refund idempotent.
         const lockedOriginal = await tx.get(originalRef);
         const lockedData = lockedOriginal.data() as Transaction;
@@ -126,6 +132,7 @@ export const refundPayment = https.onCall(
           refs: {
             transactionId: refundTransactionId,
             refundOfEntryId: lockedData.journalEntryId,
+            receiptNumber,
           },
           description: "Refund",
           postedBy: merchantId,
@@ -146,7 +153,8 @@ export const refundPayment = https.onCall(
           currency,
           status: "completed",
           description: "Refund",
-          reference: original.reference,
+          ...(original.reference ? { reference: original.reference } : {}),
+          receiptNumber,
           refundOfTransactionId: transactionId,
           journalEntryId: `refund_${transactionId}`,
           createdAt: now,
@@ -160,6 +168,14 @@ export const refundPayment = https.onCall(
         tx.update(originalRef, {
           refundedAt: now,
           refundTransactionId,
+        });
+
+        reserveReceiptNumber(tx, db, receiptNumber, {
+          transactionId: refundTransactionId,
+          type: "refund",
+          participants: [merchantId, customerId],
+          amount: gross,
+          currency,
         });
       });
 
@@ -176,6 +192,7 @@ export const refundPayment = https.onCall(
         success: true,
         data: {
           refundTransactionId,
+          receiptNumber: receiptNumber!,
           amount: gross / 100,
         },
       };

@@ -21,6 +21,8 @@ import {
   JournalLine,
   PLATFORM_FEES,
 } from "../ledger";
+import { claimReceiptNumber, reserveReceiptNumber } from "../utils/receiptNumber";
+import { recordPaidReference } from "../utils/paidReferences";
 
 const REQUEST_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -31,6 +33,7 @@ interface ApprovePaymentInput {
 
 interface ApprovePaymentResponse {
   transactionId: string;
+  receiptNumber: string;
   amount: number;
 }
 
@@ -83,12 +86,16 @@ export const approvePaymentRequest = https.onCall(
     let approvedCurrency: string;
     let approvedMerchantId: string;
     let approvedReference: string | undefined;
+    let receiptNumber: string;
     let feeCents = 0;
     let netCents = 0;
 
     const requestRef = db.collection("paymentRequests").doc(requestId);
 
     await db.runTransaction(async (tx) => {
+      // A read, so it goes before any write. A retried attempt claims afresh.
+      receiptNumber = await claimReceiptNumber(tx, db);
+
       const requestSnap = await tx.get(requestRef);
       if (!requestSnap.exists) {
         throw new https.HttpsError("not-found", "Payment request not found");
@@ -145,7 +152,7 @@ export const approvePaymentRequest = https.onCall(
         type: "customer_qr_payment",
         currency: approvedCurrency as "USD" | "SLS",
         lines,
-        refs: { transactionId },
+        refs: { transactionId, receiptNumber },
         description: "QR Payment (Customer Token)",
         postedBy: customerId,
       });
@@ -166,6 +173,7 @@ export const approvePaymentRequest = https.onCall(
         status: "completed",
         description: "QR Payment (Customer Token)",
         ...(approvedReference ? { reference: approvedReference } : {}),
+        receiptNumber,
         journalEntryId: `custqr_${requestId}`,
         createdAt: now,
         completedAt: now,
@@ -173,9 +181,32 @@ export const approvePaymentRequest = https.onCall(
 
       tx.set(db.collection("transactions").doc(transactionId), txRecord);
 
+      reserveReceiptNumber(tx, db, receiptNumber, {
+        transactionId,
+        type: "payment",
+        participants: [customerId, approvedMerchantId],
+        amount: approvedAmount,
+        currency: approvedCurrency,
+      });
+
+      if (approvedReference) {
+        recordPaidReference(tx, db, {
+          merchantId: approvedMerchantId,
+          reference: approvedReference,
+          transactionId,
+          receiptNumber,
+          amount: approvedAmount,
+          currency: approvedCurrency,
+          paidByName: customerData?.fullName || null,
+        });
+      }
+
+      // The merchant's Charge screen watches this doc for the outcome.
       tx.update(requestRef, {
         status: "approved",
         resolvedAt: now,
+        transactionId,
+        receiptNumber,
       });
     });
 
@@ -197,6 +228,7 @@ export const approvePaymentRequest = https.onCall(
       success: true,
       data: {
         transactionId,
+        receiptNumber: receiptNumber!,
         amount: approvedAmount!,
       },
     };

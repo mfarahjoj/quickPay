@@ -227,6 +227,8 @@ export interface Transaction {
   description: string;
   /** Free-text reference / order number shown to the merchant. */
   reference?: string;
+  /** Zapp receipt number, e.g. "ZP-7K3M-9QX2" (merchant payments and refunds). */
+  receiptNumber?: string;
   /** On a refund transaction: the id of the payment being refunded. */
   refundOfTransactionId?: string;
   /** On a refunded payment: when it was refunded and the refund tx id. */
@@ -266,6 +268,7 @@ export interface QRCode {
   feeCents?: number;
   netCents?: number;
   transactionId?: string;
+  receiptNumber?: string;
 }
 
 // Top-up types
@@ -402,6 +405,7 @@ export interface QRPaymentRequest {
 
 export interface PaymentResponse {
   transactionId: string;
+  receiptNumber: string;
   status: TransactionStatus;
   amount: number;
   merchantId: string;

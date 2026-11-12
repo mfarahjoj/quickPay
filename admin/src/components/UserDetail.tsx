@@ -184,6 +184,7 @@ export function UserDetail({ userId }: { userId: string }) {
               <tr>
                 <th>When</th>
                 <th>Type</th>
+                <th>Receipt</th>
                 <th>Description</th>
                 <th>Status</th>
                 <th className="num">Amount</th>
@@ -194,7 +195,11 @@ export function UserDetail({ userId }: { userId: string }) {
                 <tr key={tx.id}>
                   <td className="muted">{when(tx.createdAt)}</td>
                   <td>{tx.type || "—"}</td>
-                  <td>{tx.description || "—"}</td>
+                  <td className="mono">{tx.receiptNumber || "—"}</td>
+                  <td>
+                    {tx.description || "—"}
+                    {tx.reference ? <span className="muted"> · {tx.reference}</span> : null}
+                  </td>
                   <td>{tx.status || "—"}</td>
                   <td className="num">{money(tx.amount, tx.currency)}</td>
                 </tr>

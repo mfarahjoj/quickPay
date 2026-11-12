@@ -135,6 +135,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--accent); }
 .banner.ok { border-color: rgba(52, 199, 123, 0.4); color: #9fe6c2; }
 
 .muted { color: var(--muted); }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; }
 .empty { color: var(--muted); padding: 18px 0; text-align: center; }
 
 /* Table */

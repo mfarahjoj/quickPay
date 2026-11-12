@@ -23,6 +23,7 @@ import {
   PLATFORM_FEES,
   WalletNotFoundError,
 } from "../ledger";
+import { claimReceiptNumber, reserveReceiptNumber } from "../utils/receiptNumber";
 
 interface PayMerchantRequest {
   merchantId: string;
@@ -107,7 +108,12 @@ export const payMerchant = https.onCall(
 
       const journalEntryId = `paymerchant_${transactionId}`;
 
+      let receiptNumber: string;
+
       await db.runTransaction(async (transaction) => {
+        // A read, so it goes before any write. A retried attempt claims afresh.
+        receiptNumber = await claimReceiptNumber(transaction, db);
+
         const lines: JournalLine[] = [
           { account: userAccount(customerId), debit: amount, credit: 0 },
           { account: userAccount(merchantId), debit: 0, credit: netCents },
@@ -121,7 +127,7 @@ export const payMerchant = https.onCall(
           type: "qr_payment",
           currency: currency as "USD" | "SLS",
           lines,
-          refs: { transactionId },
+          refs: { transactionId, receiptNumber },
           description: `Payment to ${merchantData.fullName}`,
           postedBy: customerId,
         });
@@ -139,6 +145,7 @@ export const payMerchant = https.onCall(
           currency,
           status: "completed",
           description: `Payment to ${merchantData.fullName}`,
+          receiptNumber,
           journalEntryId,
           createdAt: admin.firestore.Timestamp.now(),
           completedAt: admin.firestore.Timestamp.now(),
@@ -148,6 +155,14 @@ export const payMerchant = https.onCall(
           db.collection("transactions").doc(transactionId),
           txRecord
         );
+
+        reserveReceiptNumber(transaction, db, receiptNumber, {
+          transactionId,
+          type: "payment",
+          participants: [customerId, merchantId],
+          amount,
+          currency,
+        });
       });
 
       notifyPaymentReceived(merchantId, netCents, currency, customerId).catch(
@@ -163,6 +178,7 @@ export const payMerchant = https.onCall(
         success: true,
         data: {
           transactionId,
+          receiptNumber: receiptNumber!,
           status: "completed",
           amount,
           merchantId,

@@ -6,11 +6,19 @@ import { generateSecureId } from "../utils/encryption";
 import { generateEmvQRPayload } from "../utils/emvqr";
 import { getRates, computePaymentFee } from "../config/rates";
 import { ApiResponse, QRCode, GenerateQRResponse } from "../types";
+import { cleanReference, guardPaidReference } from "../utils/paidReferences";
 
 interface GenerateQRRequest {
   amount: number; // In cents
   currency: string;
   reference?: string;
+  /**
+   * Set by the merchant app when the reference names one sale (an invoice
+   * number, not "Table 4"): refuse with `already-exists` if it's been paid.
+   */
+  checkPaidReference?: boolean;
+  /** The merchant saw that warning and wants to charge again anyway. */
+  confirmPaidReference?: boolean;
 }
 
 const QR_CODE_EXPIRY_MINUTES = 10;
@@ -39,7 +47,8 @@ export const generateQRCode = https.onCall(
     requireAuth(request);
     const merchantId = request.auth!.uid;
 
-    const { amount, currency, reference } = request.data;
+    const { amount, currency } = request.data;
+    const reference = cleanReference(request.data.reference);
 
     // Validate inputs
     if (!validateAmount(amount)) {
@@ -77,6 +86,12 @@ export const generateQRCode = https.onCall(
       }
       // Stop a frozen merchant issuing new payment codes to collect against.
       assertAccountActive(userData);
+
+      // Before any code exists: a warning is cheaper than a refund.
+      await guardPaidReference(db, merchantId, reference, {
+        check: request.data.checkPaidReference,
+        confirmed: request.data.confirmPaidReference,
+      });
 
       // Generate QR code ID
       const qrCodeId = generateSecureId(16);

@@ -45,6 +45,8 @@ export interface TransactionRow {
   fromUserId?: string;
   toUserId?: string;
   journalEntryId?: string;
+  receiptNumber?: string;
+  reference?: string;
   createdAt?: { _seconds?: number; seconds?: number };
 }
 

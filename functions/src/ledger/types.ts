@@ -42,6 +42,8 @@ export interface JournalRefs {
   topupId?: string;
   remittanceId?: string;
   refundOfEntryId?: string;
+  /** Zapp receipt number of the payment or refund this entry settles. */
+  receiptNumber?: string;
 }
 
 export interface JournalEntryInput {
