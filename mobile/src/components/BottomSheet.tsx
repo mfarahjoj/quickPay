@@ -1,12 +1,13 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
+  AppState,
   Modal,
   View,
   TouchableOpacity,
   StyleSheet,
   Dimensions,
 } from 'react-native';
-import { colors, borderRadius } from '../theme';
+import { borderRadius, makeStyles } from '../theme';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -23,10 +24,22 @@ export function BottomSheet({
   children,
   height = '50%',
 }: BottomSheetProps) {
+  const styles = useStyles();
   const sheetHeight =
     typeof height === 'string'
       ? (SCREEN_HEIGHT * parseInt(height, 10)) / 100
       : height;
+
+  // A Modal draws above everything, the app lock included, and the lock goes
+  // up as the app leaves the screen: close the sheet then, or it would sit
+  // over the lock when the app comes back.
+  useEffect(() => {
+    if (!visible) return;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'background') onClose();
+    });
+    return () => sub.remove();
+  }, [visible, onClose]);
 
   return (
     <Modal
@@ -50,7 +63,7 @@ export function BottomSheet({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -77,4 +90,4 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
-});
+}));

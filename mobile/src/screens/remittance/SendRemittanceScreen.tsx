@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Card, Button } from '../../components';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
 import { CURRENCY_SYMBOL, PHONE_PREFIX } from '../../config/constants';
 import { useAuth } from '../../hooks/useAuth';
 import { triggerHaptic } from '../../services/haptics.service';
@@ -20,6 +20,8 @@ import { functions } from '../../services/firebase.config';
 type Step = 'phone' | 'amount' | 'review' | 'success';
 
 export default function SendRemittanceScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const { user } = useAuth();
 
@@ -313,10 +315,10 @@ export default function SendRemittanceScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   content: {
     padding: spacing.md,
@@ -324,24 +326,24 @@ const styles = StyleSheet.create({
   },
   title: {
     ...typography.h1,
-    color: colors.dark.text,
+    color: colors.ui.text,
     marginBottom: spacing.xs,
     marginTop: spacing.sm,
   },
   subtitle: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     marginBottom: spacing.lg,
   },
   stepTitle: {
     ...typography.bodyLarge,
-    color: colors.dark.text,
+    color: colors.ui.text,
     fontWeight: '600',
     marginBottom: spacing.md,
   },
   groupTitle: {
     ...typography.captionBold,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
     marginBottom: spacing.sm,
     marginTop: spacing.sm,
   },
@@ -354,15 +356,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.dark.glassRaised,
+    backgroundColor: colors.ui.glassRaised,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderTopLeftRadius: borderRadius.md,
     borderBottomLeftRadius: borderRadius.md,
   },
   prefixText: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     fontWeight: '600',
   },
   phoneInput: {
@@ -370,28 +372,28 @@ const styles = StyleSheet.create({
     height: 44,
     borderWidth: 1,
     borderLeftWidth: 0,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderTopRightRadius: borderRadius.md,
     borderBottomRightRadius: borderRadius.md,
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     paddingHorizontal: spacing.md,
-    color: colors.dark.text,
+    color: colors.ui.text,
     ...typography.body,
   },
   noteInput: {
     height: 44,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderRadius: borderRadius.md,
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     paddingHorizontal: spacing.md,
-    color: colors.dark.text,
+    color: colors.ui.text,
     marginBottom: spacing.md,
   },
   recipientBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.dark.incomingSoft,
+    backgroundColor: colors.ui.incomingSoft,
     borderRadius: borderRadius.md,
     padding: spacing.sm,
     marginBottom: spacing.md,
@@ -400,14 +402,14 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: spacing.smPlus,
   },
   avatarText: {
     ...typography.body,
-    color: colors.dark.text,
+    color: colors.ui.text,
     fontWeight: '600',
   },
   contactInfo: {
@@ -415,16 +417,16 @@ const styles = StyleSheet.create({
   },
   contactName: {
     ...typography.body,
-    color: colors.dark.text,
+    color: colors.ui.text,
     fontWeight: '500',
   },
   contactHandle: {
     ...typography.caption,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
   },
   amountLarge: {
     ...typography.balanceNumber,
-    color: colors.dark.text,
+    color: colors.ui.text,
     textAlign: 'center',
     marginVertical: spacing.smPlus,
     fontVariant: ['tabular-nums'],
@@ -439,37 +441,37 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: borderRadius.md,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
-    backgroundColor: colors.dark.glass,
+    borderColor: colors.ui.glassBorder,
+    backgroundColor: colors.ui.glass,
     justifyContent: 'center',
     alignItems: 'center',
   },
   keyText: {
     ...typography.bodyLarge,
-    color: colors.dark.text,
+    color: colors.ui.text,
     fontWeight: '600',
   },
   reviewRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     borderBottomWidth: 1,
-    borderBottomColor: colors.dark.divider,
+    borderBottomColor: colors.ui.divider,
     paddingVertical: spacing.smPlus,
   },
   reviewKey: {
     ...typography.body,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
   },
   reviewValue: {
     ...typography.body,
-    color: colors.dark.text,
+    color: colors.ui.text,
     fontWeight: '600',
     maxWidth: '60%',
     textAlign: 'right',
   },
   stripeNote: {
     ...typography.caption,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
     textAlign: 'center',
     marginTop: spacing.md,
   },
@@ -484,22 +486,22 @@ const styles = StyleSheet.create({
   },
   successIcon: {
     fontSize: 42,
-    color: colors.dark.incoming,
+    color: colors.ui.incoming,
   },
   successTitle: {
     ...typography.h2,
-    color: colors.dark.text,
+    color: colors.ui.text,
     marginTop: spacing.sm,
   },
   successAmount: {
     ...typography.balanceNumber,
-    color: colors.dark.text,
+    color: colors.ui.text,
     marginTop: spacing.sm,
     fontVariant: ['tabular-nums'],
   },
   successRecipient: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     marginTop: spacing.xs,
   },
-});
+}));

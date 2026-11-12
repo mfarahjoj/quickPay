@@ -1,11 +1,12 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
+import { assertResetCooldownAllows } from "../utils/resetCooldown";
 import { assertAccountActive } from "../utils/accountStatus";
 import {
   enforceAggregateLimits,
   enforcePerTransactionLimit,
 } from "../utils/limits";
-import { requireAuth } from "../utils/validation";
+import { requireAuth, validateCurrency } from "../utils/validation";
 import { verifyUserPin } from "../auth/validatePin";
 import { notifyPaymentReceived } from "../utils/notifications";
 import { ApiResponse, Wallet, Transaction } from "../types";
@@ -62,8 +63,8 @@ export const payrollPayout = https.onCall(
         `Maximum ${MAX_EMPLOYEES} employees per payroll run`
       );
     }
-    if (!["USD", "SLS"].includes(currency)) {
-      throw new https.HttpsError("invalid-argument", "Currency must be USD or SLS");
+    if (!validateCurrency(currency)) {
+      throw new https.HttpsError("invalid-argument", "Currency must be USD");
     }
     if (!pin) {
       throw new https.HttpsError("invalid-argument", "PIN is required");
@@ -76,6 +77,9 @@ export const payrollPayout = https.onCall(
     if (!pinValid) {
       throw new https.HttpsError("permission-denied", "Incorrect PIN");
     }
+
+    // Outgoing money waits out the pause after a PIN reset.
+    await assertResetCooldownAllows(merchantId, "other", 0);
 
     // Verify merchant account type
     const merchantDoc = await db.collection("users").doc(merchantId).get();
@@ -182,6 +186,7 @@ export const payrollPayout = https.onCall(
 
           const txRecord: Transaction = {
             type: "payment",
+            kind: "payroll",
             fromUserId: merchantId,
             toUserId: recipientId,
             participants: [merchantId, recipientId],

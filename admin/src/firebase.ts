@@ -41,6 +41,15 @@ const app = initializeApp({
 // App Check: the admin callables run with enforceAppCheck, so without this
 // every request comes back unauthorised.
 const siteKey = import.meta.env.VITE_APPCHECK_SITE_KEY;
+
+/**
+ * True when this build cannot produce an App Check token at all. Every admin
+ * callable enforces App Check, so such a build signs in fine and then has
+ * every action refused — which is what the deployed console did until the
+ * site key was set. The app shows a banner rather than a wall of failed calls.
+ */
+export const appCheckMissing =
+  !siteKey && import.meta.env.VITE_APPCHECK_DEBUG !== "true";
 if (import.meta.env.VITE_APPCHECK_DEBUG === "true") {
   // Vite only exposes VITE_* to the bundle; this global is read by the SDK.
   (window as unknown as Record<string, unknown>).FIREBASE_APPCHECK_DEBUG_TOKEN = true;

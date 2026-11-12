@@ -7,6 +7,10 @@
  * `postJournalEntry()` or a projection write was lost. Results are recorded
  * in `ledger_checkpoints`; drift additionally writes a `ledger_alerts` doc
  * and logs at ERROR severity so Cloud Monitoring can page on it.
+ *
+ * Each run also runs the activity monitor (activityMonitor.ts) over the last
+ * 24h. Drift says the books disagree with themselves; the monitor looks for
+ * balanced entries that should not exist, which drift can never show.
  */
 
 import * as admin from "firebase-admin";
@@ -14,6 +18,8 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import { JournalEntryDoc } from "./types";
 import { isUserAccount, userIdOf } from "./accounts";
 import { JOURNAL_COLLECTION, LEDGER_BALANCES_COLLECTION } from "./post";
+import { probeSpendIndex } from "../utils/limits";
+import { ActivityReport, runActivityMonitor } from "./activityMonitor";
 
 const BATCH_SIZE = 500;
 
@@ -72,8 +78,22 @@ async function replayJournal(db: FirebaseFirestore.Firestore): Promise<ReplayRes
   return { entryCount, balances, corruptEntries };
 }
 
-/** Full check, callable from the schedule or from tests/scripts. */
-export async function runInvariantCheck(): Promise<{ drifts: Drift[]; entryCount: number }> {
+/** Who started a run: the nightly schedule, or an admin from the console. */
+export interface RunMeta {
+  trigger: "schedule" | "manual";
+  triggeredBy?: string;
+}
+
+/** Full check, callable from the schedule, the admin ledger desk, or tests/scripts. */
+export async function runInvariantCheck(
+  meta: RunMeta = { trigger: "schedule" }
+): Promise<{
+  drifts: Drift[];
+  entryCount: number;
+  spendIndexOk: boolean;
+  activityFindingCount: number;
+  runId: string;
+}> {
   const db = admin.firestore();
   const { entryCount, balances, corruptEntries } = await replayJournal(db);
   const drifts: Drift[] = [];
@@ -172,35 +192,101 @@ export async function runInvariantCheck(): Promise<{ drifts: Drift[]; entryCount
     }
   });
 
+  // Drift is about money that already moved. This is about money that cannot
+  // move at all: the spend-limit query fails closed, so an index it cannot use
+  // blocks every outbound flow at once. Checking it here means the daily job
+  // pages ops, rather than a customer being the one to notice.
+  const spendIndex = await probeSpendIndex();
+
+  // A monitor failure must not cost us the reconciliation result above, so
+  // it is caught and recorded on the alert instead of thrown.
+  let activity: ActivityReport = { findings: [], entryCount: 0, truncated: false };
+  let activityError: string | undefined;
+  try {
+    activity = await runActivityMonitor();
+  } catch (err) {
+    activityError = (err as Error)?.message ?? String(err);
+  }
+  const findings = activity.findings;
+
   // Record the run.
   const now = admin.firestore.Timestamp.now();
   const runId = now.toDate().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+  const trigger = {
+    trigger: meta.trigger,
+    ...(meta.triggeredBy ? { triggeredBy: meta.triggeredBy } : {}),
+  };
   await db.collection("ledger_checkpoints").doc(runId).set({
     ranAt: now,
     entryCount,
     accountCount: balances.size,
     driftCount: drifts.length,
-    ok: drifts.length === 0,
+    spendIndexOk: spendIndex.ok,
+    ok: drifts.length === 0 && spendIndex.ok,
+    // Kept apart from `ok`: findings are leads for review, not broken books.
+    activityFindingCount: findings.length,
+    activityOk: !activityError,
+    ...trigger,
   });
 
-  if (drifts.length > 0) {
+  if (drifts.length > 0 || !spendIndex.ok || findings.length > 0 || activityError) {
     await db.collection("ledger_alerts").doc(runId).set({
+      ...trigger,
       ranAt: now,
       drifts: drifts.slice(0, 100),
       driftCount: drifts.length,
+      spendIndexOk: spendIndex.ok,
+      ...(spendIndex.error ? { spendIndexError: spendIndex.error } : {}),
+      activity: findings.slice(0, 100),
+      activityFindingCount: findings.length,
+      activityEntryCount: activity.entryCount,
+      activityTruncated: activity.truncated,
+      ...(activityError ? { activityError } : {}),
       acknowledged: false,
     });
+  }
+
+  if (findings.length > 0) {
+    console.error(
+      `SUSPICIOUS LEDGER ACTIVITY: ${findings.length} finding(s) in the last 24h ` +
+        `(${activity.entryCount} entries)`,
+      JSON.stringify(findings.slice(0, 20))
+    );
+  }
+
+  if (activityError) {
+    console.error("Activity monitor failed; reconciliation still recorded:", activityError);
+  }
+
+  if (drifts.length > 0) {
     console.error(
       `LEDGER DRIFT DETECTED: ${drifts.length} mismatch(es) across ${entryCount} entries`,
       JSON.stringify(drifts.slice(0, 20))
     );
-  } else {
+  }
+
+  if (!spendIndex.ok) {
+    console.error(
+      "SPEND LIMIT QUERY UNSERVABLE: every outbound flow (cash-out, QR payment, " +
+        "sendP2P, approvePaymentRequest, remittance, payroll) is failing closed. " +
+        "Check the transactions fromUserId/type/createdAt/amount composite index.",
+      spendIndex.error
+    );
+  }
+
+  if (drifts.length === 0 && spendIndex.ok) {
     console.log(
       `Ledger invariant check OK: ${entryCount} entries, ${balances.size} accounts, zero drift`
     );
   }
 
-  return { drifts, entryCount };
+  return {
+    drifts,
+    entryCount,
+    spendIndexOk: spendIndex.ok,
+    activityFindingCount: findings.length,
+    runId,
+  };
 }
 
 /** Daily at 03:00 Africa/Mogadishu (EAT — Hargeisa's timezone). */

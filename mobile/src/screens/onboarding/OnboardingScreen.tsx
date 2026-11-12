@@ -7,9 +7,9 @@ import {
   Easing,
   TouchableOpacity,
   Dimensions,
-  SafeAreaView,
   StatusBar,
 } from 'react-native';
+import { SafeAreaView } from '../../components/SafeAreaView';
 import Svg, { Circle, Rect, Path, Polygon } from 'react-native-svg';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 

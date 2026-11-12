@@ -14,23 +14,62 @@ service cloud.firestore {
     // Users collection. Docs are created by Cloud Functions (setupPin) and all
     // privileged fields (accountType, kycStatus, pinHash, limits, lockout
     // counters) are function-managed — clients may only touch profile fields.
+    // PIN hash, lockout counters and reset state (functions/src/auth/pinStore.ts).
+    // Only Cloud Functions touch these; the phone must never see the hash.
+    match /users/{userId}/private/{doc} {
+      allow read, write: if false;
+    }
+
+    // Face ID public keys and their one-time challenges (auth/biometricKeys.ts).
+    // Consent records (auth/acceptTerms.ts): readable by the owner, written
+    // only by the server.
+    match /users/{userId}/consents/{consentId} {
+      allow read: if isAuthenticated() && isOwner(userId);
+      allow write: if false;
+    }
+    // Approved phone-number changes and their history (auth/changePhone.ts).
+    match /phoneChanges/{uid} {
+      allow read, write: if false;
+    }
+    match /users/{userId}/phoneHistory/{entryId} {
+      allow read: if isAuthenticated() && isOwner(userId);
+      allow write: if false;
+    }
+    match /deviceRiskReports/{reportId} {
+      allow read, write: if false;
+    }
+    match /biometricKeys/{keyId} {
+      allow read, write: if false;
+    }
+    match /biometricChallenges/{challengeId} {
+      allow read, write: if false;
+    }
+
     match /users/{userId} {
       allow read: if isAuthenticated() && isOwner(userId);
       allow create: if false; // Created by setupPin Cloud Function only
+      // Merchants and agents can't rename themselves: customers check that
+      // name before paying, so it changes only through adminRenameMerchant.
       allow update: if isAuthenticated() && isOwner(userId) &&
                        request.resource.data.diff(resource.data).affectedKeys()
                          .hasOnly(['fullName', 'email', 'dateOfBirth', 'gender',
                                    'address', 'preferredLanguage',
                                    'notificationPreferences', 'lastLoginAt',
-                                   'updatedAt']);
+                                   'updatedAt']) &&
+                       (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['fullName']) ||
+                        !(resource.data.get('accountType', 'customer') in
+                          ['merchant', 'topup_agent', 'agent_merchant']));
       allow delete: if false; // Never allow user deletion from client
       
       // KYC subcollection. Read-only for the owner: submitKYC is the only
       // writer, and a client that could write here could stamp its own
       // submission `verified` or edit it after review.
+      // Server-only, reads included. The ID number here is what a PIN reset
+      // on an unknown phone asks for, and whoever is signed in on a stolen or
+      // SIM-swapped phone is the owner as far as rules can tell. Neither app
+      // reads it; the admin console goes through callables.
       match /kyc/{document=**} {
-        allow read: if isAuthenticated() && isOwner(userId);
-        allow write: if false;
+        allow read, write: if false;
       }
       
       // FCM push notification tokens
@@ -93,7 +132,10 @@ service cloud.firestore {
     // Merchant profiles
     match /merchantProfiles/{userId} {
       allow read: if isAuthenticated() && isOwner(userId);
-      allow write: if isAuthenticated() && isOwner(userId);
+      // Server-only. The business name here is what customers see when they
+      // pay, so it changes through registerMerchant, role approval or
+      // adminRenameMerchant, never a client. Neither app writes this doc.
+      allow write: if false;
     }
     
     // Notifications - users can read and mark as read their own notifications
@@ -161,11 +203,76 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Merchant payout requests. The merchant may watch their own — the app
+    // shows "requested" turning into "sent" — but every write goes through
+    // requestPayout / the payout desk, which post the matching ledger entry in
+    // the same transaction. A client write here would move money on its own.
+    match /payoutRequests/{payoutId} {
+      allow read: if isAuthenticated() && isOwner(resource.data.merchantId);
+      allow write: if false;
+    }
+
     // Trusted-device login credentials — server-only. These hold the bcrypt
     // hash of a device secret that can be exchanged (with the PIN) for a
     // session, so no client may read or write them under any circumstance.
     match /trustedDevices/{deviceId} {
       allow read, write: if false;
+    }
+
+    // Merchant Payments API (functions/src/api/). All server-only, reads
+    // included. Keys are stored as hashes but still name which merchant can
+    // raise charges; charges are read by customers through getApiCharge and
+    // by the hosted checkout through the public endpoint, never directly.
+    // Webhook endpoints hold signing secrets; deliveries and events carry
+    // merchants' order data. The default deny below covers these too — they
+    // are listed so nobody opens one up by accident.
+    match /merchant_api_keys/{keyId} {
+      allow read, write: if false;
+    }
+    match /api_charges/{chargeId} {
+      allow read, write: if false;
+    }
+    match /api_refunds/{refundId} {
+      allow read, write: if false;
+    }
+    match /api_idempotency/{recordId} {
+      allow read, write: if false;
+    }
+    match /api_rate_limits/{bucketId} {
+      allow read, write: if false;
+    }
+    match /api_events/{eventId} {
+      allow read, write: if false;
+    }
+    match /webhook_endpoints/{endpointId} {
+      allow read, write: if false;
+    }
+    match /webhook_deliveries/{deliveryId} {
+      allow read, write: if false;
+    }
+    // lookupRecipient's per-caller budget counters. Server-only, or a client
+    // could reset its own count.
+    match /recipient_lookups/{counterId} {
+      allow read, write: if false;
+    }
+    // Ops corrections. Server-only; the console reads them through callables.
+    match /adjustments/{adjustmentId} {
+      allow read, write: if false;
+    }
+    // Disputes: the raiser and the party it's against read their own, so the
+    // apps can follow the thread live. Every write is a callable (openDispute,
+    // postDisputeMessage, withdrawDispute, adminResolveDispute).
+    match /disputes/{disputeId} {
+      allow read: if isAuthenticated() && request.auth.uid in resource.data.participants;
+      allow write: if false;
+    }
+
+    // Minimum app versions (the apps' update gate). Public on purpose: the
+    // gate runs before sign-in, and the doc holds nothing but version levels
+    // and store links. Written from the console or a script, never a client.
+    match /config/app_client {
+      allow read: if true;
+      allow write: if false;
     }
 
     // Default deny all other access

@@ -97,6 +97,9 @@ export async function processPayment(
     return data.data;
   } catch (error: any) {
     logger.error('Process payment error:', error);
+    // Keep the callable's code and details: the screen explains some refusals
+    // (such as the pause after a PIN reset) from them.
+    if (error?.code) throw error;
     throw new Error(error.message || 'Payment failed');
   }
 }

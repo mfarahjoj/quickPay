@@ -1,16 +1,19 @@
-import React, { useState } from 'react';
-import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from '../../components/SafeAreaView';
 import { useTranslation } from 'react-i18next';
 import { PinKeypad } from '../../components/PinKeypad';
 import {
   loginWithPin,
   DeviceNotTrustedError,
   IncorrectPinError,
-  PinLockoutError,
+  PinLockoutError, pinLockoutMessage,
 } from '../../services/auth.service';
-import { markPinVerifiedThisInstall } from '../../hooks/usePinVerifiedThisInstall';
+import { getDeviceCredential } from '../../services/device.service';
+import { setPendingSetupPin } from '../../services/biometric.service';
+import { accountLine } from '../../services/accountLabel';
 import { logger } from '../../utils/logger';
-import { colors, typography, spacing } from '../../theme';
+import { typography, spacing, makeStyles } from '../../theme';
 
 interface Props {
   /** Fall back to the phone + SMS code flow. */
@@ -26,27 +29,40 @@ interface Props {
  * onComplete, because signing in is the completion.
  */
 export default function PinLoginScreen({ onUseCode, onBack }: Props) {
+  const styles = useStyles();
   const { t } = useTranslation();
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  // Whose account this phone signs in to. On a shared phone, someone else
+  // typing their own PIN here counts against the owner's lockout.
+  const [account, setAccount] = useState<string | null>(null);
+  const [wrongPins, setWrongPins] = useState(0);
+
+  useEffect(() => {
+    getDeviceCredential()
+      .then((cred) => setAccount(accountLine(cred?.label)))
+      .catch(() => undefined);
+  }, []);
 
   const handleComplete = async (submitted: string) => {
     if (loading) return;
     try {
       setLoading(true);
       setError('');
+      // Also marks the PIN checked on this install, before the session
+      // starts, so the navigator doesn't ask for it again.
       await loginWithPin(submitted);
-      // The PIN was just verified server-side, so satisfy the install-scoped
-      // flag too — signOut clears it, and without this the navigator would
-      // route straight to WelcomeBackScreen and ask for the same PIN again.
-      await markPinVerifiedThisInstall();
+      // Signing out clears Face ID; if they turn it back on next, it can use
+      // this PIN instead of asking for it a second time.
+      setPendingSetupPin(submitted);
       // Signed in — the navigator's auth gate swaps this screen out.
     } catch (err) {
       if (err instanceof PinLockoutError) {
-        setError(t('pin.lockedOut', { seconds: err.secondsLeft ?? 60 }));
+        setError(pinLockoutMessage(err, t));
       } else if (err instanceof IncorrectPinError) {
         setError(t('auth.pinLogin.invalidPin'));
+        setWrongPins((n) => n + 1);
       } else if (err instanceof DeviceNotTrustedError) {
         // The credential is gone or rejected; SMS is the only way through.
         setError(t('auth.pinLogin.deviceNotTrusted'));
@@ -71,16 +87,27 @@ export default function PinLoginScreen({ onUseCode, onBack }: Props) {
         }}
         onComplete={loading ? undefined : handleComplete}
         title={t('auth.pinLogin.title')}
-        subtitle={t('auth.pinLogin.subtitle')}
+        subtitle={
+          account
+            ? t('auth.pinLogin.subtitleFor', { account })
+            : t('auth.pinLogin.subtitle')
+        }
         error={error}
       />
       <View style={styles.footer}>
+        {wrongPins > 0 && account ? (
+          <Text style={styles.wrongAccountHint}>
+            {t('auth.pinLogin.wrongAccountHint', { account })}
+          </Text>
+        ) : null}
         <TouchableOpacity
           onPress={onUseCode}
-          style={styles.linkButton}
-          accessibilityLabel={t('auth.pinLogin.useCode')}
+          style={[styles.linkButton, wrongPins > 0 && styles.linkButtonProminent]}
+          accessibilityLabel={account ? t('auth.pinLogin.notYou') : t('auth.pinLogin.useCode')}
         >
-          <Text style={styles.linkText}>{t('auth.pinLogin.useCode')}</Text>
+          <Text style={styles.linkText}>
+            {account ? t('auth.pinLogin.notYou') : t('auth.pinLogin.useCode')}
+          </Text>
         </TouchableOpacity>
         {onBack && (
           <TouchableOpacity
@@ -96,10 +123,10 @@ export default function PinLoginScreen({ onUseCode, onBack }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   fullScreen: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   footer: {
     alignItems: 'center',
@@ -109,9 +136,22 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
     alignSelf: 'center',
   },
+  linkButtonProminent: {
+    paddingHorizontal: spacing.lg,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.ui.accentText,
+  },
+  wrongAccountHint: {
+    ...typography.body,
+    color: colors.ui.textDim,
+    textAlign: 'center',
+    paddingHorizontal: spacing.xl,
+    marginBottom: spacing.sm,
+  },
   linkText: {
     ...typography.bodySemibold,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
   },
   backLink: {
     alignItems: 'center',
@@ -119,6 +159,6 @@ const styles = StyleSheet.create({
   },
   backText: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
   },
-});
+}));

@@ -71,7 +71,30 @@ export interface Transaction {
   counterpartyPhone: string | null;
   refundedAt?: Date;
   refundOfTransactionId?: string;
+  /** Latest dispute raised on this transaction, by either side. */
+  disputeId?: string;
+  /** Cents refunded so far, across partial refunds. */
+  refundedCents?: number;
+  /** What the row really is (getTransactions derives it for older rows). */
+  kind?: TransactionKind;
 }
+
+export type TransactionKind =
+  | 'merchant_payment'
+  | 'online_payment'
+  | 'p2p'
+  | 'payroll'
+  | 'cash_in'
+  | 'cash_out'
+  | 'payout'
+  | 'refund'
+  | 'adjustment'
+  | 'referral'
+  | 'float'
+  | 'card_topup'
+  | 'mobile_money_topup'
+  | 'mobile_money_cashout'
+  | 'remittance';
 
 export type SummaryPeriod = 'today' | 'week' | 'month';
 
@@ -136,19 +159,4 @@ export interface CustomerLookupResult {
   phoneNumber: string;
   fullName: string;
   accountType: string;
-}
-
-export interface TopupRecord {
-  id: string;
-  userId: string;
-  agentId: string;
-  amount: number;
-  amountDollars: number;
-  currency: string;
-  paymentMethod: string;
-  reference: string;
-  status: string;
-  transactionId: string;
-  createdAt: Date;
-  completedAt?: Date;
 }

@@ -25,6 +25,20 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--prefix", "/Users/mahamedfarah/fpl-scout"],
       "port": 3000
+    },
+    {
+      "name": "merchant-metro",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start", "--prefix", "merchant-app", "--", "--port", "8081"],
+      "port": 8081,
+      "autoPort": false
+    },
+    {
+      "name": "customer-metro",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start", "--prefix", "mobile", "--", "--port", "8081"],
+      "port": 8081,
+      "autoPort": false
     }
   ]
 }

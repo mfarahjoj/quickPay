@@ -4,6 +4,7 @@ import { requireAuth } from "../utils/validation";
 import { ApiResponse, MerchantProfile } from "../types";
 
 export const getMerchantProfile = https.onCall(
+  { enforceAppCheck: true },
   async (
     request: https.CallableRequest
   ): Promise<ApiResponse<MerchantProfile>> => {

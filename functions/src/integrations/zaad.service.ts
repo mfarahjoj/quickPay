@@ -8,6 +8,7 @@
 
 import axios from "axios";
 import { generateSecureId } from "../utils/encryption";
+import { sandboxAllowedHere, SANDBOX_REFUSED } from "./sandboxGuard";
 
 const ZAAD_SANDBOX = (process.env.ZAAD_SANDBOX ?? "true") === "true";
 const ZAAD_API_URL = process.env.ZAAD_API_URL || "https://api.zaad.com/v1";
@@ -41,6 +42,7 @@ export async function initiateZaadPayment(
   request: ZaadPaymentRequest
 ): Promise<ZaadPaymentResponse> {
   if (ZAAD_SANDBOX) {
+    if (!sandboxAllowedHere()) return { success: false, error: SANDBOX_REFUSED };
     console.log(`[Zaad Sandbox] Payment: ${request.amount} cents to ${request.phoneNumber}`);
     return sandboxResponse(request.reference);
   }
@@ -82,6 +84,7 @@ export async function checkZaadPaymentStatus(
   transactionId: string
 ): Promise<ZaadPaymentResponse> {
   if (ZAAD_SANDBOX) {
+    if (!sandboxAllowedHere()) return { success: false, error: SANDBOX_REFUSED };
     return { success: true, transactionId, status: "completed" };
   }
 
@@ -112,6 +115,7 @@ export async function initiateZaadPayout(
   request: ZaadPaymentRequest
 ): Promise<ZaadPaymentResponse> {
   if (ZAAD_SANDBOX) {
+    if (!sandboxAllowedHere()) return { success: false, error: SANDBOX_REFUSED };
     console.log(`[Zaad Sandbox] Payout: ${request.amount} cents to ${request.phoneNumber}`);
     return sandboxResponse(request.reference);
   }

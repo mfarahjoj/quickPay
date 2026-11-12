@@ -126,6 +126,7 @@ export const mobileMoneyWebhook = https.onRequest(
 
           const txRecord: Transaction = {
             type: "topup",
+            kind: "mobile_money_topup",
             fromUserId: topupData.userId,
             toUserId: topupData.userId,
             participants: [topupData.userId],

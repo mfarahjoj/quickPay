@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<!--
+  Zapp Pay — Terms of Use
+  ────────────────────────────────────────────────────────────
+  BEFORE PUBLISHING, confirm these values are correct:
+    · Support email:  support@zapppay.so   (appears 2× below)
+    · Effective date: 15 October 2026      (appears 2× below)
+  Fee percentages are deliberately NOT stated here — rates live in
+  Firestore config/rates and are shown in-app before confirmation.
+  Content is derived from the actual flows in functions/src/.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Terms of Use — Zapp Pay</title>
+  <meta name="description" content="The terms that govern your use of the Zapp Pay and Zapp Pay Merchant apps, the Zapp Pay wallet, and the merchant payments API." />
+  <meta name="robots" content="index, follow" />
+  <link rel="stylesheet" href="/assets/legal.css" />
+</head>
+<body>
+<div class="wrap">
+
+  <header class="site-head">
+    <a class="logo" href="/">
+      <span class="logo-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M13.5 2 4 13.5h6.2L9.8 22 20 10.2h-6.6L13.5 2Z" fill="#fff"/>
+        </svg>
+      </span>
+      <span class="logo-name">Zapp Pay</span>
+    </a>
+    <nav class="nav">
+      <a href="/terms" aria-current="page">Terms</a>
+      <a href="/privacy">Privacy</a>
+      <a href="/support">Support</a>
+    </nav>
+  </header>
+
+  <div class="page-head">
+    <h1>Terms of Use</h1>
+    <p class="lede">
+      These terms are the agreement between you and Zapp Pay. They cover the
+      <strong>Zapp Pay</strong> app for customers, the <strong>Zapp Pay Merchant</strong> app
+      for businesses and agents, and the merchant payments API.
+      Please read them — they explain what you can expect from us and what we expect from you.
+    </p>
+    <div class="meta">
+      <span class="pill">Effective 15 October 2026</span>
+      <span class="pill">Applies to iOS, Android &amp; web</span>
+    </div>
+  </div>
+
+  <nav class="toc" aria-label="Contents">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#agreement">The agreement</a></li>
+      <li><a href="#eligibility">Who can use Zapp Pay</a></li>
+      <li><a href="#account">Your account and PIN</a></li>
+      <li><a href="#wallet">Your wallet</a></li>
+      <li><a href="#payments">Payments and transfers</a></li>
+      <li><a href="#fees">Fees</a></li>
+      <li><a href="#topups">Top-ups and agents</a></li>
+      <li><a href="#verification">Identity verification and limits</a></li>
+      <li><a href="#merchants">Additional terms for merchants</a></li>
+      <li><a href="#developers">Additional terms for API use</a></li>
+      <li><a href="#agents">Additional terms for agents</a></li>
+      <li><a href="#prohibited">What you must not do</a></li>
+      <li><a href="#suspension">Suspension and closure</a></li>
+      <li><a href="#liability">Our responsibility to you</a></li>
+      <li><a href="#availability">Service availability</a></li>
+      <li><a href="#ip">Our app and brand</a></li>
+      <li><a href="#changes">Changes to these terms</a></li>
+      <li><a href="#law">Governing law and disputes</a></li>
+      <li><a href="#contact">Contact us</a></li>
+    </ol>
+  </nav>
+
+  <section id="agreement">
+    <h2>1. The agreement</h2>
+    <p>
+      Zapp Pay is a mobile payments service operating in Somaliland. "Zapp Pay", "we",
+      "us" and "our" refer to the operator of the Zapp Pay and Zapp Pay Merchant
+      applications. Zapp Pay is currently an unregistered trading name; you can reach the
+      operator at the email address in section 19.
+    </p>
+    <p>
+      By creating an account you accept these terms.
+      If you do not accept them, do not use the service. Our
+      <a href="/privacy">Privacy Policy</a> explains how we handle your information and
+      forms part of this agreement.
+    </p>
+  </section>
+
+  <section id="eligibility">
+    <h2>2. Who can use Zapp Pay</h2>
+    <ul>
+      <li>You must be <strong>at least 18 years old</strong>.</li>
+      <li>You must register with a <strong>phone number you control</strong>. Your phone number is your account identity.</li>
+      <li>You may hold <strong>one account per phone number</strong>, and the information you give us must be accurate and kept up to date.</li>
+      <li>Merchant and agent accounts are <strong>reviewed and approved by us</strong> before they can operate. We may decline an application without giving a reason.</li>
+    </ul>
+  </section>
+
+  <section id="account">
+    <h2>3. Your account and PIN</h2>
+    <p>
+      Your 6-digit PIN authorises payments from your wallet. It is the key to your money,
+      and the responsibilities around it are yours:
+    </p>
+    <ul>
+      <li><strong>Keep your PIN secret.</strong> Never share it with anyone — including people claiming to work for Zapp Pay. Our staff will never ask for it.</li>
+      <li><strong>Anything approved with your PIN counts as approved by you.</strong> If you share your PIN or let someone use your unlocked phone, payments they make are treated as yours.</li>
+      <li><strong>Tell us immediately</strong> if you believe someone else knows your PIN or has used your account. Change your PIN in the app and contact <a href="/support">support</a>.</li>
+      <li>Repeated wrong PIN entries temporarily lock PIN entry. After you reset your PIN, outgoing payments may be <strong>paused for a security period</strong> (with a small spending allowance so you are not stranded). This protects you if someone takes over your phone number.</li>
+    </ul>
+    <div class="callout">
+      <p>
+        <strong>Your phone number receives your verification codes.</strong> If your phone or
+        SIM is lost or stolen, tell your mobile provider to block the SIM, then contact us.
+      </p>
+    </div>
+  </section>
+
+  <section id="wallet">
+    <h2>4. Your wallet</h2>
+    <ul>
+      <li>Your wallet holds <strong>US dollars</strong>. Balances are stored value in our ledger — your wallet is <strong>not a bank account</strong>, it earns no interest, and it is not covered by any deposit insurance scheme.</li>
+      <li>Every movement of money is recorded as a balanced double-entry ledger record. Your balance in the app reflects those records.</li>
+      <li>If an obvious error credits your wallet with money that is not yours — a duplicate, a mistake, a technical fault — <strong>we may reverse it</strong> with a correcting entry. We will tell you when this happens.</li>
+      <li>You can spend, send or cash out your balance at any time the service is available, subject to the limits in section 8.</li>
+    </ul>
+  </section>
+
+  <section id="payments">
+    <h2>5. Payments and transfers</h2>
+    <ul>
+      <li><strong>Check before you confirm.</strong> The app shows the recipient and the amount before you enter your PIN. Once you approve a payment, it settles immediately.</li>
+      <li><strong>Payments are final.</strong> A completed payment or transfer cannot be cancelled. If you paid the wrong person or the wrong amount, contact the recipient first; if you believe you are the victim of fraud, contact us and we will investigate, but we cannot guarantee recovery.</li>
+      <li><strong>Merchant payment requests expire quickly</strong> — if you don't approve in time, the request lapses and nothing is charged. Ask the merchant to raise it again.</li>
+      <li><strong>Refunds for purchases come from the merchant.</strong> If you have a problem with goods or services you paid for, resolve it with the merchant — they can refund you in full or in part through their app. Zapp Pay moves the money; the sale itself is between you and the merchant.</li>
+      <li>We may <strong>delay, decline or block</strong> a transaction where we suspect fraud, where it would breach a limit, or where we are required to.</li>
+    </ul>
+  </section>
+
+  <section id="fees">
+    <h2>6. Fees</h2>
+    <ul>
+      <li><strong>Personal accounts:</strong> downloading the app, holding a wallet, paying merchants and sending money to other Zapp Pay users are currently free of charge to you.</li>
+      <li><strong>Merchants</strong> pay a service fee on each payment they receive, deducted automatically from the amount before it is credited. The current rate is always shown in the Merchant app.</li>
+      <li>Fees may change. If a fee that affects you is introduced or increased, we will give you notice in the app before it takes effect — continuing to use the service after that means you accept the new fee. The fee applied to any transaction is always visible on its record.</li>
+    </ul>
+  </section>
+
+  <section id="topups">
+    <h2>7. Top-ups and agents</h2>
+    <ul>
+      <li>You can load your wallet by handing cash to an <strong>authorised Zapp Pay agent</strong>. Confirm the amount shown in your app before you leave — the top-up appears in your balance immediately.</li>
+      <li>Agents are independent businesses authorised to process top-ups. The cash transaction at the counter is between you and the agent; the wallet credit is performed by our system and backed by float the agent has pre-purchased.</li>
+      <li>Never hand cash to anyone who cannot show a confirmed top-up in your app. If the balance does not appear on the spot, do not leave the cash.</li>
+    </ul>
+  </section>
+
+  <section id="verification">
+    <h2>8. Identity verification and limits</h2>
+    <ul>
+      <li>Accounts have <strong>transaction limits that depend on your verification tier</strong>. A basic account registered with just a phone number has lower per-transaction caps; verifying your identity with an ID document raises them.</li>
+      <li>We also apply <strong>velocity limits</strong> — caps on how much and how often money can move in a period — to protect you and the system from fraud. A payment that would breach a limit is declined with an explanation.</li>
+      <li>We may ask you to verify or re-verify your identity before processing a transaction, and we may hold or decline transactions until verification is complete.</li>
+    </ul>
+  </section>
+
+  <section id="merchants">
+    <h2>9. Additional terms for merchants</h2>
+    <p>These apply to you if you operate a Zapp Pay Merchant account, in addition to everything above.</p>
+    <ul>
+      <li><strong>Accurate business information.</strong> Your business name and details shown to customers must be truthful and kept current. Your account is reviewed before activation and may be re-reviewed at any time.</li>
+      <li><strong>You absorb the service fee.</strong> The fee is deducted from each payment before it is credited to your wallet. You must not add a surcharge for customers paying with Zapp Pay unless the law expressly allows it.</li>
+      <li><strong>Settlement is instant, to your wallet.</strong> Payments credit your merchant wallet immediately when the customer approves. What you do with the balance — cash out, spend, hold — is up to you.</li>
+      <li><strong>Refunds are your obligation to manage.</strong> Where a customer is entitled to a refund, issue it through the app (full or partial) rather than in cash, so both sides keep a clean record.</li>
+      <li><strong>You are responsible for what you sell.</strong> Zapp Pay processes the payment; it is not a party to the sale, and we give no warranty for your goods or services. You must not use Zapp Pay for any of the activities in section 12.</li>
+      <li><strong>Receipts and disputes.</strong> Keep your own records of orders. When we investigate a disputed payment we may ask for them, and you agree to cooperate.</li>
+    </ul>
+  </section>
+
+  <section id="developers">
+    <h2>10. Additional terms for API use</h2>
+    <p>These apply if you use the merchant payments API, the hosted checkout, or webhooks.</p>
+    <ul>
+      <li><strong>API keys are secrets.</strong> Live keys are created in the Merchant app with your PIN, shown once, and must be stored server-side. Never embed a key in a website, mobile app or public repository. If a key may have leaked, revoke it immediately in the app — anything done with your key before revocation counts as done by you.</li>
+      <li><strong>Test mode moves no money.</strong> Test keys exist so you can build and verify your integration. Do not present test-mode charges to real customers as real payments.</li>
+      <li><strong>Use idempotency keys as documented</strong>, so that network retries never create duplicate charges or refunds.</li>
+      <li><strong>Verify webhook signatures</strong> before acting on webhook events.</li>
+      <li><strong>Rate limits apply</strong> per key. Integrations that abuse the API, probe for vulnerabilities, or disrupt the service may have keys revoked and the account suspended.</li>
+      <li>We may change the API with notice, and may make breaking changes immediately where needed for security.</li>
+    </ul>
+  </section>
+
+  <section id="agents">
+    <h2>11. Additional terms for agents</h2>
+    <ul>
+      <li>Agents operate on <strong>pre-purchased float</strong>: every top-up you process for a customer is backed by, and deducted from, float you have already paid for. You cannot create wallet value you have not funded.</li>
+      <li>You earn <strong>commission on each top-up</strong>, credited automatically at the rate shown in your app.</li>
+      <li>You must <strong>count the customer's cash before confirming</strong> a top-up. A confirmed top-up moves your float immediately and cannot be reversed by you.</li>
+      <li>You must not charge customers any fee of your own for a Zapp Pay top-up, and you must not use your agent account to disguise transfers, split transactions to evade limits, or serve customers you know to be acting fraudulently.</li>
+      <li>Float purchases and agent status are subject to our approval processes, and we may suspend an agent account during any investigation.</li>
+    </ul>
+  </section>
+
+  <section id="prohibited">
+    <h2>12. What you must not do</h2>
+    <p>You must not use Zapp Pay, directly or indirectly, to:</p>
+    <ul>
+      <li>do anything unlawful, including money laundering, financing terrorism, fraud, or handling stolen funds;</li>
+      <li>buy or sell illegal goods or services;</li>
+      <li>deceive another user — including impersonation, fake payment confirmations, or misrepresenting what you are selling;</li>
+      <li>evade our limits or checks — including splitting transactions, operating multiple accounts, or using another person's account or verification;</li>
+      <li>interfere with the service — including reverse engineering the apps, probing or attacking our systems, scraping, or using the service through anything other than our apps, our web pages and the documented API;</li>
+      <li>let anyone else use your account, or use an account that is not yours.</li>
+    </ul>
+    <p>We may report unlawful activity, and the information connected to it, to the relevant authorities.</p>
+  </section>
+
+  <section id="suspension">
+    <h2>13. Suspension and closure</h2>
+    <h3>By you</h3>
+    <p>
+      You can stop using Zapp Pay at any time and delete your account from inside the app
+      once your balance is zero — see the <a href="/privacy#delete">privacy policy</a> for
+      how deletion works.
+    </p>
+    <h3>By us</h3>
+    <ul>
+      <li>We may <strong>suspend</strong> your account, or particular transactions, while we investigate suspected fraud, a breach of these terms, or a security concern. We will restore access as soon as the concern is resolved.</li>
+      <li>We may <strong>close</strong> your account for a serious or repeated breach of these terms. Unless the law prevents us, we will tell you why, and your remaining balance will be returned to you after any lawful deductions — it is your money.</li>
+      <li>Where the law requires us to freeze funds or act on an order from a competent authority, we must comply.</li>
+    </ul>
+  </section>
+
+  <section id="liability">
+    <h2>14. Our responsibility to you</h2>
+    <ul>
+      <li><strong>What we are responsible for:</strong> processing transactions you properly authorise, maintaining accurate ledger records of your balance, and correcting any error caused by our system — including restoring money lost through a fault of ours.</li>
+      <li><strong>What we are not responsible for:</strong> losses caused by you sharing your PIN or device; payments you approved to the wrong person or for the wrong amount; the quality, delivery or legality of goods and services you buy from merchants; losses caused by your mobile network, your device, or events outside our reasonable control; and indirect losses such as lost profits.</li>
+      <li>Nothing in these terms removes rights that the applicable law does not allow to be excluded, and nothing limits our liability for our own fraud.</li>
+    </ul>
+  </section>
+
+  <section id="availability">
+    <h2>15. Service availability</h2>
+    <p>
+      We work to keep Zapp Pay available around the clock, but no service is perfect: there
+      may be interruptions for maintenance, failures of networks and infrastructure we do
+      not control, or outages we have to fix. The service is provided "as is", and we do not
+      guarantee uninterrupted availability. Your balance is held in our ledger and is not
+      affected by an outage — when service resumes, your money is where you left it.
+    </p>
+  </section>
+
+  <section id="ip">
+    <h2>16. Our app and brand</h2>
+    <p>
+      The Zapp Pay apps, this website, our logo and our name belong to us. We grant you a
+      personal, non-transferable licence to use the apps for their intended purpose. You may
+      not copy, modify, resell or redistribute them, and merchants may use the Zapp Pay name
+      and logo only to indicate that they accept Zapp Pay.
+    </p>
+  </section>
+
+  <section id="changes">
+    <h2>17. Changes to these terms</h2>
+    <p>
+      We may update these terms as the service evolves. When we do, we will revise the
+      effective date at the top of this page, and for significant changes we will notify you
+      in the app before they take effect. If you do not accept a change, stop using the
+      service and close your account; continuing to use Zapp Pay after a change takes effect
+      means you accept it.
+    </p>
+  </section>
+
+  <section id="law">
+    <h2>18. Governing law and disputes</h2>
+    <p>
+      These terms are governed by the laws applicable in <strong>Somaliland</strong>. If you
+      have a dispute with us, contact us first — most problems are resolved by our support
+      team quickly and without formality. If we cannot resolve it between us, the dispute
+      may be brought before the competent courts of Somaliland.
+    </p>
+  </section>
+
+  <section id="contact">
+    <h2>19. Contact us</h2>
+    <div class="card contact-block">
+      <p class="card-label">Questions about these terms</p>
+      <a class="email" href="mailto:support@zapppay.so">support@zapppay.so</a>
+      <p>We aim to respond within 2 business days.</p>
+    </div>
+  </section>
+
+  <footer class="site-foot">
+    <p>© 2026 Zapp Pay · Hargeisa, Somaliland</p>
+    <nav>
+      <a href="/terms">Terms of Use</a>
+      <a href="/privacy">Privacy Policy</a>
+      <a href="/support">Support</a>
+    </nav>
+  </footer>
+
+</div>
+</body>
+</html>

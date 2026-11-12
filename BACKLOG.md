@@ -91,8 +91,30 @@ first. Verified open as of 2026-08-05.
   path where a stub's return value leads to a journal entry.
   *Done when:* no sandbox stub can cause a credit, and each is covered by a
   test that fails if the guard is removed.
+  *2026-09-18, found during the two-week GTM readiness review:* the audit this
+  item asked for turned up two more paths, both of which were live in prod and
+  reachable from the customer app's top-up and remittance screens:
+  `topupFromMobileMoney` (no App Check; Zaad/eDahab stub "success" →
+  `float:{provider}` debit, user credit) and `completeRemittance` (no App
+  Check; takes `paymentIntentId` from the client and never matches it against
+  the remittance's stored intent or amount, while the Stripe stub answers
+  "succeeded" for any id). `cashOutToMobileMoney` is the mirror: real wallet
+  debit, no payout. All four were **deleted from prod** on Mahamed's explicit
+  authorization and their exports removed from `index.ts` so a full redeploy
+  cannot resurrect them; `mobileMoneyWebhook` stays, since it rejects anything
+  unsigned. Not yet done: checking prod `journal_entries` for existing
+  `mmtopup_` / `remit_` ids (needs console access), and the guard-plus-test
+  this item actually asks for.
+  *2026-10-17:* guard-plus-test committed on `fix/wallet-phase1`, deployed
+  2026-10-18 from `fadb515`. Every Zaad, eDahab and Stripe stub now refuses in a deployed
+  function (`integrations/sandboxGuard.ts`, keyed on `K_SERVICE` without
+  `FUNCTIONS_EMULATOR`). `sandboxGuard.test.ts` fails if a guard is removed,
+  and also if `index.ts` exports a module that imports a stub without an
+  allow-listed reason (only `stripeWebhook`). Both were checked by removing
+  a guard and re-exporting `topupFromMobileMoney`. Left open only for the
+  prod `journal_entries` check above, which needs console access.
 
-- [ ] **4. Refund happy-path test.**
+- [x] **4. Refund happy-path test.** *(committed 2026-10-17, `refundPayment.test.ts`)*
   `refundPayment` has no test covering a successful refund — only rejection
   paths exist elsewhere. Cover the reversal amounts (merchant net, platform
   fee, customer gross), the `refundedAt` idempotency guard, and that a second
@@ -127,6 +149,16 @@ first. Verified open as of 2026-08-05.
   *Done when:* `docs` (or root) holds a runbook someone could follow under
   pressure, and any automatable part is committed.
 
+- [ ] **8. Localise the merchant app's remaining server errors.**
+  Added 2026-09-26. The agent confirm, payout and payroll screens now map
+  failures through `pinActionErrorKey` in `merchant-app/src/utils/errors.ts`,
+  (and, since 2026-09-26, charge), but manual top-up (`TopupCustomerScreen`),
+  refund (`TransactionDetailScreen`), scan (`ScanCustomerScreen`) and login/OTP
+  still show `e.message` first — English server text, including "Invalid agent PIN" and
+  "Invalid PIN" on the two PIN-gated ones.
+  *Done when:* none of those screens can show a raw server message, and a wrong
+  PIN on top-up or refund goes back to the keypad instead of failing the flow.
+
 ---
 
 ## Not for a loop — these need Mahamed
@@ -150,8 +182,37 @@ Listed so nothing tries to fake progress on them:
   class this catches — a config value present nowhere, invisible until a real
   user hits the feature. It sat broken in prod undetected.
 
-- **Test build 8 of the merchant app.** Uploaded 2026-08-15 with the reworked
-  receive screen (live confirmation, counter code, hardening). The UI shipped
-  without anyone driving it — the simulator session was signed out and signing
-  in needs a phone number and OTP. Worth walking amount → QR → pay → paid state
-  and checking the gross/fee/net split before pilot merchants see it.
+- **Test merchant build 10 and customer build 58.** Uploaded 2026-09-26 (after
+  9 and 57 the same day), with every backend change they need deployed first:
+  payouts, agent PIN, retry-safe `payMerchant`, and the charge safety work
+  (90-second window, `cancelPaymentRequest`, one charge per scan). Both apps
+  were only booted on a simulator to the signed-out welcome screen; nothing
+  behind sign-in has been driven, since that needs a phone number and OTP.
+  Worth walking, on two devices:
+  charge — scan a customer and let it run out (Expired at 90s); charge again
+  and Cancel (the customer's approve screen should flip to "Request
+  cancelled"); charge and back out mid-wait (should ask "Cancel this
+  charge?"); charge and approve;
+  merchant — Get paid (request → the admin payout desk → "Sent" with the
+  reference), confirm top-up and cash-out with a wrong PIN first (back to the
+  keypad with the code kept), a two-person payroll, the counter-code feed, the
+  receive flow, and back/swipe on every screen;
+  customer — sign out and log back in with the PIN (needs the grant below),
+  and a sticker payment;
+  PIN reset (customer build 59, backend deployed 2026-09-27) — on the usual
+  phone, Forgot PIN → SMS → new PIN should work and then refuse a transfer
+  for 24 hours while a small shop payment still goes through; on a fresh
+  install it should ask for the last 4 of the ID (or send an unverified
+  customer to an agent). Build 58 can't complete a reset any more.
+  Merchant build 8 can no longer confirm agent top-ups or cash-outs (the
+  backend requires the PIN it never sends), and merchant 9 keeps spinning
+  when a charge expires, since only build 10 counts down.
+- **Let the functions mint sign-in tokens.** `loginWithPin` (trusted-device PIN
+  login, first shipped in customer build 57) calls `createCustomToken`, which
+  signs through IAM as `76440907220-compute@developer.gserviceaccount.com`. That
+  account only has `roles/editor`, which does not include
+  `iam.serviceAccounts.signBlob` (checked 2026-09-26), so every PIN login fails
+  after the PIN is accepted and the customer has to fall back to an SMS code.
+  Fix: Cloud Console → IAM & Admin → Service Accounts → that account →
+  Principals with access → Grant access → the same account as principal, role
+  *Service Account Token Creator*. The IAM Credentials API is already enabled.

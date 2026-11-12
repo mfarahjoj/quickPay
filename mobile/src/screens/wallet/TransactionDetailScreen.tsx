@@ -2,9 +2,10 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Share, TouchableOpacity } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Header, Button, Card } from '../../components';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles } from '../../theme';
 import { CURRENCY_SYMBOL } from '../../config/constants';
 import { Transaction } from '../../types';
+import { useAuth } from '../../hooks/useAuth';
 
 interface Props {
   navigation: any;
@@ -12,8 +13,10 @@ interface Props {
 }
 
 export default function TransactionDetailScreen({ navigation, route }: Props) {
+  const styles = useStyles();
   const { t } = useTranslation();
   const transaction = route.params?.transaction;
+  const { user } = useAuth();
 
   if (!transaction) {
     return (
@@ -44,6 +47,13 @@ export default function TransactionDetailScreen({ navigation, route }: Props) {
     await Share.share({ message: receiptText, title: t('wallet.detail.receiptTitle') });
   };
 
+  // A disputed transaction carries its dispute's id. Other people's disputes
+  // on it aren't readable here, so RaiseDispute checks with the server first.
+  const openHelp = () =>
+    transaction.disputeId?.endsWith(`_${user?.uid}`)
+      ? navigation.navigate('DisputeDetail', { disputeId: transaction.disputeId })
+      : navigation.navigate('RaiseDispute', { transactionId: transaction.id });
+
   const statusLabel =
     transaction.status === 'completed'
       ? t('transaction.status.completed')
@@ -73,6 +83,9 @@ export default function TransactionDetailScreen({ navigation, route }: Props) {
             {transaction.amount.toFixed(2)}
           </Text>
           <Text style={styles.status}>{statusLabel}</Text>
+          {transaction.refundedAt ? (
+            <Text style={styles.refunded}>{t('wallet.detail.refunded')}</Text>
+          ) : null}
           <Text style={styles.currency}>{transaction.currency}</Text>
         </Card>
 
@@ -89,6 +102,12 @@ export default function TransactionDetailScreen({ navigation, route }: Props) {
             </Text>
             <Text style={styles.detailValue}>{transaction.description}</Text>
           </View>
+          {transaction.kind ? (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailKey}>{t('wallet.detail.type')}</Text>
+              <Text style={styles.detailValue}>{t(`wallet.kind.${transaction.kind}`, transaction.kind)}</Text>
+            </View>
+          ) : null}
           <View style={styles.detailRow}>
             <Text style={styles.detailKey}>{t('wallet.detail.paymentMethod')}</Text>
             <Text style={styles.detailValue}>{t('wallet.detail.walletBalance')}</Text>
@@ -120,15 +139,23 @@ export default function TransactionDetailScreen({ navigation, route }: Props) {
           fullWidth
           style={styles.shareButton}
         />
+
+        {/* Disputes: open the existing one, or raise one. */}
+        <TouchableOpacity style={styles.helpRow} onPress={openHelp} activeOpacity={0.7}>
+          <Text style={styles.helpText}>
+            {transaction.disputeId ? t('wallet.detail.viewDispute') : t('wallet.detail.getHelp')}
+          </Text>
+          <Text style={styles.helpArrow}>›</Text>
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   scroll: {
     flex: 1,
@@ -177,6 +204,30 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.text.muted,
   },
+  refunded: {
+    ...typography.captionBold,
+    color: colors.ui.incoming,
+    marginBottom: spacing.xs,
+  },
+  helpRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.lg,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.ui.glass,
+    borderWidth: 1,
+    borderColor: colors.ui.glassBorder,
+  },
+  helpText: {
+    ...typography.bodySemibold,
+    color: colors.ui.text,
+  },
+  helpArrow: {
+    ...typography.bodySemibold,
+    color: colors.ui.textDim,
+  },
   detailsCard: {
     marginBottom: spacing.lg,
   },
@@ -202,4 +253,4 @@ const styles = StyleSheet.create({
   shareButton: {
     marginTop: spacing.md,
   },
-});
+}));

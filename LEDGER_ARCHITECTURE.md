@@ -134,6 +134,7 @@ accounts keep using `FieldValue.increment` (no read-contention).
 ### 3.4 Rail adapters — how money enters, moves, and leaves
 
 Every product flow is a journal entry template. The rails differ; the ledger doesn't.
+Agent cash-in and cash-out, with guards and threat model: `CASH_IN_CASH_OUT.md`.
 
 | Flow | Debit | Credit |
 |---|---|---|
@@ -143,7 +144,11 @@ Every product flow is a journal entry template. The rails differ; the ledger doe
 | P2P (`sendP2P`) / payroll | `user:{sender}` | `user:{recipient}` |
 | QR payment against balance (`processPayment`, `payMerchant`, `approvePayment`) | `user:{customer}` | `user:{merchant}` (net) + `platform:fees` (fee) |
 | Refund | `user:{merchant}` (net) + `platform:fees` (fee) | `user:{customer}` |
-| Agent cash-out (`agentConfirmCashOut`, `customerCashOut`) | `user:{customer}` | `user:{agent}` |
+| Online / API payment (`approveApiCharge`, type `online_payment`, entry `apicharge_{chargeId}`) | `user:{customer}` | `user:{merchant}` (net) + `platform:fees` (fee at `onlinePaymentFeeRate`) |
+| API refund, full or partial (`POST /v1/charges/{id}/refunds`, entry `refund_apicharge_{chargeId}_{n}`) | `user:{merchant}` (share of net) + `platform:fees` (share of fee, rounded on the running total so the parts sum to the fee) | `user:{customer}` |
+| Cash-out hold (`customerCashOut`, entry `cashouthold_{id}`) | `user:{customer}` | `platform:cashout_hold` |
+| Cash-out settle (`agentConfirmCashOut`, entry `cashout_{id}`) | `platform:cashout_hold` | `user:{agent}` |
+| Cash-out release: cancel, expiry, 5 wrong codes, replaced (`cashoutrelease_{id}`) | `platform:cashout_hold` | `user:{customer}` |
 | Referral bonus (`setupPin`) | `platform:promo` | `user:{customer}` |
 | **No-custody QR→USSD dial** (V1 merchant QR) | `external:clearing` | `external:clearing` |
 | **[Post-license] wallet top-up from trust account** | `float:trust` | `user:{customer}` |
@@ -160,6 +165,24 @@ receipts, and history render from the same journal either way.
   every account balance, compare against cached projections and against the accounting
   equation. Any drift → alert + freeze flag. This is the "balances are derived"
   discipline from §2 applied to Firestore.
+- **Spend-index probe** (same job, plus live on every `adminGetLedgerHealth`): run the
+  spend-limit aggregation and record `spendIndexOk` on the checkpoint. Drift is about
+  money already misrecorded; this is about money that cannot move at all. The limits
+  check in front of every outbound flow fails closed — correctly, since a cap that
+  opens up during an outage is not a cap — so a composite index that stops covering
+  its query takes down cash-out, QR payment, P2P, remittance and payroll at once.
+  A missing `amount` field did exactly that, and a customer noticed first.
+- **Activity monitor** (same job, `ledger/activityMonitor.ts`): reads the last 24h of the
+  journal for balanced entries that should not exist, which drift can never show. The
+  self top-up bug posted valid, zero-sum entries that paid commission from
+  `platform:fees` on value that never left the agent; the invariant job stayed green
+  throughout. Rules: `self_dealing` (one entry debits and credits a wallet and leaves
+  it up), `agent_commission` (an account's commission over a daily threshold),
+  `round_trip` (agent cashes a customer in and value comes back to the same agent the
+  same day, including via a held cash-out), `fees_net` (`platform:fees` net below a
+  floor). Thresholds are in Firestore `config/monitor` (defaults in code). Findings go
+  on the run's `ledger_alerts` doc and the Ledger Desk; they are leads, never automatic
+  reversals.
 - **External reconciliation**: `float:bank` vs actual bank/Stripe balance;
   `float:agents` vs agent float attestations. Mismatches become explicit `adjustment`
   entries with an audit trail — never silent edits.

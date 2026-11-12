@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { TERMS_URL, PRIVACY_URL } from '../../utils/legal';
 import {
   View,
   Text,
@@ -51,8 +52,6 @@ const COUNTRIES: Country[] = [
   },
 ];
 
-const TERMS_URL = 'https://quickpay.app/terms';
-const PRIVACY_URL = 'https://quickpay.app/privacy';
 
 export default function LoginScreen({ navigation }: Props) {
   const { t } = useTranslation();
@@ -232,7 +231,7 @@ export default function LoginScreen({ navigation }: Props) {
               disabled={!isValid || loading}
             >
               <Text style={[styles.ctaText, (!isValid || loading) && styles.ctaTextDisabled]}>
-                {loading ? 'Sending…' : 'Continue'}
+                {loading ? t('auth.otp.resending') : t('auth.login.continue')}
               </Text>
             </TouchableOpacity>
 
@@ -256,7 +255,7 @@ export default function LoginScreen({ navigation }: Props) {
         onClose={() => setShowCountryPicker(false)}
         height="40%"
       >
-        <Text style={styles.sheetTitle}>Select country</Text>
+        <Text style={styles.sheetTitle}>{t('auth.login.selectCountry')}</Text>
         <FlatList
           data={COUNTRIES}
           keyExtractor={(item) => item.code}

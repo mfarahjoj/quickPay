@@ -12,14 +12,15 @@ import { BiometryTypes } from 'react-native-biometrics';
 import { Header } from '../../components/Header';
 import { Button } from '../../components/Button';
 import { PinInput } from '../../components/PinInput';
-import { colors, typography, spacing } from '../../theme';
-import { validatePin, PinLockoutError } from '../../services/auth.service';
+import { typography, spacing, makeStyles, useColors } from '../../theme';
+import { validatePin, PinLockoutError, pinLockoutMessage, adoptSessionToken } from '../../services/auth.service';
 import { functions } from '../../services/firebase.config';
+import { isWeakPin } from '../../components/auth/CodeInput';
 import {
   isBiometricEnabled,
   setBiometricEnabled,
-  clearPinFromKeychain,
-  storePinInKeychain,
+  disableBiometricKey,
+  enableBiometricKey,
   isBiometricAvailable,
 } from '../../services/biometric.service';
 
@@ -34,6 +35,8 @@ function getBiometricLabelKey(biometryType?: string): string {
 }
 
 export default function SecurityScreen({ navigation }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const [changingPin, setChangingPin] = useState(false);
   const [currentPin, setCurrentPin] = useState('');
@@ -45,6 +48,10 @@ export default function SecurityScreen({ navigation }: Props) {
   const [biometryType, setBiometryType] = useState<string | undefined>();
   const [showBiometricPin, setShowBiometricPin] = useState(false);
   const [biometricPin, setBiometricPin] = useState('');
+  // Freeze my account: confirm, then PIN.
+  const [freezing, setFreezing] = useState(false);
+  const [freezePin, setFreezePin] = useState('');
+  const [frozenNow, setFrozenNow] = useState(false);
 
   const biometricLabel = useMemo(
     () => t(getBiometricLabelKey(biometryType)),
@@ -61,6 +68,39 @@ export default function SecurityScreen({ navigation }: Props) {
     );
   }, []);
 
+  /**
+   * Stop all money leaving the account until support reactivates it. For a
+   * lost phone or a payment the customer doesn't recognise. Receiving still
+   * works, so nothing in flight is stranded.
+   */
+  const confirmFreeze = () =>
+    Alert.alert(t('profile.security.freezeConfirmTitle'), t('profile.security.freezeConfirmMessage'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('profile.security.freeze'), style: 'destructive', onPress: () => setFreezing(true) },
+    ]);
+
+  const handleFreeze = async () => {
+    if (freezePin.length !== 6) return;
+    setLoading(true);
+    try {
+      const result = await functions().httpsCallable('freezeMyAccount')({ pin: freezePin });
+      await adoptSessionToken(result.data);
+      setFreezing(false);
+      setFrozenNow(true);
+      Alert.alert(t('profile.security.frozenTitle'), t('profile.security.frozenMessage'));
+    } catch (err: any) {
+      Alert.alert(
+        t('common.error'),
+        err?.code === 'functions/permission-denied'
+          ? t('profile.security.pinIncorrect')
+          : t('profile.security.freezeFailed')
+      );
+    } finally {
+      setFreezePin('');
+      setLoading(false);
+    }
+  };
+
   const handleBiometricDisable = () => {
     Alert.alert(
       t('profile.security.disableBiometricTitle', { label: biometricLabel }),
@@ -71,7 +111,7 @@ export default function SecurityScreen({ navigation }: Props) {
           text: t('common.disable'),
           style: 'destructive',
           onPress: async () => {
-            await clearPinFromKeychain();
+            await disableBiometricKey();
             await setBiometricEnabled(false);
             setBiometricEnabledState(false);
           },
@@ -93,14 +133,14 @@ export default function SecurityScreen({ navigation }: Props) {
         setLoading(false);
         return;
       }
-      await storePinInKeychain(biometricPin);
+      await enableBiometricKey(biometricPin);
       await setBiometricEnabled(true);
       setBiometricEnabledState(true);
       setShowBiometricPin(false);
       setBiometricPin('');
     } catch (err: any) {
       if (err instanceof PinLockoutError) {
-        Alert.alert(t('common.error'), t('pin.lockedOut', { seconds: err.secondsLeft ?? 60 }));
+        Alert.alert(t('common.error'), pinLockoutMessage(err, t));
       } else {
         Alert.alert(t('common.error'), err.message ?? t('profile.security.failedEnableBiometrics'));
       }
@@ -122,6 +162,10 @@ export default function SecurityScreen({ navigation }: Props) {
       Alert.alert(t('common.error'), t('profile.security.pinMustDiffer'));
       return;
     }
+    if (isWeakPin(newPin)) {
+      Alert.alert(t('common.error'), t('auth.setupPin.weakPin'));
+      return;
+    }
 
     try {
       setLoading(true);
@@ -140,6 +184,7 @@ export default function SecurityScreen({ navigation }: Props) {
         });
         const data = result.data as { success?: boolean; error?: string };
         if (data.success !== false) {
+          await adoptSessionToken(data);
           Alert.alert(t('common.success'), t('profile.security.pinChangeSuccess'));
           setChangingPin(false);
           setCurrentPin('');
@@ -150,7 +195,9 @@ export default function SecurityScreen({ navigation }: Props) {
         }
       } catch (innerErr: any) {
         const code = innerErr?.code;
-        if (code === 'functions/not-found' || code === 'functions/unimplemented') {
+        if (innerErr?.details?.reason === 'weak_pin') {
+          Alert.alert(t('common.error'), t('auth.setupPin.weakPin'));
+        } else if (code === 'functions/not-found' || code === 'functions/unimplemented') {
           Alert.alert(
             t('common.comingSoon'),
             t('profile.security.pinChangeComingSoon')
@@ -164,7 +211,7 @@ export default function SecurityScreen({ navigation }: Props) {
       }
     } catch (err: any) {
       if (err instanceof PinLockoutError) {
-        Alert.alert(t('common.error'), t('pin.lockedOut', { seconds: err.secondsLeft ?? 60 }));
+        Alert.alert(t('common.error'), pinLockoutMessage(err, t));
       } else {
         Alert.alert(t('common.error'), err.message ?? t('profile.security.failedChangePin'));
       }
@@ -263,8 +310,8 @@ export default function SecurityScreen({ navigation }: Props) {
                     value={true}
                     onValueChange={() => handleBiometricDisable()}
                     trackColor={{
-                      false: 'rgba(255,255,255,0.15)',
-                      true: colors.dark.accent,
+                      false: colors.ui.ink(0.15),
+                      true: colors.ui.accent,
                     }}
                     thumbColor="#FFFFFF"
                   />
@@ -283,15 +330,60 @@ export default function SecurityScreen({ navigation }: Props) {
             </Text>
           )}
         </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t('devices.title')}</Text>
+          <Text style={styles.sectionDesc}>{t('devices.securityDesc')}</Text>
+          <Button title={t('devices.manage')} onPress={() => navigation.navigate('Devices')} variant="darkGhost" />
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t('changePhone.title')}</Text>
+          <Text style={styles.sectionDesc}>{t('changePhone.securityDesc')}</Text>
+          <Button title={t('changePhone.title')} onPress={() => navigation.navigate('ChangePhone')} variant="darkGhost" />
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t('profile.security.freezeTitle')}</Text>
+          <Text style={styles.sectionDesc}>{t('profile.security.freezeDesc')}</Text>
+          {frozenNow ? (
+            <Text style={styles.comingSoon}>{t('profile.security.frozenMessage')}</Text>
+          ) : freezing ? (
+            <View style={styles.biometricPinForm}>
+              <Text style={styles.label}>{t('profile.security.freezeEnterPin')}</Text>
+              <PinInput value={freezePin} onChange={setFreezePin} />
+              <View style={styles.buttonRow}>
+                <Button
+                  title={t('common.cancel')}
+                  onPress={() => {
+                    setFreezing(false);
+                    setFreezePin('');
+                  }}
+                  variant="darkGhost"
+                  style={styles.cancelButton}
+                />
+                <Button
+                  title={t('profile.security.freeze')}
+                  onPress={handleFreeze}
+                  loading={loading}
+                  disabled={freezePin.length !== 6}
+                  style={styles.submitButton}
+                />
+              </View>
+            </View>
+          ) : (
+            <Button title={t('profile.security.freeze')} onPress={confirmFreeze} variant="darkGhost" />
+          )}
+        </View>
       </ScrollView>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   content: {
     flex: 1,
@@ -301,21 +393,21 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxl,
   },
   section: {
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     padding: spacing.lg,
     borderRadius: 16,
     marginBottom: spacing.lg,
   },
   sectionTitle: {
     ...typography.h3,
-    color: colors.dark.text,
+    color: colors.ui.text,
     marginBottom: spacing.sm,
   },
   sectionDesc: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     marginBottom: spacing.lg,
   },
   pinForm: {
@@ -323,7 +415,7 @@ const styles = StyleSheet.create({
   },
   label: {
     ...typography.captionBold,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     marginTop: spacing.md,
     marginBottom: spacing.sm,
   },
@@ -340,7 +432,7 @@ const styles = StyleSheet.create({
   },
   comingSoon: {
     ...typography.caption,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
     fontStyle: 'italic',
   },
   toggleRow: {
@@ -350,9 +442,9 @@ const styles = StyleSheet.create({
   },
   toggleLabel: {
     ...typography.body,
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
   biometricPinForm: {
     marginTop: spacing.sm,
   },
-});
+}));

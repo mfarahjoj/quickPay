@@ -1,12 +1,25 @@
-import { Platform, Vibration } from 'react-native';
+import { Vibration } from 'react-native';
+import HapticFeedback from 'react-native-haptic-feedback';
 
 export type HapticType = 'light' | 'medium' | 'success' | 'payment';
 
 /**
  * `payment` is deliberately longer and double-pulsed: money landing is the one
- * event a merchant must notice with the phone face-down on a loud counter.
+ * event a merchant must notice with the phone face-down on a loud counter, so
+ * it stays a real vibration.
  */
 const PAYMENT_PATTERN = [0, 120, 90, 240];
+
+/**
+ * Everything else is a short tap through the system haptic engine. It used
+ * to call Vibration.vibrate(8), but iOS ignores the duration and plays its
+ * full ~400 ms vibration, so every tap buzzed like a phone call.
+ */
+const PATTERN = {
+  light: 'impactLight',
+  medium: 'impactMedium',
+  success: 'notificationSuccess',
+} as const;
 
 export function triggerHaptic(type: HapticType = 'light') {
   try {
@@ -14,19 +27,10 @@ export function triggerHaptic(type: HapticType = 'light') {
       Vibration.vibrate(PAYMENT_PATTERN);
       return;
     }
-
-    if (Platform.OS === 'ios') {
-      const duration = type === 'medium' ? 12 : type === 'success' ? 18 : 8;
-      Vibration.vibrate(duration);
-      return;
-    }
-
-    if (type === 'success') {
-      Vibration.vibrate([0, 14, 26, 18]);
-      return;
-    }
-
-    Vibration.vibrate(type === 'medium' ? 12 : 8);
+    HapticFeedback.trigger(PATTERN[type], {
+      enableVibrateFallback: false,
+      ignoreAndroidSystemSettings: false,
+    });
   } catch {
     // Haptics should never block user actions.
   }

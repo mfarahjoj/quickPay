@@ -10,7 +10,7 @@ import Animated, {
 import { useTranslation } from 'react-i18next';
 import { useTransactions } from '../../hooks/useTransactions';
 import { Transaction } from '../../types';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
 import { TransactionItem } from '../../components/TransactionItem';
 import { EmptyState, Card } from '../../components';
 import { Springs } from '../../constants/springs';
@@ -40,6 +40,8 @@ interface Props {
 type Row = { type: 'header'; id: string; title: string } | { type: 'item'; id: string; transaction: Transaction };
 
 export default function TransactionHistoryScreen({ navigation }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const { transactions, loading, refresh } = useTransactions(undefined, 100);
   const [refreshing, setRefreshing] = useState(false);
@@ -159,16 +161,16 @@ export default function TransactionHistoryScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   header: {
     paddingHorizontal: spacing.md,
@@ -206,10 +208,10 @@ const styles = StyleSheet.create({
     height: 34,
     borderRadius: borderRadius.md,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
   },
   filterPillActive: {
     backgroundColor: colors.action.primary,
@@ -232,4 +234,4 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     marginBottom: spacing.xs,
   },
-});
+}));

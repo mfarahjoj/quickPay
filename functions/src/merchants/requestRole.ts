@@ -175,6 +175,7 @@ export const requestRole = https.onCall(
  * "pending review" rather than silently looking like nothing happened.
  */
 export const getMyRoleRequests = https.onCall(
+  { enforceAppCheck: true },
   async (
     request: https.CallableRequest<void>
   ): Promise<ApiResponse<Array<RoleRequest & { requestId: string }>>> => {

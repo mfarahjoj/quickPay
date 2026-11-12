@@ -151,7 +151,7 @@ async function createEntry(token, entryId, entryDoc) {
 }
 
 async function incrementLedgerBalance(token, account, delta, nowIso) {
-  const docPath = `projects/${PROJECT_ID}/databases/(default)/documents/ledger_balances/${encodeURIComponent(account)}`;
+  const docPath = `projects/${PROJECT_ID}/databases/(default)/documents/ledger_balances/${account}`;
   const { status, json } = await api(
     token,
     "POST",

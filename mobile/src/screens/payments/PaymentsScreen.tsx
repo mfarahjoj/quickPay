@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { cooldownMessage } from '../../utils/cooldownMessage';
 import {
   View,
   Text,
@@ -23,7 +24,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import QRCode from 'react-native-qrcode-svg';
 import { Card, Button, PinInput } from '../../components';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
 import { CURRENCY_SYMBOL, PHONE_PREFIX } from '../../config/constants';
 import { Springs } from '../../constants/springs';
 import { SuccessCheckIcon } from '../../components/icons/AuthIcons';
@@ -32,15 +33,14 @@ import { triggerHaptic } from '../../services/haptics.service';
 import { functions } from '../../services/firebase.config';
 import {
   TokenResponse,
-  CUSTOMER_TOKEN_TTL_SECONDS,
   BACKOFF_SECONDS_ON_FAILURE,
-  buildOfflineReceiveToken,
-  clearReceiveTokenCache,
   isReceiveTokenPermissionError,
   readCachedReceiveToken,
+  receiveQrErrorKey,
   resolveReceiveToken,
   secondsLeftFromToken,
 } from '../../services/customerToken.service';
+import type { PaymentLink } from '../../services/paymentLink.service';
 
 type PaymentTab = 'send' | 'receive';
 type SendStep = 'phone' | 'amount' | 'review' | 'pin' | 'success';
@@ -49,19 +49,28 @@ type SendStep = 'phone' | 'amount' | 'review' | 'pin' | 'success';
 const MAX_RECEIVE_AUTO_FETCHES = 4;
 
 interface RecipientInfo {
-  uid: string;
+  /** Masked by the server ("Amina Y."), so it is safe to show and share. */
   fullName: string;
   phoneNumber: string;
 }
 
+/** What `lookupRecipient` answers. */
+type LookupResult =
+  | { found: false; reason: 'not_found' | 'self' }
+  | { found: true; phoneNumber: string; displayName: string; isBusiness: boolean };
+
 interface Props {
-  route?: { params?: { mode?: PaymentTab } };
+  route?: { params?: { mode?: PaymentTab; prefill?: PaymentLink } };
 }
 
 export default function PaymentsScreen({ route }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const initialMode = route?.params?.mode === 'receive' ? 'receive' : 'send';
   const [tab, setTab] = useState<PaymentTab>(initialMode);
+  /** Set when a zapppay:// link started this payment; drives the "check before paying" notice. */
+  const [fromLink, setFromLink] = useState(false);
 
   const [step, setStep] = useState<SendStep>('phone');
   const [phoneInput, setPhoneInput] = useState('');
@@ -110,7 +119,7 @@ export default function PaymentsScreen({ route }: Props) {
   const tokenFetchInFlightRef = useRef(false);
   /** Slots for budgeted fetches; reset when leaving Receive. */
   const receiveAutoFetchRemainingRef = useRef(MAX_RECEIVE_AUTO_FETCHES);
-  /** When true, timer expiry only rotates local QR — no generateCustomerToken (permission or offline display). */
+  /** Set when the server refused for good (e.g. a merchant account): stop asking. */
   const receiveAutoSkipCloudRef = useRef(false);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
@@ -124,13 +133,6 @@ export default function PaymentsScreen({ route }: Props) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
-  }, []);
-
-  const bumpOfflineReceiveDisplay = useCallback(() => {
-    const offlineToken = buildOfflineReceiveToken();
-    if (!offlineToken) return;
-    setToken(offlineToken);
-    setSecondsLeft(CUSTOMER_TOKEN_TTL_SECONDS);
   }, []);
 
   const fetchToken = useCallback(async (opts?: { silent?: boolean; useBudget?: boolean; forceRefresh?: boolean }) => {
@@ -167,32 +169,23 @@ export default function PaymentsScreen({ route }: Props) {
 
       const data = await resolveReceiveToken({ forceRefresh });
       if (!mountedRef.current) return;
-      if (data.tokenId !== 'offline') {
-        receiveAutoSkipCloudRef.current = false;
-      }
+      receiveAutoSkipCloudRef.current = false;
       setToken(data);
       setSecondsLeft(secondsLeftFromToken(data));
       if (!opts?.silent) triggerHaptic('success');
     } catch (e: any) {
-      // No Cloud Function round-trip — refund budgeted slot (same as home screen offline QR).
+      // The call failed, so it didn't use up an automatic refresh.
       if (budgetConsumed) {
         receiveAutoFetchRemainingRef.current += 1;
       }
       if (!mountedRef.current) return;
-      if (isReceiveTokenPermissionError(e)) {
-        receiveAutoSkipCloudRef.current = true;
-      }
-      const offlineToken = buildOfflineReceiveToken();
-      if (offlineToken) {
-        await clearReceiveTokenCache().catch(() => {});
-        setToken(offlineToken);
-        setSecondsLeft(CUSTOMER_TOKEN_TTL_SECONDS);
-        if (!opts?.silent) triggerHaptic('success');
-      } else if (!opts?.silent) {
-        setTokenError(e?.message || t('payments.failedGenerateQr'));
-      } else {
-        setSecondsLeft(BACKOFF_SECONDS_ON_FAILURE);
-      }
+      // No stand-in QR: nothing can scan one, so it would only look like it works.
+      // A silent refresh only runs once the old code has run out, so either
+      // way there's no code left to show.
+      if (isReceiveTokenPermissionError(e)) receiveAutoSkipCloudRef.current = true;
+      setToken(null);
+      setTokenError(t(receiveQrErrorKey(e)));
+      if (opts?.silent) setSecondsLeft(BACKOFF_SECONDS_ON_FAILURE);
     } finally {
       tokenFetchInFlightRef.current = false;
       if (mountedRef.current) setTokenLoading(false);
@@ -231,7 +224,6 @@ export default function PaymentsScreen({ route }: Props) {
     if (tokenLoading || tokenFetchInFlightRef.current) return;
     if (receiveAutoSkipCloudRef.current) {
       clearReceiveTimer();
-      bumpOfflineReceiveDisplay();
       return;
     }
     if (receiveAutoFetchRemainingRef.current <= 0) {
@@ -241,7 +233,7 @@ export default function PaymentsScreen({ route }: Props) {
     }
     clearReceiveTimer();
     fetchToken({ silent: true, useBudget: true });
-  }, [tab, token, secondsLeft, tokenLoading, fetchToken, clearReceiveTimer, bumpOfflineReceiveDisplay]);
+  }, [tab, token, secondsLeft, tokenLoading, fetchToken, clearReceiveTimer]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
@@ -293,32 +285,72 @@ export default function PaymentsScreen({ route }: Props) {
     setPin('');
     setSending(false);
     setTransactionId(null);
+    setFromLink(false);
   };
 
   const fullPhone = phoneInput.startsWith('+') ? phoneInput : `${PHONE_PREFIX}${phoneInput}`;
 
-  const handleLookup = async () => {
-    if (!phoneInput.trim()) {
+  /** `phoneOverride` lets a payment link look up before the input state has updated. */
+  const handleLookup = async (phoneOverride?: string) => {
+    const input = (phoneOverride ?? phoneInput).trim();
+    if (!input) {
       Alert.alert(t('common.error'), t('payments.enterPhoneError'));
       return;
     }
+    const phoneNumber = input.startsWith('+') ? input : `${PHONE_PREFIX}${input}`;
     try {
       setLookingUp(true);
-      const lookupFn = functions().httpsCallable('lookupUserByPhone');
-      const result = await lookupFn({ phoneNumber: fullPhone });
-      const data = result.data as { success: boolean; data?: RecipientInfo; error?: string };
-      if (!data.success || !data.data) {
-        Alert.alert(t('common.notFound'), t('payments.userNotFound'));
+      // lookupUserByPhone is for agents and merchants and refuses customers;
+      // this one answers anyone, with a masked name.
+      const lookupFn = functions().httpsCallable('lookupRecipient');
+      const result = await lookupFn({ phoneNumber });
+      const data = result.data as { success: boolean; data?: LookupResult };
+      const found = data.data;
+      if (!data.success || !found || !found.found) {
+        Alert.alert(
+          t('common.notFound'),
+          found && !found.found && found.reason === 'self'
+            ? t('payments.cannotSendToSelf')
+            : t('payments.userNotFound')
+        );
         return;
       }
-      setRecipient(data.data);
+      // A shop is paid by its QR; sendP2P would refuse the transfer anyway.
+      if (found.isBusiness) {
+        Alert.alert(found.displayName, t('payments.recipientIsBusiness'));
+        return;
+      }
+      setRecipient({ fullName: found.displayName, phoneNumber: found.phoneNumber });
       setStep('amount');
     } catch (err: any) {
-      Alert.alert(t('common.error'), err.message || t('payments.lookupFailed'));
+      Alert.alert(
+        t('common.error'),
+        err?.details?.reason === 'lookup_limit'
+          ? t('payments.lookupLimit')
+          : t('payments.lookupFailed')
+      );
     } finally {
       setLookingUp(false);
     }
   };
+
+  // A payment link pre-fills recipient, amount and note, then runs the same
+  // lookup a typed number would. Review and PIN are still the payer's to do.
+  const prefill = route?.params?.prefill;
+  const lookupRef = useRef(handleLookup);
+  lookupRef.current = handleLookup;
+  useEffect(() => {
+    if (!prefill) return;
+    setTab('send');
+    resetSend();
+    setFromLink(true);
+    const local = prefill.to.startsWith(PHONE_PREFIX) ? prefill.to.slice(PHONE_PREFIX.length) : prefill.to;
+    setPhoneInput(local);
+    setAmountText(prefill.amount ?? '');
+    setNote(prefill.note ?? '');
+    void lookupRef.current(prefill.to);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill]);
 
   const handleConfirmSend = async () => {
     if (pin.length < 6) return;
@@ -344,7 +376,12 @@ export default function PaymentsScreen({ route }: Props) {
       triggerHaptic('success');
       setStep('success');
     } catch (err: any) {
-      const msg = err.message?.replace(/^\[.*?\]\s*/, '') || t('payments.transferFailed');
+      const msg =
+        cooldownMessage(err, t) ??
+        (err?.details?.reason === 'recipient_is_merchant'
+          ? t('payments.recipientIsBusiness')
+          : null) ??
+        (err.message?.replace(/^\[.*?\]\s*/, '') || t('payments.transferFailed'));
       Alert.alert(t('common.error'), msg);
       setPin('');
     } finally {
@@ -405,7 +442,7 @@ export default function PaymentsScreen({ route }: Props) {
               </View>
               <Button
                 title={lookingUp ? t('common.lookingUp') : t('common.continue')}
-                onPress={handleLookup}
+                onPress={() => handleLookup()}
                 disabled={lookingUp || !phoneInput.trim()}
                 fullWidth
                 style={styles.primaryCta}
@@ -417,6 +454,11 @@ export default function PaymentsScreen({ route }: Props) {
           {step === 'amount' && recipient && (
             <Card>
               <Text style={styles.stepTitle}>{t('payments.enterAmount')}</Text>
+              {fromLink && (
+                <View style={styles.linkNotice}>
+                  <Text style={styles.linkNoticeText}>{t('payments.linkNotice')}</Text>
+                </View>
+              )}
               <View style={styles.recipientBadge}>
                 <View style={styles.avatar}>
                   <Text style={styles.avatarText}>{recipient.fullName.slice(0, 1)}</Text>
@@ -469,6 +511,11 @@ export default function PaymentsScreen({ route }: Props) {
           {step === 'review' && recipient && (
             <Card>
               <Text style={styles.stepTitle}>{t('payments.review')}</Text>
+              {fromLink && (
+                <View style={styles.linkNotice}>
+                  <Text style={styles.linkNoticeText}>{t('payments.linkNotice')}</Text>
+                </View>
+              )}
               <View style={styles.reviewRow}>
                 <Text style={styles.reviewKey}>{t('common.recipient')}</Text>
                 <Text style={styles.reviewValue}>{recipient.fullName}</Text>
@@ -602,11 +649,6 @@ export default function PaymentsScreen({ route }: Props) {
                   backgroundColor="#FFFFFF"
                 />
               </View>
-              {token.tokenId === 'offline' ? (
-                <Text style={styles.offlineQrHint}>
-                  {t('payments.offlineQrHint')}
-                </Text>
-              ) : null}
               <View style={[
                 styles.timerPill,
                 (secondsLeft < 30 || receiveCapReached) && styles.timerPillWarning,
@@ -643,10 +685,10 @@ export default function PaymentsScreen({ route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   content: {
     padding: spacing.md,
@@ -660,10 +702,10 @@ const styles = StyleSheet.create({
   },
   tabRow: {
     flexDirection: 'row',
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderRadius: borderRadius.md,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     padding: 4,
     marginBottom: spacing.lg,
   },
@@ -712,9 +754,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.dark.glassRaised,
+    backgroundColor: colors.ui.glassRaised,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderTopLeftRadius: borderRadius.md,
     borderBottomLeftRadius: borderRadius.md,
   },
@@ -728,18 +770,29 @@ const styles = StyleSheet.create({
     height: 44,
     borderWidth: 1,
     borderLeftWidth: 0,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderTopRightRadius: borderRadius.md,
     borderBottomRightRadius: borderRadius.md,
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     paddingHorizontal: spacing.md,
-    color: colors.dark.text,
+    color: colors.ui.text,
     ...typography.body,
+  },
+  linkNotice: {
+    backgroundColor: colors.ui.warningSoft,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+  },
+  linkNoticeText: {
+    ...typography.caption,
+    color: colors.ui.warning,
   },
   recipientBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.dark.incomingSoft,
+    backgroundColor: colors.ui.incomingSoft,
     borderRadius: borderRadius.md,
     padding: spacing.sm,
     marginBottom: spacing.md,
@@ -748,7 +801,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: spacing.smPlus,
@@ -786,11 +839,11 @@ const styles = StyleSheet.create({
   noteInput: {
     height: 44,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderRadius: borderRadius.md,
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     paddingHorizontal: spacing.md,
-    color: colors.dark.text,
+    color: colors.ui.text,
     marginBottom: spacing.md,
   },
   keypad: {
@@ -803,8 +856,8 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: borderRadius.md,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
-    backgroundColor: colors.dark.glass,
+    borderColor: colors.ui.glassBorder,
+    backgroundColor: colors.ui.glass,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -847,7 +900,7 @@ const styles = StyleSheet.create({
     height: 88,
     borderRadius: 44,
     borderWidth: 2,
-    borderColor: colors.dark.incoming,
+    borderColor: colors.ui.incoming,
   },
   successTitle: {
     ...typography.h2,
@@ -887,30 +940,22 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: spacing.md,
   },
-  offlineQrHint: {
-    ...typography.caption,
-    color: colors.text.secondary,
-    textAlign: 'center',
-    marginTop: spacing.sm,
-    marginBottom: spacing.xs,
-    paddingHorizontal: spacing.sm,
-  },
   timerPill: {
     alignSelf: 'center',
-    backgroundColor: colors.dark.accentSoft,
+    backgroundColor: colors.ui.accentSoft,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.full,
     marginBottom: spacing.md,
   },
   timerPillWarning: {
-    backgroundColor: colors.dark.errorSoft,
+    backgroundColor: colors.ui.errorSoft,
   },
   timerText: {
     ...typography.bodySemibold,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
   },
   timerTextWarning: {
-    color: colors.dark.error,
+    color: colors.ui.error,
   },
-});
+}));

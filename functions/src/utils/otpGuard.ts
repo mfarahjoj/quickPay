@@ -8,60 +8,50 @@ const MAX_ATTEMPTS_BEFORE_LOCK = 5;
 const BASE_LOCK_SECONDS = 60;
 const MAX_LOCK_SECONDS = 15 * 60;
 
-interface OtpGuardFields {
-  agentOtpFailedAttempts?: number;
-  agentOtpLockedUntil?: admin.firestore.Timestamp | null;
-}
-
 /**
- * Throw `resource-exhausted` while the agent is locked out from code guesses.
- * Call with the already-fetched user doc data before looking up a code.
+ * Count one code guess against the agent *before* the code is looked up,
+ * throwing `resource-exhausted` while they are locked out.
+ *
+ * Reserving first, inside a transaction, is what makes the limit hold under
+ * load: when the failure was recorded after the lookup, a burst of parallel
+ * requests all read "not locked" and every one of them got a guess. Call
+ * `clearOtpFailures` once a code matches, which gives the reservation back.
  */
-export function assertNotOtpLocked(agentData: OtpGuardFields): void {
-  const lockedUntil = agentData.agentOtpLockedUntil;
-  const now = admin.firestore.Timestamp.now();
-  if (lockedUntil && lockedUntil.toMillis() > now.toMillis()) {
-    const secondsLeft = Math.ceil(
-      (lockedUntil.toMillis() - now.toMillis()) / 1000
-    );
-    throw new https.HttpsError(
-      "resource-exhausted",
-      `Too many incorrect codes. Try again in ${secondsLeft} seconds.`,
-      { secondsLeft }
-    );
-  }
-}
+export async function reserveOtpAttempt(agentId: string): Promise<void> {
+  const db = admin.firestore();
+  const ref = db.collection("users").doc(agentId);
+  await db.runTransaction(async (tx) => {
+    const data = (await tx.get(ref)).data() ?? {};
+    const now = admin.firestore.Timestamp.now();
+    const lockedUntil = data.agentOtpLockedUntil as admin.firestore.Timestamp | null | undefined;
+    if (lockedUntil && lockedUntil.toMillis() > now.toMillis()) {
+      const secondsLeft = Math.ceil((lockedUntil.toMillis() - now.toMillis()) / 1000);
+      throw new https.HttpsError(
+        "resource-exhausted",
+        `Too many incorrect codes. Try again in ${secondsLeft} seconds.`,
+        { secondsLeft }
+      );
+    }
 
-/** Record a failed code guess, locking the agent out past the threshold. */
-export async function recordOtpFailure(
-  agentId: string,
-  agentData: OtpGuardFields
-): Promise<void> {
-  const failedAttempts = (agentData.agentOtpFailedAttempts ?? 0) + 1;
-  const updates: Record<string, unknown> = {
-    agentOtpFailedAttempts: admin.firestore.FieldValue.increment(1),
-  };
-  if (failedAttempts >= MAX_ATTEMPTS_BEFORE_LOCK) {
-    const lockSeconds = Math.min(
-      BASE_LOCK_SECONDS * 2 ** (failedAttempts - MAX_ATTEMPTS_BEFORE_LOCK),
-      MAX_LOCK_SECONDS
-    );
-    updates.agentOtpLockedUntil = admin.firestore.Timestamp.fromMillis(
-      admin.firestore.Timestamp.now().toMillis() + lockSeconds * 1000
-    );
-  }
-  await admin.firestore().collection("users").doc(agentId).update(updates);
+    const attempts = (data.agentOtpFailedAttempts ?? 0) + 1;
+    const updates: Record<string, unknown> = { agentOtpFailedAttempts: attempts };
+    if (attempts >= MAX_ATTEMPTS_BEFORE_LOCK) {
+      const lockSeconds = Math.min(
+        BASE_LOCK_SECONDS * 2 ** (attempts - MAX_ATTEMPTS_BEFORE_LOCK),
+        MAX_LOCK_SECONDS
+      );
+      updates.agentOtpLockedUntil = admin.firestore.Timestamp.fromMillis(
+        now.toMillis() + lockSeconds * 1000
+      );
+    }
+    tx.update(ref, updates);
+  });
 }
 
 /** Reset the guess counter after a valid code is found. */
-export async function clearOtpFailures(
-  agentId: string,
-  agentData: OtpGuardFields
-): Promise<void> {
-  if ((agentData.agentOtpFailedAttempts ?? 0) > 0 || agentData.agentOtpLockedUntil) {
-    await admin.firestore().collection("users").doc(agentId).update({
-      agentOtpFailedAttempts: 0,
-      agentOtpLockedUntil: null,
-    });
-  }
+export async function clearOtpFailures(agentId: string): Promise<void> {
+  await admin.firestore().collection("users").doc(agentId).update({
+    agentOtpFailedAttempts: 0,
+    agentOtpLockedUntil: null,
+  });
 }

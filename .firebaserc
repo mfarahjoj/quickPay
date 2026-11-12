@@ -2,5 +2,21 @@
   "projects": {
     "default": "quickpay-485417",
     "staging": "quickpay-staging"
-  }
+  },
+  "targets": {
+    "quickpay-485417": {
+      "hosting": {
+        "admin": [
+          "zapp-admin"
+        ],
+        "public": [
+          "quickpay-485417"
+        ],
+        "zapppay": [
+          "zapppay"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

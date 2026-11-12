@@ -7,7 +7,7 @@ import {
   Text,
   Platform,
 } from 'react-native';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles } from '../../theme';
 
 const CODE_LENGTH = 6;
 
@@ -31,6 +31,7 @@ export function CodeInput({
   autoFocus = true,
   otpMode = false,
 }: CodeInputProps) {
+  const styles = useStyles();
   const inputRefs = useRef<Array<TextInput | null>>([]);
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const [focusedIndex, setFocusedIndex] = useState<number | null>(autoFocus ? 0 : null);
@@ -132,7 +133,7 @@ export function CodeInput({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -142,11 +143,11 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 60,
     borderRadius: borderRadius.md,
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     overflow: 'hidden',
   },
   cellError: {
-    backgroundColor: colors.dark.errorSoft,
+    backgroundColor: colors.ui.errorSoft,
   },
   digit: {
     flex: 1,
@@ -154,7 +155,7 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '600',
     textAlign: 'center',
-    color: colors.dark.text,
+    color: colors.ui.text,
     padding: 0,
   },
   underline: {
@@ -167,23 +168,46 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   underlineFocused: {
-    backgroundColor: colors.dark.accent,
+    backgroundColor: colors.ui.accent,
   },
   underlineError: {
-    backgroundColor: colors.dark.error,
+    backgroundColor: colors.ui.error,
   },
   errorText: {
     ...typography.caption,
-    color: colors.dark.error,
+    color: colors.ui.error,
     marginTop: spacing.sm,
     textAlign: 'center',
   },
-});
+}));
 
-export const WEAK_PINS = ['123456', '654321', '111111', '000000', '121212', '123123'];
+/**
+ * Same rules as functions/src/utils/weakPin.ts, which is the authority: the
+ * server refuses these too, this just says so before the PIN is sent.
+ */
+const COMMON_PINS = new Set([
+  '123456', '654321', '123123', '121212', '112233', '123321', '159753',
+  '147258', '102030', '789456', '112211', '159357', '147852', '456789',
+  '987654', '789789', '456456', '100200', '007007', '147369', '258369',
+  '101101', '123654', '321321', '998877', '778899', '135790', '246810',
+  '112112', '110110', '520520', '131313', '696969', '252525', '202020',
+  '101010', '010203', '098765', '111222', '121314', '456123', '741852',
+  '963852', '852456', '142536', '142857', '314159', '000123', '123000',
+]);
+
+const UP = '0123456789012345';
+const DOWN = '9876543210987654';
 
 export function isWeakPin(pin: string): boolean {
-  if (WEAK_PINS.includes(pin)) return true;
+  if (!/^\d{6}$/.test(pin)) return true;
+  if (COMMON_PINS.has(pin)) return true;
   if (/^(\d)\1{5}$/.test(pin)) return true;
+  if (UP.includes(pin) || DOWN.includes(pin)) return true;
+  if (/^(\d\d)\1\1$/.test(pin) || /^(\d{3})\1$/.test(pin)) return true;
+  const isYear = (s: string) => {
+    const y = Number(s);
+    return y >= 1940 && y <= 2010;
+  };
+  if (isYear(pin.slice(0, 4)) || isYear(pin.slice(2))) return true;
   return false;
 }

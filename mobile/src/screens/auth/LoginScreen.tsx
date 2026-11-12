@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { TERMS_URL, PRIVACY_URL } from '../../utils/legal';
 import {
   View,
   Text,
@@ -16,7 +17,7 @@ import { sendOTP } from '../../services/auth.service';
 import { AuthLayout } from '../../components/auth';
 import { BottomSheet } from '../../components/BottomSheet';
 import { CheckIcon, ChevronDownIcon, CloseIcon } from '../../components/icons/AuthIcons';
-import { colors, typography, spacing } from '../../theme';
+import { typography, spacing, makeStyles, useColors } from '../../theme';
 
 interface Props {
   navigation: any;
@@ -58,10 +59,9 @@ const COUNTRIES: Country[] = [
   },
 ];
 
-const TERMS_URL = 'https://quickpay.app/terms';
-const PRIVACY_URL = 'https://quickpay.app/privacy';
 
-const CORAL = colors.dark.accent;
+// Brand coral: the same in light and dark.
+const CORAL = '#FF5043';
 
 function BoltMark({ size = 20 }: { size?: number }) {
   return (
@@ -78,6 +78,8 @@ function BoltMark({ size = 20 }: { size?: number }) {
 }
 
 export default function LoginScreen({ navigation, intent = 'signup', onBack }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const returning = intent === 'login';
   const [selectedCountry, setSelectedCountry] = useState<Country>(COUNTRIES[0]);
@@ -215,7 +217,7 @@ export default function LoginScreen({ navigation, intent = 'signup', onBack }: P
         >
           <Text style={styles.flagText}>{selectedCountry.flag}</Text>
           <Text style={styles.countryCodeText}>{selectedCountry.code}</Text>
-          <ChevronDownIcon color="rgba(255,255,255,0.4)" />
+          <ChevronDownIcon color={colors.ui.ink(0.4)} />
         </TouchableOpacity>
 
         <View
@@ -234,7 +236,7 @@ export default function LoginScreen({ navigation, intent = 'signup', onBack }: P
             keyboardType="phone-pad"
             maxLength={selectedCountry.maxInput}
             autoFocus
-            placeholderTextColor="rgba(255,255,255,0.25)"
+            placeholderTextColor={colors.ui.ink(0.25)}
             textContentType="telephoneNumber"
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
@@ -249,7 +251,7 @@ export default function LoginScreen({ navigation, intent = 'signup', onBack }: P
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <View style={styles.clearIcon}>
-                <CloseIcon size={12} color="rgba(255,255,255,0.7)" />
+                <CloseIcon size={12} color={colors.ui.ink(0.7)} />
               </View>
             </TouchableOpacity>
           )}
@@ -316,7 +318,7 @@ export default function LoginScreen({ navigation, intent = 'signup', onBack }: P
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   content: {
     justifyContent: 'flex-start',
   },
@@ -347,15 +349,15 @@ const styles = StyleSheet.create({
   },
   wordmark: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   brand: { fontSize: 16, letterSpacing: -0.3 },
-  brandBold: { fontWeight: '700', color: colors.dark.text },
+  brandBold: { fontWeight: '700', color: colors.ui.text },
   brandLight: { fontWeight: '400', color: CORAL },
   progressDots: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  pDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.18)' },
+  pDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: colors.ui.ink(0.18) },
   pDotActive: { width: 16, backgroundColor: CORAL },
   headerTitle: {
     fontSize: 33,
     fontWeight: '800',
-    color: colors.dark.text,
+    color: colors.ui.text,
     letterSpacing: -1.4,
     lineHeight: 38,
     marginBottom: 10,
@@ -363,7 +365,7 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontSize: 14,
     fontWeight: '400',
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     lineHeight: 21,
     marginBottom: spacing.xl,
   },
@@ -375,9 +377,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: colors.ui.ink(0.07),
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: colors.ui.ink(0.1),
     borderRadius: 16,
     paddingHorizontal: 14,
     height: 58,
@@ -388,15 +390,15 @@ const styles = StyleSheet.create({
   countryCodeText: {
     fontSize: 17,
     fontWeight: '600',
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
   phoneBox: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: colors.ui.ink(0.07),
     borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: colors.ui.ink(0.1),
     borderRadius: 16,
     height: 58,
     paddingHorizontal: 4,
@@ -405,14 +407,14 @@ const styles = StyleSheet.create({
     borderColor: CORAL,
   },
   phoneBoxError: {
-    borderColor: colors.dark.error,
+    borderColor: colors.ui.error,
   },
   phoneInput: {
     flex: 1,
     fontSize: 19,
     fontWeight: '600',
     letterSpacing: 0.5,
-    color: colors.dark.text,
+    color: colors.ui.text,
     paddingHorizontal: 12,
   },
   clearButton: {
@@ -422,13 +424,13 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: colors.ui.ink(0.14),
     justifyContent: 'center',
     alignItems: 'center',
   },
   errorText: {
     ...typography.caption,
-    color: colors.dark.error,
+    color: colors.ui.error,
     marginTop: spacing.sm,
   },
   continueBtn: {
@@ -454,18 +456,18 @@ const styles = StyleSheet.create({
   },
   footer: {
     fontSize: 11,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
     textAlign: 'center',
     lineHeight: 17,
     marginTop: 12,
   },
   link: {
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
     textDecorationLine: 'underline',
   },
   sheetTitle: {
     ...typography.h3,
-    color: colors.dark.text,
+    color: colors.ui.text,
     fontWeight: '700',
     textAlign: 'center',
     marginBottom: spacing.md,
@@ -478,7 +480,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   countryRowSelected: {
-    backgroundColor: colors.dark.accentSoft,
+    backgroundColor: colors.ui.accentSoft,
   },
   countryRowFlag: {
     fontSize: 28,
@@ -489,11 +491,11 @@ const styles = StyleSheet.create({
   },
   countryRowName: {
     ...typography.body,
-    color: colors.dark.text,
+    color: colors.ui.text,
     fontWeight: '600',
   },
   countryRowCode: {
     ...typography.caption,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
   },
-});
+}));

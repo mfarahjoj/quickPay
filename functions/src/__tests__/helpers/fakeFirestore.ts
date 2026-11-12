@@ -1,0 +1,233 @@
+/**
+ * In-memory Firestore stand-in, rich enough to run the real ledger.
+ *
+ * Transactions stage their writes and apply them only if the callback
+ * resolves, as real Firestore does, so a test can tell a write that commits
+ * from one a throw rolls back. Supports the FieldValue transforms the code
+ * under test uses (increment, delete) and the query shapes it runs.
+ */
+
+import * as admin from "firebase-admin";
+
+type Data = Record<string, any>;
+
+function applyTransforms(base: Data | undefined, patch: Data): Data {
+  const out: Data = { ...(base ?? {}) };
+  for (const [key, value] of Object.entries(patch)) {
+    const kind = value?.constructor?.name;
+    if (kind === "NumericIncrementTransform") {
+      out[key] = (typeof out[key] === "number" ? out[key] : 0) + value.operand;
+    } else if (kind === "DeleteTransform") {
+      delete out[key];
+    } else {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+const comparable = (v: any) => (v && typeof v.toMillis === "function" ? v.toMillis() : v);
+
+/** Field values by dotted path ("autoPayout.enabled"), as Firestore reads them. */
+function fieldAt(doc: Data, field: string): any {
+  if (doc && field in doc) return doc[field];
+  return field.split(".").reduce((v: any, k) => (v == null ? undefined : v[k]), doc);
+}
+
+function matches(doc: Data, field: string, op: string, value: any): boolean {
+  const a = comparable(fieldAt(doc, field));
+  const b = comparable(value);
+  switch (op) {
+    case "==": return a === b;
+    case "!=": return a !== b;
+    case "<": return a < b;
+    case "<=": return a <= b;
+    case ">": return a > b;
+    case ">=": return a >= b;
+    case "in": return (value as any[]).includes(a);
+    default: throw new Error(`fakeFirestore: unsupported op ${op}`);
+  }
+}
+
+export interface FakeDb {
+  store: Map<string, Data>;
+  get(path: string): Data | undefined;
+  collection(name: string): any;
+  /** A document by its full path, "config/collection". */
+  doc(path: string): any;
+  runTransaction: jest.Mock;
+  batch(): any;
+}
+
+export function fakeFirestore(seed: Record<string, Data> = {}): FakeDb {
+  const store = new Map<string, Data>(Object.entries(seed));
+  let auto = 0;
+
+  const snap = (path: string) => ({
+    exists: store.has(path),
+    id: path.split("/").pop()!,
+    ref: ref(path.split("/").slice(0, -1).join("/"), path.split("/").pop()),
+    data: () => (store.has(path) ? { ...store.get(path) } : undefined),
+    get: (field: string) => (store.has(path) ? fieldAt(store.get(path)!, field) : undefined),
+  });
+
+  const write = {
+    set: (path: string, d: Data, opts?: { merge?: boolean }) =>
+      store.set(path, applyTransforms(opts?.merge ? store.get(path) : undefined, d)),
+    create: (path: string, d: Data) => {
+      if (store.has(path)) throw new Error(`ALREADY_EXISTS ${path}`);
+      store.set(path, applyTransforms(undefined, d));
+    },
+    update: (path: string, d: Data) => {
+      if (!store.has(path)) throw new Error(`NOT_FOUND ${path}`);
+      store.set(path, applyTransforms(store.get(path), d));
+    },
+    delete: (path: string) => {
+      store.delete(path);
+    },
+  };
+
+  function ref(col: string, id?: string): any {
+    const docId = id ?? `auto${++auto}`;
+    const path = `${col}/${docId}`;
+    return {
+      id: docId,
+      path,
+      get: async () => snap(path),
+      set: async (d: Data, opts?: { merge?: boolean }) => write.set(path, d, opts),
+      create: async (d: Data) => write.create(path, d),
+      update: async (d: Data) => write.update(path, d),
+      delete: async () => write.delete(path),
+      collection: (sub: string) => collection(`${path}/${sub}`),
+    };
+  }
+
+  interface QState {
+    filters: Array<[string, string, any]>;
+    order?: [string, "asc" | "desc"];
+    max: number;
+    after?: string;
+  }
+
+  function query(col: string, s: QState): any {
+    const run = () => {
+      const depth = col.split("/").length + 1;
+      let rows = [...store.entries()].filter(
+        ([p, d]) =>
+          p.startsWith(`${col}/`) &&
+          p.split("/").length === depth &&
+          s.filters.every(([f, op, v]) => matches(d, f, op, v))
+      );
+      if (s.order) {
+        const [f, dir] = s.order;
+        rows.sort(([, x], [, y]) => {
+          const a = comparable(x[f]);
+          const b = comparable(y[f]);
+          return (a < b ? -1 : a > b ? 1 : 0) * (dir === "desc" ? -1 : 1);
+        });
+      }
+      if (s.after) {
+        const i = rows.findIndex(([p]) => p === s.after);
+        rows = i >= 0 ? rows.slice(i + 1) : rows;
+      }
+      return rows.slice(0, s.max).map(([p]) => snap(p));
+    };
+    return {
+      where: (f: string, op: string, v: any) => query(col, { ...s, filters: [...s.filters, [f, op, v]] }),
+      orderBy: (f: string, dir: "asc" | "desc" = "asc") => query(col, { ...s, order: [f, dir] }),
+      limit: (n: number) => query(col, { ...s, max: n }),
+      startAfter: (cursor: any) => query(col, { ...s, after: `${col}/${cursor.id}` }),
+      count: () => ({ get: async () => ({ data: () => ({ count: run().length }) }) }),
+      get: async () => {
+        const docs = run();
+        return {
+          empty: docs.length === 0,
+          size: docs.length,
+          docs,
+          forEach: (fn: (doc: any) => void) => docs.forEach(fn),
+        };
+      },
+    };
+  }
+
+  function collection(name: string): any {
+    return {
+      doc: (id?: string) => ref(name, id),
+      add: async (d: Data) => {
+        const r = ref(name);
+        await r.set(d);
+        return r;
+      },
+      ...query(name, { filters: [], max: Infinity }),
+    };
+  }
+
+  // Transactions run one at a time. Real Firestore transactions are
+  // serializable (contended ones retry), so this is the behaviour code may
+  // rely on — and running them concurrently here would hide exactly the
+  // read-then-write races a transaction exists to close.
+  let queue: Promise<unknown> = Promise.resolve();
+  const runTransaction = jest.fn((fn: (tx: any) => Promise<any>) => {
+    const run = queue.then(() => runOne(fn));
+    queue = run.catch(() => undefined);
+    return run;
+  });
+
+  async function runOne(fn: (tx: any) => Promise<any>) {
+    const staged: Array<() => void> = [];
+    const tx = {
+      get: async (r: any) => (typeof r.get === "function" && !r.path ? r.get() : snap(r.path)),
+      set: (r: any, d: Data, opts?: { merge?: boolean }) => staged.push(() => write.set(r.path, d, opts)),
+      create: (r: any, d: Data) => staged.push(() => write.create(r.path, d)),
+      update: (r: any, d: Data) => staged.push(() => write.update(r.path, d)),
+      delete: (r: any) => staged.push(() => write.delete(r.path)),
+    };
+    const result = await fn(tx);
+    staged.forEach((w) => w());
+    return result;
+  }
+
+  /** Batched writes, applied together on commit. */
+  const batch = () => {
+    const staged: Array<() => void> = [];
+    return {
+      set: (r: any, d: Data, opts?: { merge?: boolean }) => staged.push(() => write.set(r.path, d, opts)),
+      update: (r: any, d: Data) => staged.push(() => write.update(r.path, d)),
+      delete: (r: any) => staged.push(() => write.delete(r.path)),
+      commit: async () => staged.forEach((w) => w()),
+    };
+  };
+
+  return {
+    store,
+    get: (path: string) => store.get(path),
+    collection,
+    doc: (path: string) => {
+      const parts = path.split("/");
+      return ref(parts.slice(0, -1).join("/"), parts[parts.length - 1]);
+    },
+    runTransaction,
+    batch,
+  };
+}
+
+/** Point admin.firestore() at a fake, keeping the static helpers. Returns a restore fn. */
+export function useFakeFirestore(db: FakeDb): () => void {
+  const { Timestamp, FieldValue, FieldPath } = admin.firestore;
+  const spy = jest.spyOn(admin, "firestore").mockReturnValue(db as any);
+  Object.assign(admin.firestore, { Timestamp, FieldValue, FieldPath });
+  return () => spy.mockRestore();
+}
+
+/** A wallet doc as setupPin creates it. */
+export function wallet(balance: number, extra: Data = {}): Data {
+  return {
+    balance,
+    currency: "USD",
+    totalReceived: 0,
+    totalSent: 0,
+    lastTransactionAt: null,
+    updatedAt: admin.firestore.Timestamp.now(),
+    ...extra,
+  };
+}

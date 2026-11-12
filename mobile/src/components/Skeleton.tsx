@@ -8,9 +8,10 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import LinearGradient from 'react-native-linear-gradient';
-import { colors, spacing, borderRadius } from '../theme';
+import { spacing, borderRadius, useColors } from '../theme';
 
 function Shimmer({ width }: { width: number }) {
+  const colors = useColors();
   const position = useSharedValue(-1);
 
   useEffect(() => {
@@ -31,7 +32,7 @@ function Shimmer({ width }: { width: number }) {
   return (
     <Animated.View style={[StyleSheet.absoluteFill, style]}>
       <LinearGradient
-        colors={['transparent', 'rgba(255,255,255,0.07)', 'transparent']}
+        colors={['transparent', colors.ui.ink(0.07), 'transparent']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={StyleSheet.absoluteFill}
@@ -48,6 +49,7 @@ interface SkeletonBoxProps {
 }
 
 function SkeletonBox({ width, height, borderRadius: br = 8, style }: SkeletonBoxProps) {
+  const colors = useColors();
   const { width: screenWidth } = useWindowDimensions();
   const resolvedWidth = typeof width === 'string' ? screenWidth * 0.9 : width;
 
@@ -58,7 +60,7 @@ function SkeletonBox({ width, height, borderRadius: br = 8, style }: SkeletonBox
           width,
           height,
           borderRadius: br,
-          backgroundColor: colors.dark.glass,
+          backgroundColor: colors.ui.glass,
           overflow: 'hidden',
         },
         style,

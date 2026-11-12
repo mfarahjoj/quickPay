@@ -1,10 +1,15 @@
 name: CI
 
+# Runs on every branch: work happens on feature branches, and a check that
+# only fires on one branch never sees most changes.
+#
+# There is deliberately no deploy job. Functions that move money reach prod
+# only by an explicit, per-target deploy (`firebase deploy --only
+# functions:x,y`) from a pushed commit — see CLAUDE.md "Deployment discipline".
 on:
   push:
-    branches: [main]
+    branches: ['**']
   pull_request:
-    branches: [main]
 
 jobs:
   functions:
@@ -17,12 +22,16 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: functions/package-lock.json
       - run: npm ci
       - run: npx tsc --noEmit
+      # Lint is reported but not yet a gate: the backlog predates CI running on
+      # feature branches (functions ~5.7k, mobile 29 errors on 2026-10-03).
+      # Typecheck and tests are the gate. Remove continue-on-error once clean.
       - run: npx eslint src --ext .ts
+        continue-on-error: true
       - run: npm test
 
   mobile:
@@ -35,32 +44,45 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: mobile/package-lock.json
       - run: npm ci
       - run: npx tsc --noEmit
+      # Lint is reported but not yet a gate: the backlog predates CI running on
+      # feature branches (functions ~5.7k, mobile 29 errors on 2026-10-03).
+      # Typecheck and tests are the gate. Remove continue-on-error once clean.
       - run: npm run lint
+        continue-on-error: true
 
-  deploy-functions:
-    name: Deploy Functions
-    needs: functions
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+  merchant-app:
+    name: Merchant app — Typecheck
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: functions
+        working-directory: merchant-app
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
-          cache-dependency-path: functions/package-lock.json
+          cache-dependency-path: merchant-app/package-lock.json
       - run: npm ci
-      - run: npm run build
-      - uses: w9jds/firebase-action@master
+      - run: npx tsc --noEmit
+
+  admin:
+    name: Admin console — Typecheck
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: admin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          args: deploy --only functions
-        env:
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          node-version: 22
+          cache: npm
+          cache-dependency-path: admin/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck

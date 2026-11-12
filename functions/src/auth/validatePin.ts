@@ -1,8 +1,11 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
-import { verifyPin } from "../utils/encryption";
+import { verifyPin, hashPin, pinHashNeedsUpgrade } from "../utils/encryption";
+import { AuthSecrets, readAuth, writeAuth } from "./pinStore";
 import { validatePin, requireAuth } from "../utils/validation";
 import { ApiResponse } from "../types";
+import { getRates } from "../config/rates";
+import { consumeBiometricToken, isBiometricToken } from "./biometricKeys";
 
 interface ValidatePinRequest {
   pin: string;
@@ -10,7 +13,9 @@ interface ValidatePinRequest {
 
 // Lockout policy shared by every PIN surface (app unlock, payments, changePin,
 // account deletion): 5 straight failures lock for 60s, doubling per additional
-// failure, capped at 15 minutes. Counter resets on any successful check.
+// failure, capped at 15 minutes. At `pinHardLockAttempts` (default 10, O1) the
+// PIN locks for good: only a PIN reset or support clears it (review A3).
+// The counter resets on any successful check.
 const MAX_ATTEMPTS_BEFORE_LOCK = 5;
 const BASE_LOCK_SECONDS = 60;
 const MAX_LOCK_SECONDS = 15 * 60;
@@ -20,6 +25,7 @@ const MAX_LOCK_SECONDS = 15 * 60;
  * Used before sensitive operations
  */
 export const validateUserPin = https.onCall(
+  { enforceAppCheck: true },
   async (request: https.CallableRequest<ValidatePinRequest>):
     Promise<ApiResponse<{ valid: boolean }>> => {
     // Validate authentication
@@ -57,6 +63,14 @@ export const validateUserPin = https.onCall(
 /**
  * Verify a user's PIN with shared attempt limiting.
  *
+ * The attempt is counted *before* the PIN is compared, inside a transaction
+ * that also checks the lock. Counting after the compare let a burst of
+ * parallel requests all read "not locked" and all get a guess, so the lockout
+ * only held for callers polite enough to wait for each answer. Now the
+ * transactions serialise on the user doc: the fifth reservation sets the
+ * lock, and every request after it is refused without a guess. A correct PIN
+ * then gives its reservation back by clearing the counter.
+ *
  * Throws `resource-exhausted` (with `secondsLeft` in details) while the PIN is
  * locked out, `not-found` when the user doc is missing, and
  * `failed-precondition` when no PIN has been set up yet.
@@ -67,61 +81,105 @@ export async function verifyUserPin(
 ): Promise<boolean> {
   const db = admin.firestore();
   const userRef = db.collection("users").doc(userId);
-  const userDoc = await userRef.get();
 
-  if (!userDoc.exists) {
-    throw new https.HttpsError("not-found", "User not found");
+  // A Face ID approval (auth/biometricKeys.ts) stands in for the PIN once.
+  // A hard-locked PIN stays locked for it too: only a reset opens it.
+  if (isBiometricToken(pin)) {
+    const auth = await readAuth(userId);
+    if (auth.pinHardLocked) {
+      throw new https.HttpsError(
+        "resource-exhausted",
+        "Your PIN is locked after too many wrong attempts. Reset your PIN to unlock it.",
+        { hardLocked: true }
+      );
+    }
+    const ok = await consumeBiometricToken(userId, pin);
+    if (ok) {
+      const batch = db.batch();
+      writeAuth(batch, userId, {}, { active: true });
+      await batch.commit();
+    }
+    return ok;
   }
 
-  const userData = userDoc.data()!;
-  const pinHash = userData.pinHash;
+  const { pinHardLockAttempts: hardLockAt } = await getRates();
+  const pinHash = await db.runTransaction(async (tx) => {
+    const userDoc = await tx.get(userRef);
+    if (!userDoc.exists) {
+      throw new https.HttpsError("not-found", "User not found");
+    }
+    // PIN secrets live server-only (pinStore.ts); legacy copies on the user
+    // doc are read once and moved by the write below.
+    const auth = await readAuth(userId, tx, userDoc.data());
+    if (!auth.pinHash) {
+      throw new https.HttpsError(
+        "failed-precondition",
+        "PIN not set up. Please set up your PIN first."
+      );
+    }
 
-  if (!pinHash) {
-    throw new https.HttpsError(
-      "failed-precondition",
-      "PIN not set up. Please set up your PIN first."
-    );
-  }
+    if (auth.pinHardLocked) {
+      throw new https.HttpsError(
+        "resource-exhausted",
+        "Your PIN is locked after too many wrong attempts. Reset your PIN to unlock it.",
+        { hardLocked: true }
+      );
+    }
 
-  const now = admin.firestore.Timestamp.now();
-  const lockedUntil = userData.pinLockedUntil as
-    | admin.firestore.Timestamp
-    | null
-    | undefined;
+    const now = admin.firestore.Timestamp.now();
+    const lockedUntil = auth.pinLockedUntil;
+    if (lockedUntil && lockedUntil.toMillis() > now.toMillis()) {
+      const secondsLeft = Math.ceil(
+        (lockedUntil.toMillis() - now.toMillis()) / 1000
+      );
+      throw new https.HttpsError(
+        "resource-exhausted",
+        `Too many incorrect PIN attempts. Try again in ${secondsLeft} seconds.`,
+        { secondsLeft }
+      );
+    }
 
-  if (lockedUntil && lockedUntil.toMillis() > now.toMillis()) {
-    const secondsLeft = Math.ceil(
-      (lockedUntil.toMillis() - now.toMillis()) / 1000
-    );
-    throw new https.HttpsError(
-      "resource-exhausted",
-      `Too many incorrect PIN attempts. Try again in ${secondsLeft} seconds.`,
-      { secondsLeft }
-    );
-  }
+    // Reserve this attempt as a failure; a correct PIN clears it below.
+    const attempts = (auth.pinFailedAttempts ?? 0) + 1;
+    const updates: Record<string, unknown> = { pinFailedAttempts: attempts };
+    if (attempts >= hardLockAt) {
+      updates.pinHardLocked = true;
+      updates.pinLockedUntil = null;
+    } else if (attempts >= MAX_ATTEMPTS_BEFORE_LOCK) {
+      const lockSeconds = Math.min(
+        BASE_LOCK_SECONDS * 2 ** (attempts - MAX_ATTEMPTS_BEFORE_LOCK),
+        MAX_LOCK_SECONDS
+      );
+      updates.pinLockedUntil = admin.firestore.Timestamp.fromMillis(
+        now.toMillis() + lockSeconds * 1000
+      );
+    }
+    // Carry the whole record across on an account's first verify after the move.
+    writeAuth(tx, userId, { ...auth, ...updates }, { hasPin: true });
+    return auth.pinHash as string;
+  });
 
   const isValid = await verifyPin(pin, pinHash);
-
   if (isValid) {
-    if ((userData.pinFailedAttempts ?? 0) > 0 || lockedUntil) {
-      await userRef.update({ pinFailedAttempts: 0, pinLockedUntil: null });
+    const cleared: Partial<AuthSecrets> = { pinFailedAttempts: 0, pinLockedUntil: null };
+    // A pre-pepper hash is re-hashed now, while the PIN is in hand (A2).
+    // Only if nothing changed it meanwhile (a reset or change racing this).
+    let upgrade: string | null = null;
+    if (pinHashNeedsUpgrade(pinHash)) {
+      upgrade = await hashPin(pin).catch((err) => {
+        console.error("PIN pepper upgrade skipped:", err?.message);
+        return null;
+      });
     }
-    return true;
+    await db.runTransaction(async (tx) => {
+      const current = await readAuth(userId, tx);
+      writeAuth(
+        tx,
+        userId,
+        upgrade && current.pinHash === pinHash ? { ...cleared, pinHash: upgrade } : cleared,
+        { hasPin: true, active: true }
+      );
+    });
   }
-
-  const failedAttempts = (userData.pinFailedAttempts ?? 0) + 1;
-  const updates: Record<string, unknown> = {
-    pinFailedAttempts: admin.firestore.FieldValue.increment(1),
-  };
-  if (failedAttempts >= MAX_ATTEMPTS_BEFORE_LOCK) {
-    const lockSeconds = Math.min(
-      BASE_LOCK_SECONDS * 2 ** (failedAttempts - MAX_ATTEMPTS_BEFORE_LOCK),
-      MAX_LOCK_SECONDS
-    );
-    updates.pinLockedUntil = admin.firestore.Timestamp.fromMillis(
-      now.toMillis() + lockSeconds * 1000
-    );
-  }
-  await userRef.update(updates);
-  return false;
+  return isValid;
 }

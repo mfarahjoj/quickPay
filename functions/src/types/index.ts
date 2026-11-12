@@ -28,6 +28,20 @@ export interface LinkedAccounts {
   edahabPhone?: string;
 }
 
+/**
+ * The Zaad account a customer or merchant gives as their own (auth/zaadAccount.ts):
+ * typed, not verified. Merchants' payouts go only here.
+ */
+export interface ZaadAccount {
+  /** E.164, e.g. +252634123456. */
+  msisdn: string;
+  /** The name the Zaad account is registered to. */
+  name: string;
+  updatedAt: FirebaseFirestore.Timestamp;
+  /** When an earlier number was replaced; payouts wait after it. */
+  changedAt?: FirebaseFirestore.Timestamp;
+}
+
 export type AgentService = "cash_in" | "cash_out";
 
 export interface AgentInfo {
@@ -47,12 +61,11 @@ export interface User {
   address?: UserAddress;
   preferredLanguage: PreferredLanguage;
   accountType: "customer" | "merchant" | "topup_agent" | "agent_merchant";
-  pinHash: string;
-  /** Consecutive failed PIN attempts (reset on success / resetPin) */
-  pinFailedAttempts?: number;
-  /** PIN checks rejected until this time after too many failures */
-  pinLockedUntil?: FirebaseFirestore.Timestamp | null;
-  pinResetAt?: FirebaseFirestore.Timestamp;
+  /**
+   * Whether a PIN is set. The PIN hash, lockout counters and reset state live
+   * server-only in users/{uid}/private/auth (auth/pinStore.ts).
+   */
+  hasPin?: boolean;
   /** Consecutive failed top-up/cash-out code guesses (agents only) */
   agentOtpFailedAttempts?: number;
   /** Code guesses rejected until this time after too many failures */
@@ -60,6 +73,7 @@ export interface User {
   kycStatus: KycStatus;
   notificationPreferences: NotificationPreferences;
   linkedAccounts: LinkedAccounts;
+  zaad?: ZaadAccount;
   agentInfo?: AgentInfo;
   dailyTransactionLimit: number;
   monthlyTransactionLimit: number;
@@ -158,6 +172,46 @@ export interface FloatIssuance {
   transactionId?: string;
 }
 
+/**
+ * A merchant asking to be paid their takings.
+ *
+ * The rail is deliberately just a label plus a destination string: Zapp sends
+ * the money by bank transfer, Zaad or cash depending on the merchant, and the
+ * ledger only cares which float account the value leaves from. `externalRef`
+ * is what makes the payout reconcilable against a statement later.
+ */
+export type PayoutStatus = "requested" | "paid" | "rejected";
+
+export interface PayoutRequest {
+  merchantId: string;
+  merchantName?: string;
+  businessName?: string;
+  amountCents: number;
+  /** Which float account the money will leave from when it is sent. */
+  route: FloatRouteName;
+  /** Account name as the merchant gave it — what ops types into the bank. */
+  destinationName: string;
+  /** Account number, IBAN or mobile-money phone number. */
+  destinationRef: string;
+  note?: string;
+  status: PayoutStatus;
+  /** Set when a second approver is needed because of the amount. */
+  requiresSeniorApproval: boolean;
+  /** Raised by the daily automatic payout (D11), not by the merchant. */
+  auto?: boolean;
+  createdAt: FirebaseFirestore.Timestamp;
+  /** Journal entry for the hold taken when the merchant asked. */
+  holdEntryId: string;
+  decidedBy?: string;
+  decidedByEmail?: string;
+  decidedAt?: FirebaseFirestore.Timestamp;
+  decisionReason?: string;
+  /** Bank reference, Zaad transaction id or receipt number. */
+  externalReference?: string;
+  settlementEntryId?: string;
+  transactionId?: string;
+}
+
 // KYC document types
 export interface KycDocument {
   idType: "national_id" | "passport" | "drivers_license";
@@ -202,14 +256,52 @@ export interface Wallet {
    * a projection, like `balance`.
    */
   frozen?: boolean;
+  /**
+   * Cents owed on disputes this wallet lost and couldn't cover yet (D8). The
+   * ledger refuses any debit that would take the balance below it, so the
+   * money can't be spent before the dispute is settled. Raised and lowered
+   * only by dispute resolution (`disputes/`).
+   */
+  reservedCents?: number;
 }
 
 // Transaction types
-export type TransactionType = "payment" | "topup" | "withdrawal" | "refund" | "referral";
+export type TransactionType =
+  | "payment"
+  | "topup"
+  | "withdrawal"
+  | "refund"
+  | "referral"
+  /** An ops correction or a dispute settlement (`adjustments`, `disputes`). */
+  | "adjustment";
 export type TransactionStatus = "pending" | "completed" | "failed" | "cancelled";
+
+/**
+ * What a transaction row actually is (plan 3.1). `type` lumps shop payments,
+ * P2P and payroll together as "payment", so receipts and refunds couldn't
+ * tell them apart; `kind` can. Rows written before it existed are backfilled
+ * from their journal entry (scripts/backfill-transaction-kinds.js).
+ */
+export type TransactionKind =
+  | "merchant_payment"
+  | "online_payment"
+  | "p2p"
+  | "payroll"
+  | "cash_in"
+  | "cash_out"
+  | "payout"
+  | "refund"
+  | "adjustment"
+  | "referral"
+  | "float"
+  | "card_topup"
+  | "mobile_money_topup"
+  | "mobile_money_cashout"
+  | "remittance";
 
 export interface Transaction {
   type: TransactionType;
+  kind: TransactionKind;
   fromUserId: string;
   toUserId: string;
   /** [fromUserId, toUserId] — enables a single array-contains query per user. */
@@ -221,6 +313,8 @@ export interface Transaction {
   netCents?: number;
   /** Agent commission earned on a top-up, in cents. */
   commissionCents?: number;
+  /** Set when an agent's commission was withheld, and why. */
+  commissionWithheld?: "round_trip";
   currency: string;
   status: TransactionStatus;
   qrCodeId?: string;
@@ -234,8 +328,30 @@ export interface Transaction {
   /** On a refunded payment: when it was refunded and the refund tx id. */
   refundedAt?: FirebaseFirestore.Timestamp;
   refundTransactionId?: string;
+  /** On a payment: cents refunded so far, across partial refunds (plan 3.3). */
+  refundedCents?: number;
+  /** On a payment: platform fee returned so far with those refunds. */
+  refundedFeeCents?: number;
+  refundCount?: number;
+  lastRefundTransactionId?: string;
   /** Journal entry that moved the money (accounting source of truth). */
   journalEntryId?: string;
+  /** Cash-out only: the entry that took the hold (journalEntryId is the settlement once completed). */
+  holdEntryId?: string;
+  /** Cash-out only: the entry that returned the hold to the customer. */
+  releaseEntryId?: string;
+  /**
+   * Set on a payment taken through the merchant API, and on its refunds.
+   * Such a payment is refunded through the API only, where partial refunds
+   * are tracked on the charge — see refundPayment.
+   */
+  apiChargeId?: string;
+  /** On an API payment: cents refunded so far, across partial refunds. */
+  amountRefunded?: number;
+  /** On an adjustment row: the `adjustments` doc behind it. */
+  adjustmentId?: string;
+  /** Set on a transaction someone has disputed, and on the row that settled it. */
+  disputeId?: string;
   createdAt: FirebaseFirestore.Timestamp;
   completedAt?: FirebaseFirestore.Timestamp;
   errorMessage?: string;
@@ -334,8 +450,22 @@ export interface Notification {
     | "role_rejected"
     | "float_issued"
     | "float_withdrawn"
+    | "payout_sent"
+    | "payout_rejected"
     | "kyc_approved"
-    | "kyc_rejected";
+    | "kyc_rejected"
+    | "pin_reset"
+    | "cashout_completed"
+    | "cashout_returned"
+    | "adjustment_posted"
+    | "dispute_opened"
+    | "dispute_updated"
+    | "dispute_resolved"
+    | "account_frozen"
+    | "agent_flagged"
+    | "pin_changed"
+    | "new_device"
+    | "phone_changed";
   title: string;
   body: string;
   data?: Record<string, string>;
@@ -364,7 +494,12 @@ export interface CustomerToken {
 }
 
 // Merchant-initiated payment request types
-export type PaymentRequestStatus = "pending" | "approved" | "rejected" | "expired";
+export type PaymentRequestStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "expired"
+  | "cancelled";
 
 export interface MerchantPaymentRequest {
   merchantId: string;
@@ -374,8 +509,25 @@ export interface MerchantPaymentRequest {
   currency: string;
   status: PaymentRequestStatus;
   reference?: string;
+  /**
+   * "cash_out": an agent hands the customer [amount] in cash, paid from their
+   * wallet into the agent's float (customer-qr/counterCashOut.ts). Absent on a
+   * shop payment.
+   */
+  purpose?: "payment" | "cash_out";
+  /** Cash-out only: the fee the customer pays on top, fixed when raised. */
+  feeCents?: number;
   createdAt: FirebaseFirestore.Timestamp;
+  /**
+   * When the customer can no longer approve. Absent on requests raised before
+   * this field existed; `requestExpiryMillis` supplies their old 5-minute limit.
+   */
+  expiresAt?: FirebaseFirestore.Timestamp;
   resolvedAt?: FirebaseFirestore.Timestamp;
+  /** The `transactions` row an approval wrote, so a retried approval can return it. */
+  transactionId?: string;
+  /** Zapp receipt number of the payment this request settled. */
+  receiptNumber?: string;
 }
 
 // Remittance types
@@ -405,7 +557,8 @@ export interface QRPaymentRequest {
 
 export interface PaymentResponse {
   transactionId: string;
-  receiptNumber: string;
+  /** Zapp receipt number. Absent only when replaying a pre-receipt payment. */
+  receiptNumber?: string;
   status: TransactionStatus;
   amount: number;
   merchantId: string;
@@ -443,7 +596,34 @@ export interface CashOutRequest {
   expiresAt: FirebaseFirestore.Timestamp;
   createdAt: FirebaseFirestore.Timestamp;
   completedAt?: FirebaseFirestore.Timestamp;
+  /** The customer's history row, written as "pending" when the hold is taken. */
+  transactionId?: string;
+  /**
+   * Cash-out fee the customer pays on top of `amount` (cashOutFeeRate, D1).
+   * Held with it, kept by Zapp on confirm, returned with it otherwise.
+   */
+  feeCents?: number;
+  /**
+   * Code attempts against this request, by any agent, counted before each
+   * comparison and given back when the code was right. The fifth wrong one
+   * returns the money; no attempt past the fifth is compared at all.
+   */
+  failedAttempts?: number;
+  /**
+   * The same attempts by agent: `{ [agentId]: count }`. One agent gets fewer
+   * than the request allows in total, so no single agent can lock a
+   * customer's cash-out by themselves.
+   */
+  attemptsBy?: Record<string, number>;
+  /** Who tried a code and when, in order, for ops. At most one per attempt. */
+  attemptLog?: Array<{ agentId: string; at: FirebaseFirestore.Timestamp }>;
+  /** Why held money went back to the customer. */
+  releaseReason?: CashOutReleaseReason;
+  releasedAt?: FirebaseFirestore.Timestamp;
 }
+
+/** cancelled: by the customer · replaced: a newer request superseded it · expired: unclaimed in time · too_many_attempts: wrong codes */
+export type CashOutReleaseReason = "cancelled" | "replaced" | "expired" | "too_many_attempts";
 
 export type AgentTopupStatus = "pending" | "completed" | "expired" | "cancelled";
 
@@ -461,4 +641,11 @@ export interface AgentTopupRequest {
   confirmationId?: string; // Unique id recorded on confirmation (= transactionId)
   transactionId?: string;
   completedAt?: FirebaseFirestore.Timestamp;
+  /**
+   * The last agent whose app was shown this request (previewAgentTopup), and
+   * when. If the customer's cash is taken and the top-up never confirmed,
+   * this is who their dispute is raised against.
+   */
+  scannedBy?: string;
+  scannedAt?: FirebaseFirestore.Timestamp;
 }

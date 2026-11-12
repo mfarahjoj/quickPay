@@ -9,6 +9,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { useNavigation } from '@react-navigation/native';
 import NetInfo from '@react-native-community/netinfo';
 import QRCode from 'react-native-qrcode-svg';
 import { firestore } from '../../services/firebase.config';
@@ -40,7 +41,8 @@ import {
   TEXT_FAINT,
 } from '../../components';
 import type { ReceiptDetails } from '../../components/ReceiptScanner';
-import { SuccessCheckIcon, ReceiptIcon, CloseIcon } from '../../components/icons/AuthIcons';
+import { ScanIcon, SuccessCheckIcon, ReceiptIcon, CloseIcon } from '../../components/icons/AuthIcons';
+import CounterIncomingFeed from './CounterIncomingFeed';
 
 type Mode = 'charge' | 'counter';
 type Phase = 'entry' | 'showing' | 'paid' | 'expired';
@@ -48,9 +50,14 @@ type Phase = 'entry' | 'showing' | 'paid' | 'expired';
 const QR_SIZE = 260;
 const TICKET_QR_SIZE = 232;
 
+/**
+ * The Receive tab: a QR for one sale, the counter code, and (top right)
+ * scanning the customer's own code instead.
+ */
 export default function GenerateQRScreen() {
   const { t } = useTranslation();
   const { height: screenHeight } = useWindowDimensions();
+  const navigation = useNavigation<any>();
 
   const [mode, setMode] = useState<Mode>('charge');
   const [amount, setAmount] = useState('');
@@ -461,20 +468,15 @@ export default function GenerateQRScreen() {
     <DarkScreen scroll keyboard contentStyle={styles.content}>
       <View style={styles.topRow}>
         <Text style={styles.title}>{t('navigation.tabs.receive')}</Text>
-        {mode === 'charge' ? (
-          <TouchableOpacity
-            style={styles.scanBtn}
-            onPress={() => {
-              setRefEditing(false);
-              setScannerOpen(true);
-            }}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-          >
-            <ReceiptIcon size={18} color="#FFFFFF" />
-            <Text style={styles.scanBtnText}>{t('qr.receive.scanReceipt')}</Text>
-          </TouchableOpacity>
-        ) : null}
+        <TouchableOpacity
+          style={styles.scanBtn}
+          onPress={() => navigation.navigate('ScanCharge')}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+        >
+          <ScanIcon size={16} color="#FFFFFF" />
+          <Text style={styles.scanBtnText}>{t('qr.receive.scanCustomer')}</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.segment}>
@@ -530,6 +532,7 @@ export default function GenerateQRScreen() {
                 <PillButton label={t('qr.counter.share')} onPress={handleShareSticker} />
                 <Text style={styles.infoText}>{t('qr.counter.hint')}</Text>
               </View>
+              <CounterIncomingFeed />
             </>
           ) : (
             <Text style={styles.infoText}>
@@ -608,6 +611,23 @@ export default function GenerateQRScreen() {
                 <Text style={styles.refAddText}>{t('qr.receive.addReference')}</Text>
               </TouchableOpacity>
             )}
+
+            {/* Fills the amount and the reference from a photographed receipt.
+                Icon only once a reference is showing, so the two share the row. */}
+            {!refEditing ? (
+              <TouchableOpacity
+                style={[styles.receiptBtn, trimmedReference ? styles.receiptBtnIcon : null]}
+                onPress={() => setScannerOpen(true)}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={t('qr.receive.scanReceipt')}
+              >
+                <ReceiptIcon size={18} color="#FFFFFF" />
+                {trimmedReference ? null : (
+                  <Text style={styles.receiptBtnText}>{t('qr.receive.scanReceipt')}</Text>
+                )}
+              </TouchableOpacity>
+            ) : null}
           </View>
 
           {/* Keypad gives way to the system keyboard while a reference is typed */}
@@ -680,24 +700,19 @@ const styles = StyleSheet.create({
     letterSpacing: -0.8,
     color: '#FFFFFF',
   },
+  // segmented mode switch
   scanBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    height: 40,
+    gap: 6,
+    height: 34,
     paddingHorizontal: 14,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 9999,
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.16)',
+    borderColor: 'rgba(255,255,255,0.12)',
   },
-  scanBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-
-  // segmented mode switch
+  scanBtnText: { fontSize: 13, fontWeight: '600', color: '#FFFFFF' },
   segment: {
     flexDirection: 'row',
     marginHorizontal: 24,
@@ -797,10 +812,33 @@ const styles = StyleSheet.create({
 
   // reference
   refRow: {
+    flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 24,
     minHeight: 48,
     justifyContent: 'center',
+    gap: 10,
+  },
+  receiptBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 40,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
+  },
+  receiptBtnIcon: {
+    width: 40,
+    paddingHorizontal: 0,
+  },
+  receiptBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   refAdd: {
     height: 40,
@@ -819,7 +857,7 @@ const styles = StyleSheet.create({
   refChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    maxWidth: '100%',
+    flexShrink: 1,
     height: 40,
     paddingLeft: 14,
     paddingRight: 10,

@@ -7,12 +7,18 @@ import { useAuth } from '../hooks/useAuth';
 import { useMerchantOnboardingGate } from '../hooks/useMerchantOnboardingGate';
 import MerchantOnboardingNavigator from './MerchantOnboardingNavigator';
 import RoleReviewPendingScreen from '../screens/auth/RoleReviewPendingScreen';
-import { signOut } from '../services/auth.service';
+import { confirmSignOut } from '../utils/confirmSignOut';
+import { AppLockGate } from '../components/security/AppLockGate';
+import { DeletionPendingScreen } from '../components/security/DeletionPendingScreen';
+import { useDeletionPending } from '../hooks/useDeletionPending';
+import { useIdleSignOut } from '../hooks/useIdleSignOut';
+import { useDeviceIntegrity } from '../hooks/useDeviceIntegrity';
+import { ConsentGate } from '../components/legal/ConsentGate';
+import { ZaadGate } from '../screens/settings/ZaadAccountScreen';
 import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import { colors } from '../theme';
 import {
   HomeTabIcon,
-  ScanTabIcon,
   ReceiveTabIcon,
   HistoryTabIcon,
   SettingsTabIcon,
@@ -36,19 +42,37 @@ type MerchantStackParamList = {
     tokenId: string;
     customerName: string;
     customerId: string;
+    /** "cash_out": the agent hands over cash once the customer approves. */
+    purpose?: 'payment' | 'cash_out';
   };
+  ScanCharge: undefined;
+  ScanCashOut: { purpose: 'cash_out' };
   TransactionDetail: { transaction: any };
   TopupCustomer: undefined;
-  TopupHistory: undefined;
   ConfirmCashOut: undefined;
   ConfirmTopup: undefined;
   AgentProfileEdit: undefined;
   Payroll: undefined;
+  Payout: undefined;
+  Developers: undefined;
+  DeleteAccount: undefined;
+  DisputesInbox: undefined;
+  DisputeDetail: { disputeId: string };
+  ReportProblem: { transactionId: string };
+  AutoPayout: undefined;
+  Statement: undefined;
+  MoveToFloat: undefined;
+  BuyFloatZaad: undefined;
+  Security: undefined;
+  Devices: undefined;
+  ChangePhone: undefined;
+  ChangePin: undefined;
+  ResetPin: undefined;
+  ZaadAccount: undefined;
 };
 
 type TabParamList = {
   Dashboard: undefined;
-  ScanCharge: undefined;
   GenerateQR: undefined;
   History: undefined;
   Settings: undefined;
@@ -62,7 +86,6 @@ const Tab = createBottomTabNavigator<TabParamList>();
 type TabIconArgs = { color: string; focused: boolean };
 
 const DashboardIcon = ({ color, focused }: TabIconArgs) => <HomeTabIcon color={color} focused={focused} />;
-const ScanIcon = ({ color, focused }: TabIconArgs) => <ScanTabIcon color={color} focused={focused} />;
 const HistoryIcon = ({ color, focused }: TabIconArgs) => <HistoryTabIcon color={color} focused={focused} />;
 const SettingsIcon = ({ color, focused }: TabIconArgs) => <SettingsTabIcon color={color} focused={focused} />;
 const ReceiveIcon = ({ color, focused }: TabIconArgs) => <ReceiveTabIcon color={color} focused={focused} />;
@@ -133,16 +156,6 @@ function MainTabs() {
         }}
       />
       <Tab.Screen
-        name="ScanCharge"
-        getComponent={() => require('../screens/scan/ScanCustomerScreen').default}
-        options={{
-          title: t('navigation.tabs.scan'),
-          headerTitle: t('navigation.tabs.scanAndCharge'),
-          tabBarIcon: ScanIcon,
-          tabBarAccessibilityLabel: t('navigation.accessibility.scanTab'),
-        }}
-      />
-      <Tab.Screen
         name="GenerateQR"
         getComponent={() => require('../screens/qr/GenerateQRScreen').default}
         options={{
@@ -185,6 +198,9 @@ function MainStackNavigator() {
         headerTitleStyle: { fontWeight: '700', color: '#FFFFFF' },
         headerTintColor: '#FFFFFF',
         headerShadowVisible: false,
+        // The label would be the previous route's title, and MainTabs has
+        // none, so iOS showed the internal name "MainTabs" in every language.
+        headerBackTitleVisible: false,
       }}
     >
       <MainStack.Screen
@@ -211,14 +227,20 @@ function MainStackNavigator() {
         options={{ title: t('navigation.headers.topUpCustomer') }}
       />
       <MainStack.Screen
-        name="TopupHistory"
-        getComponent={() => require('../screens/topup/TopupHistoryScreen').default}
-        options={{ title: t('navigation.headers.topUpHistory') }}
+        name="ScanCharge"
+        getComponent={() => require('../screens/scan/ScanCustomerScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="ScanCashOut"
+        getComponent={() => require('../screens/scan/ScanCustomerScreen').default}
+        initialParams={{ purpose: 'cash_out' }}
+        options={{ headerShown: false }}
       />
       <MainStack.Screen
         name="ConfirmCashOut"
         getComponent={() => require('../screens/cashout/ConfirmCashOutScreen').default}
-        options={{ title: 'Confirm Cash Out', presentation: 'modal' }}
+        options={{ headerShown: false, presentation: 'modal' }}
       />
       <MainStack.Screen
         name="ConfirmTopup"
@@ -235,8 +257,88 @@ function MainStackNavigator() {
         }}
       </MainStack.Screen>
       <MainStack.Screen
+        name="Payout"
+        getComponent={() => require('../screens/payouts/PayoutScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
         name="Payroll"
         getComponent={() => require('../screens/payroll/PayrollScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="Developers"
+        getComponent={() => require('../screens/settings/DevelopersScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="DeleteAccount"
+        getComponent={() => require('../screens/settings/DeleteAccountScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="DisputesInbox"
+        getComponent={() => require('../screens/disputes/DisputesInboxScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="DisputeDetail"
+        getComponent={() => require('../screens/disputes/DisputeDetailScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="MoveToFloat"
+        getComponent={() => require('../screens/agent/MoveToFloatScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="BuyFloatZaad"
+        getComponent={() => require('../screens/agent/BuyFloatZaadScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="AutoPayout"
+        getComponent={() => require('../screens/payouts/AutoPayoutScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="Statement"
+        getComponent={() => require('../screens/payouts/StatementScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="Security"
+        getComponent={() => require('../screens/settings/SecurityScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="ChangePhone"
+        getComponent={() => require('../screens/settings/ChangePhoneScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="Devices"
+        getComponent={() => require('../screens/settings/DevicesScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="ChangePin"
+        getComponent={() => require('../screens/settings/ChangePinScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="ResetPin"
+        getComponent={() => require('../screens/settings/ResetPinScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="ReportProblem"
+        getComponent={() => require('../screens/disputes/ReportProblemScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="ZaadAccount"
+        getComponent={() => require('../screens/settings/ZaadAccountScreen').default}
         options={{ headerShown: false }}
       />
     </MainStack.Navigator>
@@ -244,8 +346,12 @@ function MainStackNavigator() {
 }
 
 export default function AppNavigator() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const { loading, state, requestedRole, rejectionReason } = useMerchantOnboardingGate();
+  useIdleSignOut(!!user);
+  useDeviceIntegrity(!!user);
+  const deletionDueAt = useDeletionPending(user?.uid);
 
   // A rejected applicant who chooses to try again is sent back through
   // onboarding. Local because there is nothing to persist: submitting writes a
@@ -259,8 +365,13 @@ export default function AppNavigator() {
 
   // Avoid mounting NavigationContainer during bootstrap — swapping root stack
   // screens while auth/onboarding state resolves crashes react-native-screens on iOS.
-  if (loading) {
+  if (loading || (user && deletionDueAt === undefined)) {
     return <BootstrapLoading />;
+  }
+
+  // Signed back in while the account waits to be deleted: keep it (PIN) or leave.
+  if (user && deletionDueAt) {
+    return <DeletionPendingScreen dueAt={deletionDueAt} />;
   }
 
   if (user && (state === 'onboarding' || (state === 'rejected' && reapplying))) {
@@ -289,10 +400,10 @@ export default function AppNavigator() {
   // role, so it can only run once the role has actually been granted.
   if (user && state === 'agentProfile') {
     const AgentProfileSetupScreen = require('../screens/auth/AgentProfileSetupScreen').default;
-    return <AgentProfileSetupScreen navigation={{ goBack: signOut }} />;
+    return <AgentProfileSetupScreen navigation={{ goBack: () => confirmSignOut(t) }} />;
   }
 
-  return (
+  const app = (
     <NavigationContainer ref={navigationRef}>
       <RootStack.Navigator
         screenOptions={{
@@ -307,6 +418,20 @@ export default function AppNavigator() {
         )}
       </RootStack.Navigator>
     </NavigationContainer>
+  );
+
+  // Signed in and approved: the app lock covers it (review A3). Keyed by uid
+  // so a different account never inherits an unlocked state.
+  return user ? (
+    <AppLockGate key={user.uid}>
+      {/* Terms and privacy, recorded with versions (review E12), then the
+          Zaad account payouts go to. */}
+      <ConsentGate uid={user.uid}>
+        <ZaadGate>{app}</ZaadGate>
+      </ConsentGate>
+    </AppLockGate>
+  ) : (
+    app
   );
 }
 

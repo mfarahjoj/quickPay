@@ -13,7 +13,12 @@ export interface PendingPaymentRequest {
   status: string;
   reference?: string;
   createdAt: Date;
+  /** When the shop's charge stops being payable. */
+  expiresAt: Date;
 }
+
+/** Requests raised before `expiresAt` was stored were payable for five minutes. */
+const LEGACY_TTL_MS = 5 * 60 * 1000;
 
 const merchantNameCache: Record<string, string> = {};
 
@@ -43,7 +48,18 @@ async function resolveMerchantName(merchantId: string): Promise<string> {
 export function usePaymentRequests() {
   const [requests, setRequests] = useState<PendingPaymentRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [now, setNow] = useState(() => Date.now());
   const isMounted = useRef(true);
+
+  // A charge nobody answered stays "pending" in the database until someone
+  // touches it, so drop it from the list once its window has passed rather
+  // than offer the customer a request they can no longer pay.
+  const hasPending = requests.length > 0;
+  useEffect(() => {
+    if (!hasPending) return;
+    const timer = setInterval(() => setNow(Date.now()), 5000);
+    return () => clearInterval(timer);
+  }, [hasPending]);
 
   useEffect(() => {
     isMounted.current = true;
@@ -72,6 +88,9 @@ export function usePaymentRequests() {
               status: d.status as string,
               reference: d.reference as string | undefined,
               createdAt: d.createdAt?.toDate() ?? new Date(),
+              expiresAt:
+                d.expiresAt?.toDate() ??
+                new Date((d.createdAt?.toMillis?.() ?? Date.now()) + LEGACY_TTL_MS),
             };
           });
 
@@ -100,5 +119,8 @@ export function usePaymentRequests() {
     };
   }, []);
 
-  return { requests, loading };
+  return {
+    requests: requests.filter((r) => r.expiresAt.getTime() > now),
+    loading,
+  };
 }

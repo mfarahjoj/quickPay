@@ -65,6 +65,7 @@ function incomeCents(tx: Transaction, userId: string): number {
  * commission streams, with a vs-previous-period delta for the summary header.
  */
 export const getTransactionSummary = https.onCall(
+  { enforceAppCheck: true },
   async (
     request: https.CallableRequest<GetTransactionSummaryRequest>
   ): Promise<ApiResponse<TransactionSummary>> => {

@@ -24,6 +24,7 @@ interface CreateRemittanceResponse {
 }
 
 export const createRemittance = https.onCall(
+  { enforceAppCheck: true },
   async (
     request: https.CallableRequest<CreateRemittanceRequest>
   ): Promise<ApiResponse<CreateRemittanceResponse>> => {

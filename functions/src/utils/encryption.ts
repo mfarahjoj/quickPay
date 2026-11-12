@@ -27,12 +27,43 @@ function getEncryptionKey(): Buffer {
   return Buffer.from(key.slice(0, 32));
 }
 
+/**
+ * Stored PINs (ONBOARDING_SECURITY_REVIEW.md A2):
+ *   "p1$" + bcrypt(HMAC-SHA256(PIN_PEPPER, pin))   current
+ *   bcrypt(pin)                                    before the pepper
+ * The version prefix leaves room to rotate the pepper later as "p2$".
+ * Old hashes still verify, and verifyUserPin re-hashes them on the next
+ * correct PIN.
+ */
+const PEPPER_PREFIX = "p1$";
+
+function pinPepper(): string {
+  const pepper = process.env.PIN_PEPPER;
+  if (!pepper || pepper.length < 32) {
+    // Fail closed: hashing without it would quietly store weaker PINs.
+    throw new Error("PIN_PEPPER secret is not set (see config/secrets.ts).");
+  }
+  return pepper;
+}
+
+function peppered(pin: string): string {
+  return crypto.createHmac("sha256", pinPepper()).update(pin, "utf8").digest("hex");
+}
+
 export async function hashPin(pin: string): Promise<string> {
-  return await bcrypt.hash(pin, SALT_ROUNDS);
+  return PEPPER_PREFIX + (await bcrypt.hash(peppered(pin), SALT_ROUNDS));
 }
 
 export async function verifyPin(pin: string, hash: string): Promise<boolean> {
+  if (hash.startsWith(PEPPER_PREFIX)) {
+    return await bcrypt.compare(peppered(pin), hash.slice(PEPPER_PREFIX.length));
+  }
   return await bcrypt.compare(pin, hash);
+}
+
+/** True for a hash from before the pepper, which should be re-hashed. */
+export function pinHashNeedsUpgrade(hash: string): boolean {
+  return !hash.startsWith(PEPPER_PREFIX);
 }
 
 /**

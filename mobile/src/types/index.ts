@@ -16,6 +16,9 @@ export interface NotificationPreferences {
 export interface LinkedAccounts {
   zaadPhone?: string;
   edahabPhone?: string;
+  /** Set by the server once an activation payment from the number arrives. */
+  zaadVerified?: boolean;
+  edahabVerified?: boolean;
 }
 
 export interface User {
@@ -65,6 +68,13 @@ export interface Transaction {
   counterpartyPhone?: string | null;
   net?: number;
   fee?: number;
+  /** Set when the payment was refunded (getTransactions). */
+  refundedAt?: Date | string;
+  refundOfTransactionId?: string;
+  /** Set when someone disputed this transaction. */
+  disputeId?: string;
+  /** What the row really is (shop payment, transfer...); see getTransactions. */
+  kind?: string;
   /** The merchant's order or invoice reference, when the sale had one. */
   reference?: string;
   /** Zapp receipt number, e.g. "ZP-7K3M-9QX2". Absent on older payments. */

@@ -1,12 +1,13 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Pressable, ScrollView, RefreshControl, ActivityIndicator, Alert, useWindowDimensions, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Pressable, ScrollView, RefreshControl, ActivityIndicator, Alert, StatusBar, useWindowDimensions } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import Svg, { Path, Polygon } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import QRCode from 'react-native-qrcode-svg';
 import { useWallet } from '../../hooks/useWallet';
 import { useTransactions } from '../../hooks/useTransactions';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles, useColors, useTheme, wallpaper, tints } from '../../theme';
 import { CURRENCY_SYMBOL } from '../../config/constants';
 import { Card } from '../../components/Card';
 import { TransactionItem } from '../../components/TransactionItem';
@@ -15,7 +16,13 @@ import { triggerHaptic } from '../../services/haptics.service';
 import { usePaymentRequests } from '../../hooks/usePaymentRequests';
 import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { useUserProfile } from '../../hooks/useUserProfile';
-import { resolveReceiveToken, buildLocalCustomerQrPayload } from '../../services/customerToken.service';
+import {
+  resolveReceiveToken,
+  isTokenStillValid,
+  receiveQrErrorKey,
+  secondsLeftFromToken,
+  type TokenResponse,
+} from '../../services/customerToken.service';
 import { LanguageSelector } from '../../components/LanguageSelector';
 import { QrCodeIcon } from '../../components/icons/AuthIcons';
 import Animated, {
@@ -30,6 +37,10 @@ import Animated, {
 } from 'react-native-reanimated';
 import { AnimatedNumber } from '../../components/AnimatedNumber';
 import { Springs } from '../../constants/springs';
+import { LightHomeHeader } from '../../components/home/LightHomeHeader';
+import { HomeWidgets } from '../../components/home/HomeWidgets';
+import { ChevronIcon, PinIcon, SendIcon } from '../../components/icons/LineIcons';
+import { initialsOf } from '../../utils/initials';
 
 interface Props {
   navigation: any;
@@ -37,7 +48,8 @@ interface Props {
 
 const TAB_BAR_HEIGHT = 49;
 
-const CORAL = colors.dark.accent;
+// Brand coral: the same in light and dark.
+const CORAL = '#FF5043';
 
 // ─── Tile icons ───────────────────────────────────────────────
 
@@ -90,6 +102,8 @@ function CashGlyph({ size = 20, color = CORAL }: { size?: number; color?: string
 // ─── Compact empty activity state ─────────────────────────────
 
 function EmptyActivity({ message }: { message: string }) {
+  const colors = useColors();
+  const styles = useStyles();
   const spin = useSharedValue(0);
 
   useEffect(() => {
@@ -104,7 +118,7 @@ function EmptyActivity({ message }: { message: string }) {
     <View style={styles.emptyActivity}>
       <View style={styles.emptyOrbitWrap}>
         <Animated.View style={[styles.emptyOrbit, orbitStyle]} />
-        <BoltGlyph size={22} color="rgba(255,255,255,0.35)" />
+        <BoltGlyph size={22} color={colors.ui.ink(0.35)} />
       </View>
       <Text style={styles.emptyActivityText}>{message}</Text>
     </View>
@@ -138,6 +152,7 @@ function ActionTile({
   accessibilityLabel,
   children,
 }: ActionTileProps) {
+  const styles = useStyles();
   const enter = useSharedValue(0);
   const scale = useSharedValue(1);
   const flash = useSharedValue(0);
@@ -260,20 +275,32 @@ function ActionTile({
 }
 
 export default function DashboardScreen({ navigation }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
+  const lightStyles = useLightStyles();
+  // Light mode has its own Home: the coral header, cards and widgets.
+  const { scheme } = useTheme();
+  const isLight = scheme === 'light';
+  const isFocused = useIsFocused();
   const { t } = useTranslation();
   const { height: windowHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { wallet, loading: walletLoading, error: walletError, refreshBalance } = useWallet();
-  const { transactions, loading: txLoading, error: txError, refresh: refreshTx } = useTransactions(undefined, 5);
+  // 30 rows: the light Home's spending card counts the last seven days.
+  const { transactions, loading: txLoading, error: txError, refresh: refreshTx } = useTransactions(undefined, 30);
   const [refreshing, setRefreshing] = useState(false);
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [idleTick, setIdleTick] = useState(0);
+  // Light Home: the status bar turns dark once the coral header has scrolled away.
+  const [headerHeight, setHeaderHeight] = useState(0);
+  const [pastHeader, setPastHeader] = useState(false);
 
-  // Idle attractor: nudge one action tile every few seconds
+  // Idle attractor: nudge one action tile every few seconds (dark Home only).
   useEffect(() => {
+    if (isLight) return;
     const interval = setInterval(() => setIdleTick((v) => v + 1), 4200);
     return () => clearInterval(interval);
-  }, []);
+  }, [isLight]);
   const { requests: pendingRequests } = usePaymentRequests();
   const { isConnected } = useNetworkStatus();
   const { profile, firstName } = useUserProfile();
@@ -282,6 +309,8 @@ export default function DashboardScreen({ navigation }: Props) {
   const [qrValue, setQrValue] = useState<string | null>(null);
   const [qrLoading, setQrLoading] = useState(false);
   const [qrSecondsLeft, setQrSecondsLeft] = useState(0);
+  /** The code on screen, so pressing Show again keeps it while it's still valid. */
+  const qrTokenRef = useRef<TokenResponse | null>(null);
   const qrTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const qrAutoHideRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const qrPrewarmRef = useRef<Promise<void> | null>(null);
@@ -336,8 +365,10 @@ export default function DashboardScreen({ navigation }: Props) {
     setQrSecondsLeft(0);
   }, [clearQrTimers]);
 
-  const startQrTimers = useCallback(() => {
-    setQrSecondsLeft(QR_DISPLAY_SECONDS);
+  // Shown for QR_DISPLAY_SECONDS, or until the code itself expires if sooner.
+  const startQrTimers = useCallback((token: TokenResponse) => {
+    const seconds = Math.max(1, Math.min(QR_DISPLAY_SECONDS, secondsLeftFromToken(token) - 5));
+    setQrSecondsLeft(seconds);
 
     if (qrTimerRef.current) clearInterval(qrTimerRef.current);
     qrTimerRef.current = setInterval(() => {
@@ -351,10 +382,18 @@ export default function DashboardScreen({ navigation }: Props) {
     }, 1000);
 
     if (qrAutoHideRef.current) clearTimeout(qrAutoHideRef.current);
-    qrAutoHideRef.current = setTimeout(hideQr, QR_DISPLAY_SECONDS * 1000);
+    qrAutoHideRef.current = setTimeout(hideQr, seconds * 1000);
   }, [hideQr]);
 
   const showQr = useCallback(async () => {
+    // A code is already on screen and still scannable: keep it, just show it
+    // for longer. A new one would cancel the one the customer is showing.
+    const current = qrTokenRef.current;
+    if (qrVisible && isTokenStillValid(current)) {
+      triggerHaptic('light');
+      startQrTimers(current!);
+      return;
+    }
     try {
       setQrLoading(true);
       triggerHaptic('medium');
@@ -366,27 +405,19 @@ export default function DashboardScreen({ navigation }: Props) {
         qrPrewarmRef.current = null;
       }
 
-      try {
-        const token = await resolveReceiveToken({ forceRefresh: false });
-        setQrValue(token.tokenData);
-      } catch {
-        const fallback = buildLocalCustomerQrPayload();
-        if (!fallback) {
-          Alert.alert(t('common.error'), t('dashboard.qrSignInRequired'));
-          return;
-        }
-        setQrValue(fallback);
-      }
-
+      const token = await resolveReceiveToken({ forceRefresh: false });
+      qrTokenRef.current = token;
+      setQrValue(token.tokenData);
       setQrVisible(true);
-      startQrTimers();
-    } catch (e: any) {
+      startQrTimers(token);
+    } catch (e: unknown) {
+      // No stand-in QR: nothing can scan one, so it would only look like it works.
       triggerHaptic('light');
-      Alert.alert(t('common.error'), e?.message || t('dashboard.qrError'));
+      Alert.alert(t('common.error'), t(receiveQrErrorKey(e)));
     } finally {
       setQrLoading(false);
     }
-  }, [startQrTimers, t]);
+  }, [qrVisible, startQrTimers, t]);
 
   const scrollQrIntoFocus = useCallback(() => {
     const content = scrollContentRef.current;
@@ -440,9 +471,236 @@ export default function DashboardScreen({ navigation }: Props) {
     setBalanceVisible((prev) => !prev);
   };
 
+  const offlineBanner = !isConnected && (
+    <View style={styles.offlineBanner}>
+      <Text style={styles.offlineBannerText}>{t('dashboard.offlineMessage')}</Text>
+    </View>
+  );
+  const errorBanner = errorMessage != null && (
+    <TouchableOpacity style={styles.errorBanner} onPress={onRefresh}>
+      <Text style={styles.errorBannerText}>{t('dashboard.errorRetry')}</Text>
+    </TouchableOpacity>
+  );
+  const businessBanner = profile && profile.accountType !== 'customer' && (
+    <View style={styles.businessBanner}>
+      <Text style={styles.businessBannerTitle}>{t('dashboard.businessAccount.title')}</Text>
+      <Text style={styles.businessBannerText}>{t('dashboard.businessAccount.body')}</Text>
+    </View>
+  );
+  const pendingSection = pendingRequests.length > 0 && (
+    <View style={styles.pendingSection}>
+      <Text style={styles.pendingSectionTitle}>{t('dashboard.pendingRequests')}</Text>
+      {pendingRequests.map((req) => (
+        <TouchableOpacity
+          key={req.id}
+          style={styles.pendingCard}
+          onPress={() => {
+            triggerHaptic('light');
+            navigation.navigate('ApprovePayment', {
+              requestId: req.id,
+              merchantName: req.merchantName,
+              amount: req.amount,
+              currency: req.currency,
+              createdAt: req.createdAt.toISOString(),
+              ...(req.reference ? { reference: req.reference } : {}),
+            });
+          }}
+        >
+          <View style={styles.pendingCardContent}>
+            <View>
+              <Text style={styles.pendingTitle}>{req.merchantName}</Text>
+              <Text style={styles.pendingAmount}>
+                {CURRENCY_SYMBOL}{(req.amount / 100).toFixed(2)}
+              </Text>
+            </View>
+            <Text style={styles.pendingReview}>{t('common.review')}</Text>
+          </View>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+  const nudge = (wallet?.balance ?? 0) === 0 && (
+    <TouchableOpacity
+      style={styles.nudgeBanner}
+      activeOpacity={0.85}
+      onPress={() => { triggerHaptic('light'); navigation.navigate('TopUpMethod'); }}
+    >
+      <View style={styles.nudgeIcon}>
+        <BoltGlyph size={20} color="#FFFFFF" />
+      </View>
+      <View style={styles.nudgeText}>
+        <Text style={styles.nudgeTitle}>{t('dashboard.firstTopUpTitle')}</Text>
+        <Text style={styles.nudgeSubtitle}>{t('dashboard.firstTopUpSubtitle')}</Text>
+      </View>
+      <Text style={styles.nudgeArrow}>→</Text>
+    </TouchableOpacity>
+  );
+  const qrCard = qrVisible && qrValue ? (
+    <View ref={qrCardRef} collapsable={false}>
+      <Card style={styles.qrCard}>
+      <View style={styles.qrHeader}>
+        <Text style={styles.qrTitle}>{t('dashboard.myQrCode')}</Text>
+        <TouchableOpacity
+          onPress={hideQr}
+          style={styles.qrHideButton}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.hide')}
+        >
+          <Text style={styles.qrHideText}>{t('common.hide')}</Text>
+        </TouchableOpacity>
+      </View>
+      <View
+        style={styles.qrCodeWrapper}
+        accessible
+        accessibilityRole="image"
+        accessibilityLabel={t('dashboard.myQrCode')}
+      >
+        <QRCode
+          value={qrValue}
+          size={180}
+          backgroundColor="#FFFFFF"
+          color="#000000"
+        />
+      </View>
+      <Text style={styles.qrHint}>{t('dashboard.qrHint')}</Text>
+      <View style={[styles.qrTimerPill, qrSecondsLeft <= 10 && styles.qrTimerPillWarning]}>
+        <Text style={[styles.qrTimerText, qrSecondsLeft <= 10 && styles.qrTimerTextWarning]}>
+          {t('dashboard.qrTimer', { seconds: qrSecondsLeft })}
+        </Text>
+      </View>
+    </Card>
+    </View>
+  ) : null;
+
+  if (isLight) {
+    return (
+      <>
+        {isFocused && (
+          <StatusBar
+            animated
+            barStyle={pastHeader ? 'dark-content' : 'light-content'}
+            backgroundColor={pastHeader ? colors.ui.canvas : wallpaper.top}
+          />
+        )}
+        <ScrollView
+          ref={scrollRef}
+          style={lightStyles.container}
+          contentContainerStyle={lightStyles.content}
+          scrollEventThrottle={32}
+          onScroll={(e) => {
+            const past = headerHeight > 0 && e.nativeEvent.contentOffset.y > headerHeight - insets.top;
+            if (past !== pastHeader) setPastHeader(past);
+          }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#FFFFFF"
+              colors={[colors.ui.accent]}
+              progressViewOffset={insets.top}
+            />
+          }
+        >
+          <View ref={scrollContentRef} collapsable={false}>
+            <LightHomeHeader
+              onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
+              topInset={insets.top}
+              initials={initialsOf(profile?.fullName)}
+              balance={wallet?.balance ?? 0}
+              currency={wallet?.currency || 'USD'}
+              balanceVisible={balanceVisible}
+              onToggleBalance={onToggleBalance}
+              language={profile?.preferredLanguage}
+              qrLoading={qrLoading}
+              contentStyle={balanceCardStyle}
+              onProfile={() => { triggerHaptic('light'); navigation.navigate('Profile'); }}
+              onNotifications={() => { triggerHaptic('light'); navigation.navigate('Notifications'); }}
+              onShowQr={showQr}
+              onTopUp={() => { triggerHaptic('light'); navigation.navigate('TopUpMethod'); }}
+              onPay={() => { triggerHaptic('light'); navigation.navigate('ScanQR'); }}
+              onGetCash={() => { triggerHaptic('light'); navigation.navigate('CashOut'); }}
+            />
+
+            <View style={lightStyles.body}>
+              {offlineBanner}
+              {errorBanner}
+              {businessBanner}
+              {pendingSection}
+              {nudge}
+              {qrCard}
+
+              <View style={lightStyles.card}>
+                {txLoading ? (
+                  <ActivityIndicator style={lightStyles.loader} color={colors.ui.accent} />
+                ) : transactions.length === 0 ? (
+                  <EmptyActivity message={t('dashboard.noTransactionsMessage')} />
+                ) : (
+                  transactions.slice(0, 3).map((tx: Transaction) => (
+                    <TransactionItem
+                      key={tx.id}
+                      transaction={tx}
+                      onPress={() => navigation.navigate('TransactionDetail', { transaction: tx })}
+                    />
+                  ))
+                )}
+                <TouchableOpacity
+                  style={lightStyles.seeAll}
+                  onPress={() => navigation.navigate('History')}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                >
+                  <Text style={lightStyles.seeAllText}>{t('dashboard.seeAll')}</Text>
+                </TouchableOpacity>
+              </View>
+
+              <HomeWidgets
+                transactions={transactions}
+                onSpending={() => { triggerHaptic('light'); navigation.navigate('Insights'); }}
+                onInvite={() => { triggerHaptic('light'); navigation.navigate('Invite'); }}
+              />
+
+              <View style={lightStyles.card}>
+                <TouchableOpacity
+                  style={lightStyles.linkRow}
+                  onPress={() => { triggerHaptic('light'); navigation.navigate('Payments'); }}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                >
+                  <View style={[lightStyles.linkIcon, { backgroundColor: tints.blue.fill }]}>
+                    <SendIcon size={19} color={tints.blue.mark} strokeWidth={1.9} />
+                  </View>
+                  <View style={lightStyles.linkText}>
+                    <Text style={lightStyles.linkTitle}>{t('common.send')}</Text>
+                    <Text style={lightStyles.linkSub}>{t('dashboard.sendText')}</Text>
+                  </View>
+                  <ChevronIcon size={18} color={colors.ui.textFaint} />
+                </TouchableOpacity>
+                <View style={lightStyles.linkDivider} />
+                <TouchableOpacity
+                  style={lightStyles.linkRow}
+                  onPress={() => { triggerHaptic('light'); navigation.navigate('AgentLocator'); }}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                >
+                  <View style={[lightStyles.linkIcon, { backgroundColor: tints.amber.fill }]}>
+                    <PinIcon size={19} color={tints.amber.mark} strokeWidth={1.9} />
+                  </View>
+                  <View style={lightStyles.linkText}>
+                    <Text style={lightStyles.linkTitle}>{t('dashboard.findAgent')}</Text>
+                    <Text style={lightStyles.linkSub}>{t('dashboard.findAgentText')}</Text>
+                  </View>
+                  <ChevronIcon size={18} color={colors.ui.textFaint} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </ScrollView>
+      </>
+    );
+  }
+
   return (
     <>
-      <StatusBar barStyle="light-content" backgroundColor="#000000" />
       <View style={styles.glow} pointerEvents="none" />
       <View style={styles.glowInner} pointerEvents="none" />
     <ScrollView
@@ -453,16 +711,12 @@ export default function DashboardScreen({ navigation }: Props) {
         <RefreshControl
           refreshing={refreshing}
           onRefresh={onRefresh}
-          tintColor={colors.dark.accent}
+          tintColor={colors.ui.accent}
         />
       }
     >
       <View ref={scrollContentRef} collapsable={false}>
-      {!isConnected && (
-        <View style={styles.offlineBanner}>
-          <Text style={styles.offlineBannerText}>{t('dashboard.offlineMessage')}</Text>
-        </View>
-      )}
+      {offlineBanner}
 
       {/* Header */}
       <View style={styles.headerRow}>
@@ -479,51 +733,21 @@ export default function DashboardScreen({ navigation }: Props) {
             accessibilityRole="button"
             accessibilityLabel={t('nav.screen.notifications')}
           >
-            <BellGlyph size={18} color={colors.dark.text} />
+            <BellGlyph size={18} color={colors.ui.text} />
           </TouchableOpacity>
           <LanguageSelector currentLanguage={profile?.preferredLanguage} compact />
         </View>
       </View>
 
-      {errorMessage != null && (
-        <TouchableOpacity style={styles.errorBanner} onPress={onRefresh}>
-          <Text style={styles.errorBannerText}>{t('dashboard.errorRetry')}</Text>
-        </TouchableOpacity>
-      )}
+      {errorBanner}
+
+      {/* One phone number is one account in both apps: a shop or agent that
+          opens this app sees its business account, where Show QR and the
+          customer cash-out don't apply. */}
+      {businessBanner}
 
       {/* Pending requests */}
-      {pendingRequests.length > 0 && (
-        <View style={styles.pendingSection}>
-          <Text style={styles.pendingSectionTitle}>{t('dashboard.pendingRequests')}</Text>
-          {pendingRequests.map((req) => (
-            <TouchableOpacity
-              key={req.id}
-              style={styles.pendingCard}
-              onPress={() => {
-                triggerHaptic('light');
-                navigation.navigate('ApprovePayment', {
-                  requestId: req.id,
-                  merchantName: req.merchantName,
-                  amount: req.amount,
-                  currency: req.currency,
-                  createdAt: req.createdAt.toISOString(),
-                  ...(req.reference ? { reference: req.reference } : {}),
-                });
-              }}
-            >
-              <View style={styles.pendingCardContent}>
-                <View>
-                  <Text style={styles.pendingTitle}>{req.merchantName}</Text>
-                  <Text style={styles.pendingAmount}>
-                    {CURRENCY_SYMBOL}{(req.amount / 100).toFixed(2)}
-                  </Text>
-                </View>
-                <Text style={styles.pendingReview}>{t('common.review')}</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
+      {pendingSection}
 
       {/* ─── PRIMARY ZONE: Balance (open, no card) ─── */}
       <Animated.View style={balanceCardStyle}>
@@ -591,61 +815,11 @@ export default function DashboardScreen({ navigation }: Props) {
         </View>
 
         {/* Activation nudge for empty wallets */}
-        {(wallet?.balance ?? 0) === 0 && (
-          <TouchableOpacity
-            style={styles.nudgeBanner}
-            activeOpacity={0.85}
-            onPress={() => { triggerHaptic('light'); navigation.navigate('TopUpMethod'); }}
-          >
-            <View style={styles.nudgeIcon}>
-              <BoltGlyph size={20} color="#FFFFFF" />
-            </View>
-            <View style={styles.nudgeText}>
-              <Text style={styles.nudgeTitle}>{t('dashboard.firstTopUpTitle')}</Text>
-              <Text style={styles.nudgeSubtitle}>{t('dashboard.firstTopUpSubtitle')}</Text>
-            </View>
-            <Text style={styles.nudgeArrow}>→</Text>
-          </TouchableOpacity>
-        )}
+        {nudge}
       </Animated.View>
 
       {/* Inline QR — shown right below balance for quick access */}
-      {qrVisible && qrValue ? (
-        <View ref={qrCardRef} collapsable={false}>
-          <Card style={styles.qrCard}>
-          <View style={styles.qrHeader}>
-            <Text style={styles.qrTitle}>{t('dashboard.myQrCode')}</Text>
-            <TouchableOpacity
-              onPress={hideQr}
-              style={styles.qrHideButton}
-              accessibilityRole="button"
-              accessibilityLabel={t('common.hide')}
-            >
-              <Text style={styles.qrHideText}>{t('common.hide')}</Text>
-            </TouchableOpacity>
-          </View>
-          <View
-            style={styles.qrCodeWrapper}
-            accessible
-            accessibilityRole="image"
-            accessibilityLabel={t('dashboard.myQrCode')}
-          >
-            <QRCode
-              value={qrValue}
-              size={180}
-              backgroundColor="#FFFFFF"
-              color="#000000"
-            />
-          </View>
-          <Text style={styles.qrHint}>{t('dashboard.qrHint')}</Text>
-          <View style={[styles.qrTimerPill, qrSecondsLeft <= 10 && styles.qrTimerPillWarning]}>
-            <Text style={[styles.qrTimerText, qrSecondsLeft <= 10 && styles.qrTimerTextWarning]}>
-              {t('dashboard.qrTimer', { seconds: qrSecondsLeft })}
-            </Text>
-          </View>
-        </Card>
-        </View>
-      ) : null}
+      {qrCard}
 
       {/* ─── ACTIVITY ZONE: Transactions ─── */}
       <View style={styles.sectionHeader}>
@@ -662,7 +836,7 @@ export default function DashboardScreen({ navigation }: Props) {
           <EmptyActivity message={t('dashboard.noTransactionsMessage')} />
         ) : (
           <View>
-            {transactions.map((tx: Transaction) => (
+            {transactions.slice(0, 5).map((tx: Transaction) => (
               <TransactionItem
                 key={tx.id}
                 transaction={tx}
@@ -769,7 +943,7 @@ export default function DashboardScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   // ─── Screen ───
   glow: {
     position: 'absolute',
@@ -778,7 +952,7 @@ const styles = StyleSheet.create({
     width: 360,
     height: 360,
     borderRadius: 180,
-    backgroundColor: colors.dark.accent,
+    backgroundColor: colors.ui.accent,
     opacity: 0.1,
     zIndex: -1,
   },
@@ -789,13 +963,13 @@ const styles = StyleSheet.create({
     width: 220,
     height: 220,
     borderRadius: 110,
-    backgroundColor: colors.dark.accent,
+    backgroundColor: colors.ui.accent,
     opacity: 0.07,
     zIndex: -1,
   },
   container: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   content: {
     padding: spacing.lg,
@@ -805,34 +979,51 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
 
   // ─── Banners ───
   offlineBanner: {
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     padding: spacing.sm,
     borderRadius: borderRadius.md,
     marginBottom: spacing.sm,
   },
   offlineBannerText: {
     ...typography.caption,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     textAlign: 'center' as const,
   },
   errorBanner: {
-    backgroundColor: colors.dark.errorSoft,
+    backgroundColor: colors.ui.errorSoft,
     marginBottom: spacing.md,
     padding: spacing.md,
     borderRadius: borderRadius.md,
     borderLeftWidth: 4,
-    borderLeftColor: colors.dark.error,
+    borderLeftColor: colors.ui.error,
   },
   errorBannerText: {
     ...typography.bodySemibold,
-    color: colors.dark.error,
+    color: colors.ui.error,
+  },
+  businessBanner: {
+    backgroundColor: colors.ui.glass,
+    borderWidth: 1,
+    borderColor: colors.ui.glassBorder,
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+  },
+  businessBannerTitle: {
+    ...typography.bodySemibold,
+    color: colors.ui.text,
+  },
+  businessBannerText: {
+    ...typography.body,
+    color: colors.ui.textDim,
+    marginTop: 4,
   },
 
   // ─── Header ───
@@ -849,13 +1040,13 @@ const styles = StyleSheet.create({
   },
   greetingSmall: {
     fontSize: 12,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
   },
   greetingName: {
     fontSize: 21,
     fontWeight: '700',
     letterSpacing: -0.5,
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
   headerActions: {
     flexDirection: 'row',
@@ -866,9 +1057,9 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.ui.ink(0.1),
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.16)',
+    borderColor: colors.ui.ink(0.16),
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -880,14 +1071,14 @@ const styles = StyleSheet.create({
   pendingSectionTitle: {
     ...typography.bodyLarge,
     fontWeight: '600',
-    color: colors.dark.text,
+    color: colors.ui.text,
     marginBottom: spacing.sm,
   },
   pendingCard: {
-    backgroundColor: colors.dark.warningSoft,
+    backgroundColor: colors.ui.warningSoft,
     borderRadius: borderRadius.md,
     borderLeftWidth: 4,
-    borderLeftColor: colors.dark.warning,
+    borderLeftColor: colors.ui.warning,
     padding: spacing.md,
     marginBottom: spacing.sm,
   },
@@ -898,16 +1089,16 @@ const styles = StyleSheet.create({
   },
   pendingTitle: {
     ...typography.bodySemibold,
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
   pendingAmount: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     marginTop: spacing.xs,
   },
   pendingReview: {
     ...typography.captionBold,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
   },
 
   // ─── Balance (open, centered) ───
@@ -924,11 +1115,11 @@ const styles = StyleSheet.create({
   },
   balanceLabel: {
     fontSize: 12,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
   },
   eyeIcon: {
     ...typography.captionBold,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
   },
   balanceAmountWrap: {
     alignItems: 'center',
@@ -938,7 +1129,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: -2.5,
     lineHeight: 62,
-    color: colors.dark.text,
+    color: colors.ui.text,
     fontVariant: ['tabular-nums'],
   },
   // ─── Action tiles ───
@@ -953,9 +1144,9 @@ const styles = StyleSheet.create({
   tilePress: {
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.ui.ink(0.1),
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.16)',
+    borderColor: colors.ui.ink(0.16),
     borderRadius: 18,
     paddingTop: 14,
     paddingBottom: 12,
@@ -993,7 +1184,7 @@ const styles = StyleSheet.create({
   tileLabel: {
     fontSize: 11,
     fontWeight: '500',
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
 
   // ─── Activation nudge ───
@@ -1023,11 +1214,11 @@ const styles = StyleSheet.create({
   nudgeTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
   nudgeSubtitle: {
     fontSize: 11,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     marginTop: 1,
   },
   nudgeArrow: {
@@ -1054,11 +1245,11 @@ const styles = StyleSheet.create({
     borderRadius: 27,
     borderWidth: 1,
     borderStyle: 'dashed',
-    borderColor: 'rgba(255,255,255,0.18)',
+    borderColor: colors.ui.ink(0.18),
   },
   emptyActivityText: {
     fontSize: 12,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
     marginTop: spacing.sm,
   },
 
@@ -1079,24 +1270,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   balanceActionIconShow: {
-    backgroundColor: colors.dark.accentSoft,
+    backgroundColor: colors.ui.accentSoft,
   },
   balanceActionIconAdd: {
-    backgroundColor: colors.dark.incomingSoft,
+    backgroundColor: colors.ui.incomingSoft,
   },
   balanceActionIconPay: {
-    backgroundColor: colors.dark.warningSoft,
+    backgroundColor: colors.ui.warningSoft,
   },
   balanceActionIconCashOut: {
     backgroundColor: 'rgba(111,155,255,0.15)',
   },
   balanceActionIconText: {
     fontSize: 18,
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
   balanceActionLabel: {
     ...typography.captionBold,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
   },
 
   // ─── Section headers ───
@@ -1108,11 +1299,11 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     ...typography.h3,
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
   seeAll: {
     ...typography.captionBold,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
   },
 
   // ─── Transactions card ───
@@ -1120,8 +1311,8 @@ const styles = StyleSheet.create({
     padding: 0,
     overflow: 'hidden',
     marginBottom: spacing.xl,
-    backgroundColor: 'rgba(255,255,255,0.09)',
-    borderColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: colors.ui.ink(0.09),
+    borderColor: colors.ui.ink(0.16),
   },
   emptyWrapper: {
     padding: spacing.lg,
@@ -1133,18 +1324,18 @@ const styles = StyleSheet.create({
   // ─── Discover zone ───
   discoverSectionTitle: {
     ...typography.h3,
-    color: colors.dark.text,
+    color: colors.ui.text,
     marginBottom: spacing.md,
   },
   discoverRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderRadius: borderRadius.lg,
     padding: spacing.md,
     marginBottom: spacing.sm,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
   },
   discoverRowLast: {
     marginBottom: 0,
@@ -1158,45 +1349,45 @@ const styles = StyleSheet.create({
     marginRight: spacing.md,
   },
   discoverIconQr: {
-    backgroundColor: colors.dark.accentSoft,
+    backgroundColor: colors.ui.accentSoft,
   },
   discoverIconSend: {
-    backgroundColor: colors.dark.accentSoft,
+    backgroundColor: colors.ui.accentSoft,
   },
   discoverIconReceive: {
-    backgroundColor: colors.dark.incomingSoft,
+    backgroundColor: colors.ui.incomingSoft,
   },
   discoverIconAdd: {
-    backgroundColor: colors.dark.incomingSoft,
+    backgroundColor: colors.ui.incomingSoft,
   },
   discoverIconScan: {
-    backgroundColor: colors.dark.warningSoft,
+    backgroundColor: colors.ui.warningSoft,
   },
   discoverIconInsights: {
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
   },
   discoverIconAgent: {
     backgroundColor: 'rgba(111,155,255,0.12)',
   },
   discoverIcon: {
     fontSize: 18,
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
   discoverTextWrapper: {
     flex: 1,
   },
   discoverRowTitle: {
     ...typography.bodySemibold,
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
   discoverRowSubtitle: {
     ...typography.caption,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
     marginTop: 2,
   },
   chevron: {
     fontSize: 22,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
     fontWeight: '300',
     lineHeight: 26,
   },
@@ -1206,8 +1397,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.xl,
     paddingVertical: spacing.lg,
-    backgroundColor: 'rgba(255,255,255,0.09)',
-    borderColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: colors.ui.ink(0.09),
+    borderColor: colors.ui.ink(0.16),
   },
   qrHeader: {
     flexDirection: 'row',
@@ -1219,19 +1410,19 @@ const styles = StyleSheet.create({
   qrTitle: {
     ...typography.bodyLarge,
     fontWeight: '600',
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
   qrHideButton: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderRadius: borderRadius.full,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
   },
   qrHideText: {
     ...typography.captionBold,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
   },
   qrCodeWrapper: {
     padding: spacing.md,
@@ -1241,23 +1432,94 @@ const styles = StyleSheet.create({
   },
   qrHint: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     marginBottom: spacing.smPlus,
   },
   qrTimerPill: {
-    backgroundColor: colors.dark.accentSoft,
+    backgroundColor: colors.ui.accentSoft,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.full,
   },
   qrTimerPillWarning: {
-    backgroundColor: colors.dark.errorSoft,
+    backgroundColor: colors.ui.errorSoft,
   },
   qrTimerText: {
     ...typography.captionBold,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
   },
   qrTimerTextWarning: {
-    color: colors.dark.error,
+    color: colors.ui.error,
   },
-});
+}));
+
+// ─── Light Home: flat white cards on the grey page ────────────
+const useLightStyles = makeStyles((colors) => StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.ui.canvas,
+  },
+  content: {
+    paddingBottom: spacing.xl,
+  },
+  body: {
+    paddingHorizontal: 16,
+  },
+  card: {
+    backgroundColor: colors.ui.surface,
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  loader: {
+    marginVertical: 28,
+  },
+  seeAll: {
+    height: 48,
+    marginTop: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderTopWidth: 1,
+    borderTopColor: colors.ui.divider,
+  },
+  seeAllText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.ui.accent,
+  },
+  linkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    minHeight: 64,
+  },
+  linkIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  linkText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  linkTitle: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
+    color: colors.ui.text,
+  },
+  linkSub: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.ui.textFaint,
+  },
+  linkDivider: {
+    height: 1,
+    marginLeft: 52,
+    backgroundColor: colors.ui.divider,
+  },
+}));

@@ -1,10 +1,15 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
+import { endSessions } from "./sessions";
 import * as crypto from "crypto";
 import * as bcrypt from "bcrypt";
 import { requireAuth, validatePin } from "../utils/validation";
 import { verifyUserPin } from "./validatePin";
+import { readAuth } from "./pinStore";
 import { ApiResponse } from "../types";
+import { getRates } from "../config/rates";
+import { notifyUser } from "../utils/notifications";
+import { UNNAMED_PHONE } from "../utils/pushTemplates";
 
 /**
  * Trusted-device PIN login.
@@ -31,6 +36,49 @@ const SECRET_LOCK_SECONDS = 15 * 60;
 
 interface RegisterRequest {
   platform?: string;
+  /** Required (review C8): a stolen session alone can't trust a new phone. */
+  pin?: string;
+  /** What the owner sees in their device list, e.g. "iPhone 14". */
+  name?: string;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Past the idle limit, a device can't sign in and is forgotten (O3). */
+export function isDeviceExpired(device: FirebaseFirestore.DocumentData, idleDays: number, nowMs: number): boolean {
+  const last = (device.lastUsedAt ?? device.createdAt) as admin.firestore.Timestamp | undefined;
+  return !!last && nowMs - last.toMillis() > idleDays * DAY_MS;
+}
+
+/**
+ * The secret is 256 random bits, so a plain SHA-256 keeps it as safe as bcrypt
+ * does (there's nothing to guess) and takes microseconds where bcrypt took a
+ * quarter of a second of every PIN sign-in. Same as API keys (api/keys.ts).
+ */
+export function hashDeviceSecret(secret: string): string {
+  return crypto.createHash("sha256").update(secret, "utf8").digest("hex");
+}
+
+/**
+ * Whether `secret` is this device's. Phones trusted before the plain hash
+ * have only the bcrypt one, and `addPlainHash` says to store it once they've
+ * matched. New phones keep both: resetPin still checks bcrypt.
+ */
+async function checkDeviceSecret(
+  device: FirebaseFirestore.DocumentData,
+  secret: string
+): Promise<{ ok: boolean; addPlainHash: boolean }> {
+  if (typeof device.secretSha256 === "string") {
+    const given = Buffer.from(hashDeviceSecret(secret), "hex");
+    const stored = Buffer.from(device.secretSha256, "hex");
+    if (given.length === stored.length && crypto.timingSafeEqual(given, stored)) {
+      return { ok: true, addPlainHash: false };
+    }
+  }
+  // Older phones; also a wrong secret, so guessing still costs a bcrypt.
+  if (typeof device.secretHash !== "string") return { ok: false, addPlainHash: false };
+  const ok = await bcrypt.compare(secret, device.secretHash);
+  return { ok, addPlainHash: ok };
 }
 
 interface LoginRequest {
@@ -44,6 +92,7 @@ interface LoginRequest {
  * account has authenticated by SMS and its PIN is confirmed.
  */
 export const registerTrustedDevice = https.onCall(
+  { enforceAppCheck: true },
   async (request: https.CallableRequest<RegisterRequest>):
     Promise<ApiResponse<{ deviceId: string; deviceSecret: string }>> => {
     requireAuth(request);
@@ -53,32 +102,76 @@ export const registerTrustedDevice = https.onCall(
       typeof request.data?.platform === "string" ?
         request.data.platform.slice(0, 32) :
         "unknown";
+    const name =
+      typeof request.data?.name === "string" && request.data.name.trim() ?
+        request.data.name.trim().slice(0, 40) :
+        null;
 
     const db = admin.firestore();
 
     // The account must already have a PIN. Trusting a device before one exists
     // would mint a credential whose second factor doesn't exist yet.
     const userDoc = await db.collection("users").doc(uid).get();
-    if (!userDoc.exists || !userDoc.data()?.pinHash) {
+    if (!userDoc.exists || !(await readAuth(uid, undefined, userDoc.data())).pinHash) {
       throw new https.HttpsError(
         "failed-precondition",
         "Set up your PIN before trusting this device."
       );
     }
 
+    // And the caller must know it: a session alone (a stolen token, a phone
+    // left signed in) must not be able to mint a credential that outlives it.
+    const pin = request.data?.pin;
+    if (typeof pin !== "string" || !validatePin(pin)) {
+      throw new https.HttpsError("failed-precondition", "Enter your PIN to trust this phone.", {
+        reason: "pin_required",
+      });
+    }
+    if (!(await verifyUserPin(uid, pin))) {
+      throw new https.HttpsError("permission-denied", "Invalid PIN");
+    }
+
+    // Forget phones past the idle limit, then make room under the cap by
+    // dropping the least recently used (O3: 5 phones, 180 days).
+    const { maxTrustedDevices, trustedDeviceIdleDays } = await getRates();
+    const nowMs = Date.now();
+    const existing = await db.collection(DEVICES).where("uid", "==", uid).get();
+    const live = existing.docs.filter((d) => !isDeviceExpired(d.data(), trustedDeviceIdleDays, nowMs));
+    const lastUsed = (d: FirebaseFirestore.QueryDocumentSnapshot) =>
+      ((d.data().lastUsedAt ?? d.data().createdAt) as admin.firestore.Timestamp | undefined)?.toMillis() ?? 0;
+    const evicted = [...live].sort((a, b) => lastUsed(a) - lastUsed(b)).slice(0, Math.max(0, live.length - maxTrustedDevices + 1));
+    const drop = [...existing.docs.filter((d) => !live.includes(d)), ...evicted];
+
     const deviceId = crypto.randomUUID();
     const deviceSecret = crypto.randomBytes(SECRET_BYTES).toString("hex");
     const secretHash = await bcrypt.hash(deviceSecret, SALT_ROUNDS);
 
-    await db.collection(DEVICES).doc(deviceId).set({
+    const batch = db.batch();
+    drop.forEach((d) => batch.delete(d.ref));
+    batch.set(db.collection(DEVICES).doc(deviceId), {
       uid,
       secretHash,
+      secretSha256: hashDeviceSecret(deviceSecret),
       platform,
+      name,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       lastUsedAt: admin.firestore.FieldValue.serverTimestamp(),
       secretFailedAttempts: 0,
       secretLockedUntil: null,
     });
+    await batch.commit();
+
+    // New-device alert (review C9): every phone on the account hears about it,
+    // so the owner notices a phone they don't recognise.
+    notifyUser(
+      uid,
+      "new_device",
+      {
+        key: "security.new_device",
+        params: { device: name ?? (platform === "ios" ? UNNAMED_PHONE.ios : UNNAMED_PHONE.other) },
+      },
+      { type: "new_device", deviceId }
+    ).catch((err) => console.error("Failed to send new-device alert:", err));
 
     // Returned exactly once. The server keeps only the hash — if the client
     // loses this, the device has to re-verify by SMS.
@@ -91,6 +184,7 @@ export const registerTrustedDevice = https.onCall(
  * by necessity — the caller has no session yet, which is the whole point.
  */
 export const loginWithPin = https.onCall(
+  { enforceAppCheck: true },
   async (request: https.CallableRequest<LoginRequest>):
     Promise<ApiResponse<{ token: string }>> => {
     const { deviceId, deviceSecret, pin } = request.data ?? {};
@@ -134,8 +228,15 @@ export const loginWithPin = https.onCall(
       throw denied();
     }
 
-    const secretOk = await bcrypt.compare(deviceSecret, device.secretHash);
-    if (!secretOk) {
+    // Unused for too long: forget it, and send them to SMS (O3).
+    const { trustedDeviceIdleDays } = await getRates();
+    if (isDeviceExpired(device, trustedDeviceIdleDays, now.toMillis())) {
+      await deviceRef.delete().catch(() => undefined);
+      throw denied();
+    }
+
+    const secret = await checkDeviceSecret(device, deviceSecret);
+    if (!secret.ok) {
       const attempts = (device.secretFailedAttempts ?? 0) + 1;
       const updates: Record<string, unknown> = {
         secretFailedAttempts: admin.firestore.FieldValue.increment(1),
@@ -177,6 +278,8 @@ export const loginWithPin = https.onCall(
       lastUsedAt: admin.firestore.FieldValue.serverTimestamp(),
       secretFailedAttempts: 0,
       secretLockedUntil: null,
+      // From the next sign-in on, this phone skips bcrypt.
+      ...(secret.addPlainHash ? { secretSha256: hashDeviceSecret(deviceSecret) } : {}),
     });
 
     return { success: true, data: { token } };
@@ -189,8 +292,9 @@ export const loginWithPin = https.onCall(
  * re-verify by SMS.
  */
 export const revokeTrustedDevices = https.onCall(
+  { enforceAppCheck: true },
   async (request: https.CallableRequest<unknown>):
-    Promise<ApiResponse<{ revoked: number }>> => {
+    Promise<ApiResponse<{ revoked: number; sessionToken?: string }>> => {
     requireAuth(request);
     const uid = request.auth!.uid;
 
@@ -201,6 +305,88 @@ export const revokeTrustedDevices = https.onCall(
     snap.docs.forEach((doc) => batch.delete(doc.ref));
     await batch.commit();
 
-    return { success: true, data: { revoked: snap.size } };
+    // A lost phone may still be signed in; end that too (review A5).
+    const sessionToken = await endSessions(uid, { keepCaller: true });
+    return { success: true, data: { revoked: snap.size, sessionToken } };
+  }
+);
+
+export interface DeviceRow {
+  deviceId: string;
+  name: string | null;
+  platform: string;
+  createdAt: string | null;
+  lastUsedAt: string | null;
+}
+
+const iso = (t: unknown) => (t && typeof (t as admin.firestore.Timestamp).toDate === "function" ? (t as admin.firestore.Timestamp).toDate().toISOString() : null);
+
+/** The signed-in owner's trusted phones, most recently used first (review C9). */
+export const listMyDevices = https.onCall(
+  { enforceAppCheck: true },
+  async (request: https.CallableRequest<unknown>): Promise<ApiResponse<{ devices: DeviceRow[] }>> => {
+    requireAuth(request);
+    const uid = request.auth!.uid;
+    const { trustedDeviceIdleDays } = await getRates();
+    const nowMs = Date.now();
+    const snap = await admin.firestore().collection(DEVICES).where("uid", "==", uid).get();
+    const devices = snap.docs
+      .filter((d) => !isDeviceExpired(d.data(), trustedDeviceIdleDays, nowMs))
+      .map((d) => {
+        const data = d.data();
+        return {
+          deviceId: d.id,
+          name: (data.name as string | null | undefined) ?? null,
+          platform: (data.platform as string | undefined) ?? "unknown",
+          createdAt: iso(data.createdAt),
+          lastUsedAt: iso(data.lastUsedAt),
+        };
+      })
+      .sort((a, b) => (b.lastUsedAt ?? "").localeCompare(a.lastUsedAt ?? ""));
+    return { success: true, data: { devices } };
+  }
+);
+
+async function ownDevice(uid: string, deviceId: unknown): Promise<FirebaseFirestore.DocumentReference> {
+  if (typeof deviceId !== "string" || !deviceId) {
+    throw new https.HttpsError("invalid-argument", "deviceId is required");
+  }
+  const ref = admin.firestore().collection(DEVICES).doc(deviceId);
+  const snap = await ref.get();
+  // Someone else's device looks exactly like a missing one.
+  if (!snap.exists || snap.data()?.uid !== uid) {
+    throw new https.HttpsError("not-found", "Device not found");
+  }
+  return ref;
+}
+
+/**
+ * Forget one trusted phone. It can't sign in with the PIN any more, and every
+ * session ends so a phone still signed in is cut off too; this one signs
+ * straight back in with the returned token.
+ */
+export const removeMyDevice = https.onCall(
+  { enforceAppCheck: true },
+  async (request: https.CallableRequest<{ deviceId: string }>): Promise<ApiResponse<{ sessionToken?: string }>> => {
+    requireAuth(request);
+    const uid = request.auth!.uid;
+    const ref = await ownDevice(uid, request.data?.deviceId);
+    await ref.delete();
+    const sessionToken = await endSessions(uid, { keepCaller: true });
+    return { success: true, data: { sessionToken } };
+  }
+);
+
+/** Rename a trusted phone, as the owner sees it in their list. */
+export const renameMyDevice = https.onCall(
+  { enforceAppCheck: true },
+  async (request: https.CallableRequest<{ deviceId: string; name: string }>): Promise<ApiResponse> => {
+    requireAuth(request);
+    const uid = request.auth!.uid;
+    const name = typeof request.data?.name === "string" ? request.data.name.trim().slice(0, 40) : "";
+    if (!name) throw new https.HttpsError("invalid-argument", "name is required");
+    const ref = await ownDevice(uid, request.data?.deviceId);
+    await ref.update({ name });
+    return { success: true };
   }
 );

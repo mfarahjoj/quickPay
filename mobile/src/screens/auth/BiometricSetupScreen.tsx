@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Text, TouchableOpacity, View, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { BiometryTypes } from 'react-native-biometrics';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Button } from '../../components/Button';
 import { AuthLayout, AuthHeader, CodeInput, SetupSuccessScreen } from '../../components/auth';
 import { FaceIdIcon, FingerprintIcon } from '../../components/icons/AuthIcons';
@@ -11,22 +10,19 @@ import {
   isBiometricAvailable,
   authenticateWithBiometrics,
   setBiometricEnabled,
-  storePinInKeychain,
+  enableBiometricKey,
   consumePendingSetupPin,
 } from '../../services/biometric.service';
 import { validatePin, PinLockoutError } from '../../services/auth.service';
+import { markBiometricSetupDone } from '../../hooks/useBiometricSetupDone';
 import ResetPinScreen from './ResetPinScreen';
-import { colors, typography, spacing } from '../../theme';
-
-interface Props {
-  navigation: any;
-  onComplete?: () => void;
-}
+import { typography, spacing, makeStyles } from '../../theme';
 
 type Step = 'prompt' | 'pin';
 
 /** Scanning-ring hero: dashed orbit, ripple, sweeping scan line, check pop. */
 function BiometricHero({ icon }: { icon: React.ReactNode }) {
+  const heroStyles = useHeroStyles();
   const spin = useRef(new Animated.Value(0)).current;
   const ripple = useRef(new Animated.Value(0)).current;
   const scan = useRef(new Animated.Value(0)).current;
@@ -104,7 +100,7 @@ function BiometricHero({ icon }: { icon: React.ReactNode }) {
   );
 }
 
-const heroStyles = StyleSheet.create({
+const useHeroStyles = makeStyles((colors) => StyleSheet.create({
   wrap: {
     width: 190,
     height: 190,
@@ -134,9 +130,9 @@ const heroStyles = StyleSheet.create({
     width: 130,
     height: 130,
     borderRadius: 65,
-    backgroundColor: '#1C1917',
+    backgroundColor: colors.ui.surface,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: colors.ui.ink(0.1),
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -165,7 +161,7 @@ const heroStyles = StyleSheet.create({
     fontWeight: '800',
     color: '#04342C',
   },
-});
+}));
 
 function getBiometricLabelKey(biometryType?: string): string {
   if (biometryType === BiometryTypes.FaceID) return 'biometric.faceId';
@@ -173,7 +169,9 @@ function getBiometricLabelKey(biometryType?: string): string {
   return 'biometric.generic';
 }
 
-export default function BiometricSetupScreen({ onComplete }: Props) {
+/** The Face ID offer after sign-in. Continue marks it answered and AppNavigator moves on. */
+export default function BiometricSetupScreen() {
+  const styles = useStyles();
   const { t } = useTranslation();
   const [available, setAvailable] = useState<boolean | null>(null);
   const [biometryType, setBiometryType] = useState<string | undefined>();
@@ -184,6 +182,8 @@ export default function BiometricSetupScreen({ onComplete }: Props) {
   const [pinError, setPinError] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
   const [showReset, setShowReset] = useState(false);
+  // undefined: not taken yet; null: none (or it was refused).
+  const heldPin = useRef<string | null | undefined>(undefined);
 
   const label = useMemo(() => t(getBiometricLabelKey(biometryType)), [biometryType, t]);
 
@@ -197,10 +197,11 @@ export default function BiometricSetupScreen({ onComplete }: Props) {
     });
   }, []);
 
+  // Done is marked on the success screen's Continue: the navigator moves on
+  // the moment it's set, which would skip the success screen.
   const finishSetup = async (enabled: boolean) => {
     try {
       await setBiometricEnabled(enabled);
-      await AsyncStorage.setItem('@quickpay_biometric_setup_done', 'true');
       setShowSuccess(true);
     } catch (err) {
       logger.error('Biometric setup complete error:', err);
@@ -215,17 +216,25 @@ export default function BiometricSetupScreen({ onComplete }: Props) {
       setPromptError(t('auth.biometricSetup.failedPrompt'));
       return;
     }
-    // Fresh signups just created their PIN on the previous screen — use it
-    // directly instead of asking them to retype it.
-    const pendingPin = consumePendingSetupPin();
+    // The PIN was just created or entered on the previous screen — use it
+    // instead of asking for it again. Held here so trying again after a
+    // failed call (a slow first request) still has it.
+    if (heldPin.current === undefined) heldPin.current = consumePendingSetupPin();
+    const pendingPin = heldPin.current;
     if (pendingPin) {
       try {
         setLoading(true);
-        await storePinInKeychain(pendingPin);
+        await enableBiometricKey(pendingPin);
         await finishSetup(true);
         return;
-      } catch (err) {
-        logger.warn('Pending PIN keychain store failed, falling back to manual entry:', err);
+      } catch (err: any) {
+        logger.warn('Enabling biometrics with the held PIN failed:', err);
+        if (err?.code !== 'functions/permission-denied') {
+          // Network or server trouble, not the PIN: let them try again.
+          setPromptError(t('auth.biometricSetup.failedEnable'));
+          return;
+        }
+        heldPin.current = null;
       } finally {
         setLoading(false);
       }
@@ -246,7 +255,7 @@ export default function BiometricSetupScreen({ onComplete }: Props) {
         setPin('');
         return;
       }
-      await storePinInKeychain(pinCode);
+      await enableBiometricKey(pinCode);
       await finishSetup(true);
     } catch (err: any) {
       if (err instanceof PinLockoutError) {
@@ -265,7 +274,7 @@ export default function BiometricSetupScreen({ onComplete }: Props) {
   };
 
   const handleSuccessContinue = () => {
-    onComplete?.();
+    markBiometricSetupDone();
   };
 
   if (showSuccess) {
@@ -280,7 +289,7 @@ export default function BiometricSetupScreen({ onComplete }: Props) {
           // Face ID was already approved on the previous step; finish
           // enabling it with the freshly reset PIN.
           try {
-            await storePinInKeychain(newPin);
+            await enableBiometricKey(newPin);
             await finishSetup(true);
           } catch (err) {
             logger.warn('Keychain store after reset failed:', err);
@@ -371,7 +380,7 @@ export default function BiometricSetupScreen({ onComplete }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   centered: {
     justifyContent: 'center',
   },
@@ -381,14 +390,14 @@ const styles = StyleSheet.create({
   },
   promptError: {
     ...typography.caption,
-    color: colors.dark.error,
+    color: colors.ui.error,
     textAlign: 'center',
     marginBottom: spacing.sm,
   },
   footnote: {
     marginTop: spacing.lg,
     ...typography.caption,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
     lineHeight: 18,
     textAlign: 'center',
     paddingHorizontal: spacing.md,
@@ -401,7 +410,7 @@ const styles = StyleSheet.create({
   skipText: {
     fontSize: 14,
     fontWeight: '500',
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
   },
   forgotBtn: {
     alignSelf: 'center',
@@ -409,6 +418,6 @@ const styles = StyleSheet.create({
   },
   forgotText: {
     ...typography.bodySemibold,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
   },
-});
+}));

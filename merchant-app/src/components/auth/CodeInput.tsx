@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   View,
   TextInput,
@@ -31,6 +32,7 @@ export function CodeInput({
   autoFocus = true,
   otpMode = false,
 }: CodeInputProps) {
+  const { t } = useTranslation();
   const inputRefs = useRef<Array<TextInput | null>>([]);
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const [focusedIndex, setFocusedIndex] = useState<number | null>(autoFocus ? 0 : null);
@@ -116,7 +118,7 @@ export function CodeInput({
                 autoFocus={autoFocus && index === 0}
                 textContentType={otpMode && index === 0 ? 'oneTimeCode' : 'none'}
                 autoComplete={otpMode && index === 0 ? (Platform.OS === 'android' ? 'sms-otp' : 'one-time-code') : 'off'}
-                accessibilityLabel={`Digit ${index + 1}`}
+                accessibilityLabel={t('common.digit', { n: index + 1 })}
               />
             </View>
           );
@@ -169,10 +171,33 @@ const styles = StyleSheet.create({
   },
 });
 
-export const WEAK_PINS = ['123456', '654321', '111111', '000000', '121212', '123123'];
+/**
+ * Same rules as functions/src/utils/weakPin.ts, which is the authority: the
+ * server refuses these too, this just says so before the PIN is sent.
+ */
+const COMMON_PINS = new Set([
+  '123456', '654321', '123123', '121212', '112233', '123321', '159753',
+  '147258', '102030', '789456', '112211', '159357', '147852', '456789',
+  '987654', '789789', '456456', '100200', '007007', '147369', '258369',
+  '101101', '123654', '321321', '998877', '778899', '135790', '246810',
+  '112112', '110110', '520520', '131313', '696969', '252525', '202020',
+  '101010', '010203', '098765', '111222', '121314', '456123', '741852',
+  '963852', '852456', '142536', '142857', '314159', '000123', '123000',
+]);
+
+const UP = '0123456789012345';
+const DOWN = '9876543210987654';
 
 export function isWeakPin(pin: string): boolean {
-  if (WEAK_PINS.includes(pin)) return true;
+  if (!/^\d{6}$/.test(pin)) return true;
+  if (COMMON_PINS.has(pin)) return true;
   if (/^(\d)\1{5}$/.test(pin)) return true;
+  if (UP.includes(pin) || DOWN.includes(pin)) return true;
+  if (/^(\d\d)\1\1$/.test(pin) || /^(\d{3})\1$/.test(pin)) return true;
+  const isYear = (s: string) => {
+    const y = Number(s);
+    return y >= 1940 && y <= 2010;
+  };
+  if (isYear(pin.slice(0, 4)) || isYear(pin.slice(2))) return true;
   return false;
 }

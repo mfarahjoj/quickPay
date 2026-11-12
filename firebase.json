@@ -23,14 +23,25 @@
   },
   "hosting": [
     {
-      "target": "public",
+      "target": "zapppay",
       "public": "hosting/public",
       "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
       "cleanUrls": true,
       "rewrites": [
         {
           "source": "/send/**",
-          "destination": "/index.html"
+          "destination": "/send.html"
+        },
+        {
+          "source": "/v1/**",
+          "function": {
+            "functionId": "api",
+            "region": "us-central1"
+          }
+        },
+        {
+          "source": "/checkout/**",
+          "destination": "/checkout.html"
         }
       ],
       "headers": [
@@ -40,6 +51,39 @@
             { "key": "X-Frame-Options", "value": "DENY" },
             { "key": "X-Content-Type-Options", "value": "nosniff" },
             { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+          ]
+        }
+      ]
+    },
+    {
+      "target": "public",
+      "public": "hosting/legacy-redirect",
+      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+      "cleanUrls": true,
+      "redirects": [
+        {
+          "source": "/v1/:path*",
+          "destination": "https://zapppay.web.app/v1/:path",
+          "type": 308
+        },
+        {
+          "source": "/:path*",
+          "destination": "https://zapppay.web.app/:path",
+          "type": 301
+        },
+        {
+          "source": "/",
+          "destination": "https://zapppay.web.app/",
+          "type": 301
+        }
+      ],
+      "headers": [
+        {
+          "source": "**",
+          "headers": [
+            { "key": "X-Robots-Tag", "value": "noindex, nofollow" },
+            { "key": "X-Frame-Options", "value": "DENY" },
+            { "key": "X-Content-Type-Options", "value": "nosniff" }
           ]
         }
       ]

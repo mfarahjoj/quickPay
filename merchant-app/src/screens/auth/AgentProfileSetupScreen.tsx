@@ -11,8 +11,10 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { functions } from '../../services/firebase.config';
 import { SetupSuccessScreen } from '../../components/auth';
+import { logger } from '../../utils/logger';
 
 type Service = 'cash_in' | 'cash_out';
 
@@ -37,6 +39,14 @@ const HOUR_PRESETS = [
   '24 hours',
 ];
 
+// Area and hours are stored as written above and shown to customers as-is, so
+// only the two chips that are words rather than names or times are translated
+// for display; the saved value stays the same in every language.
+const DISPLAY_KEYS: Record<string, string> = {
+  Other: 'agentProfile.areaOther',
+  '24 hours': 'agentProfile.hoursAllDay',
+};
+
 interface Props {
   navigation: any;
   /** When true, renders as a standalone settings screen with back button */
@@ -44,6 +54,8 @@ interface Props {
 }
 
 export default function AgentProfileSetupScreen({ navigation, isSettings }: Props) {
+  const { t } = useTranslation();
+  const chipLabel = (value: string) => (DISPLAY_KEYS[value] ? t(DISPLAY_KEYS[value]) : value);
   const [businessName, setBusinessName] = useState('');
   const [area, setArea] = useState('');
   const [openHours, setOpenHours] = useState('');
@@ -91,13 +103,14 @@ export default function AgentProfileSetupScreen({ navigation, isSettings }: Prop
         ...(businessName.trim() ? { businessName: businessName.trim() } : {}),
       });
       if (isSettings) {
-        Alert.alert('Saved', 'Your agent profile has been updated.');
+        Alert.alert(t('agentProfile.savedTitle'), t('agentProfile.savedMessage'));
         navigation.goBack();
       } else {
         setShowSuccess(true);
       }
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Could not save profile. Try again.');
+      logger.error('Save agent profile failed:', e);
+      Alert.alert(t('common.error'), t('agentProfile.saveFailed'));
     } finally {
       setLoading(false);
     }
@@ -126,31 +139,29 @@ export default function AgentProfileSetupScreen({ navigation, isSettings }: Prop
         </TouchableOpacity>
 
         <Animated.View style={{ opacity: fadeIn, transform: [{ translateY: slideIn }] }}>
-          <Text style={styles.title}>Set up your agent profile</Text>
-          <Text style={styles.subtitle}>
-            This is how customers find you on the agent map. You can update it anytime from Settings.
-          </Text>
+          <Text style={styles.title}>{t('agentProfile.title')}</Text>
+          <Text style={styles.subtitle}>{t('agentProfile.subtitle')}</Text>
         </Animated.View>
 
         {/* Business name (optional) */}
         <Animated.View style={[styles.section, { opacity: fadeIn }]}>
-          <Text style={styles.sectionLabel}>BUSINESS NAME (OPTIONAL)</Text>
+          <Text style={styles.sectionLabel}>{t('agentProfile.businessNameLabel')}</Text>
           <View style={styles.inputBox}>
             <TextInput
               style={styles.input}
               value={businessName}
               onChangeText={setBusinessName}
-              placeholder="e.g. Hassan Money Transfer"
+              placeholder={t('agentProfile.businessNamePlaceholder')}
               placeholderTextColor="rgba(255,255,255,0.2)"
               autoCapitalize="words"
             />
           </View>
-          <Text style={styles.inputHint}>Shown instead of your full name if provided</Text>
+          <Text style={styles.inputHint}>{t('agentProfile.businessNameHint')}</Text>
         </Animated.View>
 
         {/* Area */}
         <Animated.View style={[styles.section, { opacity: fadeIn }]}>
-          <Text style={styles.sectionLabel}>YOUR AREA IN HARGEISA</Text>
+          <Text style={styles.sectionLabel}>{t('agentProfile.areaLabel')}</Text>
           <View style={styles.chipGrid}>
             {HARGEISA_AREAS.map((a) => (
               <TouchableOpacity
@@ -159,7 +170,9 @@ export default function AgentProfileSetupScreen({ navigation, isSettings }: Prop
                 onPress={() => setArea(a)}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.chipText, area === a && styles.chipTextActive]}>{a}</Text>
+                <Text style={[styles.chipText, area === a && styles.chipTextActive]}>
+                  {chipLabel(a)}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -167,7 +180,7 @@ export default function AgentProfileSetupScreen({ navigation, isSettings }: Prop
 
         {/* Open hours */}
         <Animated.View style={[styles.section, { opacity: fadeIn }]}>
-          <Text style={styles.sectionLabel}>OPEN HOURS</Text>
+          <Text style={styles.sectionLabel}>{t('agentProfile.hoursLabel')}</Text>
           <View style={styles.chipGrid}>
             {HOUR_PRESETS.map((h) => (
               <TouchableOpacity
@@ -176,7 +189,9 @@ export default function AgentProfileSetupScreen({ navigation, isSettings }: Prop
                 onPress={() => setOpenHours(h)}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.chipText, openHours === h && styles.chipTextActive]}>{h}</Text>
+                <Text style={[styles.chipText, openHours === h && styles.chipTextActive]}>
+                  {chipLabel(h)}
+                </Text>
               </TouchableOpacity>
             ))}
             <TouchableOpacity
@@ -185,7 +200,7 @@ export default function AgentProfileSetupScreen({ navigation, isSettings }: Prop
               activeOpacity={0.7}
             >
               <Text style={[styles.chipText, openHours === 'custom' && styles.chipTextActive]}>
-                Custom…
+                {t('agentProfile.hoursCustom')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -195,7 +210,7 @@ export default function AgentProfileSetupScreen({ navigation, isSettings }: Prop
                 style={styles.input}
                 value={customHours}
                 onChangeText={setCustomHours}
-                placeholder="e.g. Sat–Thu 7:30 AM – 10 PM"
+                placeholder={t('agentProfile.customHoursPlaceholder')}
                 placeholderTextColor="rgba(255,255,255,0.2)"
                 autoFocus
               />
@@ -205,11 +220,11 @@ export default function AgentProfileSetupScreen({ navigation, isSettings }: Prop
 
         {/* Services */}
         <Animated.View style={[styles.section, { opacity: fadeIn }]}>
-          <Text style={styles.sectionLabel}>SERVICES OFFERED</Text>
+          <Text style={styles.sectionLabel}>{t('agentProfile.servicesLabel')}</Text>
           <View style={styles.serviceCards}>
             {([
-              { id: 'cash_in' as Service, emoji: '💵', title: 'Cash In', desc: 'Customers give you cash, you credit their wallet' },
-              { id: 'cash_out' as Service, emoji: '🏧', title: 'Cash Out', desc: 'Customer shows OTP code, you pay them cash' },
+              { id: 'cash_in' as Service, emoji: '💵', title: t('agentProfile.cashInTitle'), desc: t('agentProfile.cashInDesc') },
+              { id: 'cash_out' as Service, emoji: '🏧', title: t('agentProfile.cashOutTitle'), desc: t('agentProfile.cashOutDesc') },
             ] as const).map((svc) => {
               const active = services.has(svc.id);
               return (
@@ -246,7 +261,11 @@ export default function AgentProfileSetupScreen({ navigation, isSettings }: Prop
             activeOpacity={0.86}
           >
             <Text style={[styles.ctaText, !canSubmit && styles.ctaTextDisabled]}>
-              {loading ? 'Saving…' : isSettings ? 'Save Changes' : 'Complete Setup'}
+              {loading
+                ? t('agentProfile.saving')
+                : isSettings
+                  ? t('agentProfile.save')
+                  : t('agentProfile.complete')}
             </Text>
           </TouchableOpacity>
           {!isSettings && (
@@ -254,7 +273,7 @@ export default function AgentProfileSetupScreen({ navigation, isSettings }: Prop
               style={styles.skipBtn}
               onPress={() => setShowSuccess(true)}
             >
-              <Text style={styles.skipText}>Skip for now</Text>
+              <Text style={styles.skipText}>{t('agentProfile.skip')}</Text>
             </TouchableOpacity>
           )}
         </View>

@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { User } from "firebase/auth";
 import {
   auth,
   configError,
+  appCheckMissing,
   readAdminClaims,
   signInWithGoogle,
   signOut,
@@ -13,9 +14,86 @@ import { UserDetail } from "./components/UserDetail";
 import { RoleQueue } from "./components/RoleQueue";
 import { FloatDesk } from "./components/FloatDesk";
 import { KycQueue } from "./components/KycQueue";
+import { PayoutDesk } from "./components/PayoutDesk";
+import { ZaadDesk } from "./components/ZaadDesk";
 import { LedgerBanner } from "./components/LedgerBanner";
+import { LedgerDesk } from "./components/LedgerDesk";
+import { DisputeDesk } from "./components/DisputeDesk";
+import { AuthMigrationPanel } from "./components/AuthMigrationPanel";
+import { PricingPanel } from "./components/PricingPanel";
+import { Icon, type IconName } from "./components/Icon";
+import { Avatar, BrandMark, EmptyState, Loading } from "./components/ui";
 
-type Tab = "users" | "roles" | "kyc" | "float";
+type Tab = "users" | "roles" | "kyc" | "float" | "payouts" | "zaad" | "disputes" | "ledger" | "pricing";
+
+/** `short` is what the phone tab bar shows; the sidebar uses `label`. */
+const TABS: Record<
+  Tab,
+  { label: string; short: string; icon: IconName; subtitle: string }
+> = {
+  users: {
+    label: "Customers",
+    short: "Customers",
+    icon: "user",
+    subtitle: "Look up a customer to review their account, wallet and recent activity.",
+  },
+  roles: {
+    label: "Role applications",
+    short: "Roles",
+    icon: "briefcase",
+    subtitle: "Merchant and agent applications waiting for a decision.",
+  },
+  kyc: {
+    label: "KYC review",
+    short: "KYC",
+    icon: "idcard",
+    subtitle: "Identity documents waiting for verification, oldest first.",
+  },
+  float: {
+    label: "Float desk",
+    short: "Float",
+    icon: "banknote",
+    subtitle: "Agent float requests and balances.",
+  },
+  payouts: {
+    label: "Merchant payouts",
+    short: "Payouts",
+    icon: "send",
+    subtitle: "Send each payout on its rail first, then record the reference here.",
+  },
+  zaad: {
+    label: "Zaad top-ups",
+    short: "Zaad",
+    icon: "inbox",
+    subtitle: "Payments to the collection number that couldn't be credited, the texts behind them, and the listener phones.",
+  },
+  disputes: {
+    label: "Disputes",
+    short: "Disputes",
+    icon: "flag",
+    subtitle: "Claims that a payment, top-up or cash-out went wrong. Decide the ones waiting on Zapp, oldest deadline first.",
+  },
+  pricing: {
+    label: "Pricing & rules",
+    short: "Pricing",
+    icon: "scale",
+    subtitle: "Fees, agent commissions, referral rules, payout times and safety limits. Super admins change them; every change is audited.",
+  },
+  ledger: {
+    label: "Ledger",
+    short: "Ledger",
+    icon: "ledger",
+    subtitle: "Every balance checked against the journal each night, and the tools to trace a mismatch.",
+  },
+};
+
+function Gate({ children }: { children: ReactNode }) {
+  return (
+    <div className="gate">
+      <div className="card">{children}</div>
+    </div>
+  );
+}
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -35,69 +113,68 @@ export default function App() {
 
   if (configError) {
     return (
-      <div className="gate">
-        <div className="card">
-          <h1>Not configured</h1>
-          <p>{configError}</p>
-        </div>
-      </div>
+      <Gate>
+        <span className="gate-icon warn">
+          <Icon name="alert" size={28} />
+        </span>
+        <h1>Not configured</h1>
+        <p>{configError}</p>
+      </Gate>
     );
   }
 
   if (booting) {
     return (
-      <div className="gate">
-        <div className="card">
-          <p style={{ margin: 0 }}>Loading…</p>
-        </div>
-      </div>
+      <Gate>
+        <Loading />
+      </Gate>
     );
   }
 
   if (!user) {
     return (
-      <div className="gate">
-        <div className="card">
-          <h1>Zapp Pay Admin</h1>
-          <p>Internal console. Sign in with your work Google account.</p>
-          {signInError && <div className="banner error">{signInError}</div>}
-          <button
-            className="primary"
-            onClick={() =>
-              signInWithGoogle().catch((err) =>
-                setSignInError(err instanceof Error ? err.message : "Sign-in failed")
-              )
-            }
-          >
-            Sign in with Google
-          </button>
-        </div>
-      </div>
+      <Gate>
+        <BrandMark size={72} />
+        <h1>Zapp Pay Admin</h1>
+        <p>Internal console. Sign in with your work Google account.</p>
+        {signInError && <div className="banner error">{signInError}</div>}
+        <button
+          className="primary"
+          onClick={() =>
+            signInWithGoogle().catch((err) =>
+              setSignInError(err instanceof Error ? err.message : "Sign-in failed")
+            )
+          }
+        >
+          Sign in with Google
+        </button>
+      </Gate>
     );
   }
 
   if (!claims?.admin || claims.adminRoles.length === 0) {
     return (
-      <div className="gate">
-        <div className="card">
-          <h1>No access</h1>
-          <p>
-            {user.email} is signed in but has no admin role. Roles are granted with{" "}
-            <code>scripts/set-admin-claim.js</code>; a newly granted role appears
-            after the token refreshes.
-          </p>
-          <div className="row" style={{ justifyContent: "center", gap: 8 }}>
-            <button
-              onClick={async () => setClaims(await readAdminClaims(user, true))}
-            >
-              Re-check access
-            </button>
-            <button className="ghost" onClick={() => void signOut()}>
-              Sign out
-            </button>
-          </div>
+      <Gate>
+        <span className="gate-icon">
+          <Icon name="lock" size={28} />
+        </span>
+        <h1>No access</h1>
+        <p>
+          {user.email} is signed in but has no admin role. Roles are granted with{" "}
+          <code>scripts/set-admin-claim.js</code>; a newly granted role appears
+          after the token refreshes.
+        </p>
+        <div className="row">
+          <button
+            onClick={async () => setClaims(await readAdminClaims(user, true))}
+          >
+            Re-check access
+          </button>
+          <button className="ghost" onClick={() => void signOut()}>
+            Sign out
+          </button>
         </div>
-      </div>
+      </Gate>
     );
   }
 
@@ -106,75 +183,113 @@ export default function App() {
   const canRunFloatDesk =
     claims.adminRoles.includes("ops") || claims.adminRoles.includes("super");
 
+  const visibleTabs: Tab[] = ["users"];
+  if (canReviewRoles) visibleTabs.push("roles", "kyc");
+  if (canRunFloatDesk) visibleTabs.push("float", "payouts", "zaad", "disputes", "ledger");
+  visibleTabs.push("pricing");
+
   return (
     <div className="app">
-      <header className="topbar">
+      <a className="skip-link" href="#main">
+        Skip to content
+      </a>
+
+      <aside className="sidebar">
         <div className="brand">
-          Zapp Pay<span>Admin</span>
+          <BrandMark size={34} />
+          <div className="brand-name">
+            Zapp Pay<small>Admin</small>
+          </div>
         </div>
-        <div className="spacer" />
-        <div className="who">
-          {user.email} · {claims.adminRoles.join(", ")}
+
+        <nav className="nav" aria-label="Sections">
+          {visibleTabs.map((id) => (
+            <button
+              key={id}
+              aria-current={tab === id ? "page" : undefined}
+              onClick={() => setTab(id)}
+            >
+              <Icon name={TABS[id].icon} size={20} />
+              <span className="nav-label">
+                <span className="long">{TABS[id].label}</span>
+                <span className="short">{TABS[id].short}</span>
+              </span>
+            </button>
+          ))}
+        </nav>
+
+        <div className="account">
+          <Avatar name={user.email ?? ""} size={32} />
+          <div className="who">
+            <div className="who-email" title={user.email ?? undefined}>
+              {user.email}
+            </div>
+            <div className="who-roles">{claims.adminRoles.join(", ")}</div>
+          </div>
+          <button
+            className="icon-btn"
+            onClick={() => void signOut()}
+            aria-label="Sign out"
+            title="Sign out"
+          >
+            <Icon name="signout" size={18} />
+          </button>
         </div>
-        <button className="ghost" onClick={() => void signOut()}>
-          Sign out
-        </button>
-      </header>
+      </aside>
 
-      <nav className="tabs">
-        <button
-          className={tab === "users" ? "active" : ""}
-          onClick={() => setTab("users")}
-        >
-          Customers
-        </button>
-        {canReviewRoles && (
-          <button
-            className={tab === "roles" ? "active" : ""}
-            onClick={() => setTab("roles")}
-          >
-            Role applications
-          </button>
-        )}
-        {canReviewRoles && (
-          <button
-            className={tab === "kyc" ? "active" : ""}
-            onClick={() => setTab("kyc")}
-          >
-            KYC review
-          </button>
-        )}
-        {canRunFloatDesk && (
-          <button
-            className={tab === "float" ? "active" : ""}
-            onClick={() => setTab("float")}
-          >
-            Float desk
-          </button>
-        )}
-      </nav>
+      <main className="content" id="main" tabIndex={-1}>
+        <div className="content-inner">
+          {appCheckMissing && (
+            <div className="banner error" role="alert">
+              <strong>This build has no App Check key, so every action will be refused.</strong>{" "}
+              Set <code>VITE_APPCHECK_SITE_KEY</code> in <code>admin/.env.local</code> to the
+              reCAPTCHA Enterprise key registered for this web app under Firebase console → App
+              Check, then rebuild and redeploy.
+            </div>
+          )}
+          <header className="page-header">
+            <h1>{TABS[tab].label}</h1>
+            <p>{TABS[tab].subtitle}</p>
+          </header>
 
-      <main className="main">
-        <LedgerBanner />
+          <LedgerBanner
+            onOpen={canRunFloatDesk && tab !== "ledger" ? () => setTab("ledger") : undefined}
+          />
 
-        {tab === "users" && (
-          <div className="split">
-            <UserSearch selectedId={selectedId} onSelect={setSelectedId} />
-            {selectedId ? (
-              <UserDetail key={selectedId} userId={selectedId} />
-            ) : (
-              <div className="panel empty">
-                Search for a customer to see their account.
+          <div className="view" key={tab}>
+            {tab === "users" && (
+              <div className="split">
+                <UserSearch selectedId={selectedId} onSelect={setSelectedId} />
+                {selectedId ? (
+                  <UserDetail key={selectedId} userId={selectedId} canAdjust={canRunFloatDesk} />
+                ) : (
+                  <div className="panel">
+                    <EmptyState icon="search" title="No customer selected">
+                      Search for a customer to see their account.
+                    </EmptyState>
+                  </div>
+                )}
               </div>
             )}
+
+            {tab === "roles" && canReviewRoles && <RoleQueue />}
+
+            {tab === "kyc" && canReviewRoles && <KycQueue />}
+
+            {tab === "float" && canRunFloatDesk && <FloatDesk adminUid={user.uid} isSuper={claims.adminRoles.includes("super")} />}
+
+            {tab === "payouts" && canRunFloatDesk && <PayoutDesk />}
+
+            {tab === "zaad" && canRunFloatDesk && <ZaadDesk isSuper={claims.adminRoles.includes("super")} />}
+
+            {tab === "disputes" && canRunFloatDesk && <DisputeDesk />}
+
+            {tab === "ledger" && canRunFloatDesk && <LedgerDesk />}
+
+            {tab === "pricing" && <PricingPanel canEdit={claims.adminRoles.includes("super")} />}
+            {tab === "pricing" && canRunFloatDesk && <AuthMigrationPanel isSuper={claims.adminRoles.includes("super")} />}
           </div>
-        )}
-
-        {tab === "roles" && canReviewRoles && <RoleQueue />}
-
-        {tab === "kyc" && canReviewRoles && <KycQueue />}
-
-        {tab === "float" && canRunFloatDesk && <FloatDesk adminUid={user.uid} />}
+        </div>
       </main>
     </div>
   );

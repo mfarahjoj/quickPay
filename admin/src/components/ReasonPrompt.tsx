@@ -1,10 +1,15 @@
-import { useState } from "react";
+import { useId, useState, type ReactNode } from "react";
+import { Spinner } from "./ui";
 
 interface Props {
   title: string;
   description: string;
   confirmLabel: string;
   danger?: boolean;
+  /** Extra fields an action needs alongside its reason, e.g. a bank reference. */
+  children?: ReactNode;
+  /** Set when those extra fields are not filled in yet. */
+  confirmDisabled?: boolean;
   onConfirm: (reason: string) => Promise<void>;
   onCancel: () => void;
 }
@@ -22,12 +27,15 @@ export function ReasonPrompt({
   description,
   confirmLabel,
   danger,
+  children,
+  confirmDisabled,
   onConfirm,
   onCancel,
 }: Props) {
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const titleId = useId();
 
   const tooShort = reason.trim().length < MIN_REASON;
 
@@ -44,12 +52,14 @@ export function ReasonPrompt({
   };
 
   return (
-    <div className="overlay" role="dialog" aria-modal="true">
+    <div className="overlay" role="dialog" aria-modal="true" aria-labelledby={titleId}>
       <div className="modal">
-        <h2>{title}</h2>
+        <h2 id={titleId}>{title}</h2>
         <p>{description}</p>
 
         {error && <div className="banner error">{error}</div>}
+
+        {children}
 
         <label className="stack">
           <span className="muted">Reason (recorded in the audit log)</span>
@@ -62,7 +72,7 @@ export function ReasonPrompt({
           />
         </label>
         {tooShort && reason.length > 0 && (
-          <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+          <div className="hint" style={{ marginTop: 6 }}>
             At least {MIN_REASON} characters.
           </div>
         )}
@@ -74,9 +84,16 @@ export function ReasonPrompt({
           <button
             className={danger ? "danger" : "primary"}
             onClick={submit}
-            disabled={tooShort || busy}
+            disabled={tooShort || busy || confirmDisabled}
           >
-            {busy ? "Working…" : confirmLabel}
+            {busy ? (
+              <>
+                <Spinner />
+                Working…
+              </>
+            ) : (
+              confirmLabel
+            )}
           </button>
         </div>
       </div>

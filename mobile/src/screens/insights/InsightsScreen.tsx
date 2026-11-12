@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useTransactions } from '../../hooks/useTransactions';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
 import { Transaction } from '../../types';
 
 // ─── Period ───────────────────────────────────────────────────
@@ -139,6 +139,7 @@ function initials(name: string): string {
 const BAR_MAX_H = 54;
 
 function TrendChart({ data }: { data: { label: string; value: number }[] }) {
+  const chart = useChartStyles();
   const max = Math.max(...data.map(d => d.value), 0.01);
   const showLabels = data.length <= 7;
 
@@ -169,7 +170,7 @@ function TrendChart({ data }: { data: { label: string; value: number }[] }) {
   );
 }
 
-const chart = StyleSheet.create({
+const useChartStyles = makeStyles((colors) => StyleSheet.create({
   bars: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -188,12 +189,12 @@ const chart = StyleSheet.create({
   bar: {
     width: '100%',
     borderRadius: 3,
-    backgroundColor: colors.dark.accent,
+    backgroundColor: colors.ui.accent,
     opacity: 0.85,
   },
   label: {
     fontSize: 9,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
     marginTop: 4,
     textAlign: 'center',
   },
@@ -204,13 +205,15 @@ const chart = StyleSheet.create({
   },
   axisLabel: {
     ...typography.caption,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
   },
-});
+}));
 
 // ─── Screen ───────────────────────────────────────────────────
 
 export default function InsightsScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const { transactions, loading } = useTransactions(undefined, 100);
   const [period, setPeriod] = useState<Period>('30d');
@@ -248,14 +251,14 @@ export default function InsightsScreen() {
       </View>
 
       {loading ? (
-        <ActivityIndicator color={colors.dark.accent} style={styles.loader} />
+        <ActivityIndicator color={colors.ui.accent} style={styles.loader} />
       ) : (
         <>
           {/* Summary row */}
           <View style={styles.summaryRow}>
             <View style={styles.summaryCard}>
               <Text
-                style={[styles.summaryAmt, { color: colors.dark.error }]}
+                style={[styles.summaryAmt, { color: colors.ui.error }]}
                 numberOfLines={1}
                 adjustsFontSizeToFit
               >
@@ -265,7 +268,7 @@ export default function InsightsScreen() {
             </View>
             <View style={styles.summaryCard}>
               <Text
-                style={[styles.summaryAmt, { color: colors.dark.incoming }]}
+                style={[styles.summaryAmt, { color: colors.ui.incoming }]}
                 numberOfLines={1}
                 adjustsFontSizeToFit
               >
@@ -277,7 +280,7 @@ export default function InsightsScreen() {
               <Text
                 style={[
                   styles.summaryAmt,
-                  { color: summary.net >= 0 ? colors.dark.incoming : colors.dark.error },
+                  { color: summary.net >= 0 ? colors.ui.incoming : colors.ui.error },
                 ]}
                 numberOfLines={1}
                 adjustsFontSizeToFit
@@ -365,10 +368,10 @@ export default function InsightsScreen() {
 
 // ─── Styles ───────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   content: {
     padding: spacing.lg,
@@ -389,17 +392,17 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.full,
     alignItems: 'center',
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
   },
   pillActive: {
-    backgroundColor: colors.dark.accent,
-    borderColor: colors.dark.accent,
+    backgroundColor: colors.ui.accent,
+    borderColor: colors.ui.accent,
   },
   pillText: {
     ...typography.captionBold,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
   },
   pillTextActive: {
     color: '#fff',
@@ -413,9 +416,9 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     flex: 1,
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderRadius: borderRadius.lg,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.sm,
@@ -428,22 +431,22 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     ...typography.caption,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
     textAlign: 'center',
   },
 
   // Cards
   card: {
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
     marginBottom: spacing.lg,
   },
   cardTitle: {
     ...typography.captionBold,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     marginBottom: spacing.md,
@@ -451,16 +454,16 @@ const styles = StyleSheet.create({
 
   // Empty state
   emptyCard: {
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderRadius: borderRadius.lg,
     padding: spacing.xxl,
     alignItems: 'center',
   },
   emptyText: {
     ...typography.body,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
   },
 
   // Breakdown
@@ -473,31 +476,31 @@ const styles = StyleSheet.create({
   },
   breakdownLabel: {
     ...typography.caption,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     width: 76,
   },
   breakdownTrack: {
     flex: 1,
     height: 6,
-    backgroundColor: `${colors.dark.glassBorder}`,
+    backgroundColor: `${colors.ui.glassBorder}`,
     borderRadius: 3,
     marginHorizontal: spacing.sm,
     overflow: 'hidden',
   },
   breakdownFill: {
     height: '100%',
-    backgroundColor: colors.dark.accent,
+    backgroundColor: colors.ui.accent,
     borderRadius: 3,
   },
   breakdownAmt: {
     ...typography.caption,
-    color: colors.dark.text,
+    color: colors.ui.text,
     width: 48,
     textAlign: 'right',
   },
   breakdownPct: {
     ...typography.caption,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
     width: 34,
     textAlign: 'right',
   },
@@ -508,7 +511,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.dark.divider,
+    borderBottomColor: colors.ui.divider,
   },
   recipientRowLast: {
     borderBottomWidth: 0,
@@ -518,28 +521,28 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.dark.accentSoft,
+    backgroundColor: colors.ui.accentSoft,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: spacing.md,
   },
   avatarText: {
     ...typography.captionBold,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
   },
   recipientInfo: {
     flex: 1,
   },
   recipientName: {
     ...typography.body,
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
   recipientCount: {
     ...typography.caption,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
   },
   recipientTotal: {
     ...typography.bodySemibold,
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
-});
+}));

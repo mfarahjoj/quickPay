@@ -1,11 +1,13 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, Linking } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { signOut } from '../../services/auth.service';
 import { useMerchantProfile } from '../../hooks/useMerchantProfile';
 import { useAuth } from '../../hooks/useAuth';
+import { needsReply, useMyDisputes } from '../../services/dispute.service';
+import { formatLocal } from '../../utils/zaad';
 import {
   LanguageSelector,
   DarkScreen,
@@ -32,10 +34,11 @@ function Row({ label, value, mono }: { label: string; value: string; mono?: bool
   );
 }
 
-function TappableRow({ label, onPress }: { label: string; onPress: () => void }) {
+function TappableRow({ label, value, onPress }: { label: string; value?: string; onPress: () => void }) {
   return (
     <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.7}>
       <Text style={styles.rowLabel}>{label}</Text>
+      {value ? <Text style={styles.rowDetail}>{value}</Text> : null}
       <Text style={styles.rowChevron}>›</Text>
     </TouchableOpacity>
   );
@@ -46,9 +49,14 @@ export default function SettingsScreen() {
   const { user } = useAuth();
   const { profile } = useMerchantProfile();
   const navigation = useNavigation<StackNavigationProp<any>>();
+  const { disputes } = useMyDisputes();
+  const repliesDue = disputes.filter((d) => needsReply(d, user?.uid)).length;
 
   const isAgent =
     profile?.accountType === 'topup_agent' || profile?.accountType === 'agent_merchant';
+  // API keys are for accounts that take payments (isMerchantAccount on the server).
+  const takesPayments =
+    profile?.accountType === 'merchant' || profile?.accountType === 'agent_merchant';
 
   const handleLogout = () => {
     Alert.alert(t('settings.signOutConfirmTitle'), t('settings.signOutConfirmMessage'), [
@@ -91,20 +99,72 @@ export default function SettingsScreen() {
             <Row label={t('settings.email')} value={profile.email} />
           </>
         ) : null}
+        <View style={styles.divider} />
+        {/* Where payouts go. */}
+        <TappableRow
+          label={t('settings.zaadAccount')}
+          value={profile?.zaad ? formatLocal(profile.zaad.msisdn) : undefined}
+          onPress={() => navigation.navigate('ZaadAccount')}
+        />
+      </GlassCard>
+
+      {/* Security */}
+      <Text style={styles.sectionLabel}>{t('settings.section.security')}</Text>
+      <GlassCard style={[styles.sectionCard, { paddingHorizontal: 16 }]}>
+        <TappableRow label={t('security.title')} onPress={() => navigation.navigate('Security')} />
       </GlassCard>
 
       {/* Agent profile */}
       {isAgent && (
         <>
-          <Text style={styles.sectionLabel}>Agent</Text>
+          <Text style={styles.sectionLabel}>{t('settings.section.agent')}</Text>
           <GlassCard style={[styles.sectionCard, { paddingHorizontal: 16 }]}>
             <TappableRow
-              label="Update Agent Profile"
+              label={t('settings.updateAgentProfile')}
               onPress={() => navigation.navigate('AgentProfileEdit')}
             />
           </GlassCard>
         </>
       )}
+
+      {/* Disputes */}
+      <Text style={styles.sectionLabel}>{t('settings.section.disputes')}</Text>
+      <GlassCard style={[styles.sectionCard, { paddingHorizontal: 16 }]}>
+        <TappableRow
+          label={
+            repliesDue > 0
+              ? t('settings.disputesWithCount', { count: repliesDue })
+              : t('settings.disputes')
+          }
+          onPress={() => navigation.navigate('DisputesInbox')}
+        />
+      </GlassCard>
+
+      {/* Developers */}
+      {takesPayments && (
+        <>
+          <Text style={styles.sectionLabel}>{t('settings.section.developers')}</Text>
+          <GlassCard style={[styles.sectionCard, { paddingHorizontal: 16 }]}>
+            <TappableRow
+              label={t('settings.apiKeys')}
+              onPress={() => navigation.navigate('Developers')}
+            />
+          </GlassCard>
+        </>
+      )}
+
+      {/* Help */}
+      <Text style={styles.sectionLabel}>{t('settings.section.help')}</Text>
+      <GlassCard style={[styles.sectionCard, { paddingHorizontal: 16 }]}>
+        <TappableRow
+          label={t('settings.supportPage')}
+          onPress={() => Linking.openURL('https://zapppay.web.app/support').catch(() => {})}
+        />
+        <TappableRow
+          label={t('settings.emailSupport')}
+          onPress={() => Linking.openURL('mailto:support@zapppay.so').catch(() => {})}
+        />
+      </GlassCard>
 
       {/* App */}
       <Text style={styles.sectionLabel}>{t('settings.section.app')}</Text>
@@ -114,6 +174,14 @@ export default function SettingsScreen() {
 
       <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.8}>
         <Text style={styles.logoutText}>{t('settings.signOut')}</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.deleteBtn}
+        onPress={() => navigation.navigate('DeleteAccount')}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.deleteText}>{t('settings.deleteAccount')}</Text>
       </TouchableOpacity>
     </DarkScreen>
   );
@@ -230,6 +298,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#FF6961',
+  },
+  deleteBtn: {
+    alignSelf: 'center',
+    marginTop: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  deleteText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'rgba(255,105,97,0.75)',
+  },
+  rowDetail: {
+    flex: 1,
+    textAlign: 'right',
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.85)',
   },
   rowChevron: {
     fontSize: 20,

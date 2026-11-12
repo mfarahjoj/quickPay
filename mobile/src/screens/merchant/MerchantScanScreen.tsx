@@ -11,12 +11,13 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useFocusEffect } from '@react-navigation/native';
-import { Camera, useCameraDevice, useCodeScanner } from 'react-native-vision-camera';
+import { Camera, useCameraDevice } from 'react-native-vision-camera';
+import { requestCameraPermission, useQrScannerOutputs } from '../../hooks/useQrScannerOutputs';
 import LinearGradient from 'react-native-linear-gradient';
 import { scanCustomerToken, createPaymentRequest, ScanTokenResult } from '../../services/customerToken.service';
 import { firestore } from '../../services/firebase.config';
 import { triggerHaptic } from '../../services/haptics.service';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
 import { CURRENCY_SYMBOL } from '../../config/constants';
 import { Header } from '../../components/Header';
 
@@ -27,6 +28,8 @@ interface Props {
 type Step = 'scan' | 'amount' | 'waiting' | 'done';
 
 export default function MerchantScanScreen({ navigation }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const [step, setStep] = useState<Step>('scan');
   const [isScanning, setIsScanning] = useState(true);
@@ -45,9 +48,9 @@ export default function MerchantScanScreen({ navigation }: Props) {
 
   useEffect(() => {
     (async () => {
-      const status = await Camera.requestCameraPermission();
-      setHasPermission(status === 'granted');
-      if (status !== 'granted') {
+      const granted = await requestCameraPermission().catch(() => false);
+      setHasPermission(granted);
+      if (!granted) {
         Alert.alert(
           t('merchant.scan.permissionTitle'),
           t('merchant.scan.permissionMessage'),
@@ -73,13 +76,8 @@ export default function MerchantScanScreen({ navigation }: Props) {
     }, [step])
   );
 
-  const codeScanner = useCodeScanner({
-    codeTypes: ['qr'],
-    onCodeScanned: (codes) => {
-      if (!isScanning || codes.length === 0) return;
-      const qrData = codes[0].value;
-      if (qrData) handleQRScanned(qrData);
-    },
+  const outputs = useQrScannerOutputs((qrData) => {
+    if (isScanning) handleQRScanned(qrData);
   });
 
   const handleQRScanned = async (tokenData: string) => {
@@ -174,8 +172,8 @@ export default function MerchantScanScreen({ navigation }: Props) {
           style={StyleSheet.absoluteFill}
           device={device}
           isActive={true}
-          codeScanner={codeScanner}
-          torch={torchOn ? 'on' : 'off'}
+          outputs={outputs}
+          torchMode={torchOn ? 'on' : 'off'}
         />
 
         <View style={styles.topBar}>
@@ -338,14 +336,14 @@ export default function MerchantScanScreen({ navigation }: Props) {
 
 const SCAN_SIZE = 260;
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000000',
   },
   whiteContainer: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   centered: {
     flex: 1,
@@ -357,7 +355,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
     paddingHorizontal: spacing.lg,
   },
   loadingText: {
@@ -393,7 +391,7 @@ const styles = StyleSheet.create({
   middleOverlay: { flexDirection: 'row' },
   sideOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)' },
   scanArea: { width: SCAN_SIZE, height: SCAN_SIZE, position: 'relative' },
-  corner: { position: 'absolute', width: 48, height: 48, borderColor: colors.dark.incoming, borderWidth: 4 },
+  corner: { position: 'absolute', width: 48, height: 48, borderColor: colors.ui.incoming, borderWidth: 4 },
   topLeft: { top: 0, left: 0, borderTopLeftRadius: borderRadius.md },
   topRight: { top: 0, right: 0, borderTopRightRadius: borderRadius.md },
   bottomLeft: { bottom: 0, left: 0, borderBottomLeftRadius: borderRadius.md },
@@ -420,54 +418,55 @@ const styles = StyleSheet.create({
   customerBadge: { alignItems: 'center', marginBottom: spacing.xl, marginTop: spacing.md },
   customerAvatar: {
     width: 64, height: 64, borderRadius: 32,
-    backgroundColor: colors.dark.incomingSoft,
+    backgroundColor: colors.ui.incomingSoft,
     justifyContent: 'center', alignItems: 'center',
     marginBottom: spacing.sm,
   },
-  customerAvatarText: { ...typography.h1, color: colors.dark.incoming },
-  customerName: { ...typography.h2, color: colors.dark.text, textAlign: 'center' },
+  customerAvatarText: { ...typography.h1, color: colors.ui.incoming },
+  customerName: { ...typography.h2, color: colors.ui.text, textAlign: 'center' },
   amountLabel: {
-    ...typography.captionBold, color: colors.dark.textFaint,
+    ...typography.captionBold, color: colors.ui.textFaint,
     textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: spacing.sm,
   },
   amountInputRow: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderRadius: borderRadius.lg,
     paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
     marginBottom: spacing.lg,
   },
-  currencyPrefix: { ...typography.display, color: colors.dark.textFaint, marginRight: spacing.sm },
-  amountInput: { flex: 1, ...typography.display, color: colors.dark.text, padding: 0 },
+  currencyPrefix: { ...typography.display, color: colors.ui.textFaint, marginRight: spacing.sm },
+  amountInput: { flex: 1, ...typography.display, color: colors.ui.text, padding: 0 },
   chargeButton: { borderRadius: borderRadius.lg, overflow: 'hidden' },
-  gradientButton: { paddingVertical: spacing.lg, alignItems: 'center' },
+  // A gradient doesn't grow to fit its label, so it gets a fixed height.
+  gradientButton: { height: 56, alignItems: 'center', justifyContent: 'center' },
   chargeButtonText: { ...typography.h3, color: colors.text.inverse, fontWeight: '600' },
   buttonDisabled: { opacity: 0.5 },
 
   waitingPulse: { marginBottom: spacing.lg },
-  waitingTitle: { ...typography.h1, color: colors.dark.text, marginBottom: spacing.sm },
-  waitingSubtitle: { ...typography.body, color: colors.dark.textDim, textAlign: 'center', marginBottom: spacing.md },
-  waitingHint: { ...typography.caption, color: colors.dark.textFaint, textAlign: 'center' },
+  waitingTitle: { ...typography.h1, color: colors.ui.text, marginBottom: spacing.sm },
+  waitingSubtitle: { ...typography.body, color: colors.ui.textDim, textAlign: 'center', marginBottom: spacing.md },
+  waitingHint: { ...typography.caption, color: colors.ui.textFaint, textAlign: 'center' },
 
   statusCircle: {
     width: 80, height: 80, borderRadius: 40,
     justifyContent: 'center', alignItems: 'center',
     marginBottom: spacing.lg,
   },
-  statusApproved: { backgroundColor: colors.dark.incomingSoft },
-  statusDeclined: { backgroundColor: colors.dark.errorSoft },
+  statusApproved: { backgroundColor: colors.ui.incomingSoft },
+  statusDeclined: { backgroundColor: colors.ui.errorSoft },
   statusIcon: { fontSize: 36, fontWeight: '700' },
-  doneTitle: { ...typography.h1, color: colors.dark.text, marginBottom: spacing.xs },
-  doneAmount: { ...typography.display, color: colors.dark.text, marginBottom: spacing.xs },
-  doneCustomer: { ...typography.body, color: colors.dark.textDim, marginBottom: spacing.xl },
+  doneTitle: { ...typography.h1, color: colors.ui.text, marginBottom: spacing.xs },
+  doneAmount: { ...typography.display, color: colors.ui.text, marginBottom: spacing.xs },
+  doneCustomer: { ...typography.body, color: colors.ui.textDim, marginBottom: spacing.xl },
   doneButton: {
-    backgroundColor: colors.dark.accent,
+    backgroundColor: colors.ui.accent,
     paddingVertical: spacing.md, paddingHorizontal: spacing.xxl,
     borderRadius: borderRadius.lg,
   },
   doneButtonText: { ...typography.bodySemibold, color: '#FFFFFF' },
   retryLink: { marginTop: spacing.lg, padding: spacing.md },
-  retryLinkText: { ...typography.bodySemibold, color: colors.dark.accentText },
-});
+  retryLinkText: { ...typography.bodySemibold, color: colors.ui.accentText },
+}));

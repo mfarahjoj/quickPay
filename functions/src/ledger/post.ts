@@ -19,7 +19,7 @@
 import * as admin from "firebase-admin";
 import { Wallet } from "../types";
 import { JournalEntryDoc, JournalEntryInput, JournalRefs } from "./types";
-import { enforcesNonNegative, isUserAccount, userIdOf } from "./accounts";
+import { enforcesNonNegative, isUserAccount, userIdOf, isAgentAccount, agentIdOf } from "./accounts";
 import { AccountDelta, aggregateDeltas, validateEntry } from "./validate";
 
 export const JOURNAL_COLLECTION = "journal_entries";
@@ -65,6 +65,22 @@ export class WalletNotFoundError extends Error {
   constructor(account: string) {
     super(`Wallet not found for ${account}`);
     this.name = "WalletNotFoundError";
+    this.account = account;
+  }
+}
+
+/**
+ * Thrown when an entry's currency differs from a wallet it touches.
+ *
+ * Amounts are bare integers, so nothing else stops 10,000 SLS cents (about a
+ * dollar) being taken from a USD wallet as $100. Checked here rather than in
+ * each callable so a call site that forgets still can't mix currencies.
+ */
+export class CurrencyMismatchError extends Error {
+  readonly account: string;
+  constructor(account: string, walletCurrency: string, entryCurrency: string) {
+    super(`${account} holds ${walletCurrency}, entry is ${entryCurrency}`);
+    this.name = "CurrencyMismatchError";
     this.account = account;
   }
 }
@@ -117,13 +133,49 @@ export async function prepareJournalEntry(
     }
     const wallet = snap.data() as Wallet;
 
-    // Frozen accounts may still receive (see FrozenAccountError) but never spend.
-    if (d.debits > 0 && wallet.frozen === true) {
+    // Wallets written before `currency` was stored are all USD.
+    const walletCurrency = wallet.currency ?? "USD";
+    if (walletCurrency !== input.currency) {
+      throw new CurrencyMismatchError(d.account, walletCurrency, input.currency);
+    }
+
+    // Frozen accounts may still receive (see FrozenAccountError) but never
+    // spend, except when ops take back value through an adjustment.
+    if (d.debits > 0 && wallet.frozen === true && input.allowFrozenDebit !== true) {
       throw new FrozenAccountError(d.account);
     }
 
     const newBalance = wallet.balance + d.delta;
     if (newBalance < 0 && enforcesNonNegative(d.account)) {
+      throw new InsufficientBalanceError(d.account);
+    }
+    // Money owed on a lost dispute stays put until that dispute is settled.
+    // Only debits are checked: a wallet below its reserve must still receive.
+    const reserved = wallet.reservedCents ?? 0;
+    if (d.delta < 0 && reserved > 0 && newBalance < reserved && input.useReserved !== true) {
+      throw new InsufficientBalanceError(d.account);
+    }
+    resultingBalances.set(d.account, newBalance);
+  });
+
+  // Agent float accounts are read too: unlike platform accounts they can't
+  // go negative, and a frozen agent can't spend their float. The wallet is
+  // read for its frozen flag; the float lives in ledger_balances.
+  const agentDeltas = deltas.filter((d) => isAgentAccount(d.account));
+  const agentSnaps = await Promise.all(
+    agentDeltas.map((d) => tx.get(db.collection(LEDGER_BALANCES_COLLECTION).doc(d.account)))
+  );
+  const agentWalletSnaps = await Promise.all(
+    agentDeltas.map((d) => tx.get(db.collection("wallets").doc(agentIdOf(d.account))))
+  );
+  agentDeltas.forEach((d, i) => {
+    const current = (agentSnaps[i].data()?.balance as number | undefined) ?? 0;
+    const frozen = agentWalletSnaps[i].data()?.frozen === true;
+    if (d.debits > 0 && frozen && input.allowFrozenDebit !== true) {
+      throw new FrozenAccountError(d.account);
+    }
+    const newBalance = current + d.delta;
+    if (newBalance < 0) {
       throw new InsufficientBalanceError(d.account);
     }
     resultingBalances.set(d.account, newBalance);
@@ -160,8 +212,17 @@ export async function prepareJournalEntry(
       });
     });
 
+    // Float is read-modify-write, like a wallet, so its check above holds.
+    agentDeltas.forEach((d) => {
+      transaction.set(
+        db.collection(LEDGER_BALANCES_COLLECTION).doc(d.account),
+        { account: d.account, balance: resultingBalances.get(d.account), currency: input.currency, updatedAt: now },
+        { merge: true }
+      );
+    });
+
     for (const d of deltas) {
-      if (isUserAccount(d.account)) continue;
+      if (isUserAccount(d.account) || isAgentAccount(d.account)) continue;
       writeNonUserProjection(transaction, d, input.currency, now);
     }
   };

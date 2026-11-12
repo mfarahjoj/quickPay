@@ -98,3 +98,7 @@ coverage/
 # Misc
 *.log
 .cache/
+
+# Android native build cache
+mobile/android/app/.cxx/
+merchant-app/android/app/.cxx/

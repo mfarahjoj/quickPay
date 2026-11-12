@@ -26,6 +26,7 @@ interface ValidateQRResponse {
  * Callable function to validate a QR code before payment
  */
 export const validateQRCode = https.onCall(
+  { enforceAppCheck: true },
   async (
     request: https.CallableRequest<ValidateQRRequest>
   ): Promise<ApiResponse<ValidateQRResponse>> => {

@@ -15,12 +15,18 @@ import { useTranslation } from 'react-i18next';
 import { useWallet } from '../../hooks/useWallet';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useMerchantProfile } from '../../hooks/useMerchantProfile';
+import { useFloat } from '../../hooks/useFloat';
+import { useZaadFloatOn } from '../../hooks/useZaadFloatOn';
+import { useAuth } from '../../hooks/useAuth';
+import { needsReply, useMyDisputes } from '../../services/dispute.service';
 import { LanguageSelector } from '../../components/LanguageSelector';
 import {
   QrIcon,
   ScanIcon,
   TopUpIcon,
   HistoryIcon,
+  WalletIcon,
+  HandshakeIcon,
 } from '../../components/icons/AuthIcons';
 import { Transaction } from '../../types';
 import { CURRENCY_SYMBOL } from '../../config/constants';
@@ -94,27 +100,33 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
   const { wallet, loading: walletLoading, refreshBalance } = useWallet();
   const { transactions, loading: txLoading, refresh: refreshTx } = useTransactions(undefined, 6);
   const { profile } = useMerchantProfile();
+  const { user } = useAuth();
+  const { disputes } = useMyDisputes();
+  const repliesDue = disputes.filter((d) => needsReply(d, user?.uid)).length;
   const [refreshing, setRefreshing] = React.useState(false);
 
   const accountType = profile?.accountType ?? '';
   const isMerchantRole = accountType === 'merchant' || accountType === 'agent_merchant';
   const isAgentRole = accountType === 'topup_agent' || accountType === 'agent_merchant';
+  // Agents hold float apart from their sales and earnings.
+  const { floatCents } = useFloat(isAgentRole, wallet?.lastTransactionAt?.getTime());
+  // Buying float with Zaad, once the collection number is live.
+  const zaadFloat = useZaadFloatOn();
 
+  // One button per job. Receive also scans a customer's code; Cash in also
+  // finds a customer by phone; Cash out also takes a cash-out code, for
+  // customer apps that can't yet approve at the counter.
   const actions: ActionDef[] = [
     ...(isMerchantRole ? [
-      { key: 'qr', label: t('dashboard.quickActions.generateQR'), Icon: QrIcon, route: 'GenerateQR' },
-      { key: 'scan', label: t('dashboard.quickActions.scanAndCharge'), Icon: ScanIcon, route: 'ScanCharge' },
-      { key: 'payroll', label: 'Payroll', Icon: HistoryIcon, route: 'Payroll' },
+      { key: 'receive', label: t('dashboard.quickActions.receive'), Icon: QrIcon, route: 'GenerateQR' },
     ] : []),
     ...(isAgentRole ? [
-      { key: 'topup', label: t('dashboard.quickActions.topUpCustomer'), Icon: TopUpIcon, route: 'TopupCustomer' },
-      { key: 'confirmTopup', label: t('dashboard.quickActions.confirmTopUp'), Icon: TopUpIcon, route: 'ConfirmTopup' },
-      { key: 'cashout', label: 'Confirm Cash Out', Icon: TopUpIcon, route: 'ConfirmCashOut' },
-      { key: 'history', label: t('dashboard.quickActions.topUpHistory'), Icon: HistoryIcon, route: 'TopupHistory' },
+      { key: 'cashIn', label: t('dashboard.quickActions.cashIn'), Icon: TopUpIcon, route: 'ConfirmTopup' },
+      { key: 'cashOut', label: t('dashboard.quickActions.cashOut'), Icon: ScanIcon, route: 'ScanCashOut' },
     ] : []),
-    ...(!isMerchantRole && !isAgentRole ? [
-      { key: 'scan', label: t('dashboard.quickActions.scanAndCharge'), Icon: ScanIcon, route: 'ScanCharge' },
-      { key: 'topup', label: t('dashboard.quickActions.topUpCustomer'), Icon: TopUpIcon, route: 'TopupCustomer' },
+    ...(isMerchantRole ? [
+      { key: 'withdraw', label: t('dashboard.quickActions.withdraw'), Icon: WalletIcon, route: 'Payout' },
+      { key: 'payroll', label: t('dashboard.quickActions.payroll'), Icon: HandshakeIcon, route: 'Payroll' },
     ] : []),
   ];
 
@@ -177,7 +189,9 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
 
           {/* Balance */}
           <View style={styles.balanceBlock}>
-            <Text style={styles.balanceLabel}>{t('dashboard.balance.label')}</Text>
+            <Text style={styles.balanceLabel}>
+              {isAgentRole ? t('dashboard.balance.salesLabel') : t('dashboard.balance.label')}
+            </Text>
             {walletLoading && !wallet ? (
               <ActivityIndicator color="#FFFFFF" size="large" style={{ marginVertical: 14 }} />
             ) : (
@@ -202,12 +216,47 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
             </View>
           </View>
 
+          {/* Agent float, apart from the balance above */}
+          {isAgentRole && (
+            <View style={styles.floatCard}>
+              <View style={styles.floatText}>
+                <Text style={styles.floatLabel}>{t('dashboard.float.label')}</Text>
+                <Text style={styles.floatAmount}>{floatCents === null ? '…' : money(floatCents / 100)}</Text>
+                <Text style={styles.floatHint}>{t('dashboard.float.hint')}</Text>
+              </View>
+              <View style={styles.floatButtons}>
+                {zaadFloat ? (
+                  <TouchableOpacity style={styles.floatButton} onPress={() => navigation.navigate('BuyFloatZaad')} activeOpacity={0.8}>
+                    <Text style={styles.floatButtonText}>{t('dashboard.float.buyZaad')}</Text>
+                  </TouchableOpacity>
+                ) : null}
+                <TouchableOpacity style={styles.floatButton} onPress={() => navigation.navigate('MoveToFloat')} activeOpacity={0.8}>
+                  <Text style={styles.floatButtonText}>{t('dashboard.float.move')}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
           {/* Circular actions */}
           <View style={styles.actionsRow}>
             {actions.map((a) => (
               <ActionButton key={a.key} action={a} onPress={() => navigation.navigate(a.route)} />
             ))}
           </View>
+
+          {/* Disputes waiting on this shop */}
+          {repliesDue > 0 && (
+            <TouchableOpacity
+              style={styles.disputeBanner}
+              onPress={() => navigation.navigate('DisputesInbox')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.disputeBannerText}>
+                {t('dashboard.disputesNeedReply', { count: repliesDue })}
+              </Text>
+              <Text style={styles.disputeBannerArrow}>›</Text>
+            </TouchableOpacity>
+          )}
 
           {/* Recent transactions */}
           <View style={styles.txHeader}>
@@ -430,6 +479,37 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     marginBottom: 12,
   },
+  floatCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 22,
+    padding: 16,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  floatText: { flex: 1, marginRight: 12 },
+  floatLabel: { fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.45)', letterSpacing: 1, textTransform: 'uppercase' },
+  floatAmount: { fontSize: 24, fontWeight: '800', color: '#FFFFFF', marginTop: 4, letterSpacing: -0.5 },
+  floatHint: { fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 4, lineHeight: 16 },
+  floatButtons: { gap: 8, alignItems: 'flex-end' },
+  floatButton: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 999, backgroundColor: '#1A56FF' },
+  floatButtonText: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
+  disputeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,176,46,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,176,46,0.4)',
+  },
+  disputeBannerText: { flex: 1, fontSize: 14, fontWeight: '600', color: '#FFB02E' },
+  disputeBannerArrow: { fontSize: 20, color: '#FFB02E', marginLeft: 8 },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',

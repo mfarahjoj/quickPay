@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
-import { colors, typography, spacing } from '../../theme';
+import { typography, spacing, makeStyles } from '../../theme';
 
 interface AuthHeaderProps {
   icon?: React.ReactNode;
@@ -11,6 +11,7 @@ interface AuthHeaderProps {
 }
 
 export function AuthHeader({ icon, title, subtitle, highlight, centered = true }: AuthHeaderProps) {
+  const styles = useStyles();
   const fade = useRef(new Animated.Value(0)).current;
   const slide = useRef(new Animated.Value(14)).current;
 
@@ -39,7 +40,7 @@ export function AuthHeader({ icon, title, subtitle, highlight, centered = true }
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     marginTop: spacing.md,
     marginBottom: spacing.xl,
@@ -51,31 +52,31 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: spacing.lg,
   },
   title: {
     ...typography.displayL,
-    color: colors.dark.text,
+    color: colors.ui.text,
     marginBottom: spacing.smPlus,
   },
   subtitle: {
     fontSize: 16,
     fontWeight: '400',
     lineHeight: 24,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
   },
   highlight: {
     ...typography.bodyLarge,
     fontWeight: '600',
-    color: colors.dark.text,
+    color: colors.ui.text,
     marginTop: spacing.xs,
   },
   textCenter: {
     textAlign: 'center',
   },
-});
+}));

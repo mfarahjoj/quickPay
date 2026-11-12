@@ -1,16 +1,52 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { Alert, StyleSheet } from 'react-native';
+import { Alert, Linking, StatusBar, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from 'react-i18next';
+import { guardFreshInstall } from './services/installGuard';
 import AppNavigator, { navigationRef } from './navigation/AppNavigator';
+import { UpdateRequired } from './components/UpdateRequired';
+import { useUpdateGate } from './hooks/useUpdateGate';
 import { ToastProvider } from './components/auth';
 import { LanguageSync } from './i18n/useLanguageSync';
 import { messaging, auth } from './services/firebase.config';
 import { registerForPushNotifications } from './services/notification.service';
 import crashlytics from '@react-native-firebase/crashlytics';
 import { firebase } from '@react-native-firebase/app-check';
+import { parseChargeLink } from './services/apiCharge.service';
+import { ThemeProvider, useTheme } from './theme';
+
+/** Give up on a pending deep link if the customer hasn't signed in by then. */
+const PENDING_LINK_TIMEOUT_MS = 2 * 60 * 1000;
+
+/**
+ * Open the approval screen for an API charge once the app can show it. The
+ * navigation container only mounts after sign-in, so a link opened from the
+ * checkout page waits for that. The app lock covers the screen until the
+ * customer unlocks.
+ */
+function navigateToApiCharge(chargeId: string) {
+  const startedAt = Date.now();
+  const waitAndNavigate = () => {
+    if (navigationRef.isReady() && auth().currentUser) {
+      navigationRef.navigate('ApprovePayment', { chargeId });
+    } else if (Date.now() - startedAt < PENDING_LINK_TIMEOUT_MS) {
+      setTimeout(waitAndNavigate, 500);
+    }
+  };
+  waitAndNavigate();
+}
+
+/** Push notifications for charges: in-person requests and API charges. */
+function navigateFromNotification(data: Record<string, string>) {
+  if (data.type === 'api_charge' && data.chargeId) {
+    const chargeId = parseChargeLink(`zapppay://charge/${data.chargeId}`);
+    if (chargeId) navigateToApiCharge(chargeId);
+    return;
+  }
+  navigateToPaymentRequest(data);
+}
 
 function navigateToPaymentRequest(data: Record<string, string>) {
   if (
@@ -57,7 +93,9 @@ function AppContent() {
         apple: __DEV__
           ? { provider: 'debug', debugToken: '283DB4D1-8021-4A99-AF78-64C1125D0A13' }
           : { provider: 'appAttestWithDeviceCheckFallback' },
-        android: { provider: __DEV__ ? 'debug' : 'playIntegrity' },
+        android: __DEV__
+          ? { provider: 'debug', debugToken: 'D43FA50C-9835-4CC6-AAB7-B7CF0E2C2784' }
+          : { provider: 'playIntegrity' },
       });
       firebase.appCheck().initializeAppCheck({ provider, isTokenAutoRefreshEnabled: true });
     } catch {
@@ -82,13 +120,13 @@ function AppContent() {
     // Foreground notification — show an alert so user can tap through
     const unsubForeground = messaging().onMessage(async (remoteMessage) => {
       const data = remoteMessage.data as Record<string, string> | undefined;
-      if (data?.type === 'payment_request') {
+      if (data?.type === 'payment_request' || data?.type === 'api_charge') {
         Alert.alert(
           remoteMessage.notification?.title ?? t('notifications.paymentRequestTitle'),
           remoteMessage.notification?.body ?? t('notifications.paymentRequestBody'),
           [
             { text: t('common.dismiss'), style: 'cancel' },
-            { text: t('common.review'), onPress: () => navigateToPaymentRequest(data) },
+            { text: t('common.review'), onPress: () => navigateFromNotification(data) },
           ],
         );
       }
@@ -97,7 +135,7 @@ function AppContent() {
     // Background / quit → user tapped the notification
     const unsubOpened = messaging().onNotificationOpenedApp((remoteMessage) => {
       const data = remoteMessage.data as Record<string, string> | undefined;
-      if (data) navigateToPaymentRequest(data);
+      if (data) navigateFromNotification(data);
     });
 
     // App was killed, opened via notification tap
@@ -105,7 +143,7 @@ function AppContent() {
       .getInitialNotification()
       .then((remoteMessage) => {
         if (remoteMessage?.data) {
-          navigateToPaymentRequest(remoteMessage.data as Record<string, string>);
+          navigateFromNotification(remoteMessage.data as Record<string, string>);
         }
       });
 
@@ -115,12 +153,36 @@ function AppContent() {
     };
   }, [t]);
 
+  // zapppay://charge/{id} — the "Open Zapp Pay" button on the hosted checkout.
+  useEffect(() => {
+    const open = (url: string | null) => {
+      const chargeId = url ? parseChargeLink(url) : null;
+      if (chargeId) navigateToApiCharge(chargeId);
+    };
+    Linking.getInitialURL().then(open).catch(() => undefined);
+    const sub = Linking.addEventListener('url', ({ url }) => open(url));
+    return () => sub.remove();
+  }, []);
+
+  // After the App Check setup above: the gate's first read should carry a token.
+  const updateGate = useUpdateGate();
+
+  const { scheme, colors } = useTheme();
+
   return (
-    <GestureHandlerRootView style={styles.root}>
+    <GestureHandlerRootView style={[styles.root, { backgroundColor: colors.ui.canvas }]}>
+      <StatusBar
+        barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'}
+        backgroundColor={colors.ui.canvas}
+      />
       <SafeAreaProvider>
         <ToastProvider>
           <LanguageSync />
-          <AppNavigator />
+          {updateGate.required ? (
+            <UpdateRequired updateUrl={updateGate.updateUrl} />
+          ) : (
+            <AppNavigator />
+          )}
         </ToastProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
@@ -128,7 +190,12 @@ function AppContent() {
 }
 
 export default function App() {
-  return <AppContent />;
+  // Nothing else runs until a reinstall's leftover session is gone.
+  const [installChecked, setInstallChecked] = useState(false);
+  useEffect(() => {
+    guardFreshInstall().finally(() => setInstallChecked(true));
+  }, []);
+  return <ThemeProvider>{installChecked ? <AppContent /> : null}</ThemeProvider>;
 }
 
 const styles = StyleSheet.create({

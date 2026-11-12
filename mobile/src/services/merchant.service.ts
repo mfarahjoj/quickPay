@@ -35,6 +35,11 @@ export async function payMerchant(
   amountDollars: number,
   currency: string,
   pin: string,
+  /**
+   * Same key on every retry of the same payment. Without it, a retry after a
+   * dropped connection is a second payment — see `utils/idempotency.ts`.
+   */
+  idempotencyKey?: string,
 ): Promise<PaymentResult> {
   const fn = functions().httpsCallable('payMerchant');
   const result = await fn({
@@ -42,6 +47,7 @@ export async function payMerchant(
     amount: Math.round(amountDollars * 100),
     currency,
     pin,
+    ...(idempotencyKey ? { idempotencyKey } : {}),
   });
 
   const data = result.data as { success: boolean; error?: string; data: PaymentResult };

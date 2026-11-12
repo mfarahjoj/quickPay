@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { Header } from '../../components/Header';
 import { EmptyState } from '../../components/EmptyState';
 import { useNotifications } from '../../hooks/useNotifications';
-import { colors, typography, spacing } from '../../theme';
+import { typography, spacing, makeStyles, useColors } from '../../theme';
 import { MoneyInIcon, MoneyOutIcon, CardIcon, BankIcon, BellIcon } from '../../components/icons/UIIcons';
 import type { AppNotification } from '../../hooks/useNotifications';
 
@@ -20,18 +20,19 @@ interface Props {
 }
 
 function NotificationIcon({ type }: { type: AppNotification['type'] }) {
+  const colors = useColors();
   const size = 22;
   switch (type) {
     case 'payment_received':
-      return <MoneyInIcon size={size} color={colors.dark.incoming} />;
+      return <MoneyInIcon size={size} color={colors.ui.incoming} />;
     case 'payment_sent':
-      return <MoneyOutIcon size={size} color={colors.dark.textDim} />;
+      return <MoneyOutIcon size={size} color={colors.ui.textDim} />;
     case 'topup_completed':
-      return <CardIcon size={size} color={colors.dark.accentText} />;
+      return <CardIcon size={size} color={colors.ui.accentText} />;
     case 'settlement_completed':
-      return <BankIcon size={size} color={colors.dark.accentText} />;
+      return <BankIcon size={size} color={colors.ui.accentText} />;
     default:
-      return <BellIcon size={size} color={colors.dark.textDim} />;
+      return <BellIcon size={size} color={colors.ui.textDim} />;
   }
 }
 
@@ -42,6 +43,7 @@ function NotificationItem({
   item: AppNotification;
   onPress: () => void;
 }) {
+  const styles = useStyles();
   return (
     <TouchableOpacity
       style={[styles.notificationItem, !item.read && styles.unread]}
@@ -65,6 +67,8 @@ function NotificationItem({
 }
 
 export default function NotificationsScreen({ navigation }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const {
     notifications,
@@ -92,7 +96,7 @@ export default function NotificationsScreen({ navigation }: Props) {
 
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.dark.accent} />
+          <ActivityIndicator size="large" color={colors.ui.accent} />
         </View>
       ) : error ? (
         <View style={styles.errorContainer}>
@@ -121,10 +125,10 @@ export default function NotificationsScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   markAllBar: {
     flexDirection: 'row',
@@ -132,17 +136,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderBottomWidth: 1,
-    borderBottomColor: colors.dark.divider,
+    borderBottomColor: colors.ui.divider,
   },
   unreadText: {
     ...typography.caption,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
   },
   markAllText: {
     ...typography.bodySemibold,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
   },
   loadingContainer: {
     flex: 1,
@@ -157,7 +161,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     ...typography.body,
-    color: colors.dark.error,
+    color: colors.ui.error,
     textAlign: 'center',
   },
   listContent: {
@@ -166,23 +170,23 @@ const styles = StyleSheet.create({
   notificationItem: {
     flexDirection: 'row',
     padding: spacing.lg,
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     marginHorizontal: spacing.lg,
     marginTop: spacing.sm,
     borderRadius: 12,
     alignItems: 'flex-start',
   },
   unread: {
-    backgroundColor: colors.dark.accentSoft,
-    borderColor: colors.dark.accentBorder,
+    backgroundColor: colors.ui.accentSoft,
+    borderColor: colors.ui.accentBorder,
   },
   iconContainer: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: colors.dark.glassRaised,
+    backgroundColor: colors.ui.glassRaised,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: spacing.md,
@@ -192,16 +196,16 @@ const styles = StyleSheet.create({
   },
   notificationTitle: {
     ...typography.bodySemibold,
-    color: colors.dark.text,
+    color: colors.ui.text,
     marginBottom: spacing.xs,
   },
   notificationBody: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     marginBottom: spacing.xs,
   },
   notificationTime: {
     ...typography.overline,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
   },
-});
+}));

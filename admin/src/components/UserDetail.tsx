@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type UserDetail as Detail } from "../api";
+import { Icon } from "./Icon";
 import { ReasonPrompt } from "./ReasonPrompt";
+import { Avatar, EmptyState, Loading } from "./ui";
+import { ApiKeysPanel } from "./ApiKeysPanel";
+import { AdjustModal } from "./AdjustModal";
 
 type PendingAction = "freeze" | "unfreeze" | "clearLockouts" | "revokeDevices";
 
@@ -23,7 +27,7 @@ const ACTION_COPY: Record<
   clearLockouts: {
     title: "Clear lockouts",
     description:
-      "Resets failed PIN and agent-code counters so the customer can try again straight away.",
+      "Resets failed PIN and agent-code counters so the customer can try again straight away. This also opens a PIN that locked after too many wrong tries, so only do it once you've confirmed who you're talking to, in person or against their ID.",
     confirm: "Clear lockouts",
   },
   revokeDevices: {
@@ -46,12 +50,42 @@ function when(ts?: { _seconds?: number; seconds?: number }) {
   return new Date(secs * 1000).toLocaleString();
 }
 
-export function UserDetail({ userId }: { userId: string }) {
+/** "USD 1284.50" → small currency, large figure. Anything else renders as-is. */
+function Figure({ text }: { text: string }) {
+  const m = /^([A-Z]{3}) (.+)$/.exec(text);
+  if (!m) return <>{text}</>;
+  return (
+    <>
+      <span className="stat-cur">{m[1]}</span>
+      {m[2]}
+    </>
+  );
+}
+
+/** Pill colour for a transaction status. Anything unrecognised stays neutral. */
+function statusTone(status?: string) {
+  switch (status) {
+    case "completed":
+    case "success":
+      return "ok";
+    case "pending":
+      return "warn";
+    case "failed":
+    case "rejected":
+      return "bad";
+    default:
+      return "";
+  }
+}
+
+/** `canAdjust`: ops and super may correct balances (adminPostAdjustment). */
+export function UserDetail({ userId, canAdjust = false }: { userId: string; canAdjust?: boolean }) {
   const [detail, setDetail] = useState<Detail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [action, setAction] = useState<PendingAction | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [adjusting, setAdjusting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -81,8 +115,13 @@ export function UserDetail({ userId }: { userId: string }) {
     await load();
   };
 
-  if (loading) return <div className="panel empty">Loading…</div>;
-  if (error) return <div className="panel banner error">{error}</div>;
+  if (loading)
+    return (
+      <div className="panel">
+        <Loading />
+      </div>
+    );
+  if (error) return <div className="banner error">{error}</div>;
   if (!detail) return null;
 
   const profile = detail.profile as Record<string, string | undefined>;
@@ -90,15 +129,24 @@ export function UserDetail({ userId }: { userId: string }) {
   const closed = detail.accountStatus === "closed";
 
   return (
-    <div>
+    <div className="stack-lg">
       {notice && <div className="banner ok">{notice}</div>}
 
       <div className="panel">
-        <div className="row">
-          <h2 style={{ margin: 0 }}>{profile.fullName || "(no name)"}</h2>
-          <span className={`badge ${detail.accountStatus}`}>{detail.accountStatus}</span>
+        <div className="person-head">
+          <Avatar name={profile.fullName} size={56} />
+          <div className="person-text">
+            <div className="row">
+              <h2>{profile.fullName || "(no name)"}</h2>
+              <span className={`badge ${detail.accountStatus}`}>{detail.accountStatus}</span>
+            </div>
+            <div className="sub">
+              {profile.phoneNumber || "(no phone)"} · {profile.accountType || "customer"}
+            </div>
+          </div>
           <div className="spacer" />
           <button className="ghost" onClick={() => void load()}>
+            <Icon name="refresh" size={16} />
             Refresh
           </button>
         </div>
@@ -120,11 +168,20 @@ export function UserDetail({ userId }: { userId: string }) {
               : "—"}
           </dd>
           <dt>PIN set</dt>
-          <dd>{detail.hasPin ? "yes" : "no"}</dd>
+          <dd>
+            {detail.hasPin ? "yes" : "no"}
+            {detail.pinHardLocked
+              ? " · locked after too many wrong PINs"
+              : detail.pinFailedAttempts
+                ? ` · ${detail.pinFailedAttempts} wrong in a row`
+                : ""}
+          </dd>
+          <dt>Device check</dt>
+          <dd>{deviceRiskText(profile.deviceRisk)}</dd>
           <dt>Trusted devices</dt>
           <dd>{detail.trustedDeviceCount}</dd>
           <dt>uid</dt>
-          <dd>{detail.userId}</dd>
+          <dd className="mono">{detail.userId}</dd>
           {frozen && (
             <>
               <dt>Frozen reason</dt>
@@ -134,9 +191,13 @@ export function UserDetail({ userId }: { userId: string }) {
         </dl>
 
         <h3>Wallet</h3>
+        <div className="stat">
+          <span className="stat-label">Balance</span>
+          <span className="stat-value">
+            <Figure text={money(detail.wallet?.balance, detail.wallet?.currency)} />
+          </span>
+        </div>
         <dl className="kv">
-          <dt>Balance</dt>
-          <dd>{money(detail.wallet?.balance, detail.wallet?.currency)}</dd>
           <dt>Ledger freeze flag</dt>
           <dd>
             {detail.wallet?.frozen ? "frozen" : "not frozen"}
@@ -149,7 +210,7 @@ export function UserDetail({ userId }: { userId: string }) {
         </dl>
 
         <h3>Support actions</h3>
-        <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
+        <div className="row wrap" style={{ marginTop: 10 }}>
           {frozen ? (
             <button className="primary" onClick={() => setAction("unfreeze")}>
               Reactivate
@@ -166,48 +227,80 @@ export function UserDetail({ userId }: { userId: string }) {
           >
             Revoke devices ({detail.trustedDeviceCount})
           </button>
+          {canAdjust && (
+            <button onClick={() => setAdjusting(true)} disabled={!detail.wallet}>
+              Adjust balance
+            </button>
+          )}
         </div>
         {closed && (
-          <p className="muted" style={{ fontSize: 12 }}>
+          <p className="hint" style={{ marginTop: 12 }}>
             This account is closed; freeze and reactivate do not apply.
           </p>
         )}
       </div>
 
+      {(profile.accountType === "merchant" || profile.accountType === "agent_merchant") && (
+        <ApiKeysPanel merchantId={detail.userId} disabled={detail.accountStatus !== "active"} />
+      )}
+
       <div className="panel">
-        <h2>Recent transactions</h2>
+        <div className="panel-head">
+          <h2>Recent transactions</h2>
+        </div>
         {detail.transactions.length === 0 ? (
-          <div className="empty">No transactions.</div>
+          <EmptyState title="No transactions" />
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>When</th>
-                <th>Type</th>
-                <th>Receipt</th>
-                <th>Description</th>
-                <th>Status</th>
-                <th className="num">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {detail.transactions.map((tx) => (
-                <tr key={tx.id}>
-                  <td className="muted">{when(tx.createdAt)}</td>
-                  <td>{tx.type || "—"}</td>
-                  <td className="mono">{tx.receiptNumber || "—"}</td>
-                  <td>
-                    {tx.description || "—"}
-                    {tx.reference ? <span className="muted"> · {tx.reference}</span> : null}
-                  </td>
-                  <td>{tx.status || "—"}</td>
-                  <td className="num">{money(tx.amount, tx.currency)}</td>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>When</th>
+                  <th>Type</th>
+                  <th>Receipt</th>
+                  <th className="wide">Description</th>
+                  <th>Status</th>
+                  <th className="num">Amount</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {detail.transactions.map((tx) => (
+                  <tr key={tx.id}>
+                    <td className="muted nowrap">{when(tx.createdAt)}</td>
+                    <td className="nowrap">{tx.type || "—"}</td>
+                    <td className="mono nowrap">{tx.receiptNumber || "—"}</td>
+                    <td className="wide">
+                      {tx.description || "—"}
+                      {tx.reference ? <span className="muted"> · {tx.reference}</span> : null}
+                    </td>
+                    <td>
+                      {tx.status ? (
+                        <span className={`badge ${statusTone(tx.status)}`}>{tx.status}</span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="num">{money(tx.amount, tx.currency)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
+
+      {adjusting && (
+        <AdjustModal
+          userId={detail.userId}
+          name={profile.fullName || "this customer"}
+          onCancel={() => setAdjusting(false)}
+          onDone={async (message) => {
+            setAdjusting(false);
+            setNotice(message);
+            await load();
+          }}
+        />
+      )}
 
       {action && (
         <ReasonPrompt
@@ -221,4 +314,13 @@ export function UserDetail({ userId }: { userId: string }) {
       )}
     </div>
   );
+}
+
+/** The app's latest root/jailbreak report (review E14): a signal, not a block. */
+function deviceRiskText(risk: unknown): string {
+  const r = risk as { flagged?: boolean; rooted?: boolean; hooked?: boolean; platform?: string } | undefined;
+  if (!r) return "—";
+  if (!r.flagged) return `clean (${r.platform ?? "?"})`;
+  const what = [r.rooted && "rooted / jailbroken", r.hooked && "hooking tools"].filter(Boolean).join(", ");
+  return `⚠ ${what} (${r.platform ?? "?"})`;
 }

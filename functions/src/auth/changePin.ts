@@ -1,8 +1,12 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
+import { endSessions } from "./sessions";
+import { notifyUser } from "../utils/notifications";
+import { assertStrongPin } from "../utils/weakPin";
 import { requireAuth, validatePin } from "../utils/validation";
 import { hashPin } from "../utils/encryption";
 import { verifyUserPin } from "./validatePin";
+import { writeAuth } from "./pinStore";
 import { ApiResponse } from "../types";
 
 interface ChangePinRequest {
@@ -11,6 +15,7 @@ interface ChangePinRequest {
 }
 
 export const changePin = https.onCall(
+  { enforceAppCheck: true },
   async (
     request: https.CallableRequest<ChangePinRequest>
   ): Promise<ApiResponse> => {
@@ -24,6 +29,7 @@ export const changePin = https.onCall(
         "PIN must be exactly 6 digits"
       );
     }
+    assertStrongPin(newPin);
 
     if (currentPin === newPin) {
       throw new https.HttpsError(
@@ -46,12 +52,21 @@ export const changePin = https.onCall(
 
       const newPinHash = await hashPin(newPin);
 
-      await db.collection("users").doc(userId).update({
-        pinHash: newPinHash,
-        updatedAt: admin.firestore.Timestamp.now(),
-      });
+      const batch = db.batch();
+      writeAuth(batch, userId, { pinHash: newPinHash }, { hasPin: true });
+      batch.update(db.collection("users").doc(userId), { updatedAt: admin.firestore.Timestamp.now() });
+      await batch.commit();
 
-      return { success: true, message: "PIN changed successfully" };
+      // Every other phone signs in again; this one carries on (review A5).
+      const sessionToken = await endSessions(userId, { keepCaller: true });
+      notifyUser(
+        userId,
+        "pin_changed",
+        { key: "security.pin_changed" },
+        { type: "pin_changed" }
+      ).catch((err) => console.error("Failed to notify PIN change:", err));
+
+      return { success: true, message: "PIN changed successfully", data: { sessionToken } };
     } catch (error: any) {
       if (error instanceof https.HttpsError) throw error;
       console.error("Error changing PIN:", error);

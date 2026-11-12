@@ -1,5 +1,6 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
+import { assertResetCooldownAllows } from "../utils/resetCooldown";
 import { requireAuth, validateAmount, validateCurrency } from "../utils/validation";
 import { enforceTransactionLimits } from "../utils/limits";
 import { assertAccountActive } from "../utils/accountStatus";
@@ -20,16 +21,66 @@ import {
   prepareJournalEntry,
   userAccount,
   JournalLine,
+  JournalEntryDoc,
+  JOURNAL_COLLECTION,
   PLATFORM_FEES,
   WalletNotFoundError,
 } from "../ledger";
 import { claimReceiptNumber, reserveReceiptNumber } from "../utils/receiptNumber";
+import {
+  isValidIdempotencyKey,
+  scopedEntryId,
+} from "../utils/idempotency";
 
 interface PayMerchantRequest {
   merchantId: string;
   amount: number; // In cents
   currency: string;
   pin: string;
+  /**
+   * Minted once per payment attempt by the client and resent unchanged on
+   * every retry. Optional only because app builds older than 2026-09-18 don't
+   * send one; those calls keep the previous behaviour, where a retry after a
+   * dropped connection charges the customer twice.
+   */
+  idempotencyKey?: string;
+}
+
+/**
+ * Answer a retry from what was already posted.
+ *
+ * The journal entry is the record that matters — it is written in the same
+ * transaction as the `transactions` row, so if the entry exists the payment
+ * happened. `refs.transactionId` points back at the receipt the first attempt
+ * created, which is what the customer's app is waiting for.
+ */
+async function findPostedPayment(
+  db: FirebaseFirestore.Firestore,
+  customerId: string,
+  idempotencyKey: string
+): Promise<PaymentResponse | null> {
+  const entryId = scopedEntryId("paymerchant", customerId, idempotencyKey);
+  const entrySnap = await db.collection(JOURNAL_COLLECTION).doc(entryId).get();
+  if (!entrySnap.exists) return null;
+
+  const entry = entrySnap.data() as JournalEntryDoc;
+  const postedTransactionId = entry.refs?.transactionId;
+  if (!postedTransactionId) return null;
+
+  const txSnap = await db
+    .collection("transactions")
+    .doc(postedTransactionId)
+    .get();
+  if (!txSnap.exists) return null;
+
+  const tx = txSnap.data() as Transaction;
+  return {
+    transactionId: postedTransactionId,
+    ...(tx.receiptNumber ? { receiptNumber: tx.receiptNumber } : {}),
+    status: "completed",
+    amount: tx.amount,
+    merchantId: tx.toUserId as string,
+  };
 }
 
 /**
@@ -43,7 +94,7 @@ export const payMerchant = https.onCall(
   ): Promise<ApiResponse<PaymentResponse>> => {
     requireAuth(request);
     const customerId = request.auth!.uid;
-    const { merchantId, amount, currency, pin } = request.data;
+    const { merchantId, amount, currency, pin, idempotencyKey } = request.data;
 
     if (!merchantId || !pin) {
       throw new https.HttpsError(
@@ -62,7 +113,7 @@ export const payMerchant = https.onCall(
     if (!validateCurrency(currency)) {
       throw new https.HttpsError(
         "invalid-argument",
-        "Invalid currency. Supported: USD, SLS"
+        "Invalid currency. Supported: USD"
       );
     }
 
@@ -77,6 +128,24 @@ export const payMerchant = https.onCall(
       if (!pinValid) {
         throw new https.HttpsError("permission-denied", "Invalid PIN");
       }
+
+      // A retry is answered from the journal before any limit or velocity
+      // check runs. Those checks count the payment the first attempt already
+      // posted, so running them first would reject the retry of a payment that
+      // succeeded — the customer would be told they are over their daily limit
+      // for money they have already spent.
+      if (isValidIdempotencyKey(idempotencyKey)) {
+        const replay = await findPostedPayment(db, customerId, idempotencyKey);
+        if (replay) {
+          console.log(
+            `payMerchant replay for ${customerId} key ${idempotencyKey} → ${replay.transactionId}`
+          );
+          return { success: true, data: replay };
+        }
+      }
+
+      // Outgoing money waits out the pause after a PIN reset.
+      await assertResetCooldownAllows(customerId, "shop_payment", amount);
 
       await enforceVelocity(customerId);
 
@@ -106,7 +175,16 @@ export const payMerchant = https.onCall(
 
       const transactionId = db.collection("transactions").doc().id;
 
-      const journalEntryId = `paymerchant_${transactionId}`;
+      // With a key from the client the entry ID is stable across retries, so a
+      // second attempt hits the ledger's own idempotency instead of posting
+      // again. Without one it falls back to the server-generated transaction
+      // ID, which is unique per call and therefore protects nobody — that is
+      // the old-client path, not a design choice.
+      const journalEntryId = isValidIdempotencyKey(idempotencyKey)
+        ? scopedEntryId("paymerchant", customerId, idempotencyKey)
+        : `paymerchant_${transactionId}`;
+
+      let alreadyPosted = false;
 
       let receiptNumber: string;
 
@@ -132,10 +210,19 @@ export const payMerchant = https.onCall(
           postedBy: customerId,
         });
 
+        // Two taps in flight at once: the first commits, the second finds the
+        // entry already posted. Writing the transaction row anyway would leave
+        // a second receipt for a payment that happened once.
+        if (pending.alreadyPosted) {
+          alreadyPosted = true;
+          return;
+        }
+
         pending.write(transaction);
 
         const txRecord: Transaction = {
           type: "payment",
+          kind: "merchant_payment",
           fromUserId: customerId,
           toUserId: merchantId,
           participants: [customerId, merchantId],
@@ -164,6 +251,22 @@ export const payMerchant = https.onCall(
           currency,
         });
       });
+
+      if (alreadyPosted) {
+        // The other attempt did the work, including the notifications.
+        const replay = await findPostedPayment(
+          db,
+          customerId,
+          idempotencyKey as string
+        );
+        if (replay) {
+          return { success: true, data: replay };
+        }
+        throw new https.HttpsError(
+          "aborted",
+          "This payment is already being processed. Check your history before retrying."
+        );
+      }
 
       notifyPaymentReceived(merchantId, netCents, currency, customerId).catch(
         (err) => console.error("Failed to notify merchant:", err)

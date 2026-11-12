@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -6,13 +6,18 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  NativeModules,
   ScrollView,
   Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { Camera, useCameraDevice } from 'react-native-vision-camera';
+import {
+  Camera,
+  useCameraDevice,
+  usePhotoOutput,
+  type CameraPhotoOutput,
+} from 'react-native-vision-camera';
+import { CAMERA_NATIVE_AVAILABLE, requestCameraPermission } from '../hooks/useQrScannerOutputs';
 import { GlassCard, PillButton, TEXT_DIM, TEXT_FAINT } from './DarkScreen';
 import { CloseIcon, CheckIcon, ReceiptIcon, TorchIcon } from './icons/AuthIcons';
 import {
@@ -24,10 +29,6 @@ import { triggerHaptic } from '../services/haptics.service';
 import { ParsedReceipt, identifierToReference } from '../utils/receiptParser';
 import { formatCents } from '../utils/money';
 import { logger } from '../utils/logger';
-
-// VisionCamera v3 crashes at module level on simulator — guard before any hook call.
-const CAMERA_NATIVE_AVAILABLE =
-  !!NativeModules.VisionCameraProxy || !!NativeModules.CameraDevicesManager;
 
 export interface ReceiptDetails {
   /** Dollar total in cents, or null when the receipt had none we trust. */
@@ -50,28 +51,39 @@ type Step = 'camera' | 'reading' | 'review';
 interface CameraLayerProps {
   active: boolean;
   torchOn: boolean;
-  cameraRef: React.RefObject<Camera | null>;
+  /** Filled with the photo output while the camera is mounted. */
+  photoRef: React.MutableRefObject<CameraPhotoOutput | null>;
   onTorchAvailable: (hasTorch: boolean) => void;
   onPermission: (granted: boolean) => void;
 }
 
-function CameraLayer({ active, torchOn, cameraRef, onTorchAvailable, onPermission }: CameraLayerProps) {
+function CameraLayer({ active, torchOn, photoRef, onTorchAvailable, onPermission }: CameraLayerProps) {
   const device = useCameraDevice('back');
+  // 'quality': a receipt is small print on thermal paper, and the read is only
+  // as good as the photo.
+  const photoOutput = usePhotoOutput({ qualityPrioritization: 'quality' });
+  const outputs = useMemo(() => [photoOutput], [photoOutput]);
+
+  useEffect(() => {
+    photoRef.current = photoOutput;
+    return () => {
+      photoRef.current = null;
+    };
+  }, [photoOutput, photoRef]);
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      try {
-        const status = await Camera.requestCameraPermission();
-        if (!cancelled) onPermission(status === 'granted');
-      } catch {
+    requestCameraPermission()
+      .then((granted) => {
+        if (!cancelled) onPermission(granted);
+      })
+      .catch(() => {
         if (!cancelled) onPermission(false);
-      }
-    })();
+      });
     return () => {
       cancelled = true;
     };
-    // Ask once per mount; the callbacks are stable setters.
+    // Ask once per mount; the callback is a stable setter.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -84,12 +96,11 @@ function CameraLayer({ active, torchOn, cameraRef, onTorchAvailable, onPermissio
 
   return (
     <Camera
-      ref={cameraRef as React.RefObject<Camera>}
       style={StyleSheet.absoluteFill}
       device={device}
       isActive={active}
-      photo
-      torch={torchOn ? 'on' : 'off'}
+      outputs={outputs}
+      torchMode={torchOn ? 'on' : 'off'}
     />
   );
 }
@@ -102,7 +113,7 @@ function CameraLayer({ active, torchOn, cameraRef, onTorchAvailable, onPermissio
  */
 export function ReceiptScanner({ visible, onClose, onApply }: ReceiptScannerProps) {
   const { t } = useTranslation();
-  const cameraRef = useRef<Camera | null>(null);
+  const photoRef = useRef<CameraPhotoOutput | null>(null);
 
   const [step, setStep] = useState<Step>('camera');
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
@@ -126,13 +137,13 @@ export function ReceiptScanner({ visible, onClose, onApply }: ReceiptScannerProp
   }, [visible]);
 
   const capture = useCallback(async () => {
-    if (step !== 'camera' || !cameraRef.current) return;
+    if (step !== 'camera' || !photoRef.current) return;
     setError(null);
     setStep('reading');
     triggerHaptic('medium');
     try {
-      const photo = await cameraRef.current.takePhoto({ flash: 'off' });
-      const parsed = await readReceipt(photo.path);
+      const photo = await photoRef.current.capturePhotoToFile({ flashMode: 'off' }, {});
+      const parsed = await readReceipt(photo.filePath);
       if (parsed.amountCents === null && parsed.identifiers.length === 0) {
         setError(t('qr.receipt.failed'));
         setStep('camera');
@@ -263,7 +274,7 @@ export function ReceiptScanner({ visible, onClose, onApply }: ReceiptScannerProp
             // drop to black under the "Reading…" overlay.
             active={visible && ready && step !== 'review'}
             torchOn={torchOn}
-            cameraRef={cameraRef}
+            photoRef={photoRef}
             onTorchAvailable={setHasTorch}
             onPermission={setHasPermission}
           />

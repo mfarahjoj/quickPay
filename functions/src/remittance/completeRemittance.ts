@@ -12,6 +12,7 @@ interface CompleteRemittanceRequest {
 }
 
 export const completeRemittance = https.onCall(
+  { enforceAppCheck: true },
   async (
     request: https.CallableRequest<CompleteRemittanceRequest>
   ): Promise<ApiResponse> => {
@@ -87,6 +88,7 @@ export const completeRemittance = https.onCall(
 
           const txRecord: Transaction = {
             type: "topup",
+            kind: "remittance",
             fromUserId: senderId,
             toUserId: recipientId,
             participants: [senderId, recipientId],

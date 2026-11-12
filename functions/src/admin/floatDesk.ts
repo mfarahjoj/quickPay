@@ -28,12 +28,16 @@ import {
 import { requireAdmin, requireRecentAdminAuth, requireReason } from "./guard";
 import { stageAuditEntry } from "./audit";
 import { getRates } from "../config/rates";
+import { rollingWindowStart, sumStandingCents } from "../utils/rollingTotal";
 import { isAgentRole } from "../utils/roles";
 import { resolveAccountStatus } from "../utils/accountStatus";
 import { notifyUser } from "../utils/notifications";
+import { floatRef } from "../agents/float";
 import {
   prepareJournalEntry,
   userAccount,
+  agentAccount,
+  agentIdOf,
   floatAccountForRoute,
   isFloatRoute,
   type FloatRoute,
@@ -133,8 +137,18 @@ export const adminRequestFloat = https.onCall(
       );
     }
 
+    // Counted per agent and direction over the last 24 hours, whoever asked,
+    // so splitting a large movement into small requests still needs a second
+    // admin once the total crosses the threshold.
     const { floatApprovalThresholdCents } = await getRates();
-    const requiresSecondApprover = amountCents >= floatApprovalThresholdCents;
+    const recent = await db
+      .collection(FLOAT_ISSUANCES_COLLECTION)
+      .where("agentId", "==", agentId)
+      .where("createdAt", ">=", rollingWindowStart())
+      .get();
+    const recentCents = sumStandingCents(recent.docs, (d) => d.direction === direction);
+    const requiresSecondApprover =
+      recentCents + amountCents >= floatApprovalThresholdCents;
 
     const ref = db.collection(FLOAT_ISSUANCES_COLLECTION).doc();
     const issuance: FloatIssuance = {
@@ -234,7 +248,9 @@ export const adminApproveFloat = https.onCall(
       const journalEntryId = `${entryPrefix}_${issuanceId}`;
       const transactionId = journalEntryId;
       const floatAccount = floatAccountForRoute(issuance.route as FloatRoute);
-      const agentLedgerAccount = userAccount(issuance.agentId);
+      // Float is issued into, and withdrawn from, the agent's float account,
+      // never their own wallet (AGENT_FLOAT_SEPARATION.md).
+      const agentLedgerAccount = agentAccount(issuance.agentId);
 
       const lines =
         issuance.direction === "issue"
@@ -270,6 +286,7 @@ export const adminApproveFloat = https.onCall(
 
       const txRecord: Transaction = {
         type: issuance.direction === "issue" ? "topup" : "withdrawal",
+        kind: "float",
         fromUserId: issuance.direction === "issue" ? "system" : issuance.agentId,
         toUserId: issuance.direction === "issue" ? issuance.agentId : "system",
         participants: [issuance.agentId],
@@ -325,10 +342,10 @@ export const adminApproveFloat = https.onCall(
     notifyUser(
       result.agentId,
       result.direction === "issue" ? "float_issued" : "float_withdrawn",
-      result.direction === "issue" ? "Float added" : "Float withdrawn",
-      `${result.direction === "issue" ? "+" : "-"}$${(result.amountCents / 100).toFixed(
-        2
-      )} float`,
+      {
+        key: result.direction === "issue" ? "float.issued" : "float.withdrawn",
+        params: { amount: `$${(result.amountCents / 100).toFixed(2)}` },
+      },
       { transactionId: result.transactionId }
     ).catch((err) => console.error("Failed to notify agent:", err));
 
@@ -442,6 +459,8 @@ interface AgentPosition {
   accountType?: string;
   accountStatus: string;
   balanceCents: number;
+  /** The agent's own wallet: commission and, for an agent-merchant, sales. */
+  walletCents: number;
 }
 
 /**
@@ -466,12 +485,13 @@ export const adminListAgentFloat = https.onCall(
 
     if (agentsSnap.empty) return { success: true, data: [] };
 
-    const wallets = await db.getAll(
-      ...agentsSnap.docs.map((d) => db.collection("wallets").doc(d.id))
-    );
-    const balanceById = new Map(
-      wallets.map((w) => [w.id, (w.data()?.balance as number) ?? 0])
-    );
+    const [wallets, floats] = await Promise.all([
+      db.getAll(...agentsSnap.docs.map((d) => db.collection("wallets").doc(d.id))),
+      db.getAll(...agentsSnap.docs.map((d) => floatRef(d.id))),
+    ]);
+    const walletById = new Map(wallets.map((w) => [w.id, (w.data()?.balance as number) ?? 0]));
+    // Float docs are keyed agent:{uid}; map them back to the uid.
+    const floatById = new Map(floats.map((f) => [agentIdOf(f.id), (f.data()?.balance as number) ?? 0]));
 
     const positions: AgentPosition[] = agentsSnap.docs.map((doc) => {
       const data = doc.data();
@@ -481,7 +501,8 @@ export const adminListAgentFloat = https.onCall(
         phoneNumber: data.phoneNumber,
         accountType: data.accountType,
         accountStatus: resolveAccountStatus(data),
-        balanceCents: balanceById.get(doc.id) ?? 0,
+        balanceCents: floatById.get(doc.id) ?? 0,
+        walletCents: walletById.get(doc.id) ?? 0,
       };
     });
 

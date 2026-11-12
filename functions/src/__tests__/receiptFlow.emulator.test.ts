@@ -172,6 +172,7 @@ run("receipt numbers and paid invoices (emulator)", () => {
       customerId: "customer-1",
       status: "scanned",
       scannedBy: "merchant-1",
+      scannedAt: admin.firestore.Timestamp.now(),
     });
     const req = await createPaymentRequest({
       data: {
@@ -198,6 +199,7 @@ run("receipt numbers and paid invoices (emulator)", () => {
       customerId: "customer-1",
       status: "scanned",
       scannedBy: "merchant-1",
+      scannedAt: admin.firestore.Timestamp.now(),
     });
     const err = await createPaymentRequest({
       data: {
@@ -212,6 +214,88 @@ run("receipt numbers and paid invoices (emulator)", () => {
     expect(err.code).toBe("already-exists");
     // The token is left as it was, so the merchant can confirm and carry on.
     expect((await db.doc("customerTokens/token-2").get()).data()!.status).toBe("scanned");
+  });
+
+  it("numbers every partial refund, and a retried one gets the number it already had", async () => {
+    const first = await pay("Invoice No 37841");
+    const txId = first.data.transactionId;
+    const refund = (amountCents: number, idempotencyKey: string) =>
+      refundPayment({ data: { transactionId: txId, pin: "123456", amountCents, idempotencyKey }, auth: MERCHANT });
+
+    const a = await refund(100, "partial-refund-key-1");
+    const b = await refund(50, "partial-refund-key-2");
+    const aAgain = await refund(100, "partial-refund-key-1");
+
+    expect(a.data.receiptNumber).toMatch(RECEIPT);
+    expect(b.data.receiptNumber).toMatch(RECEIPT);
+    expect(new Set([first.data.receiptNumber, a.data.receiptNumber, b.data.receiptNumber]).size).toBe(3);
+    // The retry is the same refund: same row, same number, nothing new reserved.
+    expect(aAgain.data.refundTransactionId).toBe(a.data.refundTransactionId);
+    expect(aAgain.data.receiptNumber).toBe(a.data.receiptNumber);
+    expect((await db.collection("receiptNumbers").get()).size).toBe(3);
+
+    // Part-refunded, the invoice is still mostly paid: still warned about.
+    const err = await showCode({ reference: "Invoice No 37841", checkPaidReference: true }).catch((e: any) => e);
+    expect(err.code).toBe("already-exists");
+  });
+
+  it("returns the same receipt number when an approval is retried after a lost reply", async () => {
+    await db.doc("customerTokens/token-1").set({
+      customerId: "customer-1",
+      status: "scanned",
+      scannedBy: "merchant-1",
+      scannedAt: admin.firestore.Timestamp.now(),
+    });
+    const req = await createPaymentRequest({
+      data: { tokenId: "token-1", amount: 256, currency: "USD", reference: "Invoice No 777", checkPaidReference: true },
+      auth: MERCHANT,
+    });
+    const approve = () =>
+      approvePaymentRequest({ data: { requestId: req.data.requestId, pin: "123456" }, auth: CUSTOMER });
+    const first = await approve();
+    const retry = await approve();
+    expect(retry.data.transactionId).toBe(first.data.transactionId);
+    expect(retry.data.receiptNumber).toBe(first.data.receiptNumber);
+    expect((await db.collection("receiptNumbers").get()).size).toBe(1);
+
+    // The merchant retrying the same scan finds the charge it raised — it is
+    // not warned about the payment its own first attempt produced.
+    const again = await createPaymentRequest({
+      data: { tokenId: "token-1", amount: 256, currency: "USD", reference: "Invoice No 777", checkPaidReference: true },
+      auth: MERCHANT,
+    });
+    expect(again.data.requestId).toBe(req.data.requestId);
+  });
+
+  it("numbers an agent cash-out but never records it as a paid invoice", async () => {
+    const now = admin.firestore.Timestamp.now();
+    await Promise.all([
+      db.doc("users/agent-1").set({ accountType: "topup_agent", fullName: "Agent One" }),
+      db.doc("wallets/agent-1").set({ userId: "agent-1", balance: 0, currency: "USD", updatedAt: now }),
+      db.doc("customerTokens/token-co").set({
+        customerId: "customer-1",
+        status: "scanned",
+        scannedBy: "agent-1",
+        scannedAt: now,
+      }),
+    ]);
+    const req = await createPaymentRequest({
+      data: { tokenId: "token-co", amount: 1000, currency: "USD", purpose: "cash_out", reference: "Invoice No 999" },
+      auth: { uid: "agent-1" },
+    });
+    const approved = await approvePaymentRequest({
+      data: { requestId: req.data.requestId, pin: "123456" },
+      auth: CUSTOMER,
+    });
+    expect(approved.data.receiptNumber).toMatch(RECEIPT);
+
+    const tx = (await db.doc(`transactions/${approved.data.transactionId}`).get()).data()!;
+    expect(tx).toMatchObject({ type: "withdrawal", kind: "cash_out", receiptNumber: approved.data.receiptNumber });
+    expect((await db.doc(`receiptNumbers/${approved.data.receiptNumber}`).get()).data()).toMatchObject({
+      type: "withdrawal",
+    });
+    // A cash-out has no invoice to be paid twice.
+    expect((await db.collection("paidReferences").get()).size).toBe(0);
   });
 
   it("lets support find both sides of a payment from its receipt number", async () => {

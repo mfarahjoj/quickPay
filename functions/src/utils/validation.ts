@@ -19,11 +19,13 @@ export function hasStoredPinHash(pinHash: unknown): boolean {
 }
 
 /**
- * Validate PIN format (6 digits)
+ * Validate what a caller may send as `pin` to approve something: six digits,
+ * or a one-time Face ID token from approveBiometric ("bio_" + 32 hex,
+ * auth/biometricKeys.ts). A new PIN additionally passes assertStrongPin,
+ * which takes six digits only, so a token can never be set as a PIN.
  */
 export function validatePin(pin: string): boolean {
-  const pinRegex = /^[0-9]{6}$/;
-  return pinRegex.test(pin);
+  return /^[0-9]{6}$/.test(pin) || /^bio_[0-9a-f]{32}$/.test(pin);
 }
 
 /**
@@ -34,11 +36,15 @@ export function validateAmount(amount: number): boolean {
 }
 
 /**
- * Validate currency code
+ * Currencies a payment may be made in. USD only: every wallet is USD, and
+ * an SLS amount debited from one would be read as dollars (the ledger
+ * refuses that too — CurrencyMismatchError). Add SLS here once wallets can
+ * hold it and the apps show it.
  */
+export const SUPPORTED_CURRENCIES: readonly string[] = ["USD"];
+
 export function validateCurrency(currency: string): boolean {
-  const validCurrencies = ["USD", "SLS"];
-  return validCurrencies.includes(currency);
+  return SUPPORTED_CURRENCIES.includes(currency);
 }
 
 /**

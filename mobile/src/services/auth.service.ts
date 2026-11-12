@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
-import { auth, functions } from './firebase.config';
+import { auth, firestore, functions } from './firebase.config';
+import { firstName, maskPhone } from './accountLabel';
 import { clearReceiveTokenCache } from './customerToken.service';
 import { unregisterPushNotifications } from './notification.service';
 import {
@@ -8,6 +9,7 @@ import {
   hasDeviceCredential,
   storeDeviceCredential,
 } from './device.service';
+import { pinVerifiedFlag } from './signInFlags';
 import { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logger } from '../utils/logger';
@@ -84,12 +86,20 @@ export async function setupPin(data: SetupPinData): Promise<{ alreadyHasPin: boo
  */
 export class PinLockoutError extends Error {
   secondsLeft?: number;
+  /** Locked until the PIN is reset, not for a while (review A3). */
+  hardLocked: boolean;
 
-  constructor(message: string, secondsLeft?: number) {
+  constructor(message: string, secondsLeft?: number, hardLocked = false) {
     super(message);
     this.name = 'PinLockoutError';
     this.secondsLeft = secondsLeft;
+    this.hardLocked = hardLocked;
   }
+}
+
+/** The lockout explained in the customer's language. */
+export function pinLockoutMessage(err: PinLockoutError, t: (key: string, opts?: any) => string): string {
+  return err.hardLocked ? t('pin.hardLocked') : t('pin.lockedOut', { seconds: err.secondsLeft ?? 60 });
 }
 
 /**
@@ -123,7 +133,7 @@ export async function validatePin(pin: string): Promise<boolean> {
     return data.data?.valid || false;
   } catch (error: any) {
     if (error?.code === 'functions/resource-exhausted') {
-      throw new PinLockoutError(error.message, error?.details?.secondsLeft);
+      throw new PinLockoutError(error.message, error?.details?.secondsLeft, error?.details?.hardLocked === true);
     }
     logger.error('Validate PIN error:', error);
     return false;
@@ -135,35 +145,128 @@ export async function validatePin(pin: string): Promise<boolean> {
  * checks the ID token's auth_time), so callers must re-run sendOTP/verifyOTP
  * immediately before this.
  */
-export async function resetPin(newPin: string): Promise<void> {
+export interface ResetPinResult {
+  /** Sending money is paused until then. */
+  cooldownUntil: string;
+  /** What can still be spent at shops before then, in cents. */
+  allowanceCents: number;
+}
+
+/**
+ * After a PIN reset or change, a device revoke or a freeze, the server ends
+ * every session on the account (review A5) and hands this phone a token to
+ * sign straight back in with. Without one (the server couldn't mint it) this
+ * phone is signed out within the hour like the rest. Never throws.
+ */
+export async function adoptSessionToken(data: unknown): Promise<void> {
+  const token = (data as { data?: { sessionToken?: string } } | undefined)?.data?.sessionToken;
+  if (!token) return;
+  try {
+    await auth().signInWithCustomToken(token);
+  } catch (err) {
+    logger.warn('Could not renew the session:', err);
+  }
+}
+
+/**
+ * On a phone that has been this account's trusted device for a week, the SMS
+ * code is enough; anywhere else the server also asks for `idLast4`. Errors
+ * keep their `details.reason` so the screen can take the next step.
+ */
+export async function resetPin(newPin: string, idLast4?: string): Promise<ResetPinResult> {
   try {
     // Force-refresh so the callable sees the post-reauth auth_time.
     await auth().currentUser?.getIdToken(true);
+    const device = await getDeviceCredential();
     const resetPinFunction = functions().httpsCallable('resetPin');
-    const result = await resetPinFunction({ newPin });
+    const result = await resetPinFunction({
+      newPin,
+      ...(device ? { deviceId: device.deviceId, deviceSecret: device.deviceSecret } : {}),
+      ...(idLast4 ? { idLast4 } : {}),
+    });
 
-    const responseData = result.data as { success: boolean; error?: string };
+    const responseData = result.data as {
+      success: boolean;
+      error?: string;
+      data: ResetPinResult;
+    };
     if (!responseData.success) {
       throw new Error(responseData.error || 'Failed to reset PIN');
     }
+    await adoptSessionToken(responseData);
+    return responseData.data;
   } catch (error: any) {
     logger.error('Reset PIN error:', error);
-    throw new Error(error.message || 'Failed to reset PIN');
+    throw error;
+  }
+}
+
+/**
+ * The server only trusts a phone when it's sent the PIN (review C8). The
+ * screens that check the PIN hand it here; it's kept in memory only, for a
+ * few minutes, and dropped once used.
+ */
+const HELD_PIN_MS = 5 * 60 * 1000;
+let heldPin: { pin: string; at: number } | null = null;
+
+export function trustThisDeviceWithPin(pin: string): void {
+  heldPin = { pin, at: Date.now() };
+  if (auth().currentUser) registerTrustedDevice().catch(() => {});
+}
+
+function takeHeldPin(): string | null {
+  const held = heldPin;
+  heldPin = null;
+  return held && Date.now() - held.at < HELD_PIN_MS ? held.pin : null;
+}
+
+/** "iPhone" / "Android phone", shown in the owner's device list. */
+function deviceName(): string {
+  return Platform.OS === 'ios' ? 'iPhone' : 'Android phone';
+}
+
+/** First name and masked number of the signed-in account, for the PIN sign-in screen. */
+async function currentAccountLabel(): Promise<{ name?: string; phone?: string }> {
+  const user = auth().currentUser;
+  let name: string | undefined;
+  try {
+    const snap = await firestore().collection('users').doc(user?.uid ?? '-').get();
+    name = firstName(snap.data()?.fullName);
+  } catch {
+    // The number alone still tells people whose account it is.
+  }
+  return { name, phone: maskPhone(user?.phoneNumber) };
+}
+
+/**
+ * Phones trusted before the PIN sign-in screen named the account have a
+ * credential without a label: add it, once, while signed in. No-op otherwise.
+ */
+export async function labelTrustedDevice(): Promise<void> {
+  try {
+    const cred = await getDeviceCredential();
+    if (!cred || cred.label || !auth().currentUser) return;
+    await storeDeviceCredential({ ...cred, label: await currentAccountLabel() });
+  } catch (error) {
+    logger.warn('Labelling the trusted device failed:', error);
   }
 }
 
 /**
  * Mint and store this device's trusted-device credential, so the next sign-in
  * here can use the PIN instead of an SMS code. Safe to call repeatedly — it
- * no-ops once a credential exists. Never throws: failing to trust a device is
- * a downgrade to SMS login, not an error worth blocking entry over.
+ * no-ops once a credential exists, or when no PIN has been entered lately.
+ * Never throws: failing to trust a device is a downgrade to SMS login, not an
+ * error worth blocking entry over.
  */
 export async function registerTrustedDevice(): Promise<void> {
   try {
     if (await hasDeviceCredential()) return;
+    const pin = takeHeldPin();
+    if (!pin) return;
 
     const fn = functions().httpsCallable('registerTrustedDevice');
-    const result = await fn({ platform: Platform.OS });
+    const result = await fn({ platform: Platform.OS, pin, name: deviceName() });
 
     const responseData = result.data as {
       success: boolean;
@@ -175,7 +278,7 @@ export async function registerTrustedDevice(): Promise<void> {
       return;
     }
 
-    await storeDeviceCredential({ deviceId, deviceSecret });
+    await storeDeviceCredential({ deviceId, deviceSecret, label: await currentAccountLabel() });
   } catch (error) {
     logger.warn('Trusted-device registration failed:', error);
   }
@@ -213,12 +316,22 @@ export async function loginWithPin(pin: string): Promise<void> {
       throw new Error(responseData.error || 'Failed to sign in');
     }
 
-    await auth().signInWithCustomToken(token);
+    // The server has just checked the PIN. Mark it before the session
+    // starts: the sign-in gates move on the moment it does, and without the
+    // mark they asked for the same PIN again.
+    pinVerifiedFlag.set(true);
+    try {
+      await auth().signInWithCustomToken(token);
+    } catch (signInError) {
+      // Not signed in after all, so the next sign-in (maybe by SMS) must ask.
+      pinVerifiedFlag.set(false);
+      throw signInError;
+    }
   } catch (error: any) {
     if (error instanceof DeviceNotTrustedError) throw error;
 
     if (error?.code === 'functions/resource-exhausted') {
-      throw new PinLockoutError(error.message, error?.details?.secondsLeft);
+      throw new PinLockoutError(error.message, error?.details?.secondsLeft, error?.details?.hardLocked === true);
     }
     // The server can't tell us apart from an unknown device on purpose, so a
     // rejection here means: stop trusting this credential, use SMS instead.
@@ -243,20 +356,40 @@ export async function loginWithPin(pin: string): Promise<void> {
 export async function revokeTrustedDevices(): Promise<void> {
   try {
     const fn = functions().httpsCallable('revokeTrustedDevices');
-    await fn({});
+    const result = await fn({});
+    await adoptSessionToken(result.data);
   } finally {
     await clearDeviceCredential();
   }
 }
+
+/** Wait for these, but no longer than `ms`. Never throws. */
+function settleWithin(ms: number, work: Promise<unknown>[]): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    Promise.allSettled(work).then(() => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
+
+/** Enough for both tidy-ups below on a working connection. */
+const SIGN_OUT_TIDY_MS = 1500;
 
 /**
  * Sign out
  */
 export async function signOut(): Promise<void> {
   try {
-    const { clearPinFromKeychain } = await import('./biometric.service');
-    await clearPinFromKeychain().catch(() => {});
-    // Clear setup flags so user goes through full setup on next login.
+    const { disableBiometricKey } = await import('./biometric.service');
+    // Both need the session, so they start before it ends, but signing out
+    // doesn't wait on the network for them: removing the push token waits
+    // for the server to confirm (for ever, offline) and a callable can take a
+    // minute to fail. Requests already sent carry the session with them.
+    await settleWithin(SIGN_OUT_TIDY_MS, [disableBiometricKey(), unregisterPushNotifications()]);
+    // Clear setup flags so user goes through full setup on next login (the
+    // copies in memory go once the session has ended: AppNavigator).
     // biometric_enabled must go too — the keychain PIN it depends on was
     // just cleared, otherwise Security shows Face ID "on" with no PIN behind it.
     await AsyncStorage.multiRemove([
@@ -266,7 +399,6 @@ export async function signOut(): Promise<void> {
       '@quickpay_pin_verified_this_install',
     ]).catch(() => {});
     await clearReceiveTokenCache().catch(() => {});
-    await unregisterPushNotifications().catch(() => {});
     await auth().signOut();
   } catch (error: any) {
     logger.error('Sign out error:', error);

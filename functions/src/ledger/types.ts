@@ -10,6 +10,12 @@ export type JournalEntryType =
   | "p2p"
   | "qr_payment"
   | "customer_qr_payment"
+  /**
+   * Customer approves, in the app, a charge a merchant raised through the
+   * public API (online checkout or a POS integration). Same shape as
+   * qr_payment: customer debited, merchant credited the net, fee to platform.
+   */
+  | "online_payment"
   | "refund"
   | "agent_topup"
   | "agent_cashout"
@@ -23,8 +29,29 @@ export type JournalEntryType =
   | "float_issue"
   /** Agent returns float for cash: agent is debited, float account credited. */
   | "float_withdraw"
+  /** Merchant asks for a payout: their wallet is debited into settlement hold. */
+  | "payout_hold"
+  /** Ops has sent the transfer: hold is debited, the float account credited. */
+  | "payout_settled"
+  /** Payout refused or withdrawn: the hold returns to the merchant. */
+  | "payout_cancelled"
+  /**
+   * An agent moves their own sales or earnings into their float
+   * (user:{uid} → agent:{uid}), or the one-off migration that first split
+   * float out of agents' wallets.
+   */
+  | "float_move"
   | "opening_balance"
-  | "adjustment";
+  | "adjustment"
+  /**
+   * Money reached Zapp's Zaad/eDahab collection number but couldn't be
+   * credited (unknown sender, outside the limits): float → platform:mm_suspense.
+   */
+  | "mobile_money_suspense"
+  /** An admin gives a held payment to its customer: suspense → user. */
+  | "mobile_money_assign"
+  /** An admin sent a held payment back to its sender: suspense → float. */
+  | "mobile_money_refund";
 
 export type LedgerCurrency = "USD" | "SLS";
 
@@ -42,6 +69,18 @@ export interface JournalRefs {
   topupId?: string;
   remittanceId?: string;
   refundOfEntryId?: string;
+  /** Merchant settlement request behind a payout_* entry. */
+  payoutId?: string;
+  /** API charge (`api_charges`) behind an online_payment or its refund. */
+  apiChargeId?: string;
+  /** API refund (`api_refunds`) behind a partial or full API refund. */
+  apiRefundId?: string;
+  /** Collection-number payment (`mobile_money_receipts`) behind a mobile_money_* entry. */
+  receiptId?: string;
+  /** Ops correction (`adjustments`) behind an adjustment entry. */
+  adjustmentId?: string;
+  /** Dispute whose resolution posted this entry. */
+  disputeId?: string;
   /** Zapp receipt number of the payment or refund this entry settles. */
   receiptNumber?: string;
 }
@@ -60,6 +99,19 @@ export interface JournalEntryInput {
   description: string;
   /** uid of the initiating user, or "system". */
   postedBy: string;
+  /**
+   * Let this entry debit a frozen wallet. Only for ops corrections: freezing
+   * stops a suspect account spending, but ops must still be able to take back
+   * value it should never have had. Not stored on the entry.
+   */
+  allowFrozenDebit?: boolean;
+  /**
+   * Let this entry spend a wallet's `reservedCents` — money set aside for a
+   * dispute it lost and couldn't cover (decision D8). Only the settlement of
+   * that dispute uses it; every other debit must leave the reserve intact.
+   * Not stored on the entry.
+   */
+  useReserved?: boolean;
 }
 
 /** Shape of a `journal_entries` document. Append-only; never updated. */

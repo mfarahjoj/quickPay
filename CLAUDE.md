@@ -18,12 +18,14 @@ Account types: `customer`, `merchant`, `topup_agent`, `agent_merchant`. Prod Fir
 5. **Guards run before posting:** App Check on callables, PIN verification for user-initiated debits, KYC per-transaction caps, and `enforceVelocity` (`functions/src/utils/velocity.ts`).
 6. **Every `transactions` writer sets the `participants` array** and links `journalEntryId`.
 7. Money helpers: `dollarsToCents`/`centsToDollars` in `functions/src/utils/validation.ts`.
+8. **Merchant payouts go only to the Zaad account on file** (`users.zaad`, set by `setZaadAccount` in `functions/src/auth/zaadAccount.ts`; both apps ask every account for it). Never take a payout destination from the request. A new number holds payouts for `zaadChangeHoldHours`. The Zaad account is typed, not verified, so it must never be used to credit money.
 
 Use the `new-money-flow` skill when adding or modifying any flow that moves value.
 
 ## Deployment discipline
 
 - **Never deploy functions that alter money movement to prod without explicit per-target authorization from the user.**
+- Deploy only from a pushed commit, and only named targets (`firebase deploy --only functions:a,b`). A bare `--only functions` from a checkout missing another branch's functions deletes or rolls them back. CI never deploys.
 - App changes: build and verify on the **iOS simulator first**. Only archive/upload to TestFlight when the user explicitly asks — then use the `release-testflight` skill (it encodes the stale-archive verification steps).
 - Zaad/eDahab services (`functions/src/integrations/`) are **sandbox stubs** that fake success — do not assume real rails are connected.
 
@@ -35,7 +37,8 @@ Every user-facing string ships in **all three locales** — `en`, `so`, `ar` —
 
 - `DESIGN_SYSTEM.md` — base palette and components.
 - Merchant app: dark-glass Revolut style, blue accent `#1A56FF`, incoming green `#34C77B` (reference: `merchant-app/src/screens/dashboard/DashboardScreen.tsx`).
-- Customer onboarding: "dark kinetic" theme — ink `#0D0B0A`, coral `#FF5043`, teal `#5DCAA5`.
+- Customer onboarding: "dark kinetic" theme — ink `#0D0B0A`, coral `#FF5043`, teal `#5DCAA5`. It stays dark in light mode, as do the QR camera screens.
+- Customer app: light and dark themes (`mobile/src/theme/colors.ts`), following the phone unless Profile → Appearance says otherwise. Read colours from `useColors()` and build sheets with `const useStyles = makeStyles((colors) => StyleSheet.create({...}))`; never hard-code canvas or text colours. `colors.ui.ink(alpha)` stands in for `rgba(255,255,255,alpha)`.
 
 ## Verification
 
@@ -48,7 +51,10 @@ Every user-facing string ships in **all three locales** — `en`, `so`, `ar` —
 | Doc | Contents |
 |---|---|
 | `LEDGER_ARCHITECTURE.md` | Chart of accounts, journal entry schema, per-flow templates, reconciliation |
+| `docs/MERCHANT_API.md` | Merchant Payments API (`functions/src/api/`): keys, charges, refunds, webhooks, hosted checkout |
 | `DESIGN_SYSTEM.md` | Colors, typography, component patterns |
 | `GTM_ROADMAP.md` | Hargeisa launch phases, KPIs, risks |
+| `SECURITY_REMEDIATION_PLAN.md` | Audit findings (2026-10-03), fix plan per finding, status, open decisions |
+| `CASH_IN_CASH_OUT.md` | Agent cash-in/cash-out: flow steps, ledger entries, guards, threat model |
 | `MANUAL_TOPUP_GUIDE.md` | Agent top-up operational flow |
 | `TESTFLIGHT_QUICKSTART.md` | One-time Apple/signing setup |

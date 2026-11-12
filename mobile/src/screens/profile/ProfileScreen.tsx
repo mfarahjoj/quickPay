@@ -12,14 +12,37 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../hooks/useAuth';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import { signOut } from '../../services/auth.service';
-import { colors, typography, spacing, borderRadius } from '../../theme';
-import { ShieldIcon, ChartIcon } from '../../components/icons/AuthIcons';
-import { IDCardIcon, LinkIcon, BellIcon, InfoIcon, QRSquareIcon, MoneyInIcon, GiftIcon } from '../../components/icons/UIIcons';
+import {
+  typography,
+  spacing,
+  borderRadius,
+  makeStyles,
+  useTheme,
+  type AppearancePreference,
+} from '../../theme';
+import { ShieldIcon, ChartIcon, PhoneIcon } from '../../components/icons/AuthIcons';
+import {
+  IDCardIcon,
+  LinkIcon,
+  BellIcon,
+  InfoIcon,
+  QRSquareIcon,
+  MoneyInIcon,
+  GiftIcon,
+  ContrastIcon,
+} from '../../components/icons/UIIcons';
+import { formatLocal } from '../../services/mobileMoney.utils';
 import type { KycStatus } from '../../types';
 
 interface Props {
   navigation: any;
 }
+
+const APPEARANCE_OPTIONS: { value: AppearancePreference; labelKey: string }[] = [
+  { value: 'system', labelKey: 'profile.appearanceAuto' },
+  { value: 'light', labelKey: 'profile.appearanceLight' },
+  { value: 'dark', labelKey: 'profile.appearanceDark' },
+];
 
 const KYC_LABEL_KEYS: Record<KycStatus, string> = {
   pending: 'kyc.status.pending',
@@ -31,26 +54,32 @@ const KYC_LABEL_KEYS: Record<KycStatus, string> = {
 function MenuItem({
   icon,
   label,
+  detail,
   onPress,
   danger,
 }: {
   icon: React.ReactNode;
   label: string;
+  detail?: string;
   onPress: () => void;
   danger?: boolean;
 }) {
+  const styles = useStyles();
   return (
     <TouchableOpacity style={styles.menuItem} onPress={onPress}>
       <View style={styles.menuIconWrap}>{icon}</View>
       <Text style={[styles.menuText, danger && styles.menuTextDanger]}>
         {label}
       </Text>
+      {detail ? <Text style={styles.menuDetail}>{detail}</Text> : null}
       <Text style={styles.menuArrow}>›</Text>
     </TouchableOpacity>
   );
 }
 
 export default function ProfileScreen({ navigation }: Props) {
+  const { colors, preference, setPreference } = useTheme();
+  const styles = useStyles();
   const { t } = useTranslation();
   const { user } = useAuth();
   const { profile } = useUserProfile();
@@ -143,7 +172,7 @@ export default function ProfileScreen({ navigation }: Props) {
       {profile?.accountType === 'merchant' && (
         <View style={styles.menu}>
           <MenuItem
-            icon={<QRSquareIcon size={22} color={colors.dark.textDim} />}
+            icon={<QRSquareIcon size={22} color={colors.ui.textDim} />}
             label={t('profile.myPaymentQr')}
             onPress={() => navigation.navigate('MerchantQR')}
           />
@@ -152,7 +181,7 @@ export default function ProfileScreen({ navigation }: Props) {
 
       <View style={styles.menu}>
         <MenuItem
-          icon={<GiftIcon size={22} color={colors.dark.accent} />}
+          icon={<GiftIcon size={22} color={colors.ui.accent} />}
           label={t('profile.invite')}
           onPress={() => navigation.navigate('Invite')}
         />
@@ -160,35 +189,74 @@ export default function ProfileScreen({ navigation }: Props) {
 
       <View style={styles.menu}>
         <MenuItem
-          icon={<ShieldIcon size={22} color={colors.dark.textDim} />}
+          icon={<InfoIcon size={22} color={colors.ui.textDim} />}
+          label={t('profile.helpAndDisputes')}
+          onPress={() => navigation.navigate('Disputes')}
+        />
+        <MenuItem
+          icon={<ShieldIcon size={22} color={colors.ui.textDim} />}
           label={t('profile.security')}
           onPress={() => navigation.navigate('Security')}
         />
         <MenuItem
-          icon={<IDCardIcon size={22} color={colors.dark.textDim} />}
+          icon={<IDCardIcon size={22} color={colors.ui.textDim} />}
           label={t('profile.identityVerification')}
           onPress={() => navigation.navigate('KYC')}
         />
         <MenuItem
-          icon={<LinkIcon size={22} color={colors.dark.textDim} />}
+          icon={<PhoneIcon size={22} color={colors.ui.textDim} />}
+          label={t('profile.zaadAccount')}
+          detail={profile?.zaad ? formatLocal(profile.zaad.msisdn) : undefined}
+          onPress={() => navigation.navigate('ZaadAccount')}
+        />
+        <MenuItem
+          icon={<LinkIcon size={22} color={colors.ui.textDim} />}
           label={t('profile.linkedAccounts')}
           onPress={() => navigation.navigate('LinkedAccounts')}
         />
         <MenuItem
-          icon={<ChartIcon size={22} color={colors.dark.textDim} />}
+          icon={<ChartIcon size={22} color={colors.ui.textDim} />}
           label={t('profile.transactionLimits')}
           onPress={() => navigation.navigate('TransactionLimits')}
         />
       </View>
 
       <View style={styles.menu}>
+        <View style={styles.appearanceRow}>
+          <View style={styles.menuIconWrap}>
+            <ContrastIcon size={22} color={colors.ui.textDim} />
+          </View>
+          <Text style={styles.menuText}>{t('profile.appearance')}</Text>
+        </View>
+        <View style={styles.segmented}>
+          {APPEARANCE_OPTIONS.map(({ value, labelKey }) => {
+            const selected = preference === value;
+            return (
+              <TouchableOpacity
+                key={value}
+                style={[styles.segment, selected && styles.segmentSelected]}
+                onPress={() => setPreference(value)}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+              >
+                <Text style={[styles.segmentText, selected && styles.segmentTextSelected]}>
+                  {t(labelKey)}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+
+      <View style={styles.menu}>
         <MenuItem
-          icon={<BellIcon size={22} color={colors.dark.textDim} />}
+          icon={<BellIcon size={22} color={colors.ui.textDim} />}
           label={t('profile.notifications')}
           onPress={() => navigation.navigate('Notifications')}
         />
         <MenuItem
-          icon={<InfoIcon size={22} color={colors.dark.textDim} />}
+          icon={<InfoIcon size={22} color={colors.ui.textDim} />}
           label={t('profile.aboutLegal')}
           onPress={() => navigation.navigate('About')}
         />
@@ -200,7 +268,7 @@ export default function ProfileScreen({ navigation }: Props) {
         disabled={signingOut}
       >
         {signingOut ? (
-          <ActivityIndicator color={colors.dark.error} />
+          <ActivityIndicator color={colors.ui.error} />
         ) : (
           <Text style={styles.signOutText}>{t('profile.logOut')}</Text>
         )}
@@ -209,10 +277,10 @@ export default function ProfileScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   content: {
     padding: spacing.lg,
@@ -222,32 +290,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.xl,
     marginBottom: spacing.sm,
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderRadius: borderRadius.lg,
   },
   avatarPlaceholder: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: colors.dark.accentSoft,
+    backgroundColor: colors.ui.accentSoft,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: spacing.md,
   },
   avatarText: {
     ...typography.h1,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
   },
   name: {
     ...typography.h2,
-    color: colors.dark.text,
+    color: colors.ui.text,
     marginBottom: spacing.xs,
   },
   phone: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     marginBottom: spacing.sm,
   },
   badgeRow: {
@@ -258,12 +326,12 @@ const styles = StyleSheet.create({
   badge: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
-    backgroundColor: colors.dark.accentSoft,
+    backgroundColor: colors.ui.accentSoft,
     borderRadius: borderRadius.full,
   },
   badgeText: {
     ...typography.captionBold,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
     textTransform: 'capitalize',
   },
   kycBadge: {
@@ -271,36 +339,36 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.full,
   },
-  kycVerified: { backgroundColor: colors.dark.incomingSoft },
-  kycPending: { backgroundColor: colors.dark.warningSoft },
-  kycSubmitted: { backgroundColor: colors.dark.warningSoft },
-  kycRejected: { backgroundColor: colors.dark.errorSoft },
+  kycVerified: { backgroundColor: colors.ui.incomingSoft },
+  kycPending: { backgroundColor: colors.ui.warningSoft },
+  kycSubmitted: { backgroundColor: colors.ui.warningSoft },
+  kycRejected: { backgroundColor: colors.ui.errorSoft },
   kycText: {
     ...typography.captionBold,
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
   referral: {
     ...typography.caption,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
     marginTop: spacing.xs,
   },
   editButton: {
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderRadius: borderRadius.lg,
     padding: spacing.md,
     alignItems: 'center',
     marginBottom: spacing.lg,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
   },
   editButtonText: {
     ...typography.bodySemibold,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
   },
   menu: {
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderRadius: borderRadius.lg,
     overflow: 'hidden',
     marginBottom: spacing.lg,
@@ -310,7 +378,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: spacing.lg,
     borderBottomWidth: 1,
-    borderBottomColor: colors.dark.divider,
+    borderBottomColor: colors.ui.divider,
   },
   menuIconWrap: {
     width: 24,
@@ -322,14 +390,50 @@ const styles = StyleSheet.create({
   menuText: {
     flex: 1,
     ...typography.body,
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
   menuTextDanger: {
-    color: colors.dark.error,
+    color: colors.ui.error,
+  },
+  menuDetail: {
+    ...typography.body,
+    color: colors.ui.textFaint,
+    marginRight: spacing.sm,
   },
   menuArrow: {
     fontSize: 20,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
+  },
+  appearanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
+  },
+  segmented: {
+    flexDirection: 'row',
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+    padding: spacing.xs,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.ui.glass,
+  },
+  segment: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.sm,
+  },
+  segmentSelected: {
+    backgroundColor: colors.ui.accent,
+  },
+  segmentText: {
+    ...typography.bodySemibold,
+    color: colors.ui.textDim,
+  },
+  segmentTextSelected: {
+    color: colors.action.primaryText,
   },
   signOutButton: {
     padding: spacing.lg,
@@ -337,6 +441,6 @@ const styles = StyleSheet.create({
   },
   signOutText: {
     ...typography.bodySemibold,
-    color: colors.dark.error,
+    color: colors.ui.error,
   },
-});
+}));

@@ -9,15 +9,17 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { cooldownMessage } from '../../utils/cooldownMessage';
 import { BiometryTypes } from 'react-native-biometrics';
 import LinearGradient from 'react-native-linear-gradient';
 import { processPayment } from '../../services/qr.service';
 import {
   isBiometricEnabled,
-  getPinFromKeychain,
+  getBiometricCredential,
   isBiometricAvailable,
+  prepareBiometricApproval,
 } from '../../services/biometric.service';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
 import { CURRENCY_SYMBOL } from '../../config/constants';
 import { PinInput } from '../../components/PinInput';
 import { Header } from '../../components/Header';
@@ -43,6 +45,8 @@ function getBiometricLabelKey(biometryType?: string): string {
 }
 
 export default function PaymentConfirmScreen({ navigation, route }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const { qrCodeId, amount, currency, merchantName, reference } = route.params;
   const [pin, setPin] = useState('');
@@ -61,6 +65,7 @@ export default function PaymentConfirmScreen({ navigation, route }: Props) {
       ([enabled, { available, biometryType: bt }]) => {
         setBiometricAvailable(enabled && available);
         setBiometryType(bt);
+        if (enabled && available) prepareBiometricApproval();
       }
     );
   }, []);
@@ -77,9 +82,10 @@ export default function PaymentConfirmScreen({ navigation, route }: Props) {
         amount,
         currency,
         merchantId: result.merchantId,
+        merchantName,
       });
     } catch (err: any) {
-      setError(err.message || t('qr.confirm.paymentFailed'));
+      setError(cooldownMessage(err, t) ?? (err.message || t('qr.confirm.paymentFailed')));
       setPin('');
     } finally {
       setProcessing(false);
@@ -100,7 +106,7 @@ export default function PaymentConfirmScreen({ navigation, route }: Props) {
 
   const handleBiometricPay = async () => {
     if (processing) return;
-    const storedPin = await getPinFromKeychain(
+    const storedPin = await getBiometricCredential(
       t('common.confirmPaymentAmount', { amount: `${CURRENCY_SYMBOL}${amount.toFixed(2)}` })
     );
     if (storedPin) {
@@ -186,10 +192,10 @@ export default function PaymentConfirmScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   content: {
     flex: 1,
@@ -197,29 +203,29 @@ const styles = StyleSheet.create({
   },
   merchantLabel: {
     ...typography.caption,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
     textAlign: 'center',
     marginBottom: spacing.xs,
   },
   merchantName: {
     ...typography.h2,
-    color: colors.dark.text,
+    color: colors.ui.text,
     textAlign: 'center',
     marginBottom: spacing.xl,
   },
   amountBox: {
-    backgroundColor: colors.dark.incomingSoft,
+    backgroundColor: colors.ui.incomingSoft,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     padding: spacing.xl,
     borderRadius: borderRadius.lg,
     alignItems: 'center',
     marginBottom: spacing.lg,
   },
   biometricButton: {
-    backgroundColor: colors.dark.accentSoft,
+    backgroundColor: colors.ui.accentSoft,
     borderWidth: 1,
-    borderColor: colors.dark.accentBorder,
+    borderColor: colors.ui.accentBorder,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
     borderRadius: borderRadius.lg,
@@ -228,34 +234,34 @@ const styles = StyleSheet.create({
   },
   biometricButtonText: {
     ...typography.bodySemibold,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
   },
   currencyLabel: {
     ...typography.caption,
-    color: colors.dark.incoming,
+    color: colors.ui.incoming,
     marginBottom: spacing.xs,
   },
   amount: {
     ...typography.display,
-    color: colors.dark.incoming,
+    color: colors.ui.incoming,
     fontWeight: '700',
   },
   referenceLabel: {
     ...typography.caption,
-    color: 'rgba(255,255,255,0.5)',
+    color: colors.ui.ink(0.5),
     marginTop: spacing.sm,
     letterSpacing: 0.2,
   },
   pinLabel: {
     ...typography.captionBold,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     marginBottom: spacing.md,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   errorText: {
     ...typography.body,
-    color: colors.dark.error,
+    color: colors.ui.error,
     textAlign: 'center',
     marginTop: spacing.md,
   },
@@ -264,9 +270,11 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     overflow: 'hidden',
   },
+  // A gradient doesn't grow to fit its label, so it gets a fixed height.
   confirmGradient: {
-    paddingVertical: spacing.lg,
+    height: 56,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   buttonDisabled: {
     opacity: 0.6,
@@ -283,6 +291,6 @@ const styles = StyleSheet.create({
   },
   cancelText: {
     ...typography.bodySemibold,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
   },
-});
+}));

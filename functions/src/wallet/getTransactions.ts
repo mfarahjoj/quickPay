@@ -1,7 +1,8 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { requireAuth, centsToDollars } from "../utils/validation";
-import { ApiResponse, Transaction, TransactionStatus } from "../types";
+import { ApiResponse, Transaction, TransactionKind, TransactionStatus } from "../types";
+import { kindOf } from "../utils/transactionKind";
 
 interface TransactionResponse {
   id: string;
@@ -16,14 +17,18 @@ interface TransactionResponse {
   reference?: string;
   /** Zapp receipt number, e.g. "ZP-7K3M-9QX2". Absent on older payments. */
   receiptNumber?: string;
-  createdAt: Date;
-  completedAt?: Date;
+  /** ISO 8601. */
+  createdAt: string;
+  completedAt?: string;
   isIncoming: boolean;
   otherPartyId: string;
   counterpartyName: string | null;
   counterpartyPhone: string | null;
-  refundedAt?: Date;
+  refundedAt?: string;
   refundOfTransactionId?: string;
+  disputeId?: string;
+  kind: TransactionKind;
+  refundedCents: number;
 }
 
 interface GetTransactionsRequest {
@@ -74,6 +79,7 @@ async function resolveParties(
  * Uses a single participants array-contains query so paging is cursor-based.
  */
 export const getTransactions = https.onCall(
+  { enforceAppCheck: true },
   async (
     request: https.CallableRequest<GetTransactionsRequest>
   ): Promise<GetTransactionsResult> => {
@@ -144,14 +150,19 @@ export const getTransactions = https.onCall(
           description: data.description,
           reference: data.reference,
           receiptNumber: data.receiptNumber,
-          createdAt: data.createdAt.toDate(),
-          completedAt: data.completedAt?.toDate(),
+          // ISO strings: a callable sends a Date as {} (it copies own fields,
+          // and a Date has none), so the apps never got these dates.
+          createdAt: data.createdAt.toDate().toISOString(),
+          completedAt: data.completedAt?.toDate().toISOString(),
           isIncoming,
           otherPartyId: otherId,
           counterpartyName: party?.name ?? null,
           counterpartyPhone: party?.phone ?? null,
-          refundedAt: data.refundedAt?.toDate(),
+          refundedAt: data.refundedAt?.toDate().toISOString(),
           refundOfTransactionId: data.refundOfTransactionId,
+          disputeId: data.disputeId,
+          kind: kindOf(data),
+          refundedCents: data.refundedCents ?? (data.refundedAt ? data.amount : 0),
         };
       });
 

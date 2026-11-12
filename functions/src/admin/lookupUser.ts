@@ -11,14 +11,17 @@
  */
 
 import * as admin from "firebase-admin";
+import { endSessions } from "../auth/sessions";
+import { AUTH_FIELDS, readAuth, writeAuth, isStoredPinHash } from "../auth/pinStore";
 import { https } from "firebase-functions/v2";
 import { ApiResponse } from "../types";
 import { requireAdmin, requireRecentAdminAuth, requireReason } from "./guard";
 import { stageAuditEntry, writeAuditEntry } from "./audit";
 import { resolveAccountStatus } from "../utils/accountStatus";
 import { RECEIPT_NUMBERS, normalizeReceiptNumber } from "../utils/receiptNumber";
+import { probeSpendIndex } from "../utils/limits";
 
-const SENSITIVE_FIELDS = ["pinHash"];
+const SENSITIVE_FIELDS: readonly string[] = AUTH_FIELDS;
 
 function scrub(data: FirebaseFirestore.DocumentData): Record<string, unknown> {
   const copy = { ...data };
@@ -177,7 +180,7 @@ export const adminGetUser = https.onCall(
         userId,
         profile: scrub(userData),
         accountStatus: resolveAccountStatus(userData),
-        hasPin: typeof userData.pinHash === "string" && userData.pinHash.length > 0,
+        ...(await pinStateOf(userId, userData)),
         wallet: walletSnap.exists ? walletSnap.data() : null,
         kyc: kycSnap.exists ? kycSnap.data() : null,
         trustedDeviceCount: deviceSnap.size,
@@ -186,6 +189,16 @@ export const adminGetUser = https.onCall(
     };
   }
 );
+
+/** What support needs to see about a PIN, never the hash. */
+async function pinStateOf(userId: string, userData: FirebaseFirestore.DocumentData) {
+  const auth = await readAuth(userId, undefined, userData);
+  return {
+    hasPin: isStoredPinHash(auth.pinHash),
+    pinHardLocked: auth.pinHardLocked === true,
+    pinFailedAttempts: auth.pinFailedAttempts ?? 0,
+  };
+}
 
 interface SupportActionRequest {
   userId: string;
@@ -221,11 +234,12 @@ export const adminClearLockouts = https.onCall(
       if (!snap.exists) {
         throw new https.HttpsError("not-found", "User not found");
       }
-      const before = snap.data()!;
+      const auth = await readAuth(userId, tx, snap.data());
+      const before: FirebaseFirestore.DocumentData = { ...snap.data()!, ...auth };
 
+      // A support visit (review A3): clears the hard lock too, with the reason audited.
+      writeAuth(tx, userId, { ...auth, pinFailedAttempts: 0, pinLockedUntil: null, pinHardLocked: false });
       tx.update(userRef, {
-        pinFailedAttempts: 0,
-        pinLockedUntil: null,
         agentOtpFailedAttempts: 0,
         agentOtpLockedUntil: null,
         updatedAt: admin.firestore.Timestamp.now(),
@@ -239,6 +253,7 @@ export const adminClearLockouts = https.onCall(
         before: {
           pinFailedAttempts: before.pinFailedAttempts ?? 0,
           pinLockedUntil: before.pinLockedUntil ?? null,
+          pinHardLocked: before.pinHardLocked === true,
           agentOtpFailedAttempts: before.agentOtpFailedAttempts ?? 0,
         },
         after: { pinFailedAttempts: 0, pinLockedUntil: null, agentOtpFailedAttempts: 0 },
@@ -280,6 +295,7 @@ export const adminRevokeUserDevices = https.onCall(
     const batch = db.batch();
     snap.docs.forEach((doc) => batch.delete(doc.ref));
     await batch.commit();
+    await endSessions(userId, { keepCaller: false });
 
     const auditId = await writeAuditEntry({
       actor,
@@ -312,9 +328,13 @@ export const adminGetLedgerHealth = https.onCall(
     requireAdmin(request);
 
     const db = admin.firestore();
-    const [checkpoints, alerts] = await Promise.all([
+    // The spend-index probe is cheap and answers "can anyone pay right now?",
+    // so it runs live rather than being read off the last nightly checkpoint —
+    // an index broken at noon should not stay invisible until 03:00.
+    const [checkpoints, alerts, spendIndex] = await Promise.all([
       db.collection("ledger_checkpoints").orderBy("ranAt", "desc").limit(1).get(),
       db.collection("ledger_alerts").where("acknowledged", "==", false).limit(5).get(),
+      probeSpendIndex(),
     ]);
 
     const latest = checkpoints.empty ? null : checkpoints.docs[0].data();
@@ -326,6 +346,7 @@ export const adminGetLedgerHealth = https.onCall(
         neverRun: checkpoints.empty,
         openAlertCount: alerts.size,
         openAlerts: alerts.docs.map((d) => ({ id: d.id, ...d.data() })),
+        spendIndex,
       },
     };
   }

@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { Header } from '../../components/Header';
 import { Button } from '../../components/Button';
 import { functions } from '../../services/firebase.config';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
 
 interface Props {
   navigation: any;
@@ -43,6 +43,7 @@ function ProgressBar({
   total: number;
   color: string;
 }) {
+  const progressStyles = useProgressStyles();
   const pct = total > 0 ? Math.min(1, used / total) : 0;
   return (
     <View style={progressStyles.track}>
@@ -53,11 +54,11 @@ function ProgressBar({
   );
 }
 
-const progressStyles = StyleSheet.create({
+const useProgressStyles = makeStyles((colors) => StyleSheet.create({
   track: {
     height: 8,
     borderRadius: 4,
-    backgroundColor: colors.dark.glassBorder,
+    backgroundColor: colors.ui.glassBorder,
     overflow: 'hidden',
     marginTop: spacing.xs,
   },
@@ -65,9 +66,11 @@ const progressStyles = StyleSheet.create({
     height: '100%',
     borderRadius: 4,
   },
-});
+}));
 
 export default function TransactionLimitsScreen({ navigation }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const [limits, setLimits] = useState<LimitsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -103,7 +106,7 @@ export default function TransactionLimitsScreen({ navigation }: Props) {
       <Header title={t('profile.limits.title')} onBack={() => navigation.goBack()} />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         {loading ? (
-          <ActivityIndicator size="large" color={colors.dark.accent} style={styles.loader} />
+          <ActivityIndicator size="large" color={colors.ui.accent} style={styles.loader} />
         ) : error ? (
           <View style={styles.errorCard}>
             <Text style={styles.errorText}>{error}</Text>
@@ -135,7 +138,7 @@ export default function TransactionLimitsScreen({ navigation }: Props) {
               <ProgressBar
                 used={limits.dailyUsed}
                 total={limits.dailyLimit}
-                color={colors.dark.accent}
+                color={colors.ui.accent}
               />
               <Text style={styles.remaining}>
                 {t('profile.limits.remainingToday', { amount: fmt(limits.dailyRemaining) })}
@@ -151,7 +154,7 @@ export default function TransactionLimitsScreen({ navigation }: Props) {
               <ProgressBar
                 used={limits.monthlyUsed}
                 total={limits.monthlyLimit}
-                color={colors.dark.accent}
+                color={colors.ui.accent}
               />
               <Text style={styles.remaining}>
                 {t('profile.limits.remainingMonth', { amount: fmt(limits.monthlyRemaining) })}
@@ -171,48 +174,48 @@ export default function TransactionLimitsScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.dark.canvas },
+const useStyles = makeStyles((colors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.ui.canvas },
   scroll: { flex: 1 },
   content: { padding: spacing.lg, paddingBottom: spacing.xxl },
   loader: { marginTop: spacing.xxl },
   errorCard: {
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderRadius: borderRadius.lg,
     padding: spacing.xl,
     alignItems: 'center',
     gap: spacing.md,
   },
-  errorText: { ...typography.body, color: colors.dark.error, textAlign: 'center' },
+  errorText: { ...typography.body, color: colors.ui.error, textAlign: 'center' },
   tierCard: {
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
     marginBottom: spacing.lg,
     alignItems: 'center',
   },
-  tierLabel: { ...typography.caption, color: colors.dark.textDim },
+  tierLabel: { ...typography.caption, color: colors.ui.textDim },
   tierValue: {
     ...typography.h2,
-    color: colors.dark.text,
+    color: colors.ui.text,
     marginTop: spacing.xs,
   },
   verifyButton: { marginTop: spacing.md },
   limitCard: {
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
     marginBottom: spacing.md,
   },
   limitTitle: {
     ...typography.captionBold,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     marginBottom: spacing.sm,
   },
   limitRow: {
@@ -220,15 +223,15 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
     gap: spacing.sm,
   },
-  limitUsed: { ...typography.h2, color: colors.dark.text },
-  limitOf: { ...typography.body, color: colors.dark.textFaint },
+  limitUsed: { ...typography.h2, color: colors.ui.text },
+  limitOf: { ...typography.body, color: colors.ui.textFaint },
   remaining: {
     ...typography.caption,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     marginTop: spacing.sm,
   },
   perTxValue: {
     ...typography.h2,
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
-});
+}));

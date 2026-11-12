@@ -14,7 +14,8 @@ import { RouteProp } from '@react-navigation/native';
 import { SetupSuccessScreen, useToast } from '../../components/auth';
 import { Input } from '../../components/Input';
 import { HandshakeIcon, StoreIcon } from '../../components/icons/AuthIcons';
-import { completeMerchantSetup, signOut } from '../../services/auth.service';
+import { completeMerchantSetup } from '../../services/auth.service';
+import { confirmSignOut } from '../../utils/confirmSignOut';
 import type { MerchantOnboardingParamList } from '../../navigation/MerchantOnboardingNavigator';
 
 type Nav = StackNavigationProp<MerchantOnboardingParamList, 'MerchantRoleSelect'>;
@@ -189,7 +190,7 @@ export default function MerchantRoleSelectScreen({
         {/* Back */}
         <TouchableOpacity
           style={styles.backBtn}
-          onPress={pinFromRoute ? () => navigation.goBack() : signOut}
+          onPress={pinFromRoute ? () => navigation.goBack() : () => confirmSignOut(t)}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Text style={styles.backChevron}>‹</Text>
@@ -225,9 +226,9 @@ export default function MerchantRoleSelectScreen({
 
         {/* Section label — explicitly tells users both is an option */}
         <Animated.View style={[styles.selectLabelRow, { opacity: card0Opacity }]}>
-          <Text style={styles.selectLabel}>Pick one</Text>
+          <Text style={styles.selectLabel}>{t('auth.onboarding.role.pickOne')}</Text>
           <View style={styles.selectLabelDot} />
-          <Text style={styles.selectLabelBoth}>or select both</Text>
+          <Text style={styles.selectLabelBoth}>{t('auth.onboarding.role.orSelectBoth')}</Text>
         </Animated.View>
 
         {/* Role cards */}
@@ -294,7 +295,7 @@ export default function MerchantRoleSelectScreen({
                 }}
                 activeOpacity={0.7}
               >
-                <Text style={styles.selectBothText}>I do both  ⚡</Text>
+                <Text style={styles.selectBothText}>{`${t('auth.onboarding.role.iDoBoth')}  ⚡`}</Text>
               </TouchableOpacity>
             )}
           </Animated.View>
@@ -313,7 +314,7 @@ export default function MerchantRoleSelectScreen({
             disabled={!canSubmit || loading}
           >
             <Text style={[styles.ctaText, (!canSubmit || loading) && styles.ctaTextDisabled]}>
-              {loading ? 'Setting up…' : t('auth.onboarding.role.completeRegistration')}
+              {loading ? t('auth.splash.settingUp') : t('auth.onboarding.role.completeRegistration')}
             </Text>
           </TouchableOpacity>
         </Animated.View>

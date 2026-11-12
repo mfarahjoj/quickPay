@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
 
 type ToastType = 'success' | 'info' | 'error';
 
@@ -22,6 +22,8 @@ export function useToast() {
 }
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
+  const colors = useColors();
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   const [toast, setToast] = useState<ToastState>({ message: '', type: 'info', visible: false });
   const translateY = useRef(new Animated.Value(-80)).current;
@@ -47,8 +49,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     toast.type === 'success'
       ? colors.success
       : toast.type === 'error'
-        ? colors.dark.error
-        : colors.dark.accent;
+        ? colors.ui.error
+        : colors.ui.accent;
 
   return (
     <ToastContext.Provider value={{ showToast }}>
@@ -65,7 +67,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   toast: {
     position: 'absolute',
     left: spacing.lg,
@@ -80,4 +82,4 @@ const styles = StyleSheet.create({
     color: colors.text.inverse,
     textAlign: 'center',
   },
-});
+}));

@@ -1,0 +1,248 @@
+/* Shared styles for the Zapp Pay Play graphics (customer.html, merchant.html). */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --ink: #0D0B0A;
+  --coral: #FF5043;
+  --coral-text: #FF8A7A;
+  --coral-soft: rgba(255,80,67,0.18);
+  --coral-border: rgba(255,80,67,0.32);
+  --teal: #5DCAA5;
+  --green: #34C77B;
+  --green-soft: rgba(52,199,123,0.18);
+  --amber: #F5A623;
+  --amber-soft: rgba(245,166,35,0.18);
+  --glass: rgba(255,255,255,0.06);
+  --glass-raised: rgba(255,255,255,0.09);
+  --glass-border: rgba(255,255,255,0.10);
+  --glass-border-strong: rgba(255,255,255,0.16);
+  --dim: rgba(255,255,255,0.6);
+  --faint: rgba(255,255,255,0.4);
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+}
+
+html, body { background: var(--ink); }
+body {
+  font-family: var(--sans);
+  color: #fff;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+.num { font-variant-numeric: tabular-nums; }
+
+/* ── Store canvas (screenshots) ─────────────────────── */
+.canvas {
+  position: relative; overflow: hidden;
+  width: 540px; height: 960px;
+  background: var(--ink);
+}
+.canvas .bg {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(var(--g1w, 460px) var(--g1h, 380px) at var(--g1x, 12%) var(--g1y, 4%), rgba(255,80,67,var(--g1a, 0.26)), transparent 70%),
+    radial-gradient(var(--g2w, 420px) var(--g2h, 420px) at var(--g2x, 96%) var(--g2y, 58%), rgba(93,202,165,var(--g2a, 0.16)), transparent 70%),
+    radial-gradient(520px 300px at 50% 108%, rgba(255,80,67,0.14), transparent 70%);
+}
+
+.copy { position: absolute; left: 40px; right: 40px; top: 58px; }
+.eyebrow {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 12px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase;
+  color: var(--coral-text);
+  background: rgba(255,80,67,0.14); border: 1px solid var(--coral-border);
+  padding: 7px 13px 7px 11px; border-radius: 999px; margin-bottom: 18px;
+}
+.eyebrow::before { content: ''; width: 6px; height: 6px; border-radius: 3px; background: var(--coral); box-shadow: 0 0 10px var(--coral); }
+.copy h1 {
+  font-size: 45px; line-height: 1.04; font-weight: 800; letter-spacing: -1.9px;
+  margin-bottom: 14px;
+}
+.accent {
+  background: linear-gradient(100deg, #FF5043 0%, #FF8A7A 55%, #FFB3AA 100%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+}
+.copy p { font-size: 17px; line-height: 1.45; color: rgba(255,255,255,0.66); max-width: 440px; letter-spacing: -0.1px; }
+
+/* ── Phone ──────────────────────────────────────────── */
+.phone {
+  position: absolute; width: 392px; height: 850px;
+  left: 50%; margin-left: -196px; top: 304px;
+  border-radius: 54px; padding: 9px;
+  background: linear-gradient(155deg, #3a3532 0%, #1b1917 22%, #0e0d0c 60%, #262321 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,0.16),
+    inset 0 0 0 3px rgba(0,0,0,0.6),
+    0 0 0 1px rgba(0,0,0,0.7),
+    0 60px 120px rgba(0,0,0,0.7),
+    0 0 90px rgba(255,80,67,0.10);
+}
+.phone::before, .phone::after {
+  content: ''; position: absolute; right: -3px; width: 3px; border-radius: 0 2px 2px 0;
+  background: linear-gradient(90deg, #2a2725, #45403c);
+}
+.phone::before { top: 150px; height: 64px; }
+.phone::after  { top: 240px; height: 96px; }
+.screen {
+  position: relative; width: 374px; height: 832px;
+  border-radius: 46px; overflow: hidden; background: #000;
+  isolation: isolate;
+}
+.punch {
+  position: absolute; z-index: 40; top: 12px; left: 50%;
+  width: 13px; height: 13px; margin-left: -6.5px; border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #1d2433 0%, #05060a 55%);
+  box-shadow: 0 0 0 1.5px #121212;
+}
+
+/* ── Android status bar ─────────────────────────────── */
+.sb {
+  position: relative; z-index: 30;
+  height: 38px; padding: 4px 24px 0 28px;
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 13.5px; font-weight: 600; letter-spacing: 0.1px; color: #fff;
+}
+.sb .icons { display: flex; align-items: center; gap: 6px; }
+
+/* ── App primitives (mirror mobile/src/theme) ──────── */
+.app { position: absolute; inset: 0; background: #000; overflow: hidden; }
+.pad { padding: 0 22px; position: relative; z-index: 2; }
+.glow { position: absolute; border-radius: 50%; background: var(--coral); z-index: 0; filter: blur(46px); }
+.card {
+  background: var(--glass); border: 1px solid var(--glass-border);
+  border-radius: 20px;
+}
+.card.raised { background: var(--glass-raised); border-color: var(--glass-border-strong); }
+.nav-h {
+  display: flex; align-items: center; gap: 12px;
+  height: 52px; padding: 0 18px; position: relative; z-index: 2;
+}
+.nav-h .back {
+  width: 36px; height: 36px; border-radius: 18px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.16);
+}
+.nav-h .title { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; }
+.btn {
+  height: 54px; border-radius: 16px;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  font-size: 16px; font-weight: 700; letter-spacing: -0.2px;
+}
+.btn.coral { background: var(--coral); color: #fff; box-shadow: 0 10px 28px rgba(255,80,67,0.35); }
+.btn.ghost { background: var(--glass); border: 1px solid var(--glass-border-strong); color: #fff; }
+
+/* Home */
+.hdr { display: flex; justify-content: space-between; align-items: flex-start; margin: 8px 0 22px; }
+.hs { font-size: 12px; color: var(--dim); }
+.hn { font-size: 21px; font-weight: 700; letter-spacing: -0.5px; }
+.hact { display: flex; gap: 8px; align-items: center; }
+.icbtn {
+  width: 38px; height: 38px; border-radius: 19px;
+  background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.16);
+  display: flex; align-items: center; justify-content: center;
+}
+.lang {
+  height: 38px; padding: 0 11px; border-radius: 19px; gap: 5px;
+  background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.16);
+  display: flex; align-items: center; font-size: 15px;
+}
+.lang i { font-style: normal; font-size: 10px; color: var(--dim); }
+.lang b { font-size: 12px; font-weight: 700; letter-spacing: 0.4px; }
+.bal { text-align: center; padding-top: 14px; margin-bottom: 22px; }
+.bal .bl { font-size: 12px; color: var(--dim); display: flex; gap: 8px; justify-content: center; }
+.bal .bl b { font-weight: 600; color: var(--faint); }
+.bal .ba { font-size: 56px; line-height: 64px; font-weight: 800; letter-spacing: -2.6px; font-variant-numeric: tabular-nums; }
+.bal .ba small { font-size: 56px; color: rgba(255,255,255,0.92); }
+.bal .ba .c { color: rgba(255,255,255,0.45); }
+.tiles { display: flex; gap: 9px; margin-bottom: 24px; }
+.tile {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px;
+  background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 18px; padding: 14px 0 12px;
+}
+.tile .ib {
+  width: 38px; height: 38px; border-radius: 12px; background: rgba(255,80,67,0.22);
+  display: flex; align-items: center; justify-content: center;
+}
+.tile span { font-size: 11px; font-weight: 500; }
+.sech { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.sech span { font-size: 16px; font-weight: 600; }
+.sech a { font-size: 12px; font-weight: 600; color: var(--coral-text); }
+.tx { display: flex; align-items: center; padding: 11px 16px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+.tx:last-child { border-bottom: none; }
+.tx .ti {
+  width: 36px; height: 36px; border-radius: 18px; margin-right: 14px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10.5px; font-weight: 800; letter-spacing: 0.3px;
+}
+.tx .ti.in { background: var(--green-soft); }
+.tx .ti.out { background: var(--amber-soft); }
+.tx .tn { flex: 1; min-width: 0; }
+.tx .tn b { display: block; font-size: 14px; font-weight: 500; margin-bottom: 2px; }
+.tx .tn small { font-size: 12px; color: var(--faint); }
+.tx .ta { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.tx .ta.in { color: var(--green); }
+
+/* Floating callouts (outside the phone) */
+.float {
+  position: absolute; z-index: 60;
+  background: rgba(28,25,24,0.86);
+  -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 22px;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.55), 0 0 0 1px rgba(0,0,0,0.4);
+}
+.notif { display: flex; gap: 12px; align-items: center; padding: 14px 18px 14px 14px; width: 318px; }
+.notif .mk {
+  width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0;
+  background: var(--coral); display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 14px rgba(255,80,67,0.4);
+}
+.notif .nt { flex: 1; min-width: 0; }
+.notif .nt small { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--faint); margin-bottom: 2px; }
+.notif .nt b { display: block; font-size: 14px; font-weight: 700; letter-spacing: -0.2px; }
+.notif .nt span { font-size: 13px; color: var(--dim); }
+.notif .amt { color: var(--green); font-weight: 800; }
+.notif .nt span strong { color: #fff; font-weight: 800; }
+
+/* Keypad (PinKeypad / Payments keypad) */
+.keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 14px; }
+.keys div {
+  height: 58px; border-radius: 18px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px; font-weight: 500;
+  background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.08);
+}
+.keys div.plain { background: transparent; border-color: transparent; }
+
+/* ── Feature graphic ────────────────────────────────── */
+.feature {
+  position: relative; overflow: hidden;
+  width: 1024px; height: 500px; background: var(--ink);
+}
+.feature .bg {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(560px 420px at 8% 0%, rgba(255,80,67,0.30), transparent 70%),
+    radial-gradient(520px 460px at 92% 100%, rgba(93,202,165,0.20), transparent 70%),
+    radial-gradient(420px 420px at 74% 30%, rgba(255,80,67,0.16), transparent 70%);
+}
+.feature .left { position: absolute; left: 72px; top: 0; bottom: 0; width: 520px; display: flex; flex-direction: column; justify-content: center; }
+.brand { display: flex; align-items: center; gap: 14px; margin-bottom: 30px; }
+.brand .mk {
+  width: 54px; height: 54px; border-radius: 16px; background: var(--coral);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 10px 30px rgba(255,80,67,0.45);
+}
+.brand span { font-size: 30px; font-weight: 800; letter-spacing: -1px; }
+.feature h1 { font-size: 58px; line-height: 1.02; font-weight: 800; letter-spacing: -2.4px; margin-bottom: 20px; }
+.feature p { font-size: 20px; line-height: 1.45; color: rgba(255,255,255,0.68); letter-spacing: -0.2px; max-width: 470px; }
+
+/* ── Icon ───────────────────────────────────────────── */
+.icon {
+  width: 512px; height: 512px; position: relative; overflow: hidden;
+  background:
+    radial-gradient(420px 420px at 22% 12%, #FF7A66 0%, rgba(255,122,102,0) 70%),
+    linear-gradient(160deg, #FF5A4C 0%, #FF5043 45%, #E2372C 100%);
+}
+.icon svg { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }

@@ -29,3 +29,64 @@ export function callableErrorKey(error: any): string {
 
   return 'qr.errors.generic';
 }
+
+/**
+ * A wrong PIN is the one failure the person fixes by typing again, so the
+ * screens send them back to the keypad for it instead of starting over.
+ *
+ * The callables word it three ways: "Invalid PIN", "Invalid agent PIN"
+ * (manualTopup) and "Incorrect PIN" (payrollPayout).
+ */
+export function isWrongPin(error: any): boolean {
+  return (
+    error?.code === 'functions/permission-denied' &&
+    /\b(invalid|incorrect)(\s+agent)?\s+pin\b/i.test(error?.message ?? '')
+  );
+}
+
+/**
+ * Translation key for a PIN-confirmed action: agent top-up and cash-out
+ * confirmation, payouts, payroll.
+ *
+ * Several failures share a code — a wrong PIN and a frozen account are both
+ * permission-denied, an expired code and a short float both
+ * failed-precondition — and the QR wording `callableErrorKey` falls back to
+ * ("This account can't take payments") would be wrong for all of them. The
+ * backend's messages are fixed English strings in this repo, so they are
+ * matched here to tell those cases apart.
+ */
+export function pinActionErrorKey(error: any): string {
+  const code: string | undefined = error?.code;
+  const message: string = typeof error?.message === 'string' ? error.message : '';
+
+  if (isWrongPin(error)) return 'errors.wrongPin';
+  const reason = error?.details?.reason;
+  if (reason === 'pin_reset_cooldown' || reason === 'phone_change_cooldown') return 'errors.sendingPaused';
+  if (reason === 'agent_code_attempts') return 'errors.cashOutCodeAttempts';
+  if (reason === 'amount_mismatch') return 'errors.topupAmountChanged';
+  if (reason === 'target_required' || reason === 'amount_required') return 'errors.updateApp';
+  if (reason === 'idempotency_mismatch') return 'errors.startNewTopup';
+
+  switch (code) {
+    case 'functions/resource-exhausted':
+      if (error?.details?.hardLocked) return 'errors.pinHardLocked';
+      if (/pin/i.test(message)) return 'errors.pinLocked';
+      if (/code/i.test(message)) return 'errors.codeLocked';
+      break;
+    case 'functions/not-found':
+      if (/code/i.test(message)) return 'errors.codeNotFound';
+      break;
+    case 'functions/failed-precondition':
+      if (/expired/i.test(message)) return 'errors.codeExpired';
+      if (/already used/i.test(message)) return 'errors.codeUsed';
+      if (/float/i.test(message)) return 'errors.insufficientFloat';
+      if (/pin not set/i.test(message)) return 'errors.pinNotSet';
+      if (/balance/i.test(message)) return 'errors.insufficientBalance';
+      break;
+    case 'functions/permission-denied':
+      if (/own top-up/i.test(message)) return 'errors.ownTopup';
+      return 'errors.accountRestricted';
+  }
+
+  return callableErrorKey(error);
+}

@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Alert, TouchableOpacity, ActivityIndicator, Share } from 'react-native';
+import { View, Text, StyleSheet, Alert, TouchableOpacity, ActivityIndicator, Share, TextInput } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { CURRENCY_SYMBOL } from '../../config/constants';
 import { Transaction } from '../../types';
 import { DarkScreen, GlassCard, PinInput, ACCENT, TEXT_DIM, TEXT_FAINT } from '../../components';
-import { refundPayment } from '../../services/transaction.service';
+import { functions } from '../../services/firebase.config';
+import { newIdempotencyKey } from '../../utils/idempotency';
 
 interface Props {
   route: { params: { transaction: Transaction } };
@@ -55,20 +56,37 @@ export default function TransactionDetailScreen({ route, navigation }: Props) {
   const { transaction } = route.params;
 
   const [refunded, setRefunded] = useState(!!transaction.refundedAt);
-  const [refundStep, setRefundStep] = useState<'idle' | 'pin' | 'processing'>('idle');
+  const [refundStep, setRefundStep] = useState<'idle' | 'amount' | 'pin' | 'processing'>('idle');
+  // Partial refunds (plan 3.3): cents given back so far, the amount being
+  // refunded now, and one idempotency key per refund attempt.
+  const [refundedCents, setRefundedCents] = useState(transaction.refundedCents ?? 0);
+  const totalCents = Math.round(transaction.amount * 100);
+  const remainingCents = totalCents - refundedCents;
+  const [refundText, setRefundText] = useState('');
+  const [refundKey, setRefundKey] = useState(newIdempotencyKey);
+  const refundCents = Math.round(parseFloat(refundText || '0') * 100);
+  const refundValid = refundCents > 0 && refundCents <= remainingCents;
   const [pin, setPin] = useState('');
 
   const commission = transaction.type === 'topup' && !transaction.isIncoming && transaction.commission > 0;
   const incoming = transaction.isIncoming;
   const ss = statusStyle(transaction.status);
   const statusLabel = t(`transaction.status.${transaction.status}`, transaction.status);
-  const typeLabel = TYPE_KEYS[transaction.type] ? t(TYPE_KEYS[transaction.type]) : transaction.type;
+  // `kind` says what the row really is (a shop payment, P2P, payroll...);
+  // `type` is the coarse fallback for rows from before it existed.
+  const typeLabel = transaction.kind
+    ? t(`transactions.kindLabel.${transaction.kind}`)
+    : TYPE_KEYS[transaction.type]
+      ? t(TYPE_KEYS[transaction.type])
+      : transaction.type;
 
   const canRefund =
     transaction.type === 'payment' &&
+    (!transaction.kind || transaction.kind === 'merchant_payment') &&
     transaction.isIncoming &&
     transaction.status === 'completed' &&
-    !refunded;
+    !refunded &&
+    remainingCents > 0;
 
   const heroLabel = commission
     ? t('transactions.detail.commissionEarned')
@@ -114,30 +132,90 @@ export default function TransactionDetailScreen({ route, navigation }: Props) {
     }
   };
 
-  const reportProblem = () => {
-    Alert.alert(
-      t('transactions.report.title'),
-      t('transactions.report.message', { id: transaction.receiptNumber ?? transaction.id })
-    );
+  // A disputed transaction carries the id of the latest dispute on it; the
+  // report screen checks with the server whether this shop already raised one.
+  const reportProblem = () =>
+    transaction.disputeId
+      ? navigation.navigate('DisputeDetail', { disputeId: transaction.disputeId })
+      : navigation.navigate('ReportProblem', { transactionId: transaction.id });
+
+  const startRefund = () => {
+    setRefundText((remainingCents / 100).toFixed(2));
+    setRefundKey(newIdempotencyKey());
+    setRefundStep('amount');
   };
 
   const handleRefund = async (enteredPin: string) => {
     setRefundStep('processing');
+    const partial = refundCents < remainingCents || refundedCents > 0;
     try {
-      await refundPayment(transaction.id, enteredPin);
-      setRefunded(true);
+      const res = await functions().httpsCallable('refundPayment')({
+        transactionId: transaction.id,
+        pin: enteredPin,
+        ...(partial ? { amountCents: refundCents, idempotencyKey: refundKey } : {}),
+      });
+      const left = (res.data as any)?.data?.remainingCents ?? 0;
+      setRefundedCents(totalCents - left);
+      if (left === 0) setRefunded(true);
       setRefundStep('idle');
+      setPin('');
       Alert.alert(
         t('common.success'),
-        t('transactions.refund.successMessage', { amount: money(transaction.amount) }),
-        [{ text: t('common.ok'), onPress: () => navigation.goBack() }]
+        left === 0
+          ? t('transactions.refund.successMessage', { amount: money(refundCents / 100) })
+          : t('transactions.refund.partialSuccess', { amount: money(refundCents / 100), left: money(left / 100) }),
+        left === 0 ? [{ text: t('common.ok'), onPress: () => navigation.goBack() }] : undefined
       );
     } catch (e: any) {
-      Alert.alert(t('common.error'), e.message || t('transactions.refund.failed'));
+      const reason = e?.details?.reason;
       setPin('');
+      // None of these changes with another PIN, so leave the keypad.
+      if (reason === 'not_refundable' || reason === 'refund_window_closed' || reason === 'refund_amount') {
+        Alert.alert(
+          t('common.error'),
+          reason === 'not_refundable'
+            ? t('transactions.refund.notRefundable')
+            : reason === 'refund_window_closed'
+              ? t('transactions.refund.windowClosed', { days: e.details.refundWindowDays })
+              : t('transactions.refund.amountTooHigh', { amount: money((e.details.remainingCents ?? 0) / 100) })
+        );
+        setRefundStep('idle');
+        return;
+      }
+      Alert.alert(t('common.error'), e.message || t('transactions.refund.failed'));
       setRefundStep('pin');
     }
   };
+
+  // ── How much to refund ──
+  if (refundStep === 'amount') {
+    return (
+      <DarkScreen edges={[]} keyboard contentStyle={styles.pinWrap}>
+        <Text style={styles.pinTitle}>{t('transactions.refund.amountTitle')}</Text>
+        <Text style={styles.pinSubtitle}>
+          {t('transactions.refund.amountHint', { amount: money(remainingCents / 100) })}
+        </Text>
+        <TextInput
+          style={styles.refundInput}
+          value={refundText}
+          onChangeText={setRefundText}
+          keyboardType="decimal-pad"
+          selectTextOnFocus
+          accessibilityLabel={t('transactions.refund.amountTitle')}
+        />
+        <TouchableOpacity
+          style={[styles.refundContinue, !refundValid && { opacity: 0.4 }]}
+          disabled={!refundValid}
+          onPress={() => setRefundStep('pin')}
+        >
+          <Text style={styles.refundContinueText}>{t('common.continue')}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.backLink} onPress={() => setRefundStep('idle')}>
+          <Text style={styles.backLinkText}>{t('common.cancel')}</Text>
+        </TouchableOpacity>
+      </DarkScreen>
+    );
+  }
 
   // ── PIN entry for refund ──
   if (refundStep === 'pin' || refundStep === 'processing') {
@@ -145,7 +223,7 @@ export default function TransactionDetailScreen({ route, navigation }: Props) {
       <DarkScreen edges={[]} keyboard contentStyle={styles.pinWrap}>
         <Text style={styles.pinTitle}>{t('transactions.refund.confirmTitle')}</Text>
         <Text style={styles.pinSubtitle}>
-          {t('transactions.refund.confirmSubtitle', { amount: money(transaction.amount) })}
+          {t('transactions.refund.confirmSubtitle', { amount: money(refundCents / 100) })}
         </Text>
         {refundStep === 'processing' ? (
           <ActivityIndicator size="large" color={ACCENT} style={{ marginTop: 32 }} />
@@ -237,6 +315,12 @@ export default function TransactionDetailScreen({ route, navigation }: Props) {
       {/* Meta */}
       <GlassCard style={styles.detailsCard}>
         <DetailRow label={t('transactions.detail.type')} value={typeLabel} />
+        {refundedCents > 0 && (
+          <DetailRow
+            label={t('transactions.refund.refundedLabel')}
+            value={t('transactions.refund.refundedOf', { refunded: money(refundedCents / 100), total: money(transaction.amount) })}
+          />
+        )}
         {!!method && <DetailRow label={t('transactions.detail.method')} value={method} />}
         {!commission && !!transaction.description && (
           <DetailRow label={t('transactions.detail.description')} value={transaction.description} />
@@ -262,19 +346,14 @@ export default function TransactionDetailScreen({ route, navigation }: Props) {
             glyph="↩"
             label={t('transactions.refund.action')}
             tint={RED}
-            onPress={() =>
-              Alert.alert(
-                t('transactions.refund.confirmTitle'),
-                t('transactions.refund.confirmSubtitle', { amount: money(transaction.amount) }),
-                [
-                  { text: t('common.cancel'), style: 'cancel' },
-                  { text: t('transactions.refund.action'), style: 'destructive', onPress: () => setRefundStep('pin') },
-                ]
-              )
-            }
+            onPress={startRefund}
           />
         )}
-        <ActionButton glyph="⚑" label={t('transactions.actions.report')} onPress={reportProblem} />
+        <ActionButton
+          glyph="⚑"
+          label={transaction.disputeId ? t('transactions.actions.viewDispute') : t('transactions.actions.report')}
+          onPress={reportProblem}
+        />
       </View>
     </DarkScreen>
   );
@@ -392,5 +471,21 @@ const styles = StyleSheet.create({
   pinSubtitle: { fontSize: 14, color: TEXT_DIM, textAlign: 'center', marginBottom: 28, lineHeight: 20 },
   pinInput: { width: '100%' },
   backLink: { marginTop: 28, padding: 8 },
+  refundInput: {
+    marginTop: 28,
+    minWidth: 200,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    color: '#FFFFFF',
+    fontSize: 32,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  refundContinue: { marginTop: 24, paddingVertical: 14, paddingHorizontal: 40, borderRadius: 999, backgroundColor: ACCENT },
+  refundContinueText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
   backLinkText: { fontSize: 14, color: TEXT_DIM, fontWeight: '600' },
 });
