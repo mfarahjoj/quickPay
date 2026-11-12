@@ -14,11 +14,19 @@ import {
   DarkScreen,
   GlassCard,
   PillButton,
+  PaidReferenceSheet,
   ACCENT,
   TEXT_DIM,
   TEXT_FAINT,
 } from '../../components';
 import { SuccessCheckIcon, CloseIcon } from '../../components/icons/AuthIcons';
+import {
+  PriorPayment,
+  priorPaymentFromError,
+  shouldCheckPaidReference,
+} from '../../utils/paidReference';
+import { REFERENCE_MAX_LENGTH } from '../../utils/receiptParser';
+import { triggerHaptic } from '../../services/haptics.service';
 
 interface Props {
   route: { params: { tokenId: string; customerName: string; customerId: string } };
@@ -37,6 +45,9 @@ export default function ChargeScreen({ route, navigation }: Props) {
   const [focused, setFocused] = useState(false);
   const [refFocused, setRefFocused] = useState(false);
   const unsubRef = useRef<(() => void) | null>(null);
+  const [receiptNumber, setReceiptNumber] = useState<string | null>(null);
+  // The earlier payment of this reference, while the warning is up.
+  const [prior, setPrior] = useState<PriorPayment | null>(null);
 
   useEffect(() => {
     if (!requestId) return;
@@ -46,7 +57,10 @@ export default function ChargeScreen({ route, navigation }: Props) {
       .onSnapshot((doc) => {
         const data = doc.data();
         if (!data) return;
-        if (data.status === 'approved') setStatus('approved');
+        if (data.status === 'approved') {
+          if (typeof data.receiptNumber === 'string') setReceiptNumber(data.receiptNumber);
+          setStatus('approved');
+        }
         else if (data.status === 'rejected') setStatus('rejected');
       });
     return () => {
@@ -54,20 +68,32 @@ export default function ChargeScreen({ route, navigation }: Props) {
     };
   }, [requestId]);
 
-  const handleCharge = async () => {
+  const handleCharge = async (chargeAgain = false) => {
     const amountNum = parseFloat(amount);
     if (!amountNum || amountNum <= 0) {
       Alert.alert(t('common.invalidAmount'), t('common.invalidAmountMessage'));
       return;
     }
+    const ref = reference.trim() || undefined;
     try {
       setStatus('sending');
-      const result = await createPaymentRequest(tokenId, Math.round(amountNum * 100), 'USD', reference.trim() || undefined);
+      const result = await createPaymentRequest(tokenId, Math.round(amountNum * 100), 'USD', ref, {
+        checkPaidReference: !!ref && shouldCheckPaidReference(ref, null),
+        confirmPaidReference: chargeAgain,
+      });
+      setPrior(null);
       setRequestId(result.requestId);
       setStatus('waiting');
     } catch (e: any) {
-      Alert.alert(t('common.error'), e.message || t('scan.charge.createFailedMessage'));
       setStatus('idle');
+      const earlier = priorPaymentFromError(e);
+      if (earlier) {
+        triggerHaptic('medium');
+        setPrior(earlier);
+        return;
+      }
+      setPrior(null);
+      Alert.alert(t('common.error'), e.message || t('scan.charge.createFailedMessage'));
     }
   };
 
@@ -81,6 +107,14 @@ export default function ChargeScreen({ route, navigation }: Props) {
         <Text style={styles.resultTitle}>{t('scan.charge.paymentReceived')}</Text>
         <Text style={styles.resultAmount}>${parseFloat(amount).toFixed(2)}</Text>
         <Text style={styles.resultSubtitle}>{t('scan.charge.fromCustomer', { name: customerName })}</Text>
+        {receiptNumber ? (
+          <View style={styles.receiptPill}>
+            <Text style={styles.receiptPillLabel}>{t('qr.paid.receipt')}</Text>
+            <Text style={styles.receiptPillValue} selectable>
+              {receiptNumber}
+            </Text>
+          </View>
+        ) : null}
         <View style={styles.resultBtn}>
           <PillButton label={t('common.done')} onPress={handleDone} />
         </View>
@@ -137,6 +171,7 @@ export default function ChargeScreen({ route, navigation }: Props) {
             value={reference}
             onChangeText={setReference}
             returnKeyType="next"
+            maxLength={REFERENCE_MAX_LENGTH}
             onFocus={() => setRefFocused(true)}
             onBlur={() => setRefFocused(false)}
           />
@@ -161,11 +196,19 @@ export default function ChargeScreen({ route, navigation }: Props) {
       <View style={styles.footer}>
         <PillButton
           label={t('scan.charge.chargeCustomer')}
-          onPress={handleCharge}
+          onPress={() => handleCharge()}
           loading={status === 'sending'}
           disabled={!amount}
         />
       </View>
+
+      <PaidReferenceSheet
+        prior={prior}
+        amountCents={Math.round((parseFloat(amount) || 0) * 100)}
+        loading={status === 'sending'}
+        onCancel={() => setPrior(null)}
+        onChargeAgain={() => handleCharge(true)}
+      />
     </DarkScreen>
   );
 }
@@ -227,6 +270,29 @@ const styles = StyleSheet.create({
   },
 
   // results
+  receiptPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+    marginTop: 12,
+  },
+  receiptPillLabel: {
+    fontSize: 13,
+    color: TEXT_FAINT,
+  },
+  receiptPillValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.6,
+    fontVariant: ['tabular-nums'],
+  },
   resultWrap: {
     flex: 1,
     justifyContent: 'center',

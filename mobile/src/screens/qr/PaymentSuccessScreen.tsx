@@ -23,6 +23,7 @@ interface Props {
   route: {
     params: {
       transactionId: string;
+      receiptNumber?: string;
       amount: number;
       currency: string;
       merchantId?: string;
@@ -84,7 +85,7 @@ function ConfettiParticle({ dx, dy, color, size, delay }: ParticleConfig) {
 
 export default function PaymentSuccessScreen({ navigation, route }: Props) {
   const { t } = useTranslation();
-  const { transactionId, amount, currency } = route.params;
+  const { transactionId, receiptNumber, amount, currency } = route.params;
 
   // Content stagger shared values
   const titleOpacity = useSharedValue(0);
@@ -212,8 +213,19 @@ export default function PaymentSuccessScreen({ navigation, route }: Props) {
           <Text style={styles.summaryLabel}>{currency}</Text>
           <View style={styles.divider} />
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryKey}>{t('qr.success.reference')}</Text>
-            <Text style={styles.summaryValue}>{transactionId.slice(0, 12)}...</Text>
+            {receiptNumber ? (
+              <>
+                <Text style={styles.summaryKey}>{t('qr.success.receipt')}</Text>
+                <Text style={[styles.summaryValue, styles.receiptValue]} selectable>
+                  {receiptNumber}
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.summaryKey}>{t('qr.success.reference')}</Text>
+                <Text style={styles.summaryValue}>{transactionId.slice(0, 12)}...</Text>
+              </>
+            )}
           </View>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryKey}>{t('qr.success.date')}</Text>
@@ -321,6 +333,10 @@ const styles = StyleSheet.create({
   summaryValue: {
     ...typography.bodySemibold,
     color: colors.dark.text,
+  },
+  receiptValue: {
+    letterSpacing: 0.6,
+    fontVariant: ['tabular-nums'],
   },
   doneWrap: {
     width: '100%',

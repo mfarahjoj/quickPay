@@ -12,5 +12,6 @@ export { TransactionItem } from './TransactionItem';
 export { LanguageSelector } from './LanguageSelector';
 export { AmountKeypad } from './AmountKeypad';
 export { ReceiptScanner } from './ReceiptScanner';
+export { PaidReferenceSheet } from './PaidReferenceSheet';
 export { DarkScreen, ScreenHeader, GlassCard, PillButton, ACCENT, GLASS, GLASS_BORDER, TEXT_DIM, TEXT_FAINT } from './DarkScreen';
 export * from './auth';

@@ -23,12 +23,18 @@ import { toCents, formatCents } from '../../utils/money';
 import { REFERENCE_MAX_LENGTH } from '../../utils/receiptParser';
 import { callableErrorKey } from '../../utils/errors';
 import {
+  PriorPayment,
+  priorPaymentFromError,
+  shouldCheckPaidReference,
+} from '../../utils/paidReference';
+import {
   DarkScreen,
   ScreenHeader,
   GlassCard,
   PillButton,
   AmountKeypad,
   ReceiptScanner,
+  PaidReferenceSheet,
   ACCENT,
   TEXT_DIM,
   TEXT_FAINT,
@@ -63,6 +69,14 @@ export default function GenerateQRScreen() {
   // True while the amount on screen came off a photographed receipt and the
   // merchant hasn't touched it: they are asked to check it before charging.
   const [fromReceipt, setFromReceipt] = useState(false);
+  // Kind of the scanned identifier the reference came from ("invoice",
+  // "kot"…), or null when it was typed. Decides whether to check it was paid.
+  const [referenceKind, setReferenceKind] = useState<string | null>(null);
+  // The earlier payment of this reference, while the warning is up.
+  const [prior, setPrior] = useState<PriorPayment | null>(null);
+  // A reference the merchant chose to charge again for this sale, so showing
+  // a fresh code after the first expires doesn't ask a second time.
+  const [confirmedReference, setConfirmedReference] = useState<string | null>(null);
 
   // Counter-code mode
   const [sticker, setSticker] = useState<MerchantStickerData | null>(null);
@@ -125,6 +139,7 @@ export default function GenerateQRScreen() {
               netCents: data.netCents,
               transactionId: data.transactionId,
               reference: data.reference,
+              receiptNumber: data.receiptNumber,
             });
             triggerHaptic('payment');
             setPhase('paid');
@@ -183,23 +198,42 @@ export default function GenerateQRScreen() {
   };
 
   // ── Charge flow ─────────────────────────────────
-  const handleGenerate = async () => {
+  const handleGenerate = async (chargeAgain = false) => {
     if (amountCents <= 0) {
       setError(t('common.invalidAmountMessage'));
       return;
     }
+    const ref = trimmedReference || undefined;
     try {
       setLoading(true);
       setError(null);
       setRefEditing(false);
-      const result = await generateQRCode(amountCents, 'USD', trimmedReference || undefined);
+      const result = await generateQRCode(amountCents, 'USD', ref, {
+        checkPaidReference: !!ref && shouldCheckPaidReference(ref, referenceKind),
+        confirmPaidReference: chargeAgain || (!!ref && ref === confirmedReference),
+      });
+      if (chargeAgain && ref) setConfirmedReference(ref);
+      setPrior(null);
       setQrData(result);
       setPhase('showing');
     } catch (e: any) {
-      setError(t(callableErrorKey(e)));
+      const earlier = priorPaymentFromError(e);
+      if (earlier) {
+        triggerHaptic('medium');
+        setPrior(earlier);
+      } else {
+        setPrior(null);
+        setError(t(callableErrorKey(e)));
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleReferenceChange = (next: string) => {
+    setReference(next);
+    // Typed by hand now, whatever it started as.
+    setReferenceKind(null);
   };
 
   const handleNewSale = () => {
@@ -209,6 +243,9 @@ export default function GenerateQRScreen() {
     setSettlement(null);
     setAmount('');
     setReference('');
+    setReferenceKind(null);
+    setConfirmedReference(null);
+    setPrior(null);
     setRefEditing(false);
     setFromReceipt(false);
     setTimeRemaining(0);
@@ -239,8 +276,21 @@ export default function GenerateQRScreen() {
       setAmount((details.amountCents / 100).toFixed(2));
       setFromReceipt(true);
     }
-    if (details.reference) setReference(details.reference);
+    if (details.reference) {
+      setReference(details.reference);
+      setReferenceKind(details.referenceKind);
+    }
   };
+
+  const paidReferenceSheet = (
+    <PaidReferenceSheet
+      prior={prior}
+      amountCents={amountCents}
+      loading={loading}
+      onCancel={() => setPrior(null)}
+      onChargeAgain={() => handleGenerate(true)}
+    />
+  );
 
   const formatTime = (s: number) =>
     `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
@@ -265,6 +315,15 @@ export default function GenerateQRScreen() {
           <Text style={styles.paidFrom}>
             {t('qr.paid.from', { name: settlement.paidByName })}
           </Text>
+        ) : null}
+
+        {settlement.receiptNumber ? (
+          <View style={styles.receiptPill}>
+            <Text style={styles.receiptPillLabel}>{t('qr.paid.receipt')}</Text>
+            <Text style={styles.receiptPillValue} selectable>
+              {settlement.receiptNumber}
+            </Text>
+          </View>
         ) : null}
 
         <GlassCard style={styles.breakdown}>
@@ -316,7 +375,7 @@ export default function GenerateQRScreen() {
         <View style={styles.resultFooter}>
           <PillButton
             label={t('qr.expired.regenerate')}
-            onPress={handleGenerate}
+            onPress={() => handleGenerate()}
             loading={loading}
             disabled={offline}
           />
@@ -326,6 +385,7 @@ export default function GenerateQRScreen() {
             onPress={handleEditAmount}
           />
         </View>
+        {paidReferenceSheet}
       </DarkScreen>
     );
   }
@@ -503,7 +563,7 @@ export default function GenerateQRScreen() {
                   placeholder={t('qr.receive.referencePlaceholder')}
                   placeholderTextColor="rgba(255,255,255,0.3)"
                   value={reference}
-                  onChangeText={setReference}
+                  onChangeText={handleReferenceChange}
                   returnKeyType="done"
                   maxLength={REFERENCE_MAX_LENGTH}
                   autoFocus
@@ -531,7 +591,7 @@ export default function GenerateQRScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.refClear}
-                  onPress={() => setReference('')}
+                  onPress={() => handleReferenceChange('')}
                   hitSlop={{ top: 12, bottom: 12, left: 8, right: 12 }}
                   accessibilityRole="button"
                   accessibilityLabel={t('qr.receive.clearReference')}
@@ -571,7 +631,7 @@ export default function GenerateQRScreen() {
                   ? t('qr.receive.chargeButton', { amount: formatCents(amountCents) })
                   : t('qr.receive.generateButton')
               }
-              onPress={handleGenerate}
+              onPress={() => handleGenerate()}
               loading={loading}
               disabled={amountCents <= 0 || offline}
             />
@@ -584,6 +644,7 @@ export default function GenerateQRScreen() {
         onClose={() => setScannerOpen(false)}
         onApply={handleReceipt}
       />
+      {paidReferenceSheet}
     </DarkScreen>
   );
 }
@@ -967,7 +1028,30 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: TEXT_DIM,
     marginTop: 6,
-    marginBottom: 28,
+    marginBottom: 20,
+  },
+  receiptPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+    marginBottom: 20,
+  },
+  receiptPillLabel: {
+    fontSize: 13,
+    color: TEXT_FAINT,
+  },
+  receiptPillValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.6,
+    fontVariant: ['tabular-nums'],
   },
   breakdown: {
     alignSelf: 'stretch',

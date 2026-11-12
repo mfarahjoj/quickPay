@@ -65,6 +65,10 @@ export interface Transaction {
   counterpartyPhone?: string | null;
   net?: number;
   fee?: number;
+  /** The merchant's order or invoice reference, when the sale had one. */
+  reference?: string;
+  /** Zapp receipt number, e.g. "ZP-7K3M-9QX2". Absent on older payments. */
+  receiptNumber?: string;
 }
 
 export interface QRCodeData {
@@ -75,6 +79,8 @@ export interface QRCodeData {
 
 export interface PaymentResult {
   transactionId: string;
+  /** Zapp receipt number. Optional until every backend returns it. */
+  receiptNumber?: string;
   status: TransactionStatus;
   amount: number;
   merchantId: string;

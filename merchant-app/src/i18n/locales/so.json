@@ -390,5 +390,18 @@
   "qr.receipt.none": "Ha ku darin lambar",
   "qr.receipt.remember": "Marka xigta isla noocaas lambarka ah ayaan marka hore dooran doonnaa.",
   "qr.receipt.use": "Isticmaal faahfaahintan",
-  "qr.receipt.retake": "Dib u sawir"
+  "qr.receipt.retake": "Dib u sawir",
+  "qr.paid.receipt": "Rasiidka Zapp",
+  "transactions.detail.receiptNumber": "Rasiidka Zapp",
+  "paidRef.badge": "HORAY LA BIXIYEY",
+  "paidRef.title": "{{reference}} waa la bixiyey",
+  "paidRef.subtitle": "Haddii aad {{amount}} mar kale dallacdo, lacagta laba jeer ayaa la qaadayaa. Sii wad oo keliya haddii uu yahay iib cusub.",
+  "paidRef.amount": "La bixiyey",
+  "paidRef.by": "Waxaa bixiyey",
+  "paidRef.when": "Goorta",
+  "paidRef.receipt": "Rasiidka Zapp",
+  "paidRef.timesLabel": "Lacag-bixinno",
+  "paidRef.times": "La bixiyey {{count}} jeer",
+  "paidRef.cancel": "Ha dallacin",
+  "paidRef.chargeAgain": "Dallac mar kale"
 }

@@ -984,5 +984,7 @@
   "topup.agent.toppedUp": "تم الشحن!",
   "topup.agent.confirmationId": "رقم التأكيد",
   "topup.agent.failedTitle": "فشل الشحن",
-  "topup.agent.expiredMessage": "انتهت صلاحية هذا الرمز قبل تأكيده. يرجى المحاولة مرة أخرى."
+  "topup.agent.expiredMessage": "انتهت صلاحية هذا الرمز قبل تأكيده. يرجى المحاولة مرة أخرى.",
+  "qr.success.receipt": "إيصال Zapp",
+  "wallet.detail.receiptNumber": "إيصال Zapp"
 }

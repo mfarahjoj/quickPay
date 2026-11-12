@@ -33,9 +33,14 @@ export default function TransactionDetailScreen({ navigation, route }: Props) {
       `Amount: ${transaction.isIncoming ? '+' : '-'}${CURRENCY_SYMBOL}${transaction.amount.toFixed(2)}`,
       `Status: ${transaction.status}`,
       `Date: ${transaction.createdAt.toLocaleDateString()} ${transaction.createdAt.toLocaleTimeString()}`,
-      `Reference: ${transaction.id}`,
+      transaction.reference ? `${t('common.reference')}: ${transaction.reference}` : '',
+      transaction.receiptNumber
+        ? `${t('wallet.detail.receiptNumber')}: ${transaction.receiptNumber}`
+        : `Reference: ${transaction.id}`,
       '----------------',
-    ].join('\n');
+    ]
+      .filter(Boolean)
+      .join('\n');
     await Share.share({ message: receiptText, title: t('wallet.detail.receiptTitle') });
   };
 
@@ -88,6 +93,20 @@ export default function TransactionDetailScreen({ navigation, route }: Props) {
             <Text style={styles.detailKey}>{t('wallet.detail.paymentMethod')}</Text>
             <Text style={styles.detailValue}>{t('wallet.detail.walletBalance')}</Text>
           </View>
+          {transaction.reference ? (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailKey}>{t('common.reference')}</Text>
+              <Text style={styles.detailValue}>{transaction.reference}</Text>
+            </View>
+          ) : null}
+          {transaction.receiptNumber ? (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailKey}>{t('wallet.detail.receiptNumber')}</Text>
+              <Text style={styles.detailValue} selectable>
+                {transaction.receiptNumber}
+              </Text>
+            </View>
+          ) : null}
           <View style={styles.detailRow}>
             <Text style={styles.detailKey}>{t('wallet.detail.transactionId')}</Text>
             <Text style={styles.detailValue}>{transaction.id}</Text>

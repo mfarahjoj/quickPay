@@ -88,6 +88,7 @@ export default function EnterAmountScreen({ navigation, route }: Props) {
 
       navigation.replace('PaymentSuccess', {
         transactionId: result.transactionId,
+        receiptNumber: result.receiptNumber,
         amount: parsedAmount,
         currency,
         merchantId,

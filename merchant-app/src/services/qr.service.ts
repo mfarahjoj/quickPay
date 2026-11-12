@@ -8,17 +8,25 @@ import { logger } from '../utils/logger';
  * `amountCents` is already in whole cents — callers must convert from the
  * text field before calling, so no float ever reaches the wire.
  */
+export interface PaidReferenceOptions {
+  /** Ask the server to refuse if this reference has already been paid. */
+  checkPaidReference?: boolean;
+  /** The merchant saw that warning and wants to charge again. */
+  confirmPaidReference?: boolean;
+}
+
 export async function generateQRCode(
   amountCents: number,
   currency: string = 'USD',
-  reference?: string
+  reference?: string,
+  options: PaidReferenceOptions = {}
 ): Promise<QRCodeData> {
   try {
     const generateQRFunction = functions().httpsCallable('generateQRCode');
     const result = await generateQRFunction({
       amount: amountCents,
       currency,
-      ...(reference ? { reference } : {}),
+      ...(reference ? { reference, ...options } : {}),
     });
 
     const payload = result.data as {

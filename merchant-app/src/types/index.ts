@@ -61,6 +61,8 @@ export interface Transaction {
   status: TransactionStatus;
   description: string;
   reference?: string;
+  /** Zapp receipt number, e.g. "ZP-7K3M-9QX2". Absent on older payments. */
+  receiptNumber?: string;
   createdAt: Date;
   completedAt?: Date;
   isIncoming: boolean;
@@ -110,6 +112,8 @@ export interface QRSettlement {
   netCents?: number;
   transactionId?: string;
   reference?: string;
+  /** Zapp receipt number, e.g. "ZP-7K3M-9QX2". */
+  receiptNumber?: string;
 }
 
 export interface PaymentResult {

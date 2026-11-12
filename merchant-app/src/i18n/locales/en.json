@@ -390,5 +390,18 @@
   "qr.receipt.none": "Don't add a number",
   "qr.receipt.remember": "We'll pick the same kind of number first next time.",
   "qr.receipt.use": "Use these details",
-  "qr.receipt.retake": "Retake photo"
+  "qr.receipt.retake": "Retake photo",
+  "qr.paid.receipt": "Zapp receipt",
+  "transactions.detail.receiptNumber": "Zapp receipt",
+  "paidRef.badge": "ALREADY PAID",
+  "paidRef.title": "{{reference}} has been paid",
+  "paidRef.subtitle": "Charging {{amount}} again would take the money twice. Only go ahead if this is a new sale.",
+  "paidRef.amount": "Paid",
+  "paidRef.by": "Paid by",
+  "paidRef.when": "When",
+  "paidRef.receipt": "Zapp receipt",
+  "paidRef.timesLabel": "Payments",
+  "paidRef.times": "Paid {{count}} times",
+  "paidRef.cancel": "Don't charge",
+  "paidRef.chargeAgain": "Charge again"
 }

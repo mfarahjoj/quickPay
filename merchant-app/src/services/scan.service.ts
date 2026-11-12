@@ -1,5 +1,6 @@
 import { functions } from './firebase.config';
 import { logger } from '../utils/logger';
+import type { PaidReferenceOptions } from './qr.service';
 
 export interface ScanResult {
   valid: boolean;
@@ -29,11 +30,17 @@ export async function createPaymentRequest(
   tokenId: string,
   amount: number,
   currency: string,
-  reference?: string
+  reference?: string,
+  options: PaidReferenceOptions = {}
 ): Promise<{ requestId: string }> {
   try {
     const fn = functions().httpsCallable('createPaymentRequest');
-    const result = await fn({ tokenId, amount, currency, ...(reference ? { reference } : {}) });
+    const result = await fn({
+      tokenId,
+      amount,
+      currency,
+      ...(reference ? { reference, ...options } : {}),
+    });
     const data = result.data as {
       success: boolean;
       error?: string;
@@ -47,6 +54,8 @@ export async function createPaymentRequest(
     return data.data;
   } catch (error: any) {
     logger.error('Create payment request error:', error);
-    throw new Error(error.message || 'Failed to create payment request');
+    // Rethrown as-is: the Charge screen reads `code` and `details` off it to
+    // warn about an invoice that has already been paid.
+    throw error;
   }
 }

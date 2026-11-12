@@ -984,5 +984,7 @@
   "topup.agent.toppedUp": "Topped up!",
   "topup.agent.confirmationId": "Confirmation ID",
   "topup.agent.failedTitle": "Top-up failed",
-  "topup.agent.expiredMessage": "This code expired before it was confirmed. Please try again."
+  "topup.agent.expiredMessage": "This code expired before it was confirmed. Please try again.",
+  "qr.success.receipt": "Zapp receipt",
+  "wallet.detail.receiptNumber": "Zapp receipt"
 }

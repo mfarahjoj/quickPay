@@ -984,5 +984,7 @@
   "topup.agent.toppedUp": "Waa la buuxiyay!",
   "topup.agent.confirmationId": "Aqoonsiga Xaqiijinta",
   "topup.agent.failedTitle": "Shubku wuu fashilmay",
-  "topup.agent.expiredMessage": "Koodkani wuu dhacay ka hor inta aan la xaqiijin. Fadlan isku day mar kale."
+  "topup.agent.expiredMessage": "Koodkani wuu dhacay ka hor inta aan la xaqiijin. Fadlan isku day mar kale.",
+  "qr.success.receipt": "Rasiidka Zapp",
+  "wallet.detail.receiptNumber": "Rasiidka Zapp"
 }

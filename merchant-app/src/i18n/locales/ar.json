@@ -390,5 +390,18 @@
   "qr.receipt.none": "لا تضف رقماً",
   "qr.receipt.remember": "سنختار نوع الرقم نفسه أولاً في المرة القادمة.",
   "qr.receipt.use": "استخدم هذه التفاصيل",
-  "qr.receipt.retake": "أعد التصوير"
+  "qr.receipt.retake": "أعد التصوير",
+  "qr.paid.receipt": "إيصال Zapp",
+  "transactions.detail.receiptNumber": "إيصال Zapp",
+  "paidRef.badge": "مدفوعة مسبقاً",
+  "paidRef.title": "تم دفع {{reference}}",
+  "paidRef.subtitle": "تحصيل {{amount}} مرة أخرى يعني أخذ المبلغ مرتين. تابع فقط إذا كانت هذه عملية بيع جديدة.",
+  "paidRef.amount": "المبلغ المدفوع",
+  "paidRef.by": "الدافع",
+  "paidRef.when": "الوقت",
+  "paidRef.receipt": "إيصال Zapp",
+  "paidRef.timesLabel": "عدد الدفعات",
+  "paidRef.times": "دُفعت {{count}} مرات",
+  "paidRef.cancel": "لا تحصّل",
+  "paidRef.chargeAgain": "حصّل مرة أخرى"
 }

@@ -101,7 +101,11 @@ export default function TransactionDetailScreen({ route, navigation }: Props) {
         : `${t('transactions.detail.netReceived')}: ${money(transaction.net)}`,
       `${t('transactions.detail.date')}: ${fmtDate(transaction.createdAt)}`,
       transaction.reference ? `${t('transactions.detail.reference')}: ${transaction.reference}` : '',
-      `${t('transactions.detail.transactionId')}: ${transaction.id}`,
+      // The number to quote back to the customer or to support; the raw id
+      // only for payments made before receipt numbers existed.
+      transaction.receiptNumber
+        ? `${t('transactions.detail.receiptNumber')}: ${transaction.receiptNumber}`
+        : `${t('transactions.detail.transactionId')}: ${transaction.id}`,
     ].filter(Boolean);
     try {
       await Share.share({ message: lines.join('\n') });
@@ -113,7 +117,7 @@ export default function TransactionDetailScreen({ route, navigation }: Props) {
   const reportProblem = () => {
     Alert.alert(
       t('transactions.report.title'),
-      t('transactions.report.message', { id: transaction.id })
+      t('transactions.report.message', { id: transaction.receiptNumber ?? transaction.id })
     );
   };
 
@@ -236,6 +240,9 @@ export default function TransactionDetailScreen({ route, navigation }: Props) {
         {!!method && <DetailRow label={t('transactions.detail.method')} value={method} />}
         {!commission && !!transaction.description && (
           <DetailRow label={t('transactions.detail.description')} value={transaction.description} />
+        )}
+        {!!transaction.receiptNumber && (
+          <DetailRow label={t('transactions.detail.receiptNumber')} value={transaction.receiptNumber} mono />
         )}
         {!!transaction.reference && (
           <DetailRow label={t('transactions.detail.reference')} value={transaction.reference} />

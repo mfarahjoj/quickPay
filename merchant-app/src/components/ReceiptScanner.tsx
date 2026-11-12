@@ -34,6 +34,8 @@ export interface ReceiptDetails {
   amountCents: number | null;
   /** "Invoice No 37841", or null when the merchant chose none. */
   reference: string | null;
+  /** Kind of that number ("invoice", "kot"…), or null with no reference. */
+  referenceKind: string | null;
 }
 
 interface ReceiptScannerProps {
@@ -156,6 +158,7 @@ export function ReceiptScanner({ visible, onClose, onApply }: ReceiptScannerProp
     onApply({
       amountCents: receipt.amountCents,
       reference: identifier ? identifierToReference(identifier) : null,
+      referenceKind: identifier ? identifier.kind : null,
     });
   };
 

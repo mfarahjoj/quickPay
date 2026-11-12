@@ -52,6 +52,7 @@ export default function ApprovePaymentScreen() {
   const [rejecting, setRejecting] = useState(false);
   const [resultKind, setResultKind] = useState<ResultKind>('approved');
   const [resultMessage, setResultMessage] = useState('');
+  const [receiptNumber, setReceiptNumber] = useState<string | null>(null);
   const [transactionAmount, setTransactionAmount] = useState('');
 
   // Result animation
@@ -114,7 +115,8 @@ export default function ApprovePaymentScreen() {
     if (loading) return;
     try {
       setLoading(true);
-      await approvePayment(requestId, submittedPin);
+      const approved = await approvePayment(requestId, submittedPin);
+      setReceiptNumber(approved.receiptNumber ?? null);
       triggerHaptic('success');
       setTransactionAmount(`${CURRENCY_SYMBOL}${amountFormatted}`);
       setResultKind('approved');
@@ -353,6 +355,17 @@ export default function ApprovePaymentScreen() {
               {shortRef}
             </Text>
           </View>
+          {receiptNumber ? (
+            <>
+              <View style={styles.divider} />
+              <View style={styles.resultDetailRow}>
+                <Text style={styles.resultDetailLabel}>{t('qr.success.receipt')}</Text>
+                <Text style={[styles.resultDetailValue, styles.detailValueMono]} selectable>
+                  {receiptNumber}
+                </Text>
+              </View>
+            </>
+          ) : null}
         </Animated.View>
       )}
 

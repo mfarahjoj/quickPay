@@ -73,6 +73,7 @@ export default function PaymentConfirmScreen({ navigation, route }: Props) {
 
       navigation.replace('PaymentSuccess', {
         transactionId: result.transactionId,
+        receiptNumber: result.receiptNumber,
         amount,
         currency,
         merchantId: result.merchantId,
