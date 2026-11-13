@@ -56,5 +56,6 @@ Every user-facing string ships in **all three locales** — `en`, `so`, `ar` —
 | `GTM_ROADMAP.md` | Hargeisa launch phases, KPIs, risks |
 | `SECURITY_REMEDIATION_PLAN.md` | Audit findings (2026-10-03), fix plan per finding, status, open decisions |
 | `CASH_IN_CASH_OUT.md` | Agent cash-in/cash-out: flow steps, ledger entries, guards, threat model |
+| `COUNTER_DISPLAY.md` | Counter display tablet: pairing, state doc, tablet scans, threat model, shop setup, runbook, rollout |
 | `MANUAL_TOPUP_GUIDE.md` | Agent top-up operational flow |
 | `TESTFLIGHT_QUICKSTART.md` | One-time Apple/signing setup |
