@@ -298,6 +298,18 @@ select {
 }
 input::placeholder,
 textarea::placeholder { color: var(--faint); }
+/* The rule above flattens every input into a text box; a checkbox needs its
+   own box and tick back, or it can't show whether it is ticked. */
+input[type="checkbox"] {
+  appearance: auto;
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  padding: 0;
+  flex: none;
+  accent-color: var(--accent, #1a56ff);
+  cursor: pointer;
+}
 input:hover,
 textarea:hover,
 select:hover { background-color: var(--fill-hover); }
