@@ -240,9 +240,26 @@ export interface KycDocument {
 }
 
 // Wallet types
+/**
+ * A wallet's balance in one currency other than its main one. Amounts are the
+ * currency's smallest unit: whole shillings for SLS.
+ */
+export interface CurrencyPocket {
+  balance: number;
+  totalReceived: number;
+  totalSent: number;
+}
+
 export interface Wallet {
-  balance: number; // Stored in cents
+  /** The main (dollar) balance, in cents. */
+  balance: number;
+  /** The main pocket's currency. Every wallet is USD; shillings live in `sls`. */
   currency: "USD" | "SLS";
+  /**
+   * Shillings, in whole shillings. Absent until the first shilling arrives,
+   * which reads as zero. Written only by the ledger, like `balance`.
+   */
+  sls?: CurrencyPocket;
   totalReceived: number;
   totalSent: number;
   lastTransactionAt: FirebaseFirestore.Timestamp | null;

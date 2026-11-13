@@ -81,6 +81,14 @@ describe("deleting a due account", () => {
     expect(db.get("linked_numbers/zaad_252634000002")).toMatchObject({ uid: "u2" });
   });
 
+  it("won't delete an account that still holds shillings", async () => {
+    const db = seed();
+    db.store.set("wallets/u1", wallet(0, { sls: { balance: 500, totalSent: 0, totalReceived: 500 } }));
+    await expect(deleteDueAccount("u1", NOW)).resolves.toBe("has_money");
+    expect(db.get("users/u1")).toMatchObject({ fullName: "Hodan Ali", deletionBlocked: "has_money" });
+    expect(db.get("wallets/u1")!.sls.balance).toBe(500);
+  });
+
   it("holds a later payment from their old number instead of crediting the closed wallet", async () => {
     const db = seed();
     await deleteDueAccount("u1", NOW);

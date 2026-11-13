@@ -50,6 +50,7 @@ import {
   ApiRefund,
   isLiveObject,
 } from "./types";
+import { API_CURRENCY_CODES, pushAmount } from "../utils/money";
 
 const MAX_REASON = 200;
 
@@ -73,7 +74,7 @@ export function serializeRefund(id: string, refund: ApiRefund) {
     charge: refund.chargeId,
     amount: refund.amount,
     fee_returned: refund.feeReturned,
-    currency: "USD",
+    currency: API_CURRENCY_CODES[refund.currency ?? "USD"] ?? "USD",
     reason: refund.reason ?? null,
     status: "succeeded",
     transaction_id: refund.transactionId ?? null,
@@ -188,6 +189,7 @@ export async function createRefund(
           merchantId: charge.merchantId,
           livemode: false,
           amount: plan.amount,
+          currency: charge.currency ?? "USD",
           feeReturned: plan.feeReturned,
           ...(trimmedReason ? { reason: trimmedReason } : {}),
           keyId: caller.keyId,
@@ -259,6 +261,7 @@ export async function createRefund(
         livemode: true,
         customerId: charge.paidBy,
         amount,
+        currency: charge.currency ?? "USD",
         feeReturned,
         ...(trimmedReason ? { reason: trimmedReason } : {}),
         journalEntryId,
@@ -328,8 +331,8 @@ export async function createRefund(
   notifyUser(
     refund.customerId,
     "refund_issued",
-    { key: "refund.received", params: { amount: `USD ${(refund.amount / 100).toFixed(2)}` } },
-    { type: "refund_issued", amount: refund.amount.toString(), currency: "USD", merchantId: refund.merchantId }
+    { key: "refund.received", params: { amount: pushAmount(refund.amount, refund.currency ?? "USD") } },
+    { type: "refund_issued", amount: refund.amount.toString(), currency: refund.currency ?? "USD", merchantId: refund.merchantId }
   ).catch((err) => console.error("Failed to notify customer of refund:", err));
 
   return { id: refundRef.id, refund, replayed: false };

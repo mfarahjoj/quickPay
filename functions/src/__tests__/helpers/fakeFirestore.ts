@@ -11,16 +11,28 @@ import * as admin from "firebase-admin";
 
 type Data = Record<string, any>;
 
-function applyTransforms(base: Data | undefined, patch: Data): Data {
+function applyTransforms(base: Data | undefined, patch: Data, dotted = false): Data {
   const out: Data = { ...(base ?? {}) };
   for (const [key, value] of Object.entries(patch)) {
+    // update() reads "a.b" as the field b inside map a, as Firestore does;
+    // set() and create() take keys literally.
+    let target = out;
+    let field = key;
+    if (dotted && key.includes(".")) {
+      const parts = key.split(".");
+      field = parts.pop()!;
+      for (const part of parts) {
+        target[part] = target[part] && typeof target[part] === "object" ? { ...target[part] } : {};
+        target = target[part];
+      }
+    }
     const kind = value?.constructor?.name;
     if (kind === "NumericIncrementTransform") {
-      out[key] = (typeof out[key] === "number" ? out[key] : 0) + value.operand;
+      target[field] = (typeof target[field] === "number" ? target[field] : 0) + value.operand;
     } else if (kind === "DeleteTransform") {
-      delete out[key];
+      delete target[field];
     } else {
-      out[key] = value;
+      target[field] = value;
     }
   }
   return out;
@@ -80,7 +92,7 @@ export function fakeFirestore(seed: Record<string, Data> = {}): FakeDb {
     },
     update: (path: string, d: Data) => {
       if (!store.has(path)) throw new Error(`NOT_FOUND ${path}`);
-      store.set(path, applyTransforms(store.get(path), d));
+      store.set(path, applyTransforms(store.get(path), d, true));
     },
     delete: (path: string) => {
       store.delete(path);

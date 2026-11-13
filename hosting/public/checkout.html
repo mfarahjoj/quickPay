@@ -373,8 +373,12 @@
       });
     }
 
-    function money(cents) {
-      return '$' + (cents / 100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    // Amounts are in the currency's smallest unit: cents, or whole shillings.
+    function money(amount, currency) {
+      if (currency === 'SLSH') {
+        return String(Math.round(amount)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+      }
+      return '$' + (amount / 100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     }
 
     function safeHttpsUrl(u) {
@@ -417,7 +421,7 @@
           '<div class="avatar" aria-hidden="true">' + esc(name.charAt(0).toUpperCase()) + '</div>' +
           '<div class="pay-to">' + t('payTo', { merchant: '<strong>' + esc(name) + '</strong>' }) + '</div>' +
         '</div>' +
-        '<div class="amount">' + money(charge.amount) + '<small>' + esc(charge.currency) + '</small></div>' +
+        '<div class="amount">' + money(charge.amount, charge.currency) + '<small>' + esc(charge.currency) + '</small></div>' +
         (charge.reference ? '<div class="ref">' + esc(t('reference', { ref: charge.reference })) + '</div>' : '')
       );
     }

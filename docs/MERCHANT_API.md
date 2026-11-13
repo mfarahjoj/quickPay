@@ -6,7 +6,7 @@ the customer approves it in the Zapp Pay app with their PIN; you get a webhook
 nothing moves until the customer approves.
 
 - **Base URL:** `https://zapppay.web.app/v1`
-- **Money:** integer **cents**, currency `USD`. `1250` = $12.50.
+- **Money:** integers in the currency's smallest unit: `USD` in **cents** (`1250` = $12.50), `SLSH` in **whole shillings** (`30000` = 30,000 SLSH). A charge is paid from the customer's balance in that currency; Zapp never converts.
 - **Format:** JSON in, JSON out.
 
 Code: `functions/src/api/`. Ledger templates: `LEDGER_ARCHITECTURE.md` §3.4.
@@ -64,7 +64,7 @@ curl https://zapppay.web.app/v1/charges \
 | Field | | |
 |---|---|---|
 | `amount` | required | Positive integer, cents |
-| `currency` | optional | `USD` only (default) |
+| `currency` | optional | `USD` (default) or `SLSH` |
 | `reference` | optional | ≤128 chars. Shown to the customer and on both sides' receipts |
 | `metadata` | optional | ≤20 string key/values, for your own bookkeeping. Never shown to the customer |
 | `customer_phone` | optional | `+252…`. If it belongs to a Zapp customer, they get a push notification and **only they** can pay the charge. The response is the same whether or not the number has an account |

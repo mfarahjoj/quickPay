@@ -17,8 +17,9 @@
  */
 
 import * as admin from "firebase-admin";
-import { Wallet } from "../types";
-import { JournalEntryDoc, JournalEntryInput, JournalRefs } from "./types";
+import { CurrencyPocket, Wallet } from "../types";
+import { JournalEntryDoc, JournalEntryInput, JournalRefs, LedgerCurrency } from "./types";
+import { balanceKey } from "./currency";
 import { enforcesNonNegative, isUserAccount, userIdOf, isAgentAccount, agentIdOf } from "./accounts";
 import { AccountDelta, aggregateDeltas, validateEntry } from "./validate";
 
@@ -133,11 +134,14 @@ export async function prepareJournalEntry(
     }
     const wallet = snap.data() as Wallet;
 
-    // Wallets written before `currency` was stored are all USD.
+    // Wallets written before `currency` was stored are all USD. Dollars go to
+    // the main balance, which must be a dollar one; shillings go to the
+    // wallet's shilling pocket, which every wallet has.
     const walletCurrency = wallet.currency ?? "USD";
-    if (walletCurrency !== input.currency) {
+    if (input.currency === "USD" && walletCurrency !== "USD") {
       throw new CurrencyMismatchError(d.account, walletCurrency, input.currency);
     }
+    const pocket = walletPocket(wallet, input.currency);
 
     // Frozen accounts may still receive (see FrozenAccountError) but never
     // spend, except when ops take back value through an adjustment.
@@ -145,13 +149,14 @@ export async function prepareJournalEntry(
       throw new FrozenAccountError(d.account);
     }
 
-    const newBalance = wallet.balance + d.delta;
+    const newBalance = pocket.balance + d.delta;
     if (newBalance < 0 && enforcesNonNegative(d.account)) {
       throw new InsufficientBalanceError(d.account);
     }
     // Money owed on a lost dispute stays put until that dispute is settled.
     // Only debits are checked: a wallet below its reserve must still receive.
-    const reserved = wallet.reservedCents ?? 0;
+    // Disputes reserve dollars only.
+    const reserved = input.currency === "USD" ? wallet.reservedCents ?? 0 : 0;
     if (d.delta < 0 && reserved > 0 && newBalance < reserved && input.useReserved !== true) {
       throw new InsufficientBalanceError(d.account);
     }
@@ -163,7 +168,9 @@ export async function prepareJournalEntry(
   // read for its frozen flag; the float lives in ledger_balances.
   const agentDeltas = deltas.filter((d) => isAgentAccount(d.account));
   const agentSnaps = await Promise.all(
-    agentDeltas.map((d) => tx.get(db.collection(LEDGER_BALANCES_COLLECTION).doc(d.account)))
+    agentDeltas.map((d) =>
+      tx.get(db.collection(LEDGER_BALANCES_COLLECTION).doc(balanceKey(d.account, input.currency)))
+    )
   );
   const agentWalletSnaps = await Promise.all(
     agentDeltas.map((d) => tx.get(db.collection("wallets").doc(agentIdOf(d.account))))
@@ -202,11 +209,12 @@ export async function prepareJournalEntry(
     transaction.create(entryRef, entryDoc);
 
     userDeltas.forEach((d, i) => {
-      const wallet = walletSnaps[i].data() as Wallet;
+      const pocket = walletPocket(walletSnaps[i].data() as Wallet, input.currency);
+      const prefix = input.currency === "USD" ? "" : `${pocketField(input.currency)}.`;
       transaction.update(db.collection("wallets").doc(userIdOf(d.account)), {
-        balance: resultingBalances.get(d.account),
-        totalSent: wallet.totalSent + d.debits,
-        totalReceived: wallet.totalReceived + d.credits,
+        [`${prefix}balance`]: resultingBalances.get(d.account),
+        [`${prefix}totalSent`]: pocket.totalSent + d.debits,
+        [`${prefix}totalReceived`]: pocket.totalReceived + d.credits,
         lastTransactionAt: now,
         updatedAt: now,
       });
@@ -215,7 +223,7 @@ export async function prepareJournalEntry(
     // Float is read-modify-write, like a wallet, so its check above holds.
     agentDeltas.forEach((d) => {
       transaction.set(
-        db.collection(LEDGER_BALANCES_COLLECTION).doc(d.account),
+        db.collection(LEDGER_BALANCES_COLLECTION).doc(balanceKey(d.account, input.currency)),
         { account: d.account, balance: resultingBalances.get(d.account), currency: input.currency, updatedAt: now },
         { merge: true }
       );
@@ -230,17 +238,36 @@ export async function prepareJournalEntry(
   return { alreadyPosted: false, resultingBalances, write: writeEntry };
 }
 
+/** The wallet field holding a non-main currency's pocket. */
+function pocketField(currency: LedgerCurrency): "sls" {
+  if (currency !== "SLS") throw new Error(`No wallet pocket for ${currency}`);
+  return "sls";
+}
+
+/** A wallet's balance and totals in one currency; an absent pocket is empty. */
+export function walletPocket(wallet: Wallet, currency: LedgerCurrency): CurrencyPocket {
+  if (currency === "USD") {
+    return { balance: wallet.balance, totalSent: wallet.totalSent, totalReceived: wallet.totalReceived };
+  }
+  const pocket = wallet[pocketField(currency)];
+  return {
+    balance: pocket?.balance ?? 0,
+    totalSent: pocket?.totalSent ?? 0,
+    totalReceived: pocket?.totalReceived ?? 0,
+  };
+}
+
 function writeNonUserProjection(
   tx: FirebaseFirestore.Transaction,
   d: AccountDelta,
-  currency: string,
+  currency: LedgerCurrency,
   now: FirebaseFirestore.Timestamp
 ): void {
   if (d.delta === 0) return;
   const ref = admin
     .firestore()
     .collection(LEDGER_BALANCES_COLLECTION)
-    .doc(d.account);
+    .doc(balanceKey(d.account, currency));
   tx.set(
     ref,
     {

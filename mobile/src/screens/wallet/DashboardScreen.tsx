@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import QRCode from 'react-native-qrcode-svg';
 import { useWallet } from '../../hooks/useWallet';
+import { formatMoney, leadCurrency } from '../../utils/money';
 import { useTransactions } from '../../hooks/useTransactions';
 import { typography, spacing, borderRadius, makeStyles, useColors, useTheme, wallpaper, tints } from '../../theme';
 import { CURRENCY_SYMBOL } from '../../config/constants';
@@ -519,7 +520,7 @@ export default function DashboardScreen({ navigation }: Props) {
       ))}
     </View>
   );
-  const nudge = (wallet?.balance ?? 0) === 0 && (
+  const nudge = (wallet?.balance ?? 0) === 0 && (wallet?.slsBalance ?? 0) === 0 && (
     <TouchableOpacity
       style={styles.nudgeBanner}
       activeOpacity={0.85}
@@ -606,8 +607,8 @@ export default function DashboardScreen({ navigation }: Props) {
               onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
               topInset={insets.top}
               initials={initialsOf(profile?.fullName)}
-              balance={wallet?.balance ?? 0}
-              currency={wallet?.currency || 'USD'}
+              usdCents={wallet?.balanceCents ?? 0}
+              slsBalance={wallet?.slsBalance ?? 0}
               balanceVisible={balanceVisible}
               onToggleBalance={onToggleBalance}
               language={profile?.preferredLanguage}
@@ -760,16 +761,29 @@ export default function DashboardScreen({ navigation }: Props) {
           </View>
           <Animated.View style={[balanceVeilStyle, styles.balanceAmountWrap]}>
             {balanceVisible ? (
-              <AnimatedNumber
-                value={wallet?.balance ?? 0}
-                prefix={CURRENCY_SYMBOL}
-                decimals={2}
-                style={styles.balanceAmount}
-              />
+              leadCurrency(wallet?.balanceCents ?? 0, wallet?.slsBalance ?? 0) === 'SLS' ? (
+                <Text style={styles.balanceAmount} numberOfLines={1} adjustsFontSizeToFit>
+                  {formatMoney(wallet?.slsBalance ?? 0, 'SLS')}
+                </Text>
+              ) : (
+                <AnimatedNumber
+                  value={wallet?.balance ?? 0}
+                  prefix={CURRENCY_SYMBOL}
+                  decimals={2}
+                  style={styles.balanceAmount}
+                />
+              )
             ) : (
               <Text style={styles.balanceAmount}>••••••</Text>
             )}
           </Animated.View>
+          {balanceVisible &&
+          leadCurrency(wallet?.balanceCents ?? 0, wallet?.slsBalance ?? 0) === 'SLS' &&
+          (wallet?.balanceCents ?? 0) > 0 ? (
+            <Text style={styles.balanceLabel}>
+              {t('dashboard.alsoBalance', { amount: formatMoney(wallet?.balanceCents ?? 0, 'USD') })}
+            </Text>
+          ) : null}
         </TouchableOpacity>
 
         {/* Action tiles: cascade in, squish on press, icons react in character */}

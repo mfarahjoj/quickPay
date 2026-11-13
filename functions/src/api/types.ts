@@ -62,8 +62,10 @@ export interface ApiCharge {
   merchantName: string;
   /** Key hash that raised the charge. */
   keyId: string;
-  amount: number; // Integer cents
-  currency: "USD";
+  /** In the currency's smallest unit: cents, or whole shillings. */
+  amount: number;
+  /** The ledger's code. The API shows SLS as "SLSH". */
+  currency: "USD" | "SLS";
   status: ApiChargeStatus;
   reference?: string;
   metadata?: Record<string, string>;
@@ -99,7 +101,10 @@ export interface ApiRefund {
   livemode?: boolean;
   /** The customer refunded. Absent in test mode, where nobody paid. */
   customerId?: string;
+  /** In the charge's currency. */
   amount: number;
+  /** The charge's currency. Absent on refunds from before shillings: USD. */
+  currency?: "USD" | "SLS";
   /** Platform fee handed back with this refund. */
   feeReturned: number;
   reason?: string;

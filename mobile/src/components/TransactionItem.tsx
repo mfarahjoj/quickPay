@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { Transaction } from '../types';
 import { typography, spacing, borderRadius, makeStyles, useColors, useTheme, tints, type Tint } from '../theme';
-import { CURRENCY_SYMBOL } from '../config/constants';
+import { formatMajor } from '../utils/money';
 import { initialsOf } from '../utils/initials';
 import {
   ArrowInIcon,
@@ -75,8 +75,7 @@ function ClassicTransactionRow({ transaction, onPress }: TransactionItemProps) {
           ]}
         >
           {transaction.isIncoming ? '+' : '-'}
-          {CURRENCY_SYMBOL}
-          {transaction.amount.toFixed(2)}
+          {formatMajor(transaction.amount, transaction.currency)}
         </Text>
         {voided || pending ? (
           <Text style={styles.statusText}>
@@ -235,8 +234,7 @@ function LightTransactionRow({ transaction, onPress }: TransactionItemProps) {
         ]}
       >
         {transaction.isIncoming ? '+' : '\u2212'}
-        {CURRENCY_SYMBOL}
-        {transaction.amount.toFixed(2)}
+        {formatMajor(transaction.amount, transaction.currency)}
       </Text>
     </TouchableOpacity>
   );

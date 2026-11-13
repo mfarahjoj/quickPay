@@ -1,6 +1,6 @@
 # Zapp Pay (repo: QuickPay)
 
-Somaliland-focused mobile-money platform. **Zapp Pay** is the consumer brand; QuickPay is the internal/repo name. Currency is USD, amounts are **integer cents** everywhere.
+Somaliland-focused mobile-money platform. **Zapp Pay** is the consumer brand; QuickPay is the internal/repo name. Every wallet holds **dollars and shillings**, never converted into each other; amounts are integers in the currency's smallest unit (**cents** for USD, **whole shillings** for SLS). See `SHILLINGS.md`.
 
 - `mobile/` — React Native **customer** app (QR pay, top-up, remittance)
 - `merchant-app/` — React Native **merchant/agent** app (accept payments, agent top-ups)
@@ -57,5 +57,6 @@ Every user-facing string ships in **all three locales** — `en`, `so`, `ar` —
 | `SECURITY_REMEDIATION_PLAN.md` | Audit findings (2026-10-03), fix plan per finding, status, open decisions |
 | `CASH_IN_CASH_OUT.md` | Agent cash-in/cash-out: flow steps, ledger entries, guards, threat model |
 | `COUNTER_DISPLAY.md` | Counter display tablet: pairing, state doc, tablet scans, threat model, shop setup, runbook, rollout |
+| `SHILLINGS.md` | Dollar and shilling balances: units, ledger projections, limits at `slsPerUsd`, which flows take shillings |
 | `MANUAL_TOPUP_GUIDE.md` | Agent top-up operational flow |
 | `TESTFLIGHT_QUICKSTART.md` | One-time Apple/signing setup |

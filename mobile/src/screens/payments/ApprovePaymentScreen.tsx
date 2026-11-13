@@ -24,7 +24,7 @@ import { approveApiCharge, getApiCharge } from '../../services/apiCharge.service
 import { firestore } from '../../services/firebase.config';
 import { triggerHaptic } from '../../services/haptics.service';
 import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
-import { CURRENCY_SYMBOL } from '../../config/constants';
+import { formatMoney, toCurrency } from '../../utils/money';
 import { Springs } from '../../constants/springs';
 import { SuccessCheckIcon } from '../../components/icons/AuthIcons';
 import { AnimatedXMark, AnimatedWarning } from '../../components/icons/StatusIcons';
@@ -139,9 +139,11 @@ export default function ApprovePaymentScreen() {
   }, [step, resultRingScale, resultRingOpacity, resultTitleOp, resultTitleY, resultAmountOp, resultDetailsOp, resultBtnOp]);
 
   const shownAmount = liveAmount ?? amount;
-  const amountFormatted = (shownAmount / 100).toFixed(2);
-  const feeFormatted = (feeCents / 100).toFixed(2);
-  const totalFormatted = ((shownAmount + feeCents) / 100).toFixed(2);
+  // Each amount in the charge's own currency: "$12.50" or "30,000 SLSH".
+  const amountFormatted = formatMoney(shownAmount, currency);
+  const feeFormatted = formatMoney(feeCents, currency);
+  const totalFormatted = formatMoney(shownAmount + feeCents, currency);
+  const isShillings = toCurrency(currency) === 'SLS';
 
   const showResult = (kind: ResultKind, message: string, title = '') => {
     resultShown.current = true;
@@ -179,7 +181,7 @@ export default function ApprovePaymentScreen() {
           else if (c.status === 'expired') showClosed('expired');
           else if (c.status === 'succeeded') {
             if (c.paidByYou) {
-              setTransactionAmount(`${CURRENCY_SYMBOL}${(c.amount / 100).toFixed(2)}`);
+              setTransactionAmount(formatMoney(c.amount, c.currency));
               showResult('approved', t('payments.approve.alreadyPaid'));
             } else {
               showResult('closed', t('payments.approve.paidElsewhere'), t('payments.approve.unavailableTitle'));
@@ -240,7 +242,7 @@ export default function ApprovePaymentScreen() {
           if (d.status === 'cancelled') showClosed('cancelled');
           else if (d.status === 'expired') showClosed('expired');
           else if (d.status === 'approved') {
-            setTransactionAmount(`${CURRENCY_SYMBOL}${(d.amount / 100).toFixed(2)}`);
+            setTransactionAmount(formatMoney(d.amount, d.currency ?? currency));
             showResult('approved', t('payments.approve.alreadyPaid'));
           } else if (d.status === 'rejected') {
             showResult('declined', t('payments.approve.declinedMessage'));
@@ -301,11 +303,11 @@ export default function ApprovePaymentScreen() {
         setReceiptNumber(approved.receiptNumber ?? null);
       }
       triggerHaptic('success');
-      setTransactionAmount(`${CURRENCY_SYMBOL}${amountFormatted}`);
+      setTransactionAmount(amountFormatted);
       setResultKind('approved');
       setResultMessage(
         t(isCashOut ? 'payments.approve.cashOutSuccess' : 'payments.approve.successMessage', {
-          amount: `${CURRENCY_SYMBOL}${amountFormatted}`,
+          amount: amountFormatted,
           merchant: merchantName,
         })
       );
@@ -426,9 +428,9 @@ export default function ApprovePaymentScreen() {
             {t(isCashOut ? 'payments.approve.cashYouReceive' : 'payments.approve.totalAmount')}
           </Text>
           <Text style={styles.amountCardValue}>
-            {CURRENCY_SYMBOL}{amountFormatted}
+            {amountFormatted}
           </Text>
-          <Text style={styles.amountCardCurrency}>{currency}</Text>
+          {isShillings ? null : <Text style={styles.amountCardCurrency}>{currency}</Text>}
           {countdown}
         </View>
 
@@ -441,13 +443,13 @@ export default function ApprovePaymentScreen() {
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>{t('common.amount')}</Text>
             <Text style={styles.detailValue}>
-              {CURRENCY_SYMBOL}{amountFormatted}
+              {amountFormatted}
             </Text>
           </View>
           <View style={styles.divider} />
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>{t('common.fee')}</Text>
-            <Text style={styles.detailValue}>{CURRENCY_SYMBOL}{isCashOut ? feeFormatted : '0.00'}</Text>
+            <Text style={styles.detailValue}>{isCashOut ? feeFormatted : formatMoney(0, currency)}</Text>
           </View>
           <View style={styles.divider} />
           <View style={styles.detailRow}>
@@ -455,7 +457,7 @@ export default function ApprovePaymentScreen() {
               {isCashOut ? t('payments.approve.fromYourBalance') : t('common.total')}
             </Text>
             <Text style={[styles.detailValue, styles.detailValueBold]}>
-              {CURRENCY_SYMBOL}{isCashOut ? totalFormatted : amountFormatted}
+              {isCashOut ? totalFormatted : amountFormatted}
             </Text>
           </View>
           <View style={styles.divider} />
@@ -517,7 +519,7 @@ export default function ApprovePaymentScreen() {
           <Text style={styles.pinTitle}>{t('payments.approve.confirmPayment')}</Text>
           <Text style={styles.pinSubtitle}>
             {t('payments.approve.payTo', {
-              amount: `${CURRENCY_SYMBOL}${amountFormatted}`,
+              amount: amountFormatted,
               merchant: merchantName,
             })}
           </Text>

@@ -26,7 +26,7 @@ const payment: ReceivedPayment = {
   senderName: "Abdi Warsame",
   receivedAtMs: Date.UTC(2026, 9, 22, 9),
 };
-const limits = { topupMinCents: 500, topupMaxCents: 10000 };
+const limits = { topupMinCents: 500, topupMaxCents: 10000, slsPerUsd: 8000, shillings: true };
 const link = (status: LinkedNumber["status"]): LinkedNumber => ({
   uid: "u1", provider: "zaad", msisdn: "+252634123456", status,
 });
@@ -64,9 +64,27 @@ describe("decideReceipt", () => {
     expect(decideReceipt({ ...payment, amountCents: 10001 }, link("verified"), limits))
       .toEqual({ action: "suspense", reason: "above_max", uid: "u1" });
   });
-  it("holds shillings until shilling wallets exist", () => {
-    expect(decideReceipt({ ...payment, currency: "SLSH" }, link("verified"), limits).action).toBe("suspense");
-    expect(decideReceipt({ ...payment, currency: "SLSH" }, link("pending"), limits).action).toBe("suspense");
+  it("credits shillings, judging the dollar limits at the rate", () => {
+    const sls = { ...payment, currency: "SLSH" };
+    // $5 to $100 at 8,000 a dollar: 40,000 to 800,000 shillings.
+    expect(decideReceipt({ ...sls, amountCents: 40_000 }, link("verified"), limits).action).toBe("credit");
+    expect(decideReceipt({ ...sls, amountCents: 800_000 }, link("verified"), limits).action).toBe("credit");
+    // Shillings count rounded up to the cent, so the minimum is judged to
+    // within a fraction of a cent: 39,900 is $4.99.
+    expect(decideReceipt({ ...sls, amountCents: 39_900 }, link("verified"), limits))
+      .toEqual({ action: "suspense", reason: "below_min", uid: "u1" });
+    expect(decideReceipt({ ...sls, amountCents: 800_001 }, link("verified"), limits))
+      .toEqual({ action: "suspense", reason: "above_max", uid: "u1" });
+    expect(decideReceipt({ ...sls, amountCents: 800 }, link("pending"), limits).action).toBe("activate");
+  });
+  it("holds shillings for an agent's float, which is dollars only for now", () => {
+    const sls = { ...payment, currency: "SLSH", amountCents: 80_000 };
+    expect(decideReceipt(sls, link("verified"), { ...limits, shillings: false }))
+      .toEqual({ action: "suspense", reason: "currency", uid: "u1" });
+  });
+  it("holds a currency Zapp doesn't hold", () => {
+    expect(decideReceipt({ ...payment, currency: "KES" }, link("verified"), limits))
+      .toEqual({ action: "suspense", reason: "currency", uid: "u1" });
   });
 });
 
@@ -75,8 +93,8 @@ describe("journal templates", () => {
     const entries = [
       topupEntry(payment, "u1", "t1"),
       suspenseEntry(payment),
-      assignEntry("zaad_TX123456", 1000, "u1", "admin", "t2"),
-      refundEntry("zaad_TX123456", "zaad", 1000, "admin"),
+      assignEntry("zaad_TX123456", 1000, "USD", "u1", "admin", "t2"),
+      refundEntry("zaad_TX123456", "zaad", 1000, "USD", "admin"),
     ];
     for (const e of entries) {
       expect(sum(e.lines)).toBe(0);
@@ -90,6 +108,15 @@ describe("journal templates", () => {
       { account: "user:u1", debit: 0, credit: 1000 },
     ]);
     expect(suspenseEntry(payment).lines[1].account).toBe("platform:mm_suspense");
+  });
+  it("post a shilling payment in shillings", () => {
+    const sls = { ...payment, currency: "SLSH", amountCents: 30_000 };
+    const e = topupEntry(sls, "u1", "t1");
+    expect(e.currency).toBe("SLS");
+    expect(e.lines[1]).toEqual({ account: "user:u1", debit: 0, credit: 30_000 });
+    expect(suspenseEntry(sls).currency).toBe("SLS");
+    expect(assignEntry("zaad_X", 30_000, "SLS", "u1", "admin", "t2").currency).toBe("SLS");
+    expect(refundEntry("zaad_X", "zaad", 30_000, "SLS", "admin").currency).toBe("SLS");
   });
   it("the same SMS always makes the same entry ID", () => {
     expect(topupEntry(payment, "u1", "t1").entryId).toBe(topupEntry(payment, "u1", "t9").entryId);
@@ -149,6 +176,8 @@ describe("settings and dial codes", () => {
     expect(dialCode("zaad", "+252634000001", 10)).toBe("*880*0634000001*0.10#");
     expect(dialCode("zaad", "+252634000001", 1000)).toBe("*880*0634000001*10.00#");
     expect(dialCode("edahab", "+252654000001", 1000)).toBeNull();
+    // Telesom's shilling transfer: number without the leading 0, whole shillings.
+    expect(dialCode("zaad", "+252634000001", 30_000, "SLS")).toBe("*220*634000001*30000#");
   });
 });
 

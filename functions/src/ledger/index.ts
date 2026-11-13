@@ -1,5 +1,6 @@
 export * from "./types";
 export * from "./accounts";
+export * from "./currency";
 export {
   validateEntry,
   aggregateDeltas,
@@ -7,6 +8,7 @@ export {
 } from "./validate";
 export {
   prepareJournalEntry,
+  walletPocket,
   InsufficientBalanceError,
   WalletNotFoundError,
   FrozenAccountError,

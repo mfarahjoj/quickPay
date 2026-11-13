@@ -6,7 +6,7 @@ import { Wallpaper } from '../Wallpaper';
 import { LanguageSelector } from '../LanguageSelector';
 import { BellIcon, CashIcon, EyeIcon, PersonIcon, PlusIcon, QrIcon, ScanIcon } from '../icons/LineIcons';
 import { wallpaper } from '../../theme';
-import { CURRENCY_SYMBOL } from '../../config/constants';
+import { formatMoney, leadCurrency, moneyParts } from '../../utils/money';
 import type { PreferredLanguage } from '../../types';
 
 /** How far the wallpaper runs on under the first card below the header. */
@@ -16,8 +16,10 @@ interface Props {
   topInset: number;
   /** The customer's initials; a person icon when there are none. */
   initials: string;
-  balance: number;
-  currency: string;
+  /** The dollar balance, in cents. */
+  usdCents: number;
+  /** The shilling balance, in whole shillings. */
+  slsBalance: number;
   balanceVisible: boolean;
   onToggleBalance: () => void;
   language?: PreferredLanguage;
@@ -40,7 +42,11 @@ interface Props {
  */
 export function LightHomeHeader(props: Props) {
   const { t } = useTranslation();
-  const [whole, cents] = props.balance.toFixed(2).split('.');
+  // Shillings lead; the other balance shows underneath when there is any.
+  const lead = leadCurrency(props.usdCents, props.slsBalance);
+  const leadAmount = lead === 'SLS' ? props.slsBalance : props.usdCents;
+  const { main, tail } = moneyParts(leadAmount, lead);
+  const other = lead === 'SLS' ? props.usdCents : 0;
 
   const actions = [
     {
@@ -93,7 +99,7 @@ export function LightHomeHeader(props: Props) {
           <View style={styles.labelRow}>
             <View style={styles.pill}>
               <Text style={styles.pillText}>
-                {t('dashboard.availableBalance')} · {props.currency}
+                {t('dashboard.availableBalance')} · {lead === 'SLS' ? 'SLSH' : 'USD'}
               </Text>
             </View>
             <Pressable
@@ -111,15 +117,19 @@ export function LightHomeHeader(props: Props) {
               style={styles.amount}
               numberOfLines={1}
               adjustsFontSizeToFit
-              accessibilityLabel={`${CURRENCY_SYMBOL}${props.balance.toFixed(2)}`}
+              accessibilityLabel={formatMoney(leadAmount, lead)}
             >
-              {CURRENCY_SYMBOL}
-              {whole}
-              <Text style={styles.cents}>.{cents}</Text>
+              {main}
+              <Text style={styles.cents}>{tail}</Text>
             </Text>
           ) : (
             <Text style={styles.amount}>••••••</Text>
           )}
+          {props.balanceVisible && other > 0 ? (
+            <Text style={styles.otherBalance}>
+              {t('dashboard.alsoBalance', { amount: formatMoney(other, 'USD') })}
+            </Text>
+          ) : null}
         </View>
 
         <View style={styles.actions}>
@@ -244,6 +254,13 @@ const styles = StyleSheet.create({
   cents: {
     fontSize: 34,
     letterSpacing: -1,
+  },
+  otherBalance: {
+    marginTop: 2,
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 15,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
   },
   actions: {
     flexDirection: 'row',

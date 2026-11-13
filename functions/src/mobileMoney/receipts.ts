@@ -9,6 +9,7 @@ import {
   LinkedNumber,
   ReceivedPayment,
   decideReceipt,
+  paymentCurrency,
   floatEntry,
   limitsFor,
   linkId,
@@ -84,7 +85,8 @@ async function post(
       provider: payment.provider,
       operatorTxnId: payment.operatorTxnId,
       amountCents: payment.amountCents,
-      currency: payment.currency,
+      // The ledger's code: "USD" or "SLS" (the SMS says "SLSH").
+      currency: paymentCurrency(payment) ?? payment.currency,
       senderMsisdn: payment.senderMsisdn,
       senderName: payment.senderName,
       receivedAt: admin.firestore.Timestamp.fromMillis(payment.receivedAtMs),
@@ -119,7 +121,7 @@ async function post(
       toUserId: decision.uid,
       participants: [decision.uid],
       amount: payment.amountCents,
-      currency: payment.currency,
+      currency: paymentCurrency(payment) ?? payment.currency,
       status: "completed",
       description: decision.action === "activate"
         ? `${label} number linked`
@@ -153,7 +155,7 @@ async function post(
   });
 
   if (outcome.notify && outcome.uid) {
-    await notifyTopupCompleted(outcome.uid, payment.amountCents, payment.currency, payment.provider)
+    await notifyTopupCompleted(outcome.uid, payment.amountCents, paymentCurrency(payment) ?? "USD", payment.provider)
       .catch((e) => console.error("mobile money: notify failed", e));
   }
   const { notify: _notify, ...result } = outcome;
