@@ -7,7 +7,7 @@ import { prepareJournalEntry } from "../ledger";
 import { encrypt } from "../utils/encryption";
 import { notifyTopupCompleted } from "../utils/notifications";
 import { Transaction } from "../types";
-import { Provider, assignEntry, assignFloatEntry, isProvider, normaliseSomaliMsisdn, refundEntry } from "./core";
+import { paymentCurrency, Provider, assignEntry, assignFloatEntry, isProvider, normaliseSomaliMsisdn, refundEntry } from "./core";
 import { isAgentRole } from "../utils/roles";
 import { LISTENER_DEVICES, LISTENER_SMS, RECEIPTS } from "./receipts";
 import { COLLECTION_CONFIG } from "./linking";
@@ -55,15 +55,19 @@ export const adminAssignMobileMoney = https.onCall({ enforceAppCheck: true }, as
     if (!snap.exists) throw new https.HttpsError("not-found", "No such payment");
     const r = snap.data()!;
     if (r.status !== "held") throw new https.HttpsError("failed-precondition", `This payment is already ${r.status}`);
-    if (r.currency !== "USD") throw new https.HttpsError("failed-precondition", "Only dollar payments can be credited for now");
+    const currency = paymentCurrency(r as { currency: string });
+    if (!currency) throw new https.HttpsError("failed-precondition", `Zapp can't hold ${r.currency}`);
     const userSnap = await tx.get(db.collection("users").doc(uid));
     if (!userSnap.exists) throw new https.HttpsError("not-found", "No such customer");
     // Money from an agent buys float, as it would have if it had matched.
     const forFloat = isAgentRole(userSnap.get("accountType"));
+    if (forFloat && currency !== "USD") {
+      throw new https.HttpsError("failed-precondition", "Agents' float is in dollars only for now. Send it back instead.");
+    }
 
     const entry = forFloat
-      ? assignFloatEntry(receiptId, r.amountCents, uid, actor.uid, transactionId)
-      : assignEntry(receiptId, r.amountCents, uid, actor.uid, transactionId);
+      ? assignFloatEntry(receiptId, r.amountCents, currency, uid, actor.uid, transactionId)
+      : assignEntry(receiptId, r.amountCents, currency, uid, actor.uid, transactionId);
     const prepared = await prepareJournalEntry(tx, entry);
     prepared.write(tx);
     const now = admin.firestore.Timestamp.now();
@@ -74,7 +78,7 @@ export const adminAssignMobileMoney = https.onCall({ enforceAppCheck: true }, as
       toUserId: uid,
       participants: [uid],
       amount: r.amountCents,
-      currency: r.currency,
+      currency,
       status: "completed",
       description: forFloat
         ? `Float bought with ${r.provider === "zaad" ? "Zaad" : "eDahab"}`
@@ -94,7 +98,7 @@ export const adminAssignMobileMoney = https.onCall({ enforceAppCheck: true }, as
       after: { status: "assigned", uid, amountCents: r.amountCents, ...(forFloat ? { creditedTo: "float" } : {}) },
       journalEntryId: entry.entryId,
     });
-    return { amountCents: r.amountCents as number, currency: r.currency as string, provider: r.provider as string };
+    return { amountCents: r.amountCents as number, currency, provider: r.provider as string };
   });
   await notifyTopupCompleted(uid, result.amountCents, result.currency, result.provider)
     .catch((e) => console.error("mobile money: notify failed", e));
@@ -121,7 +125,9 @@ export const adminRefundMobileMoney = https.onCall({ enforceAppCheck: true }, as
     if (!snap.exists) throw new https.HttpsError("not-found", "No such payment");
     const r = snap.data()!;
     if (r.status !== "held") throw new https.HttpsError("failed-precondition", `This payment is already ${r.status}`);
-    const entry = refundEntry(receiptId, r.provider as Provider, r.amountCents, actor.uid);
+    const currency = paymentCurrency(r as { currency: string });
+    if (!currency) throw new https.HttpsError("failed-precondition", `Zapp can't hold ${r.currency}`);
+    const entry = refundEntry(receiptId, r.provider as Provider, r.amountCents, currency, actor.uid);
     const prepared = await prepareJournalEntry(tx, entry);
     prepared.write(tx);
     const now = admin.firestore.Timestamp.now();

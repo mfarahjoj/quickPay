@@ -54,6 +54,14 @@ describe("spend-limit aggregation index", () => {
     ).toBe(true);
   });
 
+  // The shilling part of the same sum (sumSpendSince takes it out and adds
+  // it back at the limits rate): currency is one more equality filter.
+  it("covers the shilling-only sum too", () => {
+    expect(
+      hasIndex("transactions", ["fromUserId", "currency", "type", "createdAt", "amount"])
+    ).toBe(true);
+  });
+
   it("aggregates a field the transactions writers actually set", () => {
     expect([...SPEND_TX_TYPES]).toEqual(["payment", "withdrawal"]);
   });

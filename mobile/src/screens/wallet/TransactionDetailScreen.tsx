@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Share, TouchableOpacity } from 'rea
 import { useTranslation } from 'react-i18next';
 import { Header, Button, Card } from '../../components';
 import { typography, spacing, borderRadius, makeStyles } from '../../theme';
-import { CURRENCY_SYMBOL } from '../../config/constants';
+import { formatMajor, toCurrency } from '../../utils/money';
 import { Transaction } from '../../types';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -33,7 +33,7 @@ export default function TransactionDetailScreen({ navigation, route }: Props) {
     const receiptText = [
       t('wallet.detail.receiptTitle'),
       '----------------',
-      `Amount: ${transaction.isIncoming ? '+' : '-'}${CURRENCY_SYMBOL}${transaction.amount.toFixed(2)}`,
+      `Amount: ${transaction.isIncoming ? '+' : '-'}${formatMajor(transaction.amount, transaction.currency)}`,
       `Status: ${transaction.status}`,
       `Date: ${transaction.createdAt.toLocaleDateString()} ${transaction.createdAt.toLocaleTimeString()}`,
       transaction.reference ? `${t('common.reference')}: ${transaction.reference}` : '',
@@ -79,14 +79,13 @@ export default function TransactionDetailScreen({ navigation, route }: Props) {
         <Card style={styles.amountCard}>
           <Text style={[styles.amount, transaction.isIncoming ? styles.amountIncoming : styles.amountOutgoing]}>
             {transaction.isIncoming ? '+' : '-'}
-            {CURRENCY_SYMBOL}
-            {transaction.amount.toFixed(2)}
+            {formatMajor(transaction.amount, transaction.currency)}
           </Text>
           <Text style={styles.status}>{statusLabel}</Text>
           {transaction.refundedAt ? (
             <Text style={styles.refunded}>{t('wallet.detail.refunded')}</Text>
           ) : null}
-          <Text style={styles.currency}>{transaction.currency}</Text>
+          <Text style={styles.currency}>{toCurrency(transaction.currency) === 'SLS' ? 'SLSH' : transaction.currency}</Text>
         </Card>
 
         <Card style={styles.detailsCard}>

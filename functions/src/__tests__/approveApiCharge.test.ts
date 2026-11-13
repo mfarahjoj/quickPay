@@ -140,7 +140,44 @@ describe("approveApiCharge", () => {
     await call();
     expect(mockedPin).toHaveBeenCalledWith(CUSTOMER, "123456");
     expect(mockedVelocity).toHaveBeenCalledWith(CUSTOMER);
-    expect(mockedLimits).toHaveBeenCalledWith(CUSTOMER, 5000, expect.anything());
+    expect(mockedLimits).toHaveBeenCalledWith(CUSTOMER, 5000, expect.anything(), undefined, "USD");
+  });
+
+  it("pays a shilling charge from the shilling balance, in shillings", async () => {
+    const db = seed(pendingCharge({ amount: 30_000, currency: "SLS" }));
+    db.store.set(`wallets/${CUSTOMER}`, {
+      ...db.get(`wallets/${CUSTOMER}`)!,
+      sls: { balance: 50_000, totalSent: 0, totalReceived: 50_000 },
+    });
+
+    const result = await call({ expectedAmount: 30_000 });
+
+    expect(result.success).toBe(true);
+    const entry = db.get(`journal_entries/${ENTRY}`)!;
+    expect(entry.currency).toBe("SLS");
+    // 1% of 30,000 is 300 shillings.
+    expect(entry.lines).toEqual(
+      expect.arrayContaining([
+        { account: `user:${CUSTOMER}`, debit: 30_000, credit: 0 },
+        { account: `user:${MERCHANT}`, debit: 0, credit: 29_700 },
+        { account: "platform:fees", debit: 0, credit: 300 },
+      ])
+    );
+    expect(db.get(`wallets/${CUSTOMER}`)!.balance).toBe(10_000);
+    expect(db.get(`wallets/${CUSTOMER}`)!.sls.balance).toBe(20_000);
+    expect(db.get(`wallets/${MERCHANT}`)!.sls.balance).toBe(29_700);
+    expect(db.get("ledger_balances/platform:fees@SLS")!.balance).toBe(300);
+    expect(db.get("ledger_balances/platform:fees")).toBeUndefined();
+    expect(db.get(`transactions/${result.data.transactionId}`)!.currency).toBe("SLS");
+    expect(mockedLimits).toHaveBeenCalledWith(CUSTOMER, 30_000, expect.anything(), undefined, "SLS");
+  });
+
+  it("refuses a shilling charge the customer can only cover in dollars", async () => {
+    const db = seed(pendingCharge({ amount: 3_000, currency: "SLS" }), 1_000_000);
+    const err = await call({ expectedAmount: 3_000 }).catch((e: any) => e);
+    expect(err.message).toMatch(/balance/i);
+    expect(db.get(`journal_entries/${ENTRY}`)).toBeUndefined();
+    expect(db.get(`wallets/${CUSTOMER}`)!.balance).toBe(1_000_000);
   });
 
   it("answers a retry with the original payment and posts nothing new", async () => {

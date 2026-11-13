@@ -24,7 +24,10 @@ export interface TopupInstructions {
   provider: MobileMoneyProvider;
   fromMsisdn: string;
   collectionNumber: string;
+  /** In the currency's smallest unit: cents, or whole shillings. */
   amountCents: number;
+  /** "USD" or "SLS". Absent from older servers: USD. */
+  currency?: string;
   dialCode: string | null;
 }
 
@@ -35,9 +38,10 @@ export async function startNumberLink(provider: MobileMoneyProvider, msisdn: str
 
 export async function getTopupInstructions(
   provider: MobileMoneyProvider,
-  amountCents: number
+  amountCents: number,
+  currency: 'USD' | 'SLS' = 'USD'
 ): Promise<TopupInstructions> {
-  const result = await functions().httpsCallable('getTopupInstructions')({ provider, amountCents });
+  const result = await functions().httpsCallable('getTopupInstructions')({ provider, amountCents, currency });
   return (result.data as { data: TopupInstructions }).data;
 }
 

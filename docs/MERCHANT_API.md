@@ -6,7 +6,7 @@ the customer approves it in the Zapp Pay app with their PIN; you get a webhook
 nothing moves until the customer approves.
 
 - **Base URL:** `https://zapppay.web.app/v1`
-- **Money:** integer **cents**, currency `USD`. `1250` = $12.50.
+- **Money:** integers in the currency's smallest unit: `USD` in **cents** (`1250` = $12.50), `SLSH` in **whole shillings** (`30000` = 30,000 SLSH). A charge is paid from the customer's balance in that currency; Zapp never converts.
 - **Format:** JSON in, JSON out.
 
 Code: `functions/src/api/`. Ledger templates: `LEDGER_ARCHITECTURE.md` §3.4.
@@ -64,7 +64,7 @@ curl https://zapppay.web.app/v1/charges \
 | Field | | |
 |---|---|---|
 | `amount` | required | Positive integer, cents |
-| `currency` | optional | `USD` only (default) |
+| `currency` | optional | `USD` (default) or `SLSH` |
 | `reference` | optional | ≤128 chars. Shown to the customer and on both sides' receipts |
 | `metadata` | optional | ≤20 string key/values, for your own bookkeeping. Never shown to the customer |
 | `customer_phone` | optional | `+252…`. If it belongs to a Zapp customer, they get a push notification and **only they** can pay the charge. The response is the same whether or not the number has an account |
@@ -147,6 +147,68 @@ Your wallet must hold enough to cover it (`409 insufficient_balance`).
 Payments taken through the API are refunded through the API only — the
 merchant app's refund button refuses them, so a payment can't be refunded
 twice through two doors.
+
+## 4a. Transfers (partners only)
+
+A partner — a platform Zapp ops has approved, such as Ridy paying its drivers —
+can pay any Zapp account from its own wallet. There is no PIN on either side,
+so a transfer needs **both**:
+
+- the merchant is a partner (console: user → API keys → *Partner transfers*,
+  super admins only), with a per-transfer and a daily cap in US dollars;
+- the key was issued from the console with **Can make transfers**. Keys a
+  merchant makes in the merchant app can never transfer.
+
+Anything else gets `403 transfers_not_enabled`.
+
+```http
+POST /v1/transfers
+Idempotency-Key: payout-ride-8812
+{
+  "amount": 23000,
+  "currency": "SLSH",
+  "destination_phone": "+252634111222",
+  "reference": "Ride 8812",
+  "metadata": { "rideId": "8812" }
+}
+```
+
+`currency` is required (`USD` in cents, `SLSH` in whole shillings) and is paid
+from the partner's balance in that currency. The transfer settles inside the
+request:
+
+| Result | Meaning | Same key again |
+|---|---|---|
+| `201`, `status: "succeeded"` | Money moved. `transaction_id` is the recipient's receipt. | Returns this transfer |
+| `201`, `status: "failed"`, `failure_code` | Nothing moved. `recipient_not_found` (no Zapp account), `recipient_inactive` (frozen, closed, or no PIN yet). | Returns this transfer: fix the number and use a new key |
+| `409 insufficient_balance`, `409 daily_limit_reached`, `409 account_frozen` | Nothing moved, nothing recorded. | Try again later with the same key |
+| `400 amount_over_limit` | Over the per-transfer cap. | — |
+
+There are no transfer webhooks: the response is final. `GET /v1/transfers/{id}`
+returns the same object.
+
+Caps are in US cents; shillings count at the shilling rate in Zapp's settings.
+Transfers carry no fee. A partner may have its own fee on its charges, set in
+the same console panel.
+
+### Account lookup
+
+```http
+GET /v1/accounts/lookup?phone=%2B252634111222
+→ { "object": "account_lookup", "phone": "+252634111222", "found": true,
+    "name_hint": "Ca*** Xa***", "livemode": true }
+```
+
+Whether a transfer to this number would succeed now, with the name mostly
+hidden, for checking a number when a worker saves it. Partners only, 20 a
+minute per key. A frozen or closed account reads `found: false`.
+
+### Test mode
+
+A test key with the transfers scope (issued from the console) runs the same
+checks and records the transfer, but looks nobody up and moves nothing. A
+`destination_phone` ending in `0000` fails as `recipient_not_found`, and looks
+up as not found.
 
 ## 5. Webhooks
 

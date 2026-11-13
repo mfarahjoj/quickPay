@@ -1,6 +1,7 @@
 import * as admin from "firebase-admin";
 import { Notification, PreferredLanguage } from "../types";
 import { PushMessage, renderPush, resolveLanguage } from "./pushTemplates";
+import { pushAmount } from "./money";
 
 /**
  * The language a user reads their pushes in: `preferredLanguage`, which both
@@ -165,11 +166,10 @@ export async function notifyPaymentReceived(
   currency: string,
   customerId: string
 ): Promise<void> {
-  const amountFormatted = (amount / 100).toFixed(2);
   await notifyUser(
     merchantId,
     "payment_received",
-    { key: "payment.received", params: { amount: `${currency} ${amountFormatted}` } },
+    { key: "payment.received", params: { amount: pushAmount(amount, currency) } },
     {
       type: "payment_received",
       amount: amount.toString(),
@@ -188,11 +188,10 @@ export async function notifyPaymentSent(
   currency: string,
   merchantId: string
 ): Promise<void> {
-  const amountFormatted = (amount / 100).toFixed(2);
   await notifyUser(
     customerId,
     "payment_sent",
-    { key: "payment.sent", params: { amount: `${currency} ${amountFormatted}` } },
+    { key: "payment.sent", params: { amount: pushAmount(amount, currency) } },
     {
       type: "payment_sent",
       amount: amount.toString(),
@@ -211,11 +210,10 @@ export async function notifyTopupCompleted(
   currency: string,
   method: string
 ): Promise<void> {
-  const amountFormatted = (amount / 100).toFixed(2);
   await notifyUser(
     userId,
     "topup_completed",
-    { key: "topup.completed", params: { amount: `${currency} ${amountFormatted}` } },
+    { key: "topup.completed", params: { amount: pushAmount(amount, currency) } },
     {
       type: "topup_completed",
       amount: amount.toString(),

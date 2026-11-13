@@ -3,6 +3,7 @@ import { https } from "firebase-functions/v2";
 import { requireAuth } from "../utils/validation";
 import { resolveAccountStatus } from "../utils/accountStatus";
 import { getRates } from "../config/rates";
+import { Currency, formatAmount, fromLimitCents, parseCurrency } from "../utils/money";
 import { LinkedNumber, Provider, isProvider, limitsFor, linkId, normaliseSomaliMsisdn } from "./core";
 import { isAgentRole } from "../utils/roles";
 import { LINKED_NUMBERS } from "./receipts";
@@ -20,11 +21,17 @@ export async function collectionNumber(provider: Provider): Promise<string | nul
   return normaliseSomaliMsisdn(entry.number);
 }
 
-/** Zaad's dollar transfer, prefilled: `*880*0634123456*0.10#`. Null for eDahab until its code is confirmed. */
-export function dialCode(provider: Provider, toMsisdn: string, cents: number): string | null {
+/**
+ * Zaad's transfer, prefilled. Dollars: `*880*0634123456*0.10#`. Shillings:
+ * `*220*634123456*30000#` (Telesom's shilling code takes the number without
+ * the leading 0 and whole shillings). Null for eDahab until its codes are
+ * confirmed.
+ */
+export function dialCode(provider: Provider, toMsisdn: string, amount: number, currency: Currency = "USD"): string | null {
   if (provider !== "zaad") return null;
-  const local = `0${toMsisdn.slice(4)}`;
-  return `*880*${local}*${(cents / 100).toFixed(2)}#`;
+  const national = toMsisdn.slice(4);
+  if (currency === "SLS") return `*220*${national}*${amount}#`;
+  return `*880*0${national}*${(amount / 100).toFixed(2)}#`;
 }
 
 /**
@@ -119,16 +126,25 @@ export const getTopupInstructions = https.onCall({ enforceAppCheck: true }, asyn
   const uid = request.auth!.uid;
   const provider = request.data?.provider;
   if (!isProvider(provider)) throw new https.HttpsError("invalid-argument", "Choose Zaad or eDahab");
+  // `amountCents` is in the currency's smallest unit: whole shillings for SLS.
   const amountCents = request.data?.amountCents;
+  const currency = parseCurrency(request.data?.currency);
+  if (!currency) throw new https.HttpsError("invalid-argument", "Top up in dollars or shillings");
   const rates = await getRates();
   const caller = (await admin.firestore().collection("users").doc(uid).get()).data();
   const creditsFloat = isAgentRole(caller?.accountType);
   const limits = limitsFor(rates, creditsFloat);
-  if (!Number.isInteger(amountCents) || amountCents < limits.topupMinCents || amountCents > limits.topupMaxCents) {
+  if (currency === "SLS" && !limits.shillings) {
+    throw new https.HttpsError("failed-precondition", "Agents buy float in dollars for now", { reason: "currency" });
+  }
+  // The limits are in dollars; shown to the customer in the currency they chose.
+  const min = fromLimitCents(limits.topupMinCents, currency, rates.slsPerUsd, "up");
+  const max = fromLimitCents(limits.topupMaxCents, currency, rates.slsPerUsd, "down");
+  if (!Number.isInteger(amountCents) || amountCents < min || amountCents > max) {
     throw new https.HttpsError(
       "invalid-argument",
-      `Top up between $${(limits.topupMinCents / 100).toFixed(2)} and $${(limits.topupMaxCents / 100).toFixed(2)}`,
-      { reason: "amount_out_of_range", minCents: limits.topupMinCents, maxCents: limits.topupMaxCents }
+      `Top up between ${formatAmount(min, currency)} and ${formatAmount(max, currency)}`,
+      { reason: "amount_out_of_range", minCents: min, maxCents: max, currency }
     );
   }
   const to = await collectionNumber(provider);
@@ -143,7 +159,8 @@ export const getTopupInstructions = https.onCall({ enforceAppCheck: true }, asyn
       fromMsisdn: links.docs[0].get("msisdn"),
       collectionNumber: to,
       amountCents,
-      dialCode: dialCode(provider, to, amountCents),
+      currency,
+      dialCode: dialCode(provider, to, amountCents, currency),
       creditsFloat,
     },
   };

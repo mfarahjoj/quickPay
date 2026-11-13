@@ -28,6 +28,7 @@ import {
   ussdUrl,
 } from '../../services/mobileMoney.service';
 import { makeStyles, useColors } from '../../theme';
+import { Currency, formatMoney } from '../../utils/money';
 
 /**
  * Top up from Zaad, through Zapp's collection number.
@@ -62,6 +63,9 @@ export default function ZaadTopupScreen() {
   const [step, setStep] = useState<Step | null>(null);
   const [numberText, setNumberText] = useState('');
   const [amountText, setAmountText] = useState('');
+  // Shillings first: the main currency. Dollars are a tap away.
+  const [currency, setCurrency] = useState<Currency>('SLS');
+  const [creditedCurrency, setCreditedCurrency] = useState<string>('USD');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [link, setLink] = useState<LinkResult | null>(null);
@@ -100,6 +104,7 @@ export default function ZaadTopupScreen() {
           const row = snap.docs.map((d) => d.data()).find((d) => d.status === 'completed');
           if (row) {
             setCredited(row.amount as number);
+            setCreditedCurrency((row.currency as string) || 'USD');
             triggerHaptic('success');
             setStep('done');
           }
@@ -128,12 +133,19 @@ export default function ZaadTopupScreen() {
     }
   }, [busy, numberText, linkOnly]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Dollars in cents; shillings whole.
+  const enteredAmount = (): number | null => {
+    if (currency === 'USD') return amountCents(amountText);
+    const n = /^\d+$/.test(amountText) ? parseInt(amountText, 10) : 0;
+    return n > 0 ? n : null;
+  };
+
   const submitAmount = useCallback(async () => {
-    const cents = amountCents(amountText);
+    const cents = enteredAmount();
     if (!cents || busy) return;
     setBusy(true);
     try {
-      const result = await getTopupInstructions('zaad', cents);
+      const result = await getTopupInstructions('zaad', cents, currency);
       setInstructions(result);
       sentAt.current = new Date();
       triggerHaptic('medium');
@@ -143,12 +155,20 @@ export default function ZaadTopupScreen() {
     } finally {
       setBusy(false);
     }
-  }, [amountText, busy]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [amountText, busy, currency]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const pickCurrency = (next: Currency) => {
+    if (next === currency) return;
+    triggerHaptic('light');
+    setCurrency(next);
+    setAmountText('');
+  };
 
   const pressKey = (key: string) => {
     triggerHaptic('light');
     if (key === '⌫') return setAmountText((p) => p.slice(0, -1));
-    if (key === '.' && amountText.includes('.')) return;
+    // Shillings are whole: no decimal point.
+    if (key === '.' && (currency === 'SLS' || amountText.includes('.'))) return;
     if (/\.\d{2}$/.test(amountText)) return;
     setAmountText((p) => p + key);
   };
@@ -201,18 +221,42 @@ export default function ZaadTopupScreen() {
 
       {step === 'amount' && (
         <View style={styles.body}>
-          <Text style={styles.amount}>${amountText || '0'}</Text>
+          <View style={styles.segment} accessibilityRole="tablist">
+            {(['SLS', 'USD'] as Currency[]).map((c) => (
+              <TouchableOpacity
+                key={c}
+                style={[styles.segmentItem, currency === c && styles.segmentItemOn]}
+                onPress={() => pickCurrency(c)}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: currency === c }}
+              >
+                <Text style={[styles.segmentText, currency === c && styles.segmentTextOn]}>
+                  {c === 'SLS' ? t('topup.zaad.shillings') : t('topup.zaad.dollars')}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <Text style={styles.amount} numberOfLines={1} adjustsFontSizeToFit>
+            {currency === 'SLS'
+              ? formatMoney(parseInt(amountText || '0', 10), 'SLS')
+              : `$${amountText || '0'}`}
+          </Text>
           <Text style={styles.hint}>
             {t('topup.zaad.fromNumber', { number: formatLocal(linkedNumber || link?.msisdn || '') })}
           </Text>
           <View style={styles.keypad}>
             {KEYPAD.map((k) => (
-              <TouchableOpacity key={k} style={styles.key} onPress={() => pressKey(k)}>
+              <TouchableOpacity
+                key={k}
+                style={[styles.key, k === '.' && currency === 'SLS' && styles.keyHidden]}
+                onPress={() => pressKey(k)}
+                disabled={k === '.' && currency === 'SLS'}
+              >
                 <Text style={styles.keyText}>{k}</Text>
               </TouchableOpacity>
             ))}
           </View>
-          <Primary label={t('topup.zaad.continue')} onPress={submitAmount} busy={busy} disabled={!amountCents(amountText)} />
+          <Primary label={t('topup.zaad.continue')} onPress={submitAmount} busy={busy} disabled={!enteredAmount()} />
           <TouchableOpacity onPress={() => setStep('link')}>
             <Text style={styles.link}>{t('topup.zaad.changeNumber')}</Text>
           </TouchableOpacity>
@@ -221,10 +265,12 @@ export default function ZaadTopupScreen() {
 
       {step === 'send' && instructions && (
         <View style={styles.body}>
-          <Text style={styles.big}>{t('topup.zaad.sendTitle', { amount: dollars(instructions.amountCents) })}</Text>
+          <Text style={styles.big}>
+            {t('topup.zaad.sendTitle', { amount: formatMoney(instructions.amountCents, instructions.currency) })}
+          </Text>
           <Text style={styles.hint}>
             {t('topup.zaad.sendBody', {
-              amount: dollars(instructions.amountCents),
+              amount: formatMoney(instructions.amountCents, instructions.currency),
               from: formatLocal(instructions.fromMsisdn),
               to: formatLocal(instructions.collectionNumber),
             })}
@@ -237,7 +283,7 @@ export default function ZaadTopupScreen() {
       {step === 'done' && (
         <View style={[styles.body, styles.center]}>
           <Text style={[styles.big, { color: colors.ui.incoming }]}>
-            {credited !== null ? t('topup.zaad.doneTopup', { amount: dollars(credited) }) : t('topup.zaad.doneLinked')}
+            {credited !== null ? t('topup.zaad.doneTopup', { amount: formatMoney(credited, creditedCurrency) }) : t('topup.zaad.doneLinked')}
           </Text>
           <Primary label={t('common.done')} onPress={() => navigation.goBack()} />
         </View>
@@ -336,6 +382,15 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
     backgroundColor: colors.ui.ink(0.05),
   },
   keyText: { fontSize: 24, color: colors.ui.text, fontWeight: '600' },
+  keyHidden: { opacity: 0 },
+  segment: {
+    flexDirection: 'row', alignSelf: 'center', padding: 4, borderRadius: 14,
+    backgroundColor: colors.ui.ink(0.06),
+  },
+  segmentItem: { paddingVertical: 8, paddingHorizontal: 18, borderRadius: 10 },
+  segmentItemOn: { backgroundColor: colors.ui.accentText },
+  segmentText: { fontSize: 14, fontWeight: '700', color: colors.ui.ink(0.6) },
+  segmentTextOn: { color: colors.ui.onSolid },
   primary: { backgroundColor: colors.ui.accentText, borderRadius: 16, paddingVertical: 16, alignItems: 'center' },
   primaryDisabled: { opacity: 0.4 },
   primaryText: { fontSize: 17, fontWeight: '800', color: colors.ui.onSolid },

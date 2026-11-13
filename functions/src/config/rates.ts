@@ -54,6 +54,7 @@ export interface Rates {
   linkActivationCents: number;
   linkChangeCooldownHours: number;
   agentFloatTopupMaxCents: number;
+  slsPerUsd: number;
 }
 
 export type RateGroup =
@@ -64,7 +65,8 @@ export type RateGroup =
   | "Limits and safety"
   | "Refunds and disputes"
   | "Sign-in and devices"
-  | "Zaad and eDahab top-ups";
+  | "Zaad and eDahab top-ups"
+  | "Shillings";
 
 interface BaseField {
   group: RateGroup;
@@ -442,6 +444,16 @@ export const RATE_FIELDS: { [K in keyof Rates]: RateFieldSpec } = {
     default: 200000,
     min: 1000,
     max: 2000000,
+  },
+  slsPerUsd: {
+    group: "Shillings",
+    label: "Shillings per dollar, for limits",
+    help: "Every limit is set in dollars. A shilling amount counts against it at this rate. Zapp exchanges nothing at this rate: a wallet's shillings and dollars never convert.",
+    kind: "int",
+    default: 8000,
+    min: 1000,
+    max: 50000,
+    unit: "SLS",
   },
 };
 

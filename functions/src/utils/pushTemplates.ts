@@ -48,6 +48,11 @@ export const PUSH_TEMPLATES = {
     so: { title: "Lacag ayaad heshay", body: "Waxaad heshay {amount}." },
     ar: { title: "تم استلام الدفع", body: "وصلتك دفعة بقيمة {amount}." },
   },
+  "transfer.received": {
+    en: { title: "Money Received", body: "{sender} sent you {amount}" },
+    so: { title: "Lacag ayaad heshay", body: "{sender} ayaa kuu soo diray {amount}." },
+    ar: { title: "تم استلام المال", body: "أرسل إليك {sender} مبلغ {amount}." },
+  },
   "payment.sent": {
     en: { title: "Payment Sent", body: "You paid {amount}" },
     so: { title: "Lacag-bixinta waa la diray", body: "Waxaad bixisay {amount}." },

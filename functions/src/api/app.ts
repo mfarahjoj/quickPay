@@ -7,6 +7,9 @@
  *   GET    /v1/charges/:id                retrieve (POS polling)
  *   POST   /v1/charges/:id/cancel         cancel while pending
  *   POST   /v1/charges/:id/refunds        refund, full or partial (Idempotency-Key required)
+ *   POST   /v1/transfers                  partners: pay a Zapp account (Idempotency-Key required)
+ *   GET    /v1/transfers/:id              partners: retrieve a transfer
+ *   GET    /v1/accounts/lookup?phone=     partners: can this number be paid?
  *   POST   /v1/webhook_endpoints          add an endpoint; the secret is shown once
  *   GET    /v1/webhook_endpoints          list
  *   DELETE /v1/webhook_endpoints/:id      remove
@@ -15,9 +18,11 @@
  *   GET    /v1/public/charges/:id         unauthenticated; the hosted checkout's view
  *   POST   /v1/public/charges/:id/test_payment    unauthenticated; test charges only
  *
- * No route here moves money on its own: a charge is paid only when the
- * customer approves it in the app (approveApiCharge), and a refund only ever
- * returns a customer's own payment. A `zpk_test_` key reaches the same routes
+ * Charges and refunds move no money on their own: a charge is paid only when
+ * the customer approves it in the app (approveApiCharge), and a refund only
+ * ever returns a customer's own payment. Transfers do move a partner's own
+ * money with no PIN, so they need a partner and a key with the `transfers`
+ * scope, both set only by Zapp ops (partners.ts). A `zpk_test_` key reaches the same routes
  * and sees only test objects, which no customer can pay.
  */
 
@@ -49,6 +54,7 @@ import {
   serializePublicCharge,
 } from "./charges";
 import { createRefund, serializeRefund } from "./refunds";
+import { createTransfer, getOwnTransfer, lookupAccount, serializeTransfer } from "./transfers";
 import { createEndpoint, deleteEndpoint, listEndpoints } from "./webhooks";
 import { TestOutcome, settleTestCharge, testModeOnly } from "./testHelpers";
 
@@ -99,6 +105,30 @@ const authed = compileRoutes<Ctx>([
       if (result.replayed) res.set("Idempotent-Replayed", "true");
       return { status: result.replayed ? 200 : 201, body: serializeRefund(result.id, result.refund) };
     },
+  },
+  {
+    method: "POST",
+    path: "/v1/transfers",
+    handler: async ({ req, res, caller }) => {
+      const key = requireIdempotencyKeyHeader(req);
+      const { id, transfer, replayed } = await createTransfer(caller, bodyOf(req), key);
+      if (replayed) res.set("Idempotent-Replayed", "true");
+      return { status: replayed ? 200 : 201, body: serializeTransfer(id, transfer) };
+    },
+  },
+  {
+    method: "GET",
+    path: "/v1/transfers/:id",
+    handler: async ({ caller }, { id }) => ({
+      body: serializeTransfer(id, await getOwnTransfer(caller, id)),
+    }),
+  },
+  {
+    method: "GET",
+    path: "/v1/accounts/lookup",
+    handler: async ({ req, caller }) => ({
+      body: await lookupAccount(caller, req.query as Record<string, unknown>),
+    }),
   },
   {
     method: "POST",

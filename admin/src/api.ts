@@ -135,8 +135,21 @@ export interface ApiKeyRow {
   hint: string;
   revoked: boolean;
   createdAt: string;
+  mode?: "live" | "test";
+  /** "transfers" on a partner's payout key. */
+  scopes?: string[];
   lastUsedAt?: string;
   revokedAt?: string;
+}
+
+/** A merchant's partner settings: may it pay Zapp accounts by API, and its caps and fee. */
+export interface ApiPartnerRow {
+  transfersEnabled: boolean;
+  maxTransferUsdCents: number;
+  dailyTransferUsdCents: number;
+  /** null: the standard online payment fee. */
+  chargeFeeRate: number | null;
+  updatedAt: string | null;
 }
 
 export interface RoleRequestRow {
@@ -502,11 +515,29 @@ export const api = {
     }).then((body) => body.keys),
 
   /** Returns the full key exactly once; it cannot be fetched again. */
-  issueApiKey: (merchantId: string, label: string, reason: string) =>
+  issueApiKey: (
+    merchantId: string,
+    label: string,
+    reason: string,
+    opts: { mode?: "live" | "test"; transfers?: boolean } = {}
+  ) =>
     call<
-      { merchantId: string; label: string; reason: string },
+      { merchantId: string; label: string; reason: string; mode?: "live" | "test"; transfers?: boolean },
       ApiKeyRow & { apiKey: string }
-    >("adminIssueApiKey", { merchantId, label, reason }),
+    >("adminIssueApiKey", { merchantId, label, reason, ...opts }),
+
+  getApiPartner: (merchantId: string) =>
+    call<{ merchantId: string }, ApiPartnerRow>("adminGetApiPartner", { merchantId }),
+
+  setApiPartner: (
+    merchantId: string,
+    settings: Omit<ApiPartnerRow, "updatedAt">,
+    reason: string
+  ) =>
+    call<Omit<ApiPartnerRow, "updatedAt"> & { merchantId: string; reason: string }, ApiPartnerRow>(
+      "adminSetApiPartner",
+      { merchantId, reason, ...settings }
+    ),
 
   revokeApiKey: (keyId: string, reason: string) =>
     call<{ keyId: string; reason: string }, ApiKeyRow>("adminRevokeApiKey", {

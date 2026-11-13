@@ -44,6 +44,8 @@ export interface User {
 export interface Wallet {
   balance: number; // In dollars
   balanceCents: number; // In cents
+  /** Shillings, in whole shillings. Kept apart from dollars; never converted. */
+  slsBalance: number;
   currency: string;
   totalReceived: number;
   totalSent: number;

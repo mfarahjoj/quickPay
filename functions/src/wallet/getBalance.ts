@@ -5,6 +5,7 @@ import { https } from "firebase-functions/v2";
 import { requireAuth } from "../utils/validation";
 import { centsToDollars } from "../utils/validation";
 import { ApiResponse, Wallet } from "../types";
+import { walletPocket } from "../ledger";
 
 interface BalanceResponse {
   balance: number; // In dollars
@@ -15,6 +16,8 @@ interface BalanceResponse {
   lastTransactionAt: Date | null;
   /** Agents only: float in agent:{uid}, apart from this wallet. */
   floatCents?: number;
+  /** The shilling pocket, in whole shillings (0 if it never held any). */
+  slsBalance: number;
 }
 
 /**
@@ -54,6 +57,7 @@ export const getBalance = https.onCall(
           totalSent: centsToDollars(wallet.totalSent),
           lastTransactionAt: wallet.lastTransactionAt?.toDate() || null,
           ...(floatCents !== undefined ? { floatCents } : {}),
+          slsBalance: walletPocket(wallet, "SLS").balance,
         },
       };
     } catch (error: any) {

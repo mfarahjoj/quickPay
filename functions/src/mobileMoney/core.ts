@@ -22,8 +22,9 @@
  * so the same SMS can never credit twice. This file is pure: no Firestore.
  */
 
-import { JournalEntryInput, JournalLine } from "../ledger";
+import { JournalEntryInput, JournalLine, LedgerCurrency } from "../ledger";
 import { agentAccount, mobileMoneyFloat, userAccount, MOBILE_MONEY_SUSPENSE } from "../ledger/accounts";
+import { currencyFromApiCode, toLimitCents } from "../utils/money";
 
 export type Provider = "zaad" | "edahab";
 export const PROVIDERS: readonly Provider[] = ["zaad", "edahab"];
@@ -37,7 +38,9 @@ export interface ReceivedPayment {
   provider: Provider;
   /** The operator's transaction ID — the idempotency key. */
   operatorTxnId: string;
+  /** In the currency's smallest unit: cents, or whole shillings. */
   amountCents: number;
+  /** As the operator writes it: "USD" or "SLSH". */
   currency: string;
   /** E.164, e.g. +252634123456. */
   senderMsisdn: string;
@@ -53,9 +56,24 @@ export interface LinkedNumber {
   status: "pending" | "verified";
 }
 
+/** Limits are in US cents; a shilling payment is compared at `slsPerUsd`. */
 export interface TopupLimits {
   topupMinCents: number;
   topupMaxCents: number;
+  slsPerUsd: number;
+  /** Whether shillings can be credited (not yet to an agent's float). */
+  shillings: boolean;
+}
+
+/** The ledger currency of a payment, or null for one Zapp doesn't hold. */
+export function paymentCurrency(p: Pick<ReceivedPayment, "currency">): LedgerCurrency | null {
+  return currencyFromApiCode(p.currency);
+}
+
+function requireCurrency(p: Pick<ReceivedPayment, "currency">): LedgerCurrency {
+  const currency = paymentCurrency(p);
+  if (!currency) throw new Error(`Unsupported currency ${p.currency}`);
+  return currency;
 }
 
 export type SuspenseReason =
@@ -91,13 +109,18 @@ export function decideReceipt(
   limits: TopupLimits
 ): Decision {
   if (!link) return { action: "suspense", reason: "unknown_sender", uid: null };
-  // Until shilling wallets exist (M4), only dollars are credited.
-  if (payment.currency !== "USD") return { action: "suspense", reason: "currency", uid: link.uid };
+  // Shillings go to the wallet's shilling pocket. Agents' float is dollars
+  // only until agents cash in and out in shillings.
+  const currency = paymentCurrency(payment);
+  if (!currency || (currency === "SLS" && !limits.shillings)) {
+    return { action: "suspense", reason: "currency", uid: link.uid };
+  }
   if (link.status === "pending") return { action: "activate", uid: link.uid };
-  if (payment.amountCents < limits.topupMinCents) {
+  const cents = toLimitCents(payment.amountCents, currency, limits.slsPerUsd);
+  if (cents < limits.topupMinCents) {
     return { action: "suspense", reason: "below_min", uid: link.uid };
   }
-  if (payment.amountCents > limits.topupMaxCents) {
+  if (cents > limits.topupMaxCents) {
     return { action: "suspense", reason: "above_max", uid: link.uid };
   }
   return { action: "credit", uid: link.uid };
@@ -108,12 +131,13 @@ export function decideReceipt(
 function entry(
   entryId: string,
   type: JournalEntryInput["type"],
+  currency: LedgerCurrency,
   lines: JournalLine[],
   description: string,
   postedBy: string,
   refs: JournalEntryInput["refs"]
 ): JournalEntryInput {
-  return { entryId, type, currency: "USD", lines, description, postedBy, refs };
+  return { entryId, type, currency, lines, description, postedBy, refs };
 }
 
 /** Real money reached the collection number and is the customer's. */
@@ -121,6 +145,7 @@ export function topupEntry(p: ReceivedPayment, uid: string, transactionId: strin
   return entry(
     `mmtopup_${receiptId(p.provider, p.operatorTxnId)}`,
     "mobile_money_topup",
+    requireCurrency(p),
     [
       { account: mobileMoneyFloat(p.provider), debit: p.amountCents, credit: 0 },
       { account: userAccount(uid), debit: 0, credit: p.amountCents },
@@ -140,6 +165,7 @@ export function floatEntry(p: ReceivedPayment, uid: string, transactionId: strin
   return entry(
     `mmfloat_${receiptId(p.provider, p.operatorTxnId)}`,
     "float_issue",
+    requireCurrency(p),
     [
       { account: mobileMoneyFloat(p.provider), debit: p.amountCents, credit: 0 },
       { account: agentAccount(uid), debit: 0, credit: p.amountCents },
@@ -154,6 +180,7 @@ export function floatEntry(p: ReceivedPayment, uid: string, transactionId: strin
 export function assignFloatEntry(
   receipt: string,
   amountCents: number,
+  currency: LedgerCurrency,
   uid: string,
   adminUid: string,
   transactionId: string
@@ -161,6 +188,7 @@ export function assignFloatEntry(
   return entry(
     `mmassignfloat_${receipt}`,
     "float_issue",
+    currency,
     [
       { account: MOBILE_MONEY_SUSPENSE, debit: amountCents, credit: 0 },
       { account: agentAccount(uid), debit: 0, credit: amountCents },
@@ -173,12 +201,14 @@ export function assignFloatEntry(
 
 /** The limits that apply to a payment for an agent's float, or a customer's wallet. */
 export function limitsFor(
-  rates: { topupMinCents: number; topupMaxCents: number; agentFloatTopupMaxCents: number },
+  rates: { topupMinCents: number; topupMaxCents: number; agentFloatTopupMaxCents: number; slsPerUsd: number },
   forFloat: boolean
 ): TopupLimits {
   return {
     topupMinCents: rates.topupMinCents,
     topupMaxCents: forFloat ? rates.agentFloatTopupMaxCents : rates.topupMaxCents,
+    slsPerUsd: rates.slsPerUsd,
+    shillings: !forFloat,
   };
 }
 
@@ -187,6 +217,7 @@ export function suspenseEntry(p: ReceivedPayment): JournalEntryInput {
   return entry(
     `mmsuspense_${receiptId(p.provider, p.operatorTxnId)}`,
     "mobile_money_suspense",
+    requireCurrency(p),
     [
       { account: mobileMoneyFloat(p.provider), debit: p.amountCents, credit: 0 },
       { account: MOBILE_MONEY_SUSPENSE, debit: 0, credit: p.amountCents },
@@ -201,6 +232,7 @@ export function suspenseEntry(p: ReceivedPayment): JournalEntryInput {
 export function assignEntry(
   receipt: string,
   amountCents: number,
+  currency: LedgerCurrency,
   uid: string,
   adminUid: string,
   transactionId: string
@@ -208,6 +240,7 @@ export function assignEntry(
   return entry(
     `mmassign_${receipt}`,
     "mobile_money_assign",
+    currency,
     [
       { account: MOBILE_MONEY_SUSPENSE, debit: amountCents, credit: 0 },
       { account: userAccount(uid), debit: 0, credit: amountCents },
@@ -223,11 +256,13 @@ export function refundEntry(
   receipt: string,
   provider: Provider,
   amountCents: number,
+  currency: LedgerCurrency,
   adminUid: string
 ): JournalEntryInput {
   return entry(
     `mmrefund_${receipt}`,
     "mobile_money_refund",
+    currency,
     [
       { account: MOBILE_MONEY_SUSPENSE, debit: amountCents, credit: 0 },
       { account: mobileMoneyFloat(provider), debit: 0, credit: amountCents },

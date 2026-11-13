@@ -10,6 +10,18 @@ import { LINKED_NUMBERS } from "../mobileMoney/receipts";
 import { ApiResponse } from "../types";
 
 /**
+ * Whether a wallet still holds anything: dollars, shillings, or money held
+ * back on a lost dispute. An account isn't deleted with money in it.
+ */
+function holdsMoney(wallet: FirebaseFirestore.DocumentData | undefined): boolean {
+  return (
+    (wallet?.balance ?? 0) > 0 ||
+    (wallet?.sls?.balance ?? 0) > 0 ||
+    (wallet?.reservedCents ?? 0) > 0
+  );
+}
+
+/**
  * Deleting an account (App Store 5.1.1(v), Play's account-deletion policy).
  *
  *   request  → PIN, empty wallet; every session ends and every trusted phone is
@@ -97,7 +109,7 @@ export const requestAccountDeletion = https.onCall(
 
     const db = admin.firestore();
     const wallet = (await db.collection("wallets").doc(userId).get()).data() ?? {};
-    if ((wallet.balance ?? 0) > 0 || (wallet.reservedCents ?? 0) > 0) {
+    if (holdsMoney(wallet)) {
       throw new https.HttpsError(
         "failed-precondition",
         "Please withdraw your remaining balance before deleting your account"
@@ -173,7 +185,7 @@ export async function deleteDueAccount(uid: string, nowMs: number): Promise<"del
 
   const walletRef = db.collection("wallets").doc(uid);
   const wallet = (await walletRef.get()).data();
-  if ((wallet?.balance ?? 0) > 0 || (wallet?.reservedCents ?? 0) > 0) {
+  if (holdsMoney(wallet)) {
     await userRef.update({ deletionBlocked: "has_money", deletionBlockedAt: admin.firestore.Timestamp.now() });
     console.warn(`Account ${uid} is due for deletion but holds money; skipped`);
     return "has_money";

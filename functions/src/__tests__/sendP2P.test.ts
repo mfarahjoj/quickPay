@@ -171,5 +171,38 @@ describe("sendP2P", () => {
       expect(db.get(`wallets/${SENDER}`)!.balance).toBe(9_000);
       expect(db.get("wallets/friend-1")!.balance).toBe(1_000);
     });
+
+    it("sends shillings from the shilling balance, counted at the rate", async () => {
+      const db = seed();
+      const sender = db.get(`wallets/${SENDER}`)!;
+      db.store.set(`wallets/${SENDER}`, {
+        ...sender,
+        sls: { balance: 50_000, totalSent: 0, totalReceived: 50_000 },
+      });
+      const { enforceTransactionLimits } = jest.requireMock("../utils/limits");
+      const result = await wrapped({
+        data: { recipientPhone: FRIEND_PHONE, amount: 30_000, currency: "SLS", pin: "123456" },
+        auth: { uid: SENDER },
+      });
+      expect(result.success).toBe(true);
+      expect(db.get(`wallets/${SENDER}`)!.balance).toBe(10_000);
+      expect(db.get(`wallets/${SENDER}`)!.sls.balance).toBe(20_000);
+      expect(db.get("wallets/friend-1")!.sls.balance).toBe(30_000);
+      const row = db.get(`transactions/${result.data.transactionId}`)!;
+      expect(row.currency).toBe("SLS");
+      expect(enforceTransactionLimits).toHaveBeenCalledWith(
+        SENDER, 30_000, expect.anything(), undefined, "SLS"
+      );
+    });
+
+    it("refuses shillings the sender doesn't have, whatever their dollars", async () => {
+      const db = seed();
+      const err = await wrapped({
+        data: { recipientPhone: FRIEND_PHONE, amount: 1_000, currency: "SLS", pin: "123456" },
+        auth: { uid: SENDER },
+      }).catch((e: any) => e);
+      expect(err.message).toMatch(/Insufficient balance/);
+      expect(journalEntries(db)).toHaveLength(0);
+    });
   });
 });

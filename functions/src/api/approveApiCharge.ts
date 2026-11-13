@@ -31,6 +31,8 @@ import {
 import { CHARGE_ID_PATTERN, effectiveStatus, isLapsed } from "./charges";
 import { isMerchantAccount } from "./keys";
 import { API_CHARGES_COLLECTION, ApiCharge, ApiChargeStatus, isLiveObject } from "./types";
+import { toLimitCents } from "../utils/money";
+import { chargeFeeRateFor } from "./partners";
 
 export function apiChargeEntryId(chargeId: string): string {
   return `apicharge_${chargeId}`;
@@ -204,11 +206,17 @@ export const approveApiCharge = https.onCall(
 
       // Outgoing money waits out the pause after a PIN reset. A merchant's
       // online checkout or till counts as a shop.
-      await assertResetCooldownAllows(customerId, "shop_payment", preCharge.amount);
+      // The allowance and the limits are in dollars; shillings count at the rate.
+      const { slsPerUsd } = await getRates();
+      await assertResetCooldownAllows(
+        customerId,
+        "shop_payment",
+        toLimitCents(preCharge.amount, preCharge.currency ?? "USD", slsPerUsd)
+      );
 
       const customerData = await requireActiveAccount(customerId);
       await enforceVelocity(customerId);
-      await enforceTransactionLimits(customerId, preCharge.amount, customerData);
+      await enforceTransactionLimits(customerId, preCharge.amount, customerData, undefined, preCharge.currency ?? "USD");
 
       // Roles and status can change between the charge and the approval.
       const merchantSnap = await db.collection("users").doc(preCharge.merchantId).get();
@@ -221,7 +229,11 @@ export const approveApiCharge = https.onCall(
       }
       assertAccountActive(merchant, "counterparty");
 
-      const { onlinePaymentFeeRate } = await getRates();
+      // A partner may have its own rate (Z7); everyone else pays the standard one.
+      const onlinePaymentFeeRate = await chargeFeeRateFor(
+        preCharge.merchantId,
+        (await getRates()).onlinePaymentFeeRate
+      );
       const transactionId = db.collection("transactions").doc().id;
 
       type Outcome =

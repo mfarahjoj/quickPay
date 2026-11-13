@@ -48,11 +48,14 @@ describe("probeSpendIndex", () => {
     const now = new Date("2026-09-27T12:00:00Z");
     await probeSpendIndex(now);
 
+    // Then the shilling part of the same sum, on its own index.
     expect(where.mock.calls.map((c) => [c[0], c[1]])).toEqual([
       ["fromUserId", "=="],
       ["type", "in"],
       ["createdAt", ">="],
+      ["currency", "=="],
     ]);
+    expect(where.mock.calls[3][2]).toBe("SLS");
     expect(where.mock.calls[2][2]).toEqual({
       __date: startOfLocalMonth(now).toISOString(),
     });
