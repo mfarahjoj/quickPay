@@ -3,6 +3,7 @@ import { triggerHaptic } from '../../services/haptics.service';
 import { useTranslation } from 'react-i18next';
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 import { scanCustomerToken } from '../../services/scan.service';
+import { formatCents } from '../../utils/money';
 import { CodeSheet, QrScannerView, ScannerButton } from '../../components/QrScannerView';
 
 /**
@@ -13,8 +14,13 @@ import { CodeSheet, QrScannerView, ScannerButton } from '../../components/QrScan
 export default function ScanCustomerScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
+  const params = useRoute<any>().params;
   const purpose: 'payment' | 'cash_out' =
-    (useRoute<any>().params?.purpose as string) === 'cash_out' ? 'cash_out' : 'payment';
+    (params?.purpose as string) === 'cash_out' ? 'cash_out' : 'payment';
+  // A sale already typed on Receive: its amount stays in sight while scanning.
+  const amountCents: number | undefined =
+    typeof params?.amountCents === 'number' && params.amountCents > 0 ? params.amountCents : undefined;
+  const reference: string | undefined = params?.reference;
   const [loading, setLoading] = useState(false);
   const [isScanning, setIsScanning] = useState(true);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -47,6 +53,8 @@ export default function ScanCustomerScreen() {
           customerName: result.customerName,
           customerId: result.customerId,
           purpose,
+          amountCents,
+          reference,
         });
       } catch (e: any) {
         setScanError(e.message || t('scan.scanFailedMessage'));
@@ -56,13 +64,19 @@ export default function ScanCustomerScreen() {
         setLoading(false);
       }
     },
-    [loading, navigation, t, purpose]
+    [loading, navigation, t, purpose, amountCents, reference]
   );
 
   return (
     <>
       <QrScannerView
-        title={purpose === 'cash_out' ? t('scan.cashOut.scanTitle') : t('scan.title')}
+        title={
+          purpose === 'cash_out'
+            ? t('scan.cashOut.scanTitle')
+            : amountCents
+              ? t('scan.chargingAmount', { amount: formatCents(amountCents) })
+              : t('scan.title')
+        }
         hint={purpose === 'cash_out' ? t('scan.cashOut.hint') : t('scan.cameraHint')}
         onScan={handleScan}
         onClose={() => navigation.goBack()}

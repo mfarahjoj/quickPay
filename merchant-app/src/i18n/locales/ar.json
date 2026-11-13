@@ -895,5 +895,9 @@
   "paidRef.timesLabel": "عدد الدفعات",
   "paidRef.times": "دُفعت {{count}} مرات",
   "paidRef.cancel": "لا تحصّل",
-  "paidRef.chargeAgain": "حصّل مرة أخرى"
+  "paidRef.chargeAgain": "حصّل مرة أخرى",
+  "qr.receive.charge": "حصّل",
+  "qr.receive.chargeAmount": "حصّل {{amount}}",
+  "qr.display.cantScan": "لا يستطيع المسح؟ امسح رمزه",
+  "scan.chargingAmount": "تحصيل {{amount}}"
 }

@@ -895,5 +895,9 @@
   "paidRef.timesLabel": "Payments",
   "paidRef.times": "Paid {{count}} times",
   "paidRef.cancel": "Don't charge",
-  "paidRef.chargeAgain": "Charge again"
+  "paidRef.chargeAgain": "Charge again",
+  "qr.receive.charge": "Charge",
+  "qr.receive.chargeAmount": "Charge {{amount}}",
+  "qr.display.cantScan": "Can't scan? Scan their code",
+  "scan.chargingAmount": "Charging {{amount}}"
 }

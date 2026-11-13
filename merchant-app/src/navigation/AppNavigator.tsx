@@ -44,8 +44,12 @@ type MerchantStackParamList = {
     customerId: string;
     /** "cash_out": the agent hands over cash once the customer approves. */
     purpose?: 'payment' | 'cash_out';
+    /** The sale typed on Receive, when the customer couldn't scan its code. */
+    amountCents?: number;
+    reference?: string;
   };
-  ScanCharge: undefined;
+  ScanCharge: { amountCents?: number; reference?: string } | undefined;
+  CounterCode: undefined;
   ScanCashOut: { purpose: 'cash_out' };
   TransactionDetail: { transaction: any };
   TopupCustomer: undefined;
@@ -229,6 +233,11 @@ function MainStackNavigator() {
       <MainStack.Screen
         name="ScanCharge"
         getComponent={() => require('../screens/scan/ScanCustomerScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="CounterCode"
+        getComponent={() => require('../screens/qr/CounterCodeScreen').default}
         options={{ headerShown: false }}
       />
       <MainStack.Screen

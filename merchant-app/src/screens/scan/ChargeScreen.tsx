@@ -42,6 +42,8 @@ interface Props {
       customerName: string;
       customerId: string;
       purpose?: 'payment' | 'cash_out';
+      amountCents?: number;
+      reference?: string;
     };
   };
   navigation: any;
@@ -92,8 +94,11 @@ export default function ChargeScreen({ route, navigation }: Props) {
   // A cash-out: the agent hands over cash once the customer approves.
   const cashOut = route.params.purpose === 'cash_out';
   const k = (key: string) => (cashOut ? `scan.cashOut.${key}` : `scan.charge.${key}`);
-  const [amount, setAmount] = useState('');
-  const [reference, setReference] = useState('');
+  // Filled in already when the sale was typed on Receive.
+  const [amount, setAmount] = useState(
+    route.params.amountCents ? (route.params.amountCents / 100).toFixed(2) : ''
+  );
+  const [reference, setReference] = useState(route.params.reference ?? '');
   const [phase, setPhase] = useState<Phase>('idle');
   const [requestId, setRequestId] = useState<string | null>(null);
   const [chargedCents, setChargedCents] = useState(0);
@@ -275,7 +280,10 @@ export default function ChargeScreen({ route, navigation }: Props) {
   const scanAgain = () =>
     cashOut
       ? navigation.navigate('ScanCashOut', { purpose: 'cash_out' })
-      : navigation.navigate('ScanCharge');
+      : navigation.navigate('ScanCharge', {
+          amountCents: route.params.amountCents,
+          reference: route.params.reference,
+        });
 
   // ── Outcomes ──
   if (phase === 'approved') {
