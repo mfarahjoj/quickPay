@@ -260,10 +260,12 @@ Console setup:
    `zapp-display.firebaseapp.com`, registered in App Check for that web app; site key in
    `display/.env.local`. No App Check enforcement switched on in the console.
 4. Done: `DISPLAY_WEB_APP_ID` in `functions/.env.quickpay-485417`.
-5. **After the first pairing**: Firestore TTL policies on `displayPairings.expireAt`
-   and `display_rate_limits.expireAt` (offset 0). The console's TTL form only lists
-   collections that already have documents, and both appear on a tablet's first
-   pairing request.
+5. Done: Firestore TTL policies, offset 0, on `display_rate_limits.expireAt` and
+   `displayPairings.expiresAt` (the console offered only `expiresAt` for pairings).
+   So a pairing record goes soon after its 5-minute code expires, not a day later as
+   `expireAt` intended. Safe: every call refuses an expired code first, and a tablet
+   that finds its record gone shows a new code. `merchantDisplays` keeps the lasting
+   record. The console's TTL form only lists collections that already have documents.
 
 Deploy in this order, each with explicit go-ahead, from the pushed commit:
 
