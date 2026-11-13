@@ -248,18 +248,24 @@ Tests: `cd functions && npm test`; `cd display && npm test`; `cd merchant-app &&
 
 ## Rollout
 
-Status: built and committed on `feat/counter-display`; **nothing deployed**.
+Status: merged to `main`; **nothing deployed**.
 
-Console setup (by hand):
+Console setup:
 
-1. Hosting: add a site (suggested `zapp-display`), then
-   `firebase target:apply hosting display <site-id>`.
-2. Project settings: add a Web app "Zapp Counter Display"; put its config in
-   `display/.env.local`.
-3. App Check: register that web app with a reCAPTCHA Enterprise key limited to the
-   display domain; put the site key in `display/.env.local`.
-4. Set the functions param `DISPLAY_WEB_APP_ID` to that web app's id.
-5. Firestore TTL policies on `displayPairings.expireAt` and `display_rate_limits.expireAt`.
+1. Done: hosting site `zapp-display` (https://zapp-display.web.app), mapped to the
+   `display` target in `.firebaserc`.
+2. Done: Web app "Zapp Counter Display" (`1:76440907220:web:ca352566032dea3883fa41`);
+   its config is in `display/.env.local` (git-ignored, on the machine that builds).
+3. Done: reCAPTCHA Enterprise ("Fraud Defense") key for `zapp-display.web.app` and
+   `zapp-display.firebaseapp.com`, registered in App Check for that web app; site key in
+   `display/.env.local`. No App Check enforcement switched on in the console.
+4. Done: `DISPLAY_WEB_APP_ID` in `functions/.env.quickpay-485417`.
+5. Done: Firestore TTL policies, offset 0, on `display_rate_limits.expireAt` and
+   `displayPairings.expiresAt` (the console offered only `expiresAt` for pairings).
+   So a pairing record goes soon after its 5-minute code expires, not a day later as
+   `expireAt` intended. Safe: every call refuses an expired code first, and a tablet
+   that finds its record gone shows a new code. `merchantDisplays` keeps the lasting
+   record. The console's TTL form only lists collections that already have documents.
 
 Deploy in this order, each with explicit go-ahead, from the pushed commit:
 
