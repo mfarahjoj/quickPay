@@ -21,6 +21,7 @@ import { computePaymentFee, getRates } from "../config/rates";
 import { ApiError, badRequest, conflict, notFound } from "./http";
 import { CHARGE_ID_PATTERN, isLapsed } from "./charges";
 import { API_CHARGES_COLLECTION, ApiCharge, isLiveObject } from "./types";
+import { chargeFeeRateFor } from "./partners";
 
 export type TestOutcome = "succeeded" | "expired";
 
@@ -46,7 +47,11 @@ export async function settleTestCharge(
   if (!CHARGE_ID_PATTERN.test(chargeId)) throw notFound("charge");
   const db = admin.firestore();
   const ref = db.collection(API_CHARGES_COLLECTION).doc(chargeId);
-  const { onlinePaymentFeeRate } = await getRates();
+  const { onlinePaymentFeeRate: standardRate } = await getRates();
+  // Shown the partner's own fee, if it has one, so test numbers match live.
+  const ownerId =
+    merchantId ?? ((await db.collection(API_CHARGES_COLLECTION).doc(chargeId).get()).data()?.merchantId as string | undefined);
+  const onlinePaymentFeeRate = ownerId ? await chargeFeeRateFor(ownerId, standardRate) : standardRate;
 
   type Result = { charge: ApiCharge } | { lapsed: true };
   const result = await db.runTransaction(async (tx): Promise<Result> => {

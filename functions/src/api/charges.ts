@@ -143,7 +143,7 @@ export function parseAmount(value: unknown, param = "amount"): number {
   return value;
 }
 
-function parseOptionalString(value: unknown, param: string, max: number): string | undefined {
+export function parseOptionalString(value: unknown, param: string, max: number): string | undefined {
   if (value === undefined || value === null || value === "") return undefined;
   if (typeof value !== "string" || value.trim().length === 0 || value.length > max) {
     throw badRequest("parameter_invalid", `${param} must be a string of at most ${max} characters`, param);
@@ -151,7 +151,7 @@ function parseOptionalString(value: unknown, param: string, max: number): string
   return value.trim();
 }
 
-function parseMetadata(value: unknown): Record<string, string> | undefined {
+export function parseMetadata(value: unknown): Record<string, string> | undefined {
   if (value === undefined || value === null) return undefined;
   if (typeof value !== "object" || Array.isArray(value)) {
     throw badRequest("parameter_invalid", "metadata must be an object of string values", "metadata");

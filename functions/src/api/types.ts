@@ -15,6 +15,16 @@ export const API_RATE_LIMITS_COLLECTION = "api_rate_limits";
 export const API_EVENTS_COLLECTION = "api_events";
 export const WEBHOOK_ENDPOINTS_COLLECTION = "webhook_endpoints";
 export const WEBHOOK_DELIVERIES_COLLECTION = "webhook_deliveries";
+export const API_TRANSFERS_COLLECTION = "api_transfers";
+export const API_PARTNERS_COLLECTION = "api_partners";
+/** Under a partner: `api_partners/{merchantId}/transfer_days/{YYYY-MM-DD}`. */
+export const TRANSFER_DAYS_SUBCOLLECTION = "transfer_days";
+
+/**
+ * What a key may do beyond charges and refunds. Only the console grants a
+ * scope, and only to a partner; keys a merchant makes for themselves have none.
+ */
+export type ApiKeyScope = "transfers";
 
 /**
  * A merchant's API key. The document ID is the SHA-256 of the key, so the key
@@ -40,6 +50,8 @@ export interface MerchantApiKey {
   revokedAt?: FirebaseFirestore.Timestamp;
   revokedBy?: string;
   lastUsedAt?: FirebaseFirestore.Timestamp;
+  /** Absent: charges and refunds only. */
+  scopes?: ApiKeyScope[];
 }
 
 /**
@@ -123,7 +135,7 @@ export function isLiveObject(obj: { livemode?: boolean }): boolean {
 /** Maps a merchant's Idempotency-Key to the object its first request made. */
 export interface ApiIdempotencyRecord {
   merchantId: string;
-  scope: "charge" | "refund";
+  scope: "charge" | "refund" | "transfer";
   /** Hash of the normalised request, so a reused key with a different body is refused. */
   requestHash: string;
   objectId: string;
@@ -181,5 +193,62 @@ export interface WebhookDelivery {
   lastStatusCode?: number;
   lastError?: string;
   deliveredAt?: FirebaseFirestore.Timestamp;
+  createdAt: FirebaseFirestore.Timestamp;
+}
+
+/**
+ * A merchant ops has made a partner: a platform (Ridy) that collects from its
+ * customers and pays people out of its own wallet, by API, with no PIN. Set
+ * only from the console. Caps are in US cents; shillings count at
+ * `config/rates.slsPerUsd`, the same as every other limit.
+ */
+export interface ApiPartner {
+  /** Transfers and account lookups are allowed while this is true. */
+  transfersEnabled: boolean;
+  /** Largest single transfer, in US cents. */
+  maxTransferUsdCents: number;
+  /** Most the partner may transfer per local day, in US cents. */
+  dailyTransferUsdCents: number;
+  /**
+   * Zapp's fee on this partner's charges, as a fraction (0.01 = 1%). Absent:
+   * the standard `onlinePaymentFeeRate`. Transfers carry no fee.
+   */
+  chargeFeeRate?: number;
+  updatedAt: FirebaseFirestore.Timestamp;
+  updatedBy: string;
+}
+
+/** A partner's running total for one local day. */
+export interface TransferDay {
+  /** Sum of succeeded live transfers, in US cents (shillings converted). */
+  usdCents: number;
+  count: number;
+}
+
+/**
+ * Settled the moment it is made: `succeeded` (money moved) or `failed`
+ * (nothing moved — the recipient could not receive). Refusals that may pass on
+ * a retry (balance, caps, a frozen partner) are errors and leave no transfer,
+ * so the same Idempotency-Key can be retried later.
+ */
+export type ApiTransferStatus = "succeeded" | "failed";
+
+export type TransferFailureCode = "recipient_not_found" | "recipient_inactive";
+
+export interface ApiTransfer {
+  merchantId: string;
+  livemode: boolean;
+  keyId: string;
+  amount: number;
+  currency: "USD" | "SLS";
+  status: ApiTransferStatus;
+  destinationPhone: string;
+  /** Who was paid. Absent when failed, and in test mode. */
+  recipientId?: string;
+  failureCode?: TransferFailureCode;
+  reference?: string;
+  metadata?: Record<string, string>;
+  journalEntryId?: string;
+  transactionId?: string;
   createdAt: FirebaseFirestore.Timestamp;
 }

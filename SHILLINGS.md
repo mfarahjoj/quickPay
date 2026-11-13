@@ -63,6 +63,7 @@ ever paid at it.
 | Zaad top-ups (`*220*` dial code, SMS `SLSH`), held payments, admin assign and refund | Yes, to the wallet. **Not to an agent's float** (held for an admin) |
 | P2P (`sendP2P`, `currency: "SLS"`) | Yes |
 | Merchant API: charges (`currency: "SLSH"`), approval, refunds, webhooks, hosted checkout | Yes |
+| Partner transfers (`POST /v1/transfers`, `currency: "SLSH"`) | Yes |
 | `getBalance` (`slsBalance`), `getTransactions` (whole shillings) | Yes |
 | Account deletion | Refused while shillings remain |
 | Customer app: Home, charge approval, history, Zaad top-up | Yes |

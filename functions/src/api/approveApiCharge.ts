@@ -32,6 +32,7 @@ import { CHARGE_ID_PATTERN, effectiveStatus, isLapsed } from "./charges";
 import { isMerchantAccount } from "./keys";
 import { API_CHARGES_COLLECTION, ApiCharge, ApiChargeStatus, isLiveObject } from "./types";
 import { toLimitCents } from "../utils/money";
+import { chargeFeeRateFor } from "./partners";
 
 export function apiChargeEntryId(chargeId: string): string {
   return `apicharge_${chargeId}`;
@@ -228,7 +229,11 @@ export const approveApiCharge = https.onCall(
       }
       assertAccountActive(merchant, "counterparty");
 
-      const { onlinePaymentFeeRate } = await getRates();
+      // A partner may have its own rate (Z7); everyone else pays the standard one.
+      const onlinePaymentFeeRate = await chargeFeeRateFor(
+        preCharge.merchantId,
+        (await getRates()).onlinePaymentFeeRate
+      );
       const transactionId = db.collection("transactions").doc().id;
 
       type Outcome =

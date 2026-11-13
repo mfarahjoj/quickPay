@@ -7,9 +7,11 @@
  * only its hash is stored (see api/keys.ts), so a lost key is revoked and
  * replaced, never recovered.
  *
- * The console issues live keys. Merchants can also make their own, live and
- * test, from the merchant app (merchants/apiKeys.ts); the console still lists
- * and revokes every key, whoever made it.
+ * The console issues live keys, and test keys for partners. Only the console
+ * can give a key the `transfers` scope, and only for a merchant that is a
+ * partner (api/partners.ts). Merchants can also make their own keys, live and
+ * test, from the merchant app (merchants/apiKeys.ts), never with a scope; the
+ * console still lists and revokes every key, whoever made it.
  */
 
 import * as admin from "firebase-admin";
@@ -28,7 +30,8 @@ import {
   mintApiKey,
   toApiKeyRow,
 } from "../api/keys";
-import { API_KEYS_COLLECTION, MerchantApiKey } from "../api/types";
+import { API_KEYS_COLLECTION, ApiKeyScope, MerchantApiKey } from "../api/types";
+import { getPartner } from "../api/partners";
 
 export type { ApiKeyRow };
 
@@ -51,6 +54,10 @@ interface IssueApiKeyInput {
   merchantId: string;
   label: string;
   reason: string;
+  /** Default live. */
+  mode?: "live" | "test";
+  /** Give the key the transfers scope. Partners only. */
+  transfers?: boolean;
 }
 
 export const adminIssueApiKey = https.onCall(
@@ -90,17 +97,27 @@ export const adminIssueApiKey = https.onCall(
       throw new https.HttpsError("failed-precondition", "This account is not active");
     }
 
-    if ((await activeKeyCount(merchantId, "live")) >= MAX_ACTIVE_KEYS_PER_MODE) {
+    const mode = request.data?.mode === "test" ? "test" : "live";
+    const scopes: ApiKeyScope[] = request.data?.transfers === true ? ["transfers"] : [];
+    if (scopes.length && !(await getPartner(merchantId))?.transfersEnabled) {
       throw new https.HttpsError(
         "failed-precondition",
-        `This merchant already has ${MAX_ACTIVE_KEYS_PER_MODE} active live keys. Revoke one first.`
+        "Only a partner's keys can make transfers. Turn on transfers for this merchant first."
+      );
+    }
+
+    if ((await activeKeyCount(merchantId, mode)) >= MAX_ACTIVE_KEYS_PER_MODE) {
+      throw new https.HttpsError(
+        "failed-precondition",
+        `This merchant already has ${MAX_ACTIVE_KEYS_PER_MODE} active ${mode} keys. Revoke one first.`
       );
     }
 
     const { apiKey, keyId, record } = mintApiKey({
       merchantId,
       label,
-      mode: "live",
+      mode,
+      scopes,
       createdBy: actor.uid,
       createdVia: "console",
     });
@@ -112,7 +129,7 @@ export const adminIssueApiKey = https.onCall(
         action: "api_key.issue",
         target: { type: "api_key", id: keyId },
         reason,
-        after: { merchantId, label, hint: record.hint },
+        after: { merchantId, label, hint: record.hint, mode, scopes },
       });
     });
 

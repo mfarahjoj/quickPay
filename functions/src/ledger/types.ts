@@ -75,6 +75,8 @@ export interface JournalRefs {
   apiChargeId?: string;
   /** API refund (`api_refunds`) behind a partial or full API refund. */
   apiRefundId?: string;
+  /** API transfer (`api_transfers`) behind a partner's payroll entry. */
+  apiTransferId?: string;
   /** Collection-number payment (`mobile_money_receipts`) behind a mobile_money_* entry. */
   receiptId?: string;
   /** Ops correction (`adjustments`) behind an adjustment entry. */

@@ -363,6 +363,8 @@ export interface Transaction {
    * are tracked on the charge — see refundPayment.
    */
   apiChargeId?: string;
+  /** Partner transfer (`api_transfers`) behind a payroll row. */
+  apiTransferId?: string;
   /** On an API payment: cents refunded so far, across partial refunds. */
   amountRefunded?: number;
   /** On an adjustment row: the `adjustments` doc behind it. */
