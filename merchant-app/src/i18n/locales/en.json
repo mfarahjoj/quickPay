@@ -896,8 +896,9 @@
   "paidRef.times": "Paid {{count}} times",
   "paidRef.cancel": "Don't charge",
   "paidRef.chargeAgain": "Charge again",
-  "qr.receive.charge": "Charge",
-  "qr.receive.chargeAmount": "Charge {{amount}}",
   "qr.display.cantScan": "Can't scan? Scan their code",
-  "scan.chargingAmount": "Charging {{amount}}"
+  "scan.chargingAmount": "Charging {{amount}}",
+  "qr.receive.showQr": "Show QR",
+  "qr.myQr.title": "My QR",
+  "qr.myQr.hint": "Scan with Zapp Pay and type the amount"
 }

@@ -47,13 +47,13 @@ const SURFACE = '#1C1C1E';
 const TEXT_MUTED = '#AEAEB2';
 
 /**
- * The Receive tab, one path for every sale: type the amount, press Charge,
- * the customer scans the code, paid.
+ * The Receive tab. The sale comes first: the amount, and an invoice number
+ * or note. Then the shopkeeper picks how to collect it: show a QR for the
+ * customer to scan, or scan the customer's own code. Either way the amount
+ * and note carry through, and a link under the QR switches to scanning.
  *
- * Two things sit off that path on purpose. A customer who can't scan is
- * scanned instead, from a link under the code, with the amount carried over.
- * The printed counter code has its own screen (CounterCodeScreen), reached
- * from the top right.
+ * The shop's own QR, where the customer types the amount, has its own
+ * screen (CounterCodeScreen, "My QR"), reached from the top right.
  */
 export default function GenerateQRScreen() {
   const { t } = useTranslation();
@@ -470,7 +470,7 @@ export default function GenerateQRScreen() {
           accessibilityRole="button"
         >
           <QrIcon size={16} color="#FFFFFF" />
-          <Text style={styles.counterBtnText}>{t('qr.mode.counter')}</Text>
+          <Text style={styles.counterBtnText}>{t('qr.myQr.title')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -590,12 +590,17 @@ export default function GenerateQRScreen() {
           )}
 
           <View style={styles.footer}>
+            {/* The sale is typed; now how to collect it. */}
             <PillButton
-              label={
-                amountCents > 0
-                  ? t('qr.receive.chargeAmount', { amount: formatCents(amountCents) })
-                  : t('qr.receive.charge')
-              }
+              label={t('qr.receive.scanCustomer')}
+              variant="glass"
+              style={styles.footerBtn}
+              onPress={handleScanInstead}
+              disabled={amountCents <= 0 || offline || loading}
+            />
+            <PillButton
+              label={t('qr.receive.showQr')}
+              style={styles.footerBtn}
               onPress={() => handleGenerate()}
               loading={loading}
               disabled={amountCents <= 0 || offline}
@@ -825,9 +830,12 @@ const styles = StyleSheet.create({
     height: 24,
   },
   footer: {
-    paddingHorizontal: 24,
+    flexDirection: 'row',
+    gap: 10,
+    paddingHorizontal: 20,
     paddingTop: 10,
   },
+  footerBtn: { flex: 1 },
 
   // ticket (customer-facing)
   ticket: {

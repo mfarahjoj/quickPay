@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Share } from 'react-native';
+import { View, Text, StyleSheet, Share, useWindowDimensions } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import QRCode from 'react-native-qrcode-svg';
@@ -9,22 +9,24 @@ import { callableErrorKey } from '../../utils/errors';
 import { DarkScreen, ScreenHeader, PillButton, TEXT_DIM } from '../../components';
 import CounterIncomingFeed from './CounterIncomingFeed';
 
-const QR_SIZE = 132;
-
 /**
- * The counter code: the shop's one printed QR. The customer scans it and
- * types the amount themselves, so there is nothing to do here per sale. The
- * shopkeeper prints it once and watches payments land in the list.
+ * My QR: the shop's own code. The customer scans it and types the amount
+ * themselves, so there is nothing to do here per sale. The shopkeeper holds
+ * up the phone, or prints the code once, and watches payments land in the
+ * list underneath.
  *
- * It is reached from the top of Receive, off the path of a normal sale.
+ * The code is as wide as the sale ticket's, because it is mostly shown to a
+ * customer across a counter. Reached from the top of Receive.
  */
 export default function CounterCodeScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
+  const { width } = useWindowDimensions();
   const [sticker, setSticker] = useState<MerchantStickerData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const qrRef = useRef<any>(null);
+  const qrSize = Math.min(260, width - 120);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,7 +69,7 @@ export default function CounterCodeScreen() {
 
   return (
     <DarkScreen scroll contentStyle={styles.content}>
-      <ScreenHeader title={t('qr.mode.counter')} onBack={() => navigation.goBack()} />
+      <ScreenHeader title={t('qr.myQr.title')} onBack={() => navigation.goBack()} />
 
       {error ? (
         <View style={styles.errorBanner}>
@@ -78,34 +80,35 @@ export default function CounterCodeScreen() {
       {sticker ? (
         <>
           <View style={styles.card}>
-            <QRCode
-              value={sticker.qrData}
-              size={QR_SIZE}
-              backgroundColor="#FFFFFF"
-              color="#000000"
-              getRef={(c) => {
-                qrRef.current = c;
-              }}
-            />
-            <View style={styles.cardBody}>
-              <Text style={styles.name} numberOfLines={2}>
-                {sticker.merchantName}
-              </Text>
-              <Text style={styles.cardText}>{t('qr.counter.subtitle')}</Text>
-              <Text style={styles.cardHint}>{t('qr.counter.hint')}</Text>
+            <Text style={styles.payTo}>{t('qr.display.payTo')}</Text>
+            <Text style={styles.name} numberOfLines={2}>
+              {sticker.merchantName}
+            </Text>
+            <View style={styles.qr}>
+              <QRCode
+                value={sticker.qrData}
+                size={qrSize}
+                backgroundColor="#FFFFFF"
+                color="#000000"
+                getRef={(c) => {
+                  qrRef.current = c;
+                }}
+              />
             </View>
+            <Text style={styles.cardText}>{t('qr.myQr.hint')}</Text>
+          </View>
+
+          <View style={styles.footer}>
+            <PillButton label={t('qr.counter.share')} variant="glass" onPress={share} />
+            <Text style={styles.info}>{t('qr.counter.hint')}</Text>
           </View>
 
           <View style={styles.feed}>
             <CounterIncomingFeed />
           </View>
-
-          <View style={styles.footer}>
-            <PillButton label={t('qr.counter.share')} variant="glass" onPress={share} />
-          </View>
         </>
       ) : (
-        <Text style={styles.info}>
+        <Text style={[styles.info, styles.infoAlone]}>
           {loading ? t('qr.counter.loading') : error ? '' : t('qr.counter.unavailable')}
         </Text>
       )}
@@ -116,22 +119,30 @@ export default function CounterCodeScreen() {
 const styles = StyleSheet.create({
   content: { flexGrow: 1, paddingBottom: 24 },
   card: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
     marginHorizontal: 20,
     marginTop: 8,
-    padding: 18,
-    borderRadius: 28,
+    paddingTop: 24,
+    paddingBottom: 22,
+    paddingHorizontal: 20,
+    borderRadius: 32,
     backgroundColor: '#FFFFFF',
   },
-  cardBody: { flex: 1, gap: 6 },
-  name: { fontSize: 20, fontWeight: '700', letterSpacing: -0.3, color: '#000000' },
-  cardText: { fontSize: 14, lineHeight: 19, color: '#48484A' },
-  cardHint: { fontSize: 13, lineHeight: 18, color: '#636366' },
-  feed: { flexGrow: 1, paddingHorizontal: 20, marginTop: 8 },
-  footer: { paddingHorizontal: 20, paddingTop: 16 },
-  info: { fontSize: 14, color: TEXT_DIM, textAlign: 'center', marginTop: 40, paddingHorizontal: 24 },
+  payTo: { fontSize: 13, fontWeight: '600', color: '#636366' },
+  name: {
+    fontSize: 24,
+    fontWeight: '700',
+    letterSpacing: -0.4,
+    color: '#000000',
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  qr: { marginTop: 18, marginBottom: 16 },
+  cardText: { fontSize: 15, fontWeight: '600', color: '#48484A', textAlign: 'center' },
+  footer: { paddingHorizontal: 20, paddingTop: 16, gap: 12 },
+  feed: { paddingHorizontal: 20, marginTop: 12 },
+  info: { fontSize: 13, lineHeight: 19, color: TEXT_DIM, textAlign: 'center' },
+  infoAlone: { marginTop: 40, paddingHorizontal: 24 },
   errorBanner: {
     marginHorizontal: 20,
     marginBottom: 12,

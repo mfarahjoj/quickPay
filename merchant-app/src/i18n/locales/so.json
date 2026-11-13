@@ -896,8 +896,9 @@
   "paidRef.times": "La bixiyey {{count}} jeer",
   "paidRef.cancel": "Ha dallacin",
   "paidRef.chargeAgain": "Dallac mar kale",
-  "qr.receive.charge": "Lacag qaad",
-  "qr.receive.chargeAmount": "Qaad {{amount}}",
   "qr.display.cantScan": "Ma iskaan gareyn karo? Iskaan garee koodhkiisa",
-  "scan.chargingAmount": "Waxaa la qaadayaa {{amount}}"
+  "scan.chargingAmount": "Waxaa la qaadayaa {{amount}}",
+  "qr.receive.showQr": "Muuji QR",
+  "qr.myQr.title": "QR-kayga",
+  "qr.myQr.hint": "Ku iskaan garee Zapp Pay oo qor lacagta"
 }

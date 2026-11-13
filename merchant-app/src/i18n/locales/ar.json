@@ -896,8 +896,9 @@
   "paidRef.times": "دُفعت {{count}} مرات",
   "paidRef.cancel": "لا تحصّل",
   "paidRef.chargeAgain": "حصّل مرة أخرى",
-  "qr.receive.charge": "حصّل",
-  "qr.receive.chargeAmount": "حصّل {{amount}}",
   "qr.display.cantScan": "لا يستطيع المسح؟ امسح رمزه",
-  "scan.chargingAmount": "تحصيل {{amount}}"
+  "scan.chargingAmount": "تحصيل {{amount}}",
+  "qr.receive.showQr": "اعرض QR",
+  "qr.myQr.title": "رمزي QR",
+  "qr.myQr.hint": "امسح عبر Zapp Pay واكتب المبلغ"
 }
