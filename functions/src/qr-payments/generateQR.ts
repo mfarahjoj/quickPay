@@ -7,6 +7,7 @@ import { generateEmvQRPayload } from "../utils/emvqr";
 import { getRates, computePaymentFee } from "../config/rates";
 import { ApiResponse, QRCode, GenerateQRResponse } from "../types";
 import { cleanReference, guardPaidReference } from "../utils/paidReferences";
+import { syncCounterStateQuietly } from "../counterDisplay/state";
 
 interface GenerateQRRequest {
   amount: number; // In cents
@@ -139,6 +140,10 @@ export const generateQRCode = https.onCall(
       };
 
       await db.collection("qrCodes").doc(qrCodeId).set(qrCode);
+
+      // Put the sale on the shop's counter display before the phone shows
+      // it, rather than after a trigger's cold start. Never fails the sale.
+      await syncCounterStateQuietly(merchantId);
 
       console.log(`Generated QR code ${qrCodeId} for merchant ${merchantId}`);
 

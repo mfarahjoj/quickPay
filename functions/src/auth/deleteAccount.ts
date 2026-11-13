@@ -1,6 +1,7 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { onSchedule } from "firebase-functions/v2/scheduler";
+import { revokeAllDisplays } from "../counterDisplay/manage";
 import { requireAuth } from "../utils/validation";
 import { verifyUserPin } from "./validatePin";
 import { endSessions } from "./sessions";
@@ -179,6 +180,8 @@ export async function deleteDueAccount(uid: string, nowMs: number): Promise<"del
   }
 
   await forgetTrustedDevices(uid);
+  // A shop's counter displays stop showing its QR.
+  await revokeAllDisplays(uid);
   // Whoever has their Zaad/eDahab number next can link it.
   await forgetLinkedNumbers(uid);
   // PIN secrets (private/auth), push tokens and anything else under the user.
