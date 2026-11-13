@@ -6,6 +6,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { signOut } from '../../services/auth.service';
 import { useMerchantProfile } from '../../hooks/useMerchantProfile';
 import { useAuth } from '../../hooks/useAuth';
+import { useCounterDisplayOn } from '../../hooks/useCounterDisplayOn';
 import { needsReply, useMyDisputes } from '../../services/dispute.service';
 import { formatLocal } from '../../utils/zaad';
 import {
@@ -50,6 +51,7 @@ export default function SettingsScreen() {
   const { profile } = useMerchantProfile();
   const navigation = useNavigation<StackNavigationProp<any>>();
   const { disputes } = useMyDisputes();
+  const counterDisplay = useCounterDisplayOn();
   const repliesDue = disputes.filter((d) => needsReply(d, user?.uid)).length;
 
   const isAgent =
@@ -106,6 +108,16 @@ export default function SettingsScreen() {
           value={profile?.zaad ? formatLocal(profile.zaad.msisdn) : undefined}
           onPress={() => navigation.navigate('ZaadAccount')}
         />
+        {/* A tablet on the counter that shows the shop's QR and each sale. */}
+        {takesPayments && counterDisplay.on ? (
+          <>
+            <View style={styles.divider} />
+            <TappableRow
+              label={t('settings.counterDisplay')}
+              onPress={() => navigation.navigate('CounterDisplays')}
+            />
+          </>
+        ) : null}
       </GlassCard>
 
       {/* Security */}

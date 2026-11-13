@@ -14,6 +14,8 @@ import NetInfo from '@react-native-community/netinfo';
 import QRCode from 'react-native-qrcode-svg';
 import { firestore } from '../../services/firebase.config';
 import { generateQRCode, cancelQRCode } from '../../services/qr.service';
+import { listMyDisplays } from '../../services/counterDisplay.service';
+import { useCounterDisplayOn } from '../../hooks/useCounterDisplayOn';
 import { triggerHaptic } from '../../services/haptics.service';
 import { QRCodeData, QRSettlement } from '../../types';
 import { toCents, formatCents } from '../../utils/money';
@@ -88,6 +90,23 @@ export default function GenerateQRScreen() {
   const amountCents = toCents(amount);
   const trimmedReference = reference.trim();
 
+  // ── Counter display ─────────────────────────────
+  // Whether a tablet on the counter is showing this sale too.
+  const counterDisplay = useCounterDisplayOn();
+  const [onCounter, setOnCounter] = useState(false);
+  useEffect(() => {
+    if (!counterDisplay.on || phase !== 'showing') return;
+    let cancelled = false;
+    listMyDisplays()
+      .then((displays) => {
+        if (!cancelled) setOnCounter(displays.some((d) => d.online));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [counterDisplay.on, phase]);
+
   // ── Connectivity ────────────────────────────────
   useEffect(() => {
     const unsub = NetInfo.addEventListener((state) => {
@@ -145,6 +164,22 @@ export default function GenerateQRScreen() {
             });
             triggerHaptic('payment');
             setPhase('paid');
+          } else if (data.status === 'expired' && typeof data.supersededBy === 'string') {
+            // The customer scanned their own code at the counter display: the
+            // tablet voided this QR and raised a request for the same sale.
+            // Wait on that request, as if the phone had scanned them.
+            triggerHaptic('medium');
+            setQrData(null);
+            setTimeRemaining(0);
+            setPhase('entry');
+            navigation.navigate('Charge', {
+              requestId: data.supersededBy,
+              tokenId: data.supersededBy,
+              customerName: '',
+              customerId: '',
+              amountCents: data.amount,
+              reference: data.reference,
+            });
           } else if (data.status === 'expired') {
             setPhase('expired');
           }
@@ -157,7 +192,7 @@ export default function GenerateQRScreen() {
       );
 
     return unsub;
-  }, [phase, qrData, t]);
+  }, [phase, qrData, t, navigation]);
 
   // ── Charge flow ─────────────────────────────────
   const handleGenerate = async (chargeAgain = false) => {
@@ -434,6 +469,7 @@ export default function GenerateQRScreen() {
             <Text style={styles.statusSub}>
               {t('qr.display.youReceive', { amount: formatCents(qrData.netCents) })}
             </Text>
+            {onCounter ? <Text style={styles.statusSub}>{t('qr.display.alsoOnCounter')}</Text> : null}
           </View>
           <Text style={[styles.statusTime, warning && styles.statusTimeWarn]}>
             {formatTime(timeRemaining)}

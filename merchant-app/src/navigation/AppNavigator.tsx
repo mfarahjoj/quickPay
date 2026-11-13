@@ -47,6 +47,8 @@ type MerchantStackParamList = {
     /** The sale typed on Receive, when the customer couldn't scan its code. */
     amountCents?: number;
     reference?: string;
+    /** A request already raised (a scan at the counter display): wait on it. */
+    requestId?: string;
   };
   ScanCharge: { amountCents?: number; reference?: string } | undefined;
   CounterCode: undefined;
@@ -73,6 +75,8 @@ type MerchantStackParamList = {
   ChangePin: undefined;
   ResetPin: undefined;
   ZaadAccount: undefined;
+  CounterDisplays: undefined;
+  LinkDisplay: undefined;
 };
 
 type TabParamList = {
@@ -348,6 +352,16 @@ function MainStackNavigator() {
       <MainStack.Screen
         name="ZaadAccount"
         getComponent={() => require('../screens/settings/ZaadAccountScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="CounterDisplays"
+        getComponent={() => require('../screens/settings/CounterDisplaysScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="LinkDisplay"
+        getComponent={() => require('../screens/settings/LinkDisplayScreen').default}
         options={{ headerShown: false }}
       />
     </MainStack.Navigator>
