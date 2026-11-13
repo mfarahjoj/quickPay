@@ -275,6 +275,29 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Counter display (functions/src/counterDisplay/, COUNTER_DISPLAY.md).
+    // A shop's counter tablet has no Firebase Auth identity. It reads one
+    // state doc whose id is a 256-bit secret handed to it at pairing: the id
+    // is the capability, so `get` needs no sign-in and `list` is closed (ids
+    // can't be enumerated). The doc holds only what the counter screen shows
+    // to the public anyway: shop name, QR payloads, an amount, a first name.
+    match /counterDisplayStates/{stateKey} {
+      allow get: if true;
+      allow list: if false;
+      allow write: if false;
+    }
+    // Display records (hashed secrets), pairing codes and rate counters:
+    // server-only. The merchant app goes through listMyDisplays.
+    match /merchantDisplays/{displayId} {
+      allow read, write: if false;
+    }
+    match /displayPairings/{pairingId} {
+      allow read, write: if false;
+    }
+    match /display_rate_limits/{bucketId} {
+      allow read, write: if false;
+    }
+
     // Default deny all other access
     match /{document=**} {
       allow read, write: if false;

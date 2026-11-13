@@ -120,6 +120,21 @@ export { cancelPaymentRequest } from "./customer-qr/cancelPayment";
 export { registerMerchant } from "./merchants/registerMerchant";
 export { getMerchantProfile } from "./merchants/getMerchantProfile";
 export { generateMerchantSticker } from "./merchants/generateMerchantSticker";
+// Counter display: a customer-facing tablet on the shop counter (COUNTER_DISPLAY.md).
+export {
+  startDisplayPairing,
+  pollDisplayPairing,
+  confirmDisplayPairing,
+  linkDisplay,
+} from "./counterDisplay/pairing";
+export { listMyDisplays, renameDisplay, unlinkDisplay, displaySignOut } from "./counterDisplay/manage";
+export { displayHeartbeat } from "./counterDisplay/heartbeat";
+export { displayScanCustomer } from "./counterDisplay/scan";
+export {
+  counterDisplayOnQrCode,
+  counterDisplayOnPaymentRequest,
+  counterDisplayOnTransaction,
+} from "./counterDisplay/triggers";
 export { setupAgentProfile } from "./merchants/setupAgentProfile";
 
 // Referral functions

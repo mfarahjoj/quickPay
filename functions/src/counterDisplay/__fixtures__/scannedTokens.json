@@ -1,0 +1,62 @@
+[
+  {
+    "name": "as the server writes it",
+    "raw": "v2:7ca1e954eaad9a0317c8c903:85ea6b8b93746868eae87ab2c97df6e3:a9eb7b1e437df1a99374dcc695cb865961571f274e6ed1d305a2734d35d728bfcebb3f0d66b42d4ed40a63c4bd5731dfd5d873612c2d22096bee4ee9",
+    "expected": "v2:7ca1e954eaad9a0317c8c903:85ea6b8b93746868eae87ab2c97df6e3:a9eb7b1e437df1a99374dcc695cb865961571f274e6ed1d305a2734d35d728bfcebb3f0d66b42d4ed40a63c4bd5731dfd5d873612c2d22096bee4ee9"
+  },
+  {
+    "name": "Enter suffix from a USB scanner",
+    "raw": "v2:7ca1e954eaad9a0317c8c903:85ea6b8b93746868eae87ab2c97df6e3:a9eb7b1e437df1a99374dcc695cb865961571f274e6ed1d305a2734d35d728bfcebb3f0d66b42d4ed40a63c4bd5731dfd5d873612c2d22096bee4ee9\r\n",
+    "expected": "v2:7ca1e954eaad9a0317c8c903:85ea6b8b93746868eae87ab2c97df6e3:a9eb7b1e437df1a99374dcc695cb865961571f274e6ed1d305a2734d35d728bfcebb3f0d66b42d4ed40a63c4bd5731dfd5d873612c2d22096bee4ee9"
+  },
+  {
+    "name": "Tab suffix",
+    "raw": "v2:7ca1e954eaad9a0317c8c903:85ea6b8b93746868eae87ab2c97df6e3:a9eb7b1e437df1a99374dcc695cb865961571f274e6ed1d305a2734d35d728bfcebb3f0d66b42d4ed40a63c4bd5731dfd5d873612c2d22096bee4ee9\t",
+    "expected": "v2:7ca1e954eaad9a0317c8c903:85ea6b8b93746868eae87ab2c97df6e3:a9eb7b1e437df1a99374dcc695cb865961571f274e6ed1d305a2734d35d728bfcebb3f0d66b42d4ed40a63c4bd5731dfd5d873612c2d22096bee4ee9"
+  },
+  {
+    "name": "Caps Lock on",
+    "raw": "V2:7CA1E954EAAD9A0317C8C903:85EA6B8B93746868EAE87AB2C97DF6E3:A9EB7B1E437DF1A99374DCC695CB865961571F274E6ED1D305A2734D35D728BFCEBB3F0D66B42D4ED40A63C4BD5731DFD5D873612C2D22096BEE4EE9",
+    "expected": "v2:7ca1e954eaad9a0317c8c903:85ea6b8b93746868eae87ab2c97df6e3:a9eb7b1e437df1a99374dcc695cb865961571f274e6ed1d305a2734d35d728bfcebb3f0d66b42d4ed40a63c4bd5731dfd5d873612c2d22096bee4ee9"
+  },
+  {
+    "name": "colon typed as semicolon (non-US layout)",
+    "raw": "v2;7ca1e954eaad9a0317c8c903;85ea6b8b93746868eae87ab2c97df6e3;a9eb7b1e437df1a99374dcc695cb865961571f274e6ed1d305a2734d35d728bfcebb3f0d66b42d4ed40a63c4bd5731dfd5d873612c2d22096bee4ee9",
+    "expected": "v2:7ca1e954eaad9a0317c8c903:85ea6b8b93746868eae87ab2c97df6e3:a9eb7b1e437df1a99374dcc695cb865961571f274e6ed1d305a2734d35d728bfcebb3f0d66b42d4ed40a63c4bd5731dfd5d873612c2d22096bee4ee9"
+  },
+  {
+    "name": "colon typed as Shift+period",
+    "raw": "v2>7ca1e954eaad9a0317c8c903>85ea6b8b93746868eae87ab2c97df6e3>a9eb7b1e437df1a99374dcc695cb865961571f274e6ed1d305a2734d35d728bfcebb3f0d66b42d4ed40a63c4bd5731dfd5d873612c2d22096bee4ee9",
+    "expected": "v2:7ca1e954eaad9a0317c8c903:85ea6b8b93746868eae87ab2c97df6e3:a9eb7b1e437df1a99374dcc695cb865961571f274e6ed1d305a2734d35d728bfcebb3f0d66b42d4ed40a63c4bd5731dfd5d873612c2d22096bee4ee9"
+  },
+  {
+    "name": "leading spaces",
+    "raw": "  v2:7ca1e954eaad9a0317c8c903:85ea6b8b93746868eae87ab2c97df6e3:a9eb7b1e437df1a99374dcc695cb865961571f274e6ed1d305a2734d35d728bfcebb3f0d66b42d4ed40a63c4bd5731dfd5d873612c2d22096bee4ee9",
+    "expected": "v2:7ca1e954eaad9a0317c8c903:85ea6b8b93746868eae87ab2c97df6e3:a9eb7b1e437df1a99374dcc695cb865961571f274e6ed1d305a2734d35d728bfcebb3f0d66b42d4ed40a63c4bd5731dfd5d873612c2d22096bee4ee9"
+  },
+  {
+    "name": "a merchant QR, not a customer code",
+    "raw": "{\"type\": \"quickpay_merchant\", \"merchantId\": \"m1\"}",
+    "expected": null
+  },
+  {
+    "name": "an EMV payment QR",
+    "raw": "00020101021226000000000000000000000000000000000000000000000000000000000000",
+    "expected": null
+  },
+  {
+    "name": "nonce too short",
+    "raw": "v2:7ca1e954eaad9a0317c8c9:85ea6b8b93746868eae87ab2c97df6e3:a9eb7b1e437df1a99374dcc695cb865961571f274e6ed1d305a2734d35d728bfcebb3f0d66b42d4ed40a63c4bd5731dfd5d873612c2d22096bee4ee9",
+    "expected": null
+  },
+  {
+    "name": "digits changed by a layout (AZERTY)",
+    "raw": "vé:7ca&e954eaad9a03&7c8c903:85ea6b8b93746868eae87abéc97df6e3:a9eb7b&e437df&a99374dcc695cb86596&57&fé74e6ed&d305aé734d35d7é8bfcebb3f0d66b4éd4ed40a63c4bd573&dfd5d8736&écédéé096bee4ee9",
+    "expected": null
+  },
+  {
+    "name": "empty",
+    "raw": "",
+    "expected": null
+  }
+]

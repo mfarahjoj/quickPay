@@ -44,8 +44,14 @@ type MerchantStackParamList = {
     customerId: string;
     /** "cash_out": the agent hands over cash once the customer approves. */
     purpose?: 'payment' | 'cash_out';
+    /** The sale typed on Receive, when the customer couldn't scan its code. */
+    amountCents?: number;
+    reference?: string;
+    /** A request already raised (a scan at the counter display): wait on it. */
+    requestId?: string;
   };
-  ScanCharge: undefined;
+  ScanCharge: { amountCents?: number; reference?: string } | undefined;
+  CounterCode: undefined;
   ScanCashOut: { purpose: 'cash_out' };
   TransactionDetail: { transaction: any };
   TopupCustomer: undefined;
@@ -69,6 +75,8 @@ type MerchantStackParamList = {
   ChangePin: undefined;
   ResetPin: undefined;
   ZaadAccount: undefined;
+  CounterDisplays: undefined;
+  LinkDisplay: undefined;
 };
 
 type TabParamList = {
@@ -232,6 +240,11 @@ function MainStackNavigator() {
         options={{ headerShown: false }}
       />
       <MainStack.Screen
+        name="CounterCode"
+        getComponent={() => require('../screens/qr/CounterCodeScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
         name="ScanCashOut"
         getComponent={() => require('../screens/scan/ScanCustomerScreen').default}
         initialParams={{ purpose: 'cash_out' }}
@@ -339,6 +352,16 @@ function MainStackNavigator() {
       <MainStack.Screen
         name="ZaadAccount"
         getComponent={() => require('../screens/settings/ZaadAccountScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="CounterDisplays"
+        getComponent={() => require('../screens/settings/CounterDisplaysScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="LinkDisplay"
+        getComponent={() => require('../screens/settings/LinkDisplayScreen').default}
         options={{ headerShown: false }}
       />
     </MainStack.Navigator>

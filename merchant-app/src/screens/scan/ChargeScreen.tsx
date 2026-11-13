@@ -42,6 +42,10 @@ interface Props {
       customerName: string;
       customerId: string;
       purpose?: 'payment' | 'cash_out';
+      amountCents?: number;
+      reference?: string;
+      /** A request already raised (a scan at the counter display): wait on it. */
+      requestId?: string;
     };
   };
   navigation: any;
@@ -88,15 +92,21 @@ const formatClock = (seconds: number) =>
 
 export default function ChargeScreen({ route, navigation }: Props) {
   const { t } = useTranslation();
-  const { tokenId, customerName } = route.params;
+  const { tokenId } = route.params;
+  // Resuming a request raised elsewhere: its name, amount and expiry come from the request.
+  const resumedId = route.params.requestId ?? null;
+  const [customerName, setCustomerName] = useState(route.params.customerName);
   // A cash-out: the agent hands over cash once the customer approves.
   const cashOut = route.params.purpose === 'cash_out';
   const k = (key: string) => (cashOut ? `scan.cashOut.${key}` : `scan.charge.${key}`);
-  const [amount, setAmount] = useState('');
-  const [reference, setReference] = useState('');
-  const [phase, setPhase] = useState<Phase>('idle');
-  const [requestId, setRequestId] = useState<string | null>(null);
-  const [chargedCents, setChargedCents] = useState(0);
+  // Filled in already when the sale was typed on Receive.
+  const [amount, setAmount] = useState(
+    route.params.amountCents ? (route.params.amountCents / 100).toFixed(2) : ''
+  );
+  const [reference, setReference] = useState(route.params.reference ?? '');
+  const [phase, setPhase] = useState<Phase>(resumedId ? 'waiting' : 'idle');
+  const [requestId, setRequestId] = useState<string | null>(resumedId);
+  const [chargedCents, setChargedCents] = useState(resumedId ? route.params.amountCents ?? 0 : 0);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [connectionLost, setConnectionLost] = useState(false);
   // The last attempt failed without saying whether the charge was raised.
@@ -124,6 +134,12 @@ export default function ChargeScreen({ route, navigation }: Props) {
         (doc) => {
           setConnectionLost(false);
           const data = doc.data();
+          if (resumedId && data) {
+            if (typeof data.amount === 'number') setChargedCents(data.amount);
+            if (typeof data.customerName === 'string' && data.customerName) setCustomerName(data.customerName);
+            const expiresAtMs = data.expiresAt?.toMillis?.();
+            if (!deadline.current && typeof expiresAtMs === 'number') deadline.current = expiresAtMs;
+          }
           const status = data?.status as ChargeStatus | undefined;
           if (status === 'approved' && typeof data?.receiptNumber === 'string') {
             setReceiptNumber(data.receiptNumber);
@@ -132,7 +148,7 @@ export default function ChargeScreen({ route, navigation }: Props) {
         },
         () => setConnectionLost(true),
       );
-  }, [requestId, settle]);
+  }, [requestId, resumedId, settle]);
 
   /**
    * Ask the server to end the charge, then show how it really ended. Its
@@ -168,6 +184,8 @@ export default function ChargeScreen({ route, navigation }: Props) {
   useEffect(() => {
     if (phase !== 'waiting' || !requestId) return;
     const tick = () => {
+      // A resumed request's expiry arrives with its first snapshot.
+      if (!deadline.current) return;
       const left = Math.max(0, Math.ceil((deadline.current - Date.now()) / 1000));
       setSecondsLeft(left);
       if (left === 0) withdraw(requestId, 'unknown');
@@ -275,7 +293,10 @@ export default function ChargeScreen({ route, navigation }: Props) {
   const scanAgain = () =>
     cashOut
       ? navigation.navigate('ScanCashOut', { purpose: 'cash_out' })
-      : navigation.navigate('ScanCharge');
+      : navigation.navigate('ScanCharge', {
+          amountCents: route.params.amountCents,
+          reference: route.params.reference,
+        });
 
   // ── Outcomes ──
   if (phase === 'approved') {

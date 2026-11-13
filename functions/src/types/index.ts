@@ -385,6 +385,12 @@ export interface QRCode {
   netCents?: number;
   transactionId?: string;
   receiptNumber?: string;
+  /**
+   * Set when a counter display scanned a customer for this sale: the QR was
+   * voided in the same transaction that raised this payment request
+   * (counterDisplay/scan.ts). The merchant app follows the sale there.
+   */
+  supersededBy?: string;
 }
 
 // Top-up types
@@ -491,6 +497,8 @@ export interface CustomerToken {
   createdAt: FirebaseFirestore.Timestamp;
   scannedBy?: string;
   scannedAt?: FirebaseFirestore.Timestamp;
+  /** "counter_display" when a shop's counter tablet read the code. */
+  scannedVia?: string;
 }
 
 // Merchant-initiated payment request types
@@ -517,6 +525,12 @@ export interface MerchantPaymentRequest {
   purpose?: "payment" | "cash_out";
   /** Cash-out only: the fee the customer pays on top, fixed when raised. */
   feeCents?: number;
+  /** "counter_display" when raised by a shop's counter tablet (counterDisplay/scan.ts). */
+  source?: "counter_display";
+  /** Counter display only: which tablet, which sale it replaced, who was scanned. */
+  displayId?: string;
+  saleId?: string;
+  customerName?: string;
   createdAt: FirebaseFirestore.Timestamp;
   /**
    * When the customer can no longer approve. Absent on requests raised before

@@ -2,6 +2,7 @@ import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { requireAuth } from "../utils/validation";
 import { ApiResponse, QRCode } from "../types";
+import { syncCounterStateQuietly } from "../counterDisplay/state";
 
 interface CancelQRRequest {
   qrCodeId: string;
@@ -58,6 +59,9 @@ export const cancelQRCode = https.onCall(
         });
         return true;
       });
+
+      // Take the voided code off the counter display at once.
+      if (cancelled) await syncCounterStateQuietly(merchantId);
 
       return { success: true, data: { cancelled } };
     } catch (error: any) {

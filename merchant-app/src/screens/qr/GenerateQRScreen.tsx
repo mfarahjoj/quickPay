@@ -1,11 +1,11 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Share,
+  ActivityIndicator,
   useWindowDimensions,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
@@ -13,13 +13,11 @@ import { useNavigation } from '@react-navigation/native';
 import NetInfo from '@react-native-community/netinfo';
 import QRCode from 'react-native-qrcode-svg';
 import { firestore } from '../../services/firebase.config';
-import {
-  generateQRCode,
-  generateMerchantSticker,
-  cancelQRCode,
-} from '../../services/qr.service';
+import { generateQRCode, cancelQRCode } from '../../services/qr.service';
+import { listMyDisplays } from '../../services/counterDisplay.service';
+import { useCounterDisplayOn } from '../../hooks/useCounterDisplayOn';
 import { triggerHaptic } from '../../services/haptics.service';
-import { QRCodeData, MerchantStickerData, QRSettlement } from '../../types';
+import { QRCodeData, QRSettlement } from '../../types';
 import { toCents, formatCents } from '../../utils/money';
 import { REFERENCE_MAX_LENGTH } from '../../utils/receiptParser';
 import { callableErrorKey } from '../../utils/errors';
@@ -41,25 +39,29 @@ import {
   TEXT_FAINT,
 } from '../../components';
 import type { ReceiptDetails } from '../../components/ReceiptScanner';
-import { ScanIcon, SuccessCheckIcon, ReceiptIcon, CloseIcon } from '../../components/icons/AuthIcons';
-import CounterIncomingFeed from './CounterIncomingFeed';
+import { ScanIcon, SuccessCheckIcon, ReceiptIcon, CloseIcon, QrIcon } from '../../components/icons/AuthIcons';
 
-type Mode = 'charge' | 'counter';
 type Phase = 'entry' | 'showing' | 'paid' | 'expired';
 
-const QR_SIZE = 260;
 const TICKET_QR_SIZE = 232;
+// Flat, solid surfaces rather than bordered glass.
+const SURFACE = '#1C1C1E';
+const TEXT_MUTED = '#AEAEB2';
 
 /**
- * The Receive tab: a QR for one sale, the counter code, and (top right)
- * scanning the customer's own code instead.
+ * The Receive tab. The sale comes first: the amount, and an invoice number
+ * or note. Then the shopkeeper picks how to collect it: show a QR for the
+ * customer to scan, or scan the customer's own code. Either way the amount
+ * and note carry through, and a link under the QR switches to scanning.
+ *
+ * The shop's own QR, where the customer types the amount, has its own
+ * screen (CounterCodeScreen, "My QR"), reached from the top right.
  */
 export default function GenerateQRScreen() {
   const { t } = useTranslation();
   const { height: screenHeight } = useWindowDimensions();
   const navigation = useNavigation<any>();
 
-  const [mode, setMode] = useState<Mode>('charge');
   const [amount, setAmount] = useState('');
   const [reference, setReference] = useState('');
   const [qrData, setQrData] = useState<QRCodeData | null>(null);
@@ -85,13 +87,25 @@ export default function GenerateQRScreen() {
   // a fresh code after the first expires doesn't ask a second time.
   const [confirmedReference, setConfirmedReference] = useState<string | null>(null);
 
-  // Counter-code mode
-  const [sticker, setSticker] = useState<MerchantStickerData | null>(null);
-  const [stickerLoading, setStickerLoading] = useState(false);
-  const stickerRef = useRef<any>(null);
-
   const amountCents = toCents(amount);
   const trimmedReference = reference.trim();
+
+  // ── Counter display ─────────────────────────────
+  // Whether a tablet on the counter is showing this sale too.
+  const counterDisplay = useCounterDisplayOn();
+  const [onCounter, setOnCounter] = useState(false);
+  useEffect(() => {
+    if (!counterDisplay.on || phase !== 'showing') return;
+    let cancelled = false;
+    listMyDisplays()
+      .then((displays) => {
+        if (!cancelled) setOnCounter(displays.some((d) => d.online));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [counterDisplay.on, phase]);
 
   // ── Connectivity ────────────────────────────────
   useEffect(() => {
@@ -150,6 +164,22 @@ export default function GenerateQRScreen() {
             });
             triggerHaptic('payment');
             setPhase('paid');
+          } else if (data.status === 'expired' && typeof data.supersededBy === 'string') {
+            // The customer scanned their own code at the counter display: the
+            // tablet voided this QR and raised a request for the same sale.
+            // Wait on that request, as if the phone had scanned them.
+            triggerHaptic('medium');
+            setQrData(null);
+            setTimeRemaining(0);
+            setPhase('entry');
+            navigation.navigate('Charge', {
+              requestId: data.supersededBy,
+              tokenId: data.supersededBy,
+              customerName: '',
+              customerId: '',
+              amountCents: data.amount,
+              reference: data.reference,
+            });
           } else if (data.status === 'expired') {
             setPhase('expired');
           }
@@ -162,47 +192,7 @@ export default function GenerateQRScreen() {
       );
 
     return unsub;
-  }, [phase, qrData, t]);
-
-  // ── Counter code ────────────────────────────────
-  const loadSticker = useCallback(async () => {
-    if (sticker || stickerLoading) return;
-    try {
-      setStickerLoading(true);
-      setError(null);
-      setSticker(await generateMerchantSticker());
-    } catch (e: any) {
-      setError(t(callableErrorKey(e)));
-    } finally {
-      setStickerLoading(false);
-    }
-  }, [sticker, stickerLoading, t]);
-
-  useEffect(() => {
-    if (mode === 'counter') loadSticker();
-  }, [mode, loadSticker]);
-
-  const handleShareSticker = async () => {
-    if (!sticker) return;
-    const message = t('qr.counter.shareMessage', { name: sticker.merchantName });
-    try {
-      const dataUrl: string | null = await new Promise((resolve) => {
-        if (!stickerRef.current?.toDataURL) return resolve(null);
-        stickerRef.current.toDataURL((data: string) => resolve(data));
-      });
-      if (dataUrl) {
-        await Share.share({ url: `data:image/png;base64,${dataUrl}`, message });
-        return;
-      }
-    } catch {
-      // Fall through to a plain text share below.
-    }
-    try {
-      await Share.share({ message });
-    } catch {
-      // User dismissed the sheet.
-    }
-  };
+  }, [phase, qrData, t, navigation]);
 
   // ── Charge flow ─────────────────────────────────
   const handleGenerate = async (chargeAgain = false) => {
@@ -267,6 +257,20 @@ export default function GenerateQRScreen() {
     setPhase('entry');
   };
 
+  // The customer can't scan: scan them instead, for the same sale. The code
+  // on screen is voided first, so one sale can't be paid both ways.
+  const handleScanInstead = () => {
+    if (qrData) cancelQRCode(qrData.qrCodeId);
+    setQrData(null);
+    setTimeRemaining(0);
+    setError(null);
+    setPhase('entry');
+    navigation.navigate('ScanCharge', {
+      amountCents,
+      reference: trimmedReference || undefined,
+    });
+  };
+
   const handleAmountChange = (next: string) => {
     setAmount(next);
     setFromReceipt(false);
@@ -324,16 +328,18 @@ export default function GenerateQRScreen() {
           </Text>
         ) : null}
 
-        {settlement.receiptNumber ? (
-          <View style={styles.receiptPill}>
-            <Text style={styles.receiptPillLabel}>{t('qr.paid.receipt')}</Text>
-            <Text style={styles.receiptPillValue} selectable>
-              {settlement.receiptNumber}
-            </Text>
-          </View>
-        ) : null}
-
-        <GlassCard style={styles.breakdown}>
+        <View style={styles.breakdown}>
+          {settlement.receiptNumber ? (
+            <>
+              <View style={styles.breakdownRow}>
+                <Text style={styles.breakdownLabel}>{t('qr.paid.receipt')}</Text>
+                <Text style={styles.receiptValue} selectable>
+                  {settlement.receiptNumber}
+                </Text>
+              </View>
+              <View style={styles.breakdownDivider} />
+            </>
+          ) : null}
           <View style={styles.breakdownRow}>
             <Text style={styles.breakdownLabel}>{t('qr.paid.gross')}</Text>
             <Text style={styles.breakdownValue}>{formatCents(gross)}</Text>
@@ -360,7 +366,7 @@ export default function GenerateQRScreen() {
               </View>
             </>
           ) : null}
-        </GlassCard>
+        </View>
 
         <View style={styles.resultFooter}>
           <PillButton label={t('qr.paid.newSale')} onPress={handleNewSale} />
@@ -405,6 +411,20 @@ export default function GenerateQRScreen() {
     const warning = timeRemaining < 60;
     return (
       <DarkScreen scroll contentStyle={styles.showingContent}>
+        <View style={styles.showingHeader}>
+          <TouchableOpacity
+            style={styles.roundBtn}
+            onPress={handleNewSale}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={t('qr.display.cancelSale')}
+          >
+            <CloseIcon size={14} color="#FFFFFF" />
+          </TouchableOpacity>
+          <Text style={styles.showingTitle}>{t('qr.display.scanSubtitle')}</Text>
+          <View style={styles.roundSpacer} />
+        </View>
+
         <View style={styles.ticket}>
           {qrData.merchantName ? (
             <>
@@ -442,25 +462,36 @@ export default function GenerateQRScreen() {
           </View>
         ) : null}
 
-        <View style={styles.statusRow}>
-          <View style={[styles.statusDot, warning && styles.statusDotWarn]} />
-          <Text style={styles.statusText}>{t('qr.display.waiting')}</Text>
+        <View style={styles.statusCard}>
+          <ActivityIndicator color={warning ? '#FF6961' : ACCENT} />
+          <View style={styles.statusBody}>
+            <Text style={styles.statusText}>{t('qr.display.waiting')}</Text>
+            <Text style={styles.statusSub}>
+              {t('qr.display.youReceive', { amount: formatCents(qrData.netCents) })}
+            </Text>
+            {onCounter ? <Text style={styles.statusSub}>{t('qr.display.alsoOnCounter')}</Text> : null}
+          </View>
           <Text style={[styles.statusTime, warning && styles.statusTimeWarn]}>
             {formatTime(timeRemaining)}
           </Text>
         </View>
-        <Text style={styles.netLine}>
-          {t('qr.display.youReceive', { amount: formatCents(qrData.netCents) })}
-        </Text>
 
-        <View style={styles.resultFooter}>
-          <PillButton label={t('qr.display.cancelSale')} variant="glass" onPress={handleNewSale} />
-        </View>
+        <View style={styles.showingSpacer} />
+
+        <TouchableOpacity
+          style={styles.cantScan}
+          onPress={handleScanInstead}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+        >
+          <ScanIcon size={18} color="#FFFFFF" />
+          <Text style={styles.cantScanText}>{t('qr.display.cantScan')}</Text>
+        </TouchableOpacity>
       </DarkScreen>
     );
   }
 
-  // ── Entry / counter code ────────────────────────
+  // ── Entry ───────────────────────────────────────
   const keyHeight = screenHeight < 700 ? 50 : screenHeight < 820 ? 58 : 66;
   const amountEmpty = amount === '';
 
@@ -469,33 +500,14 @@ export default function GenerateQRScreen() {
       <View style={styles.topRow}>
         <Text style={styles.title}>{t('navigation.tabs.receive')}</Text>
         <TouchableOpacity
-          style={styles.scanBtn}
-          onPress={() => navigation.navigate('ScanCharge')}
+          style={styles.counterBtn}
+          onPress={() => navigation.navigate('CounterCode')}
           activeOpacity={0.8}
           accessibilityRole="button"
         >
-          <ScanIcon size={16} color="#FFFFFF" />
-          <Text style={styles.scanBtnText}>{t('qr.receive.scanCustomer')}</Text>
+          <QrIcon size={16} color="#FFFFFF" />
+          <Text style={styles.counterBtnText}>{t('qr.myQr.title')}</Text>
         </TouchableOpacity>
-      </View>
-
-      <View style={styles.segment}>
-        {(['charge', 'counter'] as Mode[]).map((m) => (
-          <TouchableOpacity
-            key={m}
-            style={[styles.segmentBtn, mode === m && styles.segmentBtnActive]}
-            onPress={() => {
-              setError(null);
-              setRefEditing(false);
-              setMode(m);
-            }}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.segmentText, mode === m && styles.segmentTextActive]}>
-              {t(`qr.mode.${m}`)}
-            </Text>
-          </TouchableOpacity>
-        ))}
       </View>
 
       {offline ? (
@@ -510,38 +522,7 @@ export default function GenerateQRScreen() {
         </View>
       ) : null}
 
-      {mode === 'counter' ? (
-        <View style={styles.counterBody}>
-          <Text style={styles.counterSubtitle}>{t('qr.counter.subtitle')}</Text>
-          {sticker ? (
-            <>
-              <View style={styles.qrFrame}>
-                <QRCode
-                  value={sticker.qrData}
-                  size={QR_SIZE}
-                  backgroundColor="#FFFFFF"
-                  color="#000000"
-                  getRef={(c) => {
-                    stickerRef.current = c;
-                  }}
-                />
-              </View>
-              <Text style={styles.counterName}>{sticker.merchantName}</Text>
-              <Text style={styles.counterAddress}>{sticker.businessAddress}</Text>
-              <View style={styles.counterFooter}>
-                <PillButton label={t('qr.counter.share')} onPress={handleShareSticker} />
-                <Text style={styles.infoText}>{t('qr.counter.hint')}</Text>
-              </View>
-              <CounterIncomingFeed />
-            </>
-          ) : (
-            <Text style={styles.infoText}>
-              {stickerLoading ? t('qr.counter.loading') : t('qr.counter.unavailable')}
-            </Text>
-          )}
-        </View>
-      ) : (
-        <>
+      <>
           {/* Amount */}
           <View style={styles.amountBlock}>
             <Text
@@ -645,19 +626,23 @@ export default function GenerateQRScreen() {
           )}
 
           <View style={styles.footer}>
+            {/* The sale is typed; now how to collect it. */}
             <PillButton
-              label={
-                amountCents > 0
-                  ? t('qr.receive.chargeButton', { amount: formatCents(amountCents) })
-                  : t('qr.receive.generateButton')
-              }
+              label={t('qr.receive.scanCustomer')}
+              variant="glass"
+              style={styles.footerBtn}
+              onPress={handleScanInstead}
+              disabled={amountCents <= 0 || offline || loading}
+            />
+            <PillButton
+              label={t('qr.receive.showQr')}
+              style={styles.footerBtn}
               onPress={() => handleGenerate()}
               loading={loading}
               disabled={amountCents <= 0 || offline}
             />
           </View>
-        </>
-      )}
+      </>
 
       <ReceiptScanner
         visible={scannerOpen}
@@ -695,51 +680,21 @@ const styles = StyleSheet.create({
   },
   title: {
     flex: 1,
-    fontSize: 26,
-    fontWeight: '800',
-    letterSpacing: -0.8,
+    fontSize: 34,
+    fontWeight: '700',
+    letterSpacing: -0.6,
     color: '#FFFFFF',
   },
-  // segmented mode switch
-  scanBtn: {
+  counterBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    height: 34,
-    paddingHorizontal: 14,
-    borderRadius: 9999,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    gap: 8,
+    height: 44,
+    paddingHorizontal: 16,
+    borderRadius: 22,
+    backgroundColor: SURFACE,
   },
-  scanBtnText: { fontSize: 13, fontWeight: '600', color: '#FFFFFF' },
-  segment: {
-    flexDirection: 'row',
-    marginHorizontal: 24,
-    padding: 4,
-    borderRadius: 9999,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  segmentBtn: {
-    flex: 1,
-    height: 36,
-    borderRadius: 9999,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  segmentBtnActive: {
-    backgroundColor: '#FFFFFF',
-  },
-  segmentText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.6)',
-  },
-  segmentTextActive: {
-    color: '#000000',
-  },
+  counterBtnText: { fontSize: 15, fontWeight: '600', color: '#FFFFFF' },
 
   offlineBanner: {
     marginHorizontal: 24,
@@ -827,9 +782,7 @@ const styles = StyleSheet.create({
     height: 40,
     paddingHorizontal: 14,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: SURFACE,
   },
   receiptBtnIcon: {
     width: 40,
@@ -845,9 +798,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     borderRadius: 20,
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.16)',
-    borderStyle: 'dashed',
+    backgroundColor: SURFACE,
   },
   refAddText: {
     fontSize: 14,
@@ -862,9 +813,7 @@ const styles = StyleSheet.create({
     paddingLeft: 14,
     paddingRight: 10,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: SURFACE,
     gap: 10,
   },
   refChipMain: {
@@ -917,19 +866,22 @@ const styles = StyleSheet.create({
     height: 24,
   },
   footer: {
-    paddingHorizontal: 24,
+    flexDirection: 'row',
+    gap: 10,
+    paddingHorizontal: 20,
     paddingTop: 10,
   },
+  footerBtn: { flex: 1 },
 
   // ticket (customer-facing)
   ticket: {
     alignSelf: 'stretch',
     marginHorizontal: 20,
-    marginBottom: 20,
+    marginBottom: 16,
     paddingTop: 24,
     paddingBottom: 20,
     paddingHorizontal: 20,
-    borderRadius: 28,
+    borderRadius: 32,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
   },
@@ -981,41 +933,57 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 16,
   },
-  statusRow: {
+  showingHeader: {
+    alignSelf: 'stretch',
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    marginBottom: 18,
+  },
+  showingTitle: { fontSize: 17, fontWeight: '600', color: '#FFFFFF' },
+  roundBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: SURFACE,
     justifyContent: 'center',
-    gap: 8,
-    paddingHorizontal: 24,
+    alignItems: 'center',
   },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#34C77B',
+  roundSpacer: { width: 44, height: 44 },
+  statusCard: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginHorizontal: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: SURFACE,
   },
-  statusDotWarn: {
-    backgroundColor: '#FF6961',
-  },
-  statusText: {
-    fontSize: 15,
-    color: 'rgba(255,255,255,0.75)',
-  },
+  statusBody: { flex: 1, gap: 2 },
+  statusText: { fontSize: 16, fontWeight: '600', color: '#FFFFFF' },
+  statusSub: { fontSize: 13, color: TEXT_MUTED },
   statusTime: {
     fontSize: 15,
-    fontWeight: '700',
-    color: '#34C77B',
+    fontWeight: '600',
+    color: TEXT_MUTED,
     fontVariant: ['tabular-nums'],
   },
   statusTimeWarn: {
     color: '#FF6961',
   },
-  netLine: {
-    fontSize: 13,
-    color: TEXT_DIM,
-    marginTop: 6,
-    marginBottom: 20,
+  showingSpacer: { flexGrow: 1, minHeight: 12 },
+  cantScan: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    minHeight: 48,
+    paddingHorizontal: 20,
   },
+  cantScanText: { fontSize: 16, fontWeight: '600', color: '#FFFFFF' },
 
   // expired
   expiredAmount: {
@@ -1051,51 +1019,38 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   paidTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#30D158',
   },
   paidAmount: {
-    fontSize: 52,
-    fontWeight: '800',
-    color: '#34C77B',
-    letterSpacing: -2,
-    marginTop: 8,
-  },
-  paidFrom: {
-    fontSize: 15,
-    color: TEXT_DIM,
-    marginTop: 6,
-    marginBottom: 20,
-  },
-  receiptPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
-    marginBottom: 20,
-  },
-  receiptPillLabel: {
-    fontSize: 13,
-    color: TEXT_FAINT,
-  },
-  receiptPillValue: {
-    fontSize: 16,
+    fontSize: 64,
     fontWeight: '700',
     color: '#FFFFFF',
-    letterSpacing: 0.6,
+    letterSpacing: -2.5,
+    marginTop: 6,
+    fontVariant: ['tabular-nums'],
+  },
+  paidFrom: {
+    fontSize: 17,
+    color: TEXT_MUTED,
+    marginTop: 4,
+    marginBottom: 28,
+  },
+  receiptValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
     fontVariant: ['tabular-nums'],
   },
   breakdown: {
     alignSelf: 'stretch',
-    marginHorizontal: 24,
-    padding: 18,
-    marginBottom: 28,
+    marginHorizontal: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: SURFACE,
+    marginBottom: 24,
   },
   breakdownRow: {
     flexDirection: 'row',
@@ -1119,8 +1074,8 @@ const styles = StyleSheet.create({
   },
   breakdownNet: {
     fontSize: 18,
-    fontWeight: '800',
-    color: '#34C77B',
+    fontWeight: '700',
+    color: '#30D158',
   },
   breakdownDivider: {
     height: 1,
@@ -1128,48 +1083,4 @@ const styles = StyleSheet.create({
     marginVertical: 8,
   },
 
-  // counter code
-  counterBody: {
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    alignItems: 'center',
-    flex: 1,
-  },
-  counterSubtitle: {
-    fontSize: 15,
-    color: TEXT_DIM,
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  qrFrame: {
-    backgroundColor: '#FFFFFF',
-    padding: 22,
-    borderRadius: 28,
-    marginBottom: 24,
-  },
-  counterName: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: -0.5,
-    textAlign: 'center',
-  },
-  counterAddress: {
-    fontSize: 14,
-    color: TEXT_DIM,
-    marginTop: 4,
-    marginBottom: 28,
-    textAlign: 'center',
-  },
-  counterFooter: {
-    alignSelf: 'stretch',
-    gap: 14,
-  },
-
-  infoText: {
-    fontSize: 13,
-    color: TEXT_DIM,
-    textAlign: 'center',
-    lineHeight: 19,
-  },
 });
