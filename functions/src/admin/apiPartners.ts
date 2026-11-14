@@ -15,7 +15,9 @@ import { isMerchantAccount } from "../api/keys";
 import {
   DEFAULT_DAILY_TRANSFER_USD_CENTS,
   DEFAULT_MAX_TRANSFER_USD_CENTS,
+  E164_PATTERN,
   MAX_PARTNER_FEE_RATE,
+  MAX_TEST_PHONE_NUMBERS,
 } from "../api/partners";
 import { API_PARTNERS_COLLECTION, ApiPartner } from "../api/types";
 
@@ -25,6 +27,8 @@ export interface ApiPartnerRow {
   dailyTransferUsdCents: number;
   /** null: the standard online payment fee. */
   chargeFeeRate: number | null;
+  /** Numbers outside +252 the partner may charge, pay and look up. */
+  testPhoneNumbers: string[];
   updatedAt: string | null;
 }
 
@@ -34,6 +38,7 @@ function toRow(p: ApiPartner | undefined): ApiPartnerRow {
     maxTransferUsdCents: p?.maxTransferUsdCents ?? DEFAULT_MAX_TRANSFER_USD_CENTS,
     dailyTransferUsdCents: p?.dailyTransferUsdCents ?? DEFAULT_DAILY_TRANSFER_USD_CENTS,
     chargeFeeRate: typeof p?.chargeFeeRate === "number" ? p.chargeFeeRate : null,
+    testPhoneNumbers: Array.isArray(p?.testPhoneNumbers) ? p!.testPhoneNumbers : [],
     updatedAt: p?.updatedAt ? p.updatedAt.toDate().toISOString() : null,
   };
 }
@@ -57,11 +62,14 @@ interface SetPartnerInput {
   maxTransferUsdCents: number;
   dailyTransferUsdCents: number;
   chargeFeeRate: number | null;
+  testPhoneNumbers?: string[];
   reason: string;
 }
 
 /** Pure, for testing: refuse anything that isn't a sane partner setting. */
-export function validatePartnerInput(d: Partial<SetPartnerInput>): Omit<SetPartnerInput, "merchantId" | "reason"> {
+export function validatePartnerInput(
+  d: Partial<SetPartnerInput>
+): Required<Omit<SetPartnerInput, "merchantId" | "reason">> {
   const cents = (v: unknown, name: string, max: number) => {
     if (typeof v !== "number" || !Number.isSafeInteger(v) || v < 100 || v > max) {
       throw new https.HttpsError("invalid-argument", `${name} must be whole US cents between 100 and ${max}`);
@@ -80,11 +88,27 @@ export function validatePartnerInput(d: Partial<SetPartnerInput>): Omit<SetPartn
   if (rate !== null && rate !== undefined && (typeof rate !== "number" || !(rate >= 0 && rate <= MAX_PARTNER_FEE_RATE))) {
     throw new https.HttpsError("invalid-argument", `chargeFeeRate must be between 0 and ${MAX_PARTNER_FEE_RATE}, or empty`);
   }
+  const phones = d.testPhoneNumbers ?? [];
+  if (!Array.isArray(phones) || phones.length > MAX_TEST_PHONE_NUMBERS) {
+    throw new https.HttpsError("invalid-argument", `Up to ${MAX_TEST_PHONE_NUMBERS} test numbers`);
+  }
+  const testPhoneNumbers: string[] = [];
+  for (const raw of phones) {
+    const p = typeof raw === "string" ? raw.replace(/[\s\-()]/g, "") : "";
+    if (!E164_PATTERN.test(p)) {
+      throw new https.HttpsError(
+        "invalid-argument",
+        `${String(raw)} is not a number in international form, e.g. +447700900123`
+      );
+    }
+    if (!testPhoneNumbers.includes(p)) testPhoneNumbers.push(p);
+  }
   return {
     transfersEnabled: d.transfersEnabled,
     maxTransferUsdCents,
     dailyTransferUsdCents,
     chargeFeeRate: typeof rate === "number" ? rate : null,
+    testPhoneNumbers,
   };
 }
 
@@ -109,10 +133,11 @@ export const adminSetApiPartner = https.onCall(
     const ref = db.collection(API_PARTNERS_COLLECTION).doc(merchantId);
     const row = await db.runTransaction(async (tx) => {
       const before = (await tx.get(ref)).data() as ApiPartner | undefined;
-      const { chargeFeeRate, ...rest } = input;
+      const { chargeFeeRate, testPhoneNumbers, ...rest } = input;
       const next: ApiPartner = {
         ...rest,
         ...(chargeFeeRate !== null ? { chargeFeeRate } : {}),
+        ...(testPhoneNumbers.length ? { testPhoneNumbers } : {}),
         updatedAt: admin.firestore.Timestamp.now(),
         updatedBy: actor.uid,
       };

@@ -275,6 +275,49 @@ describe("partner transfers", () => {
     });
   });
 
+  describe("test numbers", () => {
+    const TESTER = "tester-1";
+    const TEST_PHONE = "+447700900123";
+
+    beforeEach(() => {
+      db.store.set(`users/${TESTER}`, {
+        accountType: "customer",
+        fullName: "Test Rider",
+        phoneNumber: TEST_PHONE,
+        accountStatus: "active",
+      });
+      db.store.set(`wallets/${TESTER}`, wallet(0));
+    });
+    const allow = (list: string[]) =>
+      db.store.set(`api_partners/${RIDY}`, { ...db.get(`api_partners/${RIDY}`)!, testPhoneNumbers: list });
+    const charge = () =>
+      request("POST", "/v1/charges", {
+        body: { amount: 420, currency: "USD", customer_phone: TEST_PHONE },
+        idem: "ride-test-1",
+      });
+
+    it("refuses a number outside +252 the partner hasn't listed", async () => {
+      expect((await charge()).json.error.code).toBe("phone_invalid");
+      expect((await transfer({ destination_phone: TEST_PHONE })).json.error.code).toBe("phone_invalid");
+      expect((await request("GET", "/v1/accounts/lookup", { query: { phone: TEST_PHONE } })).statusCode).toBe(400);
+    });
+
+    it("charges, looks up and pays a listed test number like any other", async () => {
+      allow([TEST_PHONE]);
+      const c = await charge();
+      expect(c.statusCode).toBe(201);
+      expect(c.json.customer_phone).toBe(TEST_PHONE);
+      expect(db.get(`api_charges/${c.json.id}`)!.customerId).toBe(TESTER);
+
+      const l = await request("GET", "/v1/accounts/lookup", { query: { phone: TEST_PHONE } });
+      expect(l.json).toMatchObject({ found: true, name_hint: "Te** Ri***" });
+
+      const t = await transfer({ destination_phone: TEST_PHONE }, "payout-test-1");
+      expect(t.json).toMatchObject({ status: "succeeded", destination_phone: TEST_PHONE });
+      expect(db.get(`wallets/${TESTER}`)!.sls.balance).toBe(23_000);
+    });
+  });
+
   describe("partner fee", () => {
     it("uses the partner's own rate, or the standard one", async () => {
       expect(await chargeFeeRateFor(RIDY, 0.01)).toBe(0.01);
@@ -296,12 +339,22 @@ describe("maskName", () => {
 describe("validatePartnerInput", () => {
   const ok = { transfersEnabled: true, maxTransferUsdCents: 10_000, dailyTransferUsdCents: 200_000, chargeFeeRate: null };
   it("accepts sane settings", () => {
-    expect(validatePartnerInput(ok)).toEqual(ok);
+    expect(validatePartnerInput(ok)).toEqual({ ...ok, testPhoneNumbers: [] });
     expect(validatePartnerInput({ ...ok, chargeFeeRate: 0.005 }).chargeFeeRate).toBe(0.005);
   });
   it("refuses caps out of order and silly fees", () => {
     expect(() => validatePartnerInput({ ...ok, dailyTransferUsdCents: 5_000 })).toThrow(/daily cap/);
     expect(() => validatePartnerInput({ ...ok, chargeFeeRate: 0.5 })).toThrow(/chargeFeeRate/);
     expect(() => validatePartnerInput({ ...ok, maxTransferUsdCents: 1.5 })).toThrow(/whole US cents/);
+  });
+  it("keeps test numbers in international form, once each", () => {
+    expect(
+      validatePartnerInput({ ...ok, testPhoneNumbers: ["+44 7700 900123", "+447700900123", "+252630000001"] })
+        .testPhoneNumbers
+    ).toEqual(["+447700900123", "+252630000001"]);
+    expect(() => validatePartnerInput({ ...ok, testPhoneNumbers: ["07700900123"] })).toThrow(/international form/);
+    expect(() =>
+      validatePartnerInput({ ...ok, testPhoneNumbers: Array.from({ length: 51 }, (_, i) => `+4477009${String(i).padStart(5, "0")}`) })
+    ).toThrow(/Up to 50/);
   });
 });

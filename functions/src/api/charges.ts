@@ -29,6 +29,7 @@ import {
   isLiveObject,
 } from "./types";
 import { API_CURRENCY_CODES, Currency, currencyFromApiCode, pushAmount } from "../utils/money";
+import { testPhoneNumbersFor } from "./partners";
 
 export const CHARGE_ID_PATTERN = /^ch_[A-Za-z0-9_-]{16,64}$/;
 export const DEEP_LINK_SCHEME = "zapppay";
@@ -200,7 +201,14 @@ export interface NormalisedChargeInput {
   expiresIn?: number;
 }
 
-export function parseChargeInput(body: Record<string, unknown>): NormalisedChargeInput {
+/**
+ * [testPhoneNumbers]: numbers outside +252 the merchant may address, its
+ * partner test numbers (partners.ts). Every other number must be +252.
+ */
+export function parseChargeInput(
+  body: Record<string, unknown>,
+  testPhoneNumbers: readonly string[] = []
+): NormalisedChargeInput {
   const amount = parseAmount(body.amount);
 
   const currency =
@@ -210,7 +218,7 @@ export function parseChargeInput(body: Record<string, unknown>): NormalisedCharg
   }
 
   const customerPhone = parseOptionalString(body.customer_phone, "customer_phone", 20);
-  if (customerPhone && !validatePhoneNumber(customerPhone)) {
+  if (customerPhone && !validatePhoneNumber(customerPhone) && !testPhoneNumbers.includes(customerPhone)) {
     throw badRequest(
       "phone_invalid",
       "customer_phone must be in international format, e.g. +252634123456",
@@ -280,7 +288,7 @@ export async function createCharge(
   body: Record<string, unknown>,
   idempotencyKey: string
 ): Promise<CreateChargeResult> {
-  const input = parseChargeInput(body);
+  const input = parseChargeInput(body, await testPhoneNumbersFor(caller.merchantId, body.customer_phone));
   const db = admin.firestore();
   const idemRef = db
     .collection(API_IDEMPOTENCY_COLLECTION)

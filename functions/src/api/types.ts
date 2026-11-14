@@ -214,6 +214,12 @@ export interface ApiPartner {
    * the standard `onlinePaymentFeeRate`. Transfers carry no fee.
    */
   chargeFeeRate?: number;
+  /**
+   * Phone numbers outside +252 this partner may charge, pay and look up:
+   * the Firebase test numbers its testers sign in with on simulators
+   * (+447700900123). E.164. Every other number must be +252.
+   */
+  testPhoneNumbers?: string[];
   updatedAt: FirebaseFirestore.Timestamp;
   updatedBy: string;
 }

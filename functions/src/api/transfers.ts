@@ -100,14 +100,21 @@ export interface NormalisedTransferInput {
   metadata?: Record<string, string>;
 }
 
-function parsePhone(value: unknown, param: string): string {
-  if (typeof value !== "string" || !validatePhoneNumber(value.trim())) {
+/** A +252 number, or one of the partner's test numbers. */
+function parsePhone(value: unknown, param: string, testPhoneNumbers: readonly string[] = []): string {
+  if (
+    typeof value !== "string" ||
+    !(validatePhoneNumber(value.trim()) || testPhoneNumbers.includes(value.trim()))
+  ) {
     throw badRequest("phone_invalid", `${param} must be in international format, e.g. +252634123456`, param);
   }
   return value.trim();
 }
 
-export function parseTransferInput(body: Record<string, unknown>): NormalisedTransferInput {
+export function parseTransferInput(
+  body: Record<string, unknown>,
+  testPhoneNumbers: readonly string[] = []
+): NormalisedTransferInput {
   const amount = parseAmount(body.amount);
   // No default: a partner paying in the wrong currency is a real loss, so it says which.
   const currency = currencyFromApiCode(typeof body.currency === "string" ? body.currency.toUpperCase() : body.currency);
@@ -115,7 +122,7 @@ export function parseTransferInput(body: Record<string, unknown>): NormalisedTra
   return {
     amount,
     currency,
-    destinationPhone: parsePhone(body.destination_phone, "destination_phone"),
+    destinationPhone: parsePhone(body.destination_phone, "destination_phone", testPhoneNumbers),
     reference: parseOptionalString(body.reference, "reference", MAX_REFERENCE),
     metadata: parseMetadata(body.metadata),
   };
@@ -152,7 +159,7 @@ export async function createTransfer(
   idempotencyKey: string
 ): Promise<CreateTransferResult> {
   const partner = await requireTransferPartner(caller);
-  const input = parseTransferInput(body);
+  const input = parseTransferInput(body, partner.testPhoneNumbers ?? []);
   const db = admin.firestore();
   const idemRef = db
     .collection(API_IDEMPOTENCY_COLLECTION)
@@ -364,8 +371,8 @@ export function maskName(name: string): string {
  * its worker saves it, so a payout never goes to a typo. Rate-limited per key.
  */
 export async function lookupAccount(caller: ApiCaller, query: Record<string, unknown>) {
-  await requireTransferPartner(caller);
-  const phone = parsePhone(query.phone, "phone");
+  const partner = await requireTransferPartner(caller);
+  const phone = parsePhone(query.phone, "phone", partner.testPhoneNumbers ?? []);
   await enforceApiRateLimit(`lookup:${caller.keyId}`, LOOKUPS_PER_MINUTE);
 
   let found = false;
