@@ -117,6 +117,14 @@ export default function TransactionDetailScreen({ navigation, route }: Props) {
               <Text style={styles.detailValue}>{transaction.reference}</Text>
             </View>
           ) : null}
+          {transaction.approvedVia === 'partner_device' ? (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailKey}>{t('wallet.detail.approvedIn')}</Text>
+              <Text style={styles.detailValue}>
+                {t('wallet.detail.approvedInApp', { merchant: transaction.counterpartyName ?? '' })}
+              </Text>
+            </View>
+          ) : null}
           {transaction.receiptNumber ? (
             <View style={styles.detailRow}>
               <Text style={styles.detailKey}>{t('wallet.detail.receiptNumber')}</Text>

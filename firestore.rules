@@ -257,6 +257,9 @@ service cloud.firestore {
     match /api_transfers/{transferId} {
       allow read, write: if false;
     }
+    match /api_agreements/{document=**} {
+      allow read, write: if false;
+    }
     // lookupRecipient's per-caller budget counters. Server-only, or a client
     // could reset its own count.
     match /recipient_lookups/{counterId} {

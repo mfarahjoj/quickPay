@@ -215,6 +215,11 @@ export default function ProfileScreen({ navigation }: Props) {
           onPress={() => navigation.navigate('LinkedAccounts')}
         />
         <MenuItem
+          icon={<LinkIcon size={22} color={colors.ui.textDim} />}
+          label={t('profile.linkedApps')}
+          onPress={() => navigation.navigate('LinkedApps')}
+        />
+        <MenuItem
           icon={<ChartIcon size={22} color={colors.ui.textDim} />}
           label={t('profile.transactionLimits')}
           onPress={() => navigation.navigate('TransactionLimits')}

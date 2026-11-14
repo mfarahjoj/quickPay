@@ -18,6 +18,8 @@ interface TransactionResponse {
   reference?: string;
   /** Zapp receipt number, e.g. "ZP-7K3M-9QX2". Absent on older payments. */
   receiptNumber?: string;
+  /** Set when the customer approved this payment in a partner's app, on their phone (api/agreements.ts). */
+  approvedVia?: "partner_device";
   /** ISO 8601. */
   createdAt: string;
   completedAt?: string;
@@ -153,6 +155,7 @@ export const getTransactions = https.onCall(
           description: data.description,
           reference: data.reference,
           receiptNumber: data.receiptNumber,
+          approvedVia: data.approvedVia,
           // ISO strings: a callable sends a Date as {} (it copies own fields,
           // and a Date has none), so the apps never got these dates.
           createdAt: data.createdAt.toDate().toISOString(),

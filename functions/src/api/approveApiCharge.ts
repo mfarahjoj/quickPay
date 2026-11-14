@@ -9,34 +9,20 @@
 
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
-import { assertResetCooldownAllows } from "../utils/resetCooldown";
 import { requireAuth } from "../utils/validation";
-import { assertAccountActive, requireActiveAccount } from "../utils/accountStatus";
-import { enforceTransactionLimits } from "../utils/limits";
+import { assertAccountActive } from "../utils/accountStatus";
 import { verifyUserPin } from "../auth/validatePin";
-import { enforceVelocity } from "../utils/velocity";
 import { notifyPaymentReceived, notifyPaymentSent } from "../utils/notifications";
-import { ApiResponse, Transaction, User } from "../types";
-import { getRates, computePaymentFee } from "../config/rates";
-import {
-  prepareJournalEntry,
-  userAccount,
-  JournalLine,
-  JOURNAL_COLLECTION,
-  PLATFORM_FEES,
-  InsufficientBalanceError,
-  FrozenAccountError,
-  WalletNotFoundError,
-} from "../ledger";
+import { ApiResponse, User } from "../types";
+import { getRates } from "../config/rates";
+import { InsufficientBalanceError, FrozenAccountError, WalletNotFoundError } from "../ledger";
 import { CHARGE_ID_PATTERN, effectiveStatus, isLapsed } from "./charges";
 import { isMerchantAccount } from "./keys";
 import { API_CHARGES_COLLECTION, ApiCharge, ApiChargeStatus, isLiveObject } from "./types";
-import { toLimitCents } from "../utils/money";
 import { chargeFeeRateFor } from "./partners";
+import { apiChargeEntryId, assertCustomerMaySpend, settleChargeInTx } from "./settleCharge";
 
-export function apiChargeEntryId(chargeId: string): string {
-  return `apicharge_${chargeId}`;
-}
+export { apiChargeEntryId };
 
 function requireChargeId(chargeId: unknown): string {
   if (typeof chargeId !== "string" || !CHARGE_ID_PATTERN.test(chargeId)) {
@@ -165,7 +151,6 @@ export const approveApiCharge = https.onCall(
 
     const db = admin.firestore();
     const chargeRef = db.collection(API_CHARGES_COLLECTION).doc(chargeId);
-    const journalEntryId = apiChargeEntryId(chargeId);
 
     try {
       const pinValid = await verifyUserPin(customerId, pin);
@@ -204,19 +189,7 @@ export const approveApiCharge = https.onCall(
         );
       }
 
-      // Outgoing money waits out the pause after a PIN reset. A merchant's
-      // online checkout or till counts as a shop.
-      // The allowance and the limits are in dollars; shillings count at the rate.
-      const { slsPerUsd } = await getRates();
-      await assertResetCooldownAllows(
-        customerId,
-        "shop_payment",
-        toLimitCents(preCharge.amount, preCharge.currency ?? "USD", slsPerUsd)
-      );
-
-      const customerData = await requireActiveAccount(customerId);
-      await enforceVelocity(customerId);
-      await enforceTransactionLimits(customerId, preCharge.amount, customerData, undefined, preCharge.currency ?? "USD");
+      await assertCustomerMaySpend(customerId, preCharge);
 
       // Roles and status can change between the charge and the approval.
       const merchantSnap = await db.collection("users").doc(preCharge.merchantId).get();
@@ -267,78 +240,15 @@ export const approveApiCharge = https.onCall(
           );
         }
 
-        // Merchant absorbs the platform fee and receives the net.
-        const feeCents = computePaymentFee(charge.amount, onlinePaymentFeeRate);
-        const netCents = charge.amount - feeCents;
-
-        const lines: JournalLine[] = [
-          { account: userAccount(customerId), debit: charge.amount, credit: 0 },
-          { account: userAccount(charge.merchantId), debit: 0, credit: netCents },
-        ];
-        if (feeCents > 0) {
-          lines.push({ account: PLATFORM_FEES, debit: 0, credit: feeCents });
-        }
-
-        const description = `Payment to ${charge.merchantName}`;
-        const pending = await prepareJournalEntry(tx, {
-          entryId: journalEntryId,
-          type: "online_payment",
-          currency: charge.currency,
-          lines,
-          refs: { transactionId, apiChargeId: chargeId },
-          description,
-          postedBy: customerId,
-        });
-
-        if (pending.alreadyPosted) {
-          // The entry and the charge update are written together, so this
-          // should not happen. Settle the charge on the transaction the entry
-          // names rather than write a second receipt.
-          const entrySnap = await tx.get(db.collection(JOURNAL_COLLECTION).doc(journalEntryId));
-          const postedTxId = (entrySnap.data()?.refs?.transactionId as string | undefined) ?? "";
-          tx.update(chargeRef, {
-            status: "succeeded",
-            succeededAt: now,
-            paidBy: customerId,
-            journalEntryId,
-            ...(postedTxId ? { transactionId: postedTxId } : {}),
-          });
-          return { kind: "replay", charge, transactionId: postedTxId };
-        }
-
-        pending.write(tx);
-
-        const txRecord: Transaction = {
-          type: "payment",
-          kind: "online_payment",
-          fromUserId: customerId,
-          toUserId: charge.merchantId,
-          participants: [customerId, charge.merchantId],
-          amount: charge.amount,
-          feeCents,
-          netCents,
-          currency: charge.currency,
-          status: "completed",
-          description,
-          ...(charge.reference ? { reference: charge.reference } : {}),
-          journalEntryId,
-          apiChargeId: chargeId,
-          createdAt: now,
-          completedAt: now,
-        };
-        tx.set(db.collection("transactions").doc(transactionId), txRecord);
-
-        tx.update(chargeRef, {
-          status: "succeeded",
-          succeededAt: now,
-          paidBy: customerId,
+        return settleChargeInTx(tx, {
+          chargeRef,
+          chargeId,
+          charge,
+          customerId,
+          feeRate: onlinePaymentFeeRate,
           transactionId,
-          journalEntryId,
-          feeCents,
-          netCents,
+          now,
         });
-
-        return { kind: "paid", charge, feeCents, netCents };
       });
 
       if (outcome.kind === "lapsed") {

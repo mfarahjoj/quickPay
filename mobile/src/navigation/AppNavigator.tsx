@@ -98,6 +98,9 @@ type MainStackParamList = {
     createdAt?: string;
     reference?: string;
   };
+  // A partner (Ridy) asking to take payments, each approved in its own app.
+  ApproveAgreement: { agreementId: string };
+  LinkedApps: undefined;
   // `MobileMoney` and `SendRemittance` are intentionally unregistered: both
   // screens call callables that were deleted from prod on 2026-09-18 because
   // the Zaad/eDahab and Stripe stubs turned fake success into real balance.
@@ -376,6 +379,16 @@ function MainStackNavigator() {
         name="ApprovePayment"
         getComponent={() => require('../screens/payments/ApprovePaymentScreen').default}
         options={{ title: t('nav.screen.paymentRequest'), presentation: 'modal' }}
+      />
+      <MainStack.Screen
+        name="ApproveAgreement"
+        getComponent={() => require('../screens/agreements/ApproveAgreementScreen').default}
+        options={{ title: t('nav.screen.linkApp'), presentation: 'modal' }}
+      />
+      <MainStack.Screen
+        name="LinkedApps"
+        getComponent={() => require('../screens/agreements/LinkedAppsScreen').default}
+        options={{ headerShown: false }}
       />
       <MainStack.Screen
         name="MerchantOnboarding"

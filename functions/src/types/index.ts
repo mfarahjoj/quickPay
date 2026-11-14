@@ -363,6 +363,13 @@ export interface Transaction {
    * are tracked on the charge — see refundPayment.
    */
   apiChargeId?: string;
+  /**
+   * Set on an API payment the customer approved in a partner's app, on their
+   * phone, under an agreement (api/agreements.ts) rather than with the PIN here.
+   */
+  approvedVia?: "partner_device";
+  /** The agreement behind such a payment. */
+  apiAgreementId?: string;
   /** Partner transfer (`api_transfers`) behind a payroll row. */
   apiTransferId?: string;
   /** On an API payment: cents refunded so far, across partial refunds. */

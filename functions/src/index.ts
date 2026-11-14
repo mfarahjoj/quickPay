@@ -235,6 +235,15 @@ export { requestRole, getMyRoleRequests } from "./merchants/requestRole";
 // PIN, and in API refunds, which only ever return a customer's own payment.
 export { api } from "./api/app";
 export { getApiCharge, approveApiCharge } from "./api/approveApiCharge";
+// Linked payments: the customer links a partner once here, then approves each
+// payment on their phone in the partner's app (api/agreements.ts).
+export {
+  getApiAgreement,
+  approveApiAgreement,
+  listMyAgreements,
+  revokeMyAgreement,
+} from "./api/approveApiAgreement";
+export { adminListAgreements, adminRevokeAgreement } from "./admin/apiAgreements";
 export { expireApiCharges } from "./api/expireCharges";
 export { onApiChargeWritten, retryWebhookDeliveries } from "./api/webhooks";
 export {
