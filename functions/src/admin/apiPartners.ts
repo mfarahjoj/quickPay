@@ -13,6 +13,8 @@ import { stageAuditEntry } from "./audit";
 import { ApiResponse, User } from "../types";
 import { isMerchantAccount } from "../api/keys";
 import {
+  DEFAULT_AGREEMENT_DAILY_USD_CENTS,
+  DEFAULT_AGREEMENT_MAX_CHARGE_USD_CENTS,
   DEFAULT_DAILY_TRANSFER_USD_CENTS,
   DEFAULT_MAX_TRANSFER_USD_CENTS,
   E164_PATTERN,
@@ -29,6 +31,10 @@ export interface ApiPartnerRow {
   chargeFeeRate: number | null;
   /** Numbers outside +252 the partner may charge, pay and look up. */
   testPhoneNumbers: string[];
+  /** Linked payments (api/agreements.ts). */
+  agreementsEnabled: boolean;
+  agreementMaxChargeUsdCents: number;
+  agreementDailyUsdCents: number;
   updatedAt: string | null;
 }
 
@@ -39,6 +45,9 @@ function toRow(p: ApiPartner | undefined): ApiPartnerRow {
     dailyTransferUsdCents: p?.dailyTransferUsdCents ?? DEFAULT_DAILY_TRANSFER_USD_CENTS,
     chargeFeeRate: typeof p?.chargeFeeRate === "number" ? p.chargeFeeRate : null,
     testPhoneNumbers: Array.isArray(p?.testPhoneNumbers) ? p!.testPhoneNumbers : [],
+    agreementsEnabled: p?.agreementsEnabled ?? false,
+    agreementMaxChargeUsdCents: p?.agreementMaxChargeUsdCents ?? DEFAULT_AGREEMENT_MAX_CHARGE_USD_CENTS,
+    agreementDailyUsdCents: p?.agreementDailyUsdCents ?? DEFAULT_AGREEMENT_DAILY_USD_CENTS,
     updatedAt: p?.updatedAt ? p.updatedAt.toDate().toISOString() : null,
   };
 }
@@ -63,13 +72,18 @@ interface SetPartnerInput {
   dailyTransferUsdCents: number;
   chargeFeeRate: number | null;
   testPhoneNumbers?: string[];
+  /** Absent from an older console: kept as they are. */
+  agreementsEnabled?: boolean;
+  agreementMaxChargeUsdCents?: number;
+  agreementDailyUsdCents?: number;
   reason: string;
 }
 
 /** Pure, for testing: refuse anything that isn't a sane partner setting. */
 export function validatePartnerInput(
   d: Partial<SetPartnerInput>
-): Required<Omit<SetPartnerInput, "merchantId" | "reason">> {
+): Required<Omit<SetPartnerInput, "merchantId" | "reason" | "agreementsEnabled" | "agreementMaxChargeUsdCents" | "agreementDailyUsdCents">> &
+  Pick<SetPartnerInput, "agreementsEnabled" | "agreementMaxChargeUsdCents" | "agreementDailyUsdCents"> {
   const cents = (v: unknown, name: string, max: number) => {
     if (typeof v !== "number" || !Number.isSafeInteger(v) || v < 100 || v > max) {
       throw new https.HttpsError("invalid-argument", `${name} must be whole US cents between 100 and ${max}`);
@@ -103,12 +117,26 @@ export function validatePartnerInput(
     }
     if (!testPhoneNumbers.includes(p)) testPhoneNumbers.push(p);
   }
+  // Linked payments: all three together, or none (an older console, which keeps what is set).
+  let agreements: Pick<SetPartnerInput, "agreementsEnabled" | "agreementMaxChargeUsdCents" | "agreementDailyUsdCents"> = {};
+  if (d.agreementsEnabled !== undefined) {
+    if (typeof d.agreementsEnabled !== "boolean") {
+      throw new https.HttpsError("invalid-argument", "agreementsEnabled must be true or false");
+    }
+    const agreementMaxChargeUsdCents = cents(d.agreementMaxChargeUsdCents, "agreementMaxChargeUsdCents", 100_000);
+    const agreementDailyUsdCents = cents(d.agreementDailyUsdCents, "agreementDailyUsdCents", 500_000);
+    if (agreementDailyUsdCents < agreementMaxChargeUsdCents) {
+      throw new https.HttpsError("invalid-argument", "The daily cap cannot be below the per-payment cap");
+    }
+    agreements = { agreementsEnabled: d.agreementsEnabled, agreementMaxChargeUsdCents, agreementDailyUsdCents };
+  }
   return {
     transfersEnabled: d.transfersEnabled,
     maxTransferUsdCents,
     dailyTransferUsdCents,
     chargeFeeRate: typeof rate === "number" ? rate : null,
     testPhoneNumbers,
+    ...agreements,
   };
 }
 
@@ -133,9 +161,14 @@ export const adminSetApiPartner = https.onCall(
     const ref = db.collection(API_PARTNERS_COLLECTION).doc(merchantId);
     const row = await db.runTransaction(async (tx) => {
       const before = (await tx.get(ref)).data() as ApiPartner | undefined;
-      const { chargeFeeRate, testPhoneNumbers, ...rest } = input;
+      const { chargeFeeRate, testPhoneNumbers, agreementsEnabled, agreementMaxChargeUsdCents, agreementDailyUsdCents, ...rest } = input;
+      const keep = (k: "agreementsEnabled" | "agreementMaxChargeUsdCents" | "agreementDailyUsdCents") =>
+        before?.[k] !== undefined ? { [k]: before[k] } : {};
       const next: ApiPartner = {
         ...rest,
+        ...(agreementsEnabled !== undefined
+          ? { agreementsEnabled, agreementMaxChargeUsdCents, agreementDailyUsdCents }
+          : { ...keep("agreementsEnabled"), ...keep("agreementMaxChargeUsdCents"), ...keep("agreementDailyUsdCents") }),
         ...(chargeFeeRate !== null ? { chargeFeeRate } : {}),
         ...(testPhoneNumbers.length ? { testPhoneNumbers } : {}),
         updatedAt: admin.firestore.Timestamp.now(),

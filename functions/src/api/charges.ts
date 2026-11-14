@@ -29,7 +29,9 @@ import {
   isLiveObject,
 } from "./types";
 import { API_CURRENCY_CODES, Currency, currencyFromApiCode, pushAmount } from "../utils/money";
-import { testPhoneNumbersFor } from "./partners";
+import { requireAgreementPartner, testPhoneNumbersFor } from "./partners";
+import { chargeConfirmationPayload } from "./agreementSignature";
+import { initialAutoPay } from "./agreements";
 
 export const CHARGE_ID_PATTERN = /^ch_[A-Za-z0-9_-]{16,64}$/;
 export const DEEP_LINK_SCHEME = "zapppay";
@@ -104,6 +106,35 @@ export function serializeCharge(id: string, charge: ApiCharge, now = Date.now())
     canceled_at: iso(charge.canceledAt),
     expired_at: iso(charge.expiredAt) ?? (isLapsed(charge, now) ? iso(charge.expiresAt) : null),
     livemode: isLiveObject(charge),
+    ...serializeAutoPay(id, charge, now),
+  };
+}
+
+/**
+ * For a charge raised on an agreement (agreements.ts): the agreement, and how
+ * far paying it on the customer's phone got. `payload` is what the phone must
+ * sign, present while the charge waits for that.
+ */
+export function serializeAutoPay(id: string, charge: ApiCharge, now = Date.now()) {
+  if (!charge.agreementId || !charge.autoPay) return {};
+  const ap = charge.autoPay;
+  const waiting = ap.status === "requires_confirmation" && charge.status === "pending" && !isLapsed(charge, now);
+  return {
+    agreement: charge.agreementId,
+    auto_pay: {
+      status: charge.status === "succeeded" ? "paid" : ap.status,
+      ...(ap.status === "declined" && ap.declinedCode ? { declined_code: ap.declinedCode } : {}),
+      ...(waiting
+        ? {
+          payload: chargeConfirmationPayload({
+            chargeId: id,
+            agreementId: charge.agreementId,
+            amount: charge.amount,
+            currency: charge.currency,
+          }),
+        }
+        : {}),
+    },
   };
 }
 
@@ -199,6 +230,8 @@ export interface NormalisedChargeInput {
   successUrl?: string;
   cancelUrl?: string;
   expiresIn?: number;
+  /** An agreement (agreements.ts) the customer will approve this charge under, on their phone. */
+  agreement?: string;
 }
 
 /**
@@ -239,6 +272,11 @@ export function parseChargeInput(
     expiresIn = v;
   }
 
+  const agreement = parseOptionalString(body.agreement, "agreement", 80);
+  if (agreement && !customerPhone) {
+    throw badRequest("parameter_missing", "customer_phone is required with agreement", "customer_phone");
+  }
+
   return {
     amount,
     currency,
@@ -248,6 +286,7 @@ export function parseChargeInput(
     successUrl: parseRedirectUrl(body.success_url, "success_url"),
     cancelUrl: parseRedirectUrl(body.cancel_url, "cancel_url"),
     expiresIn,
+    ...(agreement ? { agreement } : {}),
   };
 }
 
@@ -289,6 +328,8 @@ export async function createCharge(
   idempotencyKey: string
 ): Promise<CreateChargeResult> {
   const input = parseChargeInput(body, await testPhoneNumbersFor(caller.merchantId, body.customer_phone));
+  // Charging on an agreement is a partner power, like transfers.
+  if (input.agreement) await requireAgreementPartner(caller);
   const db = admin.firestore();
   const idemRef = db
     .collection(API_IDEMPOTENCY_COLLECTION)
@@ -312,6 +353,15 @@ export async function createCharge(
     getRates(),
   ]);
 
+  // Before the charge is written, so its first state says whether the phone can approve it.
+  const autoPay = input.agreement
+    ? await initialAutoPay(caller, input.agreement, {
+      amount: input.amount,
+      currency: input.currency,
+      customerPhone: input.customerPhone,
+    })
+    : undefined;
+
   const now = admin.firestore.Timestamp.now();
   const ttlSeconds = input.expiresIn ?? rates.apiChargeTtlSeconds;
   const chargeRef = db.collection(API_CHARGES_COLLECTION).doc(newChargeId());
@@ -331,6 +381,7 @@ export async function createCharge(
     ...(customerId ? { customerId } : {}),
     ...(input.successUrl ? { successUrl: input.successUrl } : {}),
     ...(input.cancelUrl ? { cancelUrl: input.cancelUrl } : {}),
+    ...(input.agreement ? { agreementId: input.agreement, autoPay } : {}),
     createdAt: now,
     expiresAt: admin.firestore.Timestamp.fromMillis(now.toMillis() + ttlSeconds * 1000),
     amountRefunded: 0,
@@ -361,7 +412,9 @@ export async function createCharge(
     return replayCharge(outcome.record, requestHash);
   }
 
-  if (customerId) {
+  // A charge the customer is about to approve in the partner's app gets no
+  // "approve in Zapp" push: two prompts at once would confuse them.
+  if (customerId && autoPay?.status !== "requires_confirmation") {
     const amount = pushAmount(input.amount, input.currency);
     const message: PushMessage = input.reference
       ? { key: "payment.request_with_reference", params: { merchant: merchantName, amount, reference: input.reference } }

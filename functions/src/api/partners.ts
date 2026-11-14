@@ -19,6 +19,9 @@ export const DEFAULT_MAX_TRANSFER_USD_CENTS = 10_000; // $100
 export const DEFAULT_DAILY_TRANSFER_USD_CENTS = 200_000; // $2,000
 /** Fee rates a partner may be given; above this is a typo, not a deal. */
 export const MAX_PARTNER_FEE_RATE = 0.1;
+/** Agreement caps when ops have not set them: $20 a payment, $60 a day. */
+export const DEFAULT_AGREEMENT_MAX_CHARGE_USD_CENTS = 2_000;
+export const DEFAULT_AGREEMENT_DAILY_USD_CENTS = 6_000;
 /** Test numbers a partner may list. */
 export const MAX_TEST_PHONE_NUMBERS = 50;
 /** Any country's number in E.164: a + and 8 to 15 digits. */
@@ -56,6 +59,31 @@ export async function requireTransferPartner(caller: ApiCaller): Promise<ApiPart
     );
   }
   return partner;
+}
+
+/**
+ * Refuse a caller that may not use agreements: the partner must have them on
+ * and the key must carry the `agreements` scope. Both failures read the same.
+ */
+export async function requireAgreementPartner(caller: ApiCaller): Promise<ApiPartner> {
+  const partner = caller.scopes.includes("agreements") ? await getPartner(caller.merchantId) : undefined;
+  if (!partner?.agreementsEnabled) {
+    throw new ApiError(
+      403,
+      "permission_error",
+      "agreements_not_enabled",
+      "This key cannot use agreements. They are for Zapp partners; contact Zapp to apply."
+    );
+  }
+  return partner;
+}
+
+/** The caps a partner's agreements get when approved now. US cents. */
+export function agreementCapsOf(partner: ApiPartner): { maxChargeUsdCents: number; dailyUsdCents: number } {
+  return {
+    maxChargeUsdCents: partner.agreementMaxChargeUsdCents ?? DEFAULT_AGREEMENT_MAX_CHARGE_USD_CENTS,
+    dailyUsdCents: partner.agreementDailyUsdCents ?? DEFAULT_AGREEMENT_DAILY_USD_CENTS,
+  };
 }
 
 /**

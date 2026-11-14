@@ -7,6 +7,11 @@
  *   GET    /v1/charges/:id                retrieve (POS polling)
  *   POST   /v1/charges/:id/cancel         cancel while pending
  *   POST   /v1/charges/:id/refunds        refund, full or partial (Idempotency-Key required)
+ *   POST   /v1/charges/:id/confirm        partners: pay an agreement charge with the customer's phone signature
+ *   POST   /v1/agreements                 partners: ask a customer to link their wallet (Idempotency-Key required)
+ *   GET    /v1/agreements/:id             partners: retrieve an agreement
+ *   POST   /v1/agreements/:id/revoke      partners: end an agreement
+ *   POST   /v1/test_helpers/agreements/:id/approve   test mode: approve a test agreement
  *   POST   /v1/transfers                  partners: pay a Zapp account (Idempotency-Key required)
  *   GET    /v1/transfers/:id              partners: retrieve a transfer
  *   GET    /v1/accounts/lookup?phone=     partners: can this number be paid?
@@ -56,6 +61,15 @@ import {
 import { createRefund, serializeRefund } from "./refunds";
 import { createTransfer, getOwnTransfer, lookupAccount, serializeTransfer } from "./transfers";
 import { createEndpoint, deleteEndpoint, listEndpoints } from "./webhooks";
+import {
+  confirmAgreementCharge,
+  createAgreement,
+  getOwnAgreement,
+  revokeOwnAgreement,
+  serializeAgreement,
+} from "./agreements";
+import { approveTestAgreement } from "./approveApiAgreement";
+import { requireAgreementPartner } from "./partners";
 import { TestOutcome, settleTestCharge, testModeOnly } from "./testHelpers";
 
 interface Ctx {
@@ -129,6 +143,43 @@ const authed = compileRoutes<Ctx>([
     handler: async ({ req, caller }) => ({
       body: await lookupAccount(caller, req.query as Record<string, unknown>),
     }),
+  },
+  {
+    method: "POST",
+    path: "/v1/charges/:id/confirm",
+    handler: async ({ req, caller }, { id }) => ({ body: await confirmAgreementCharge(caller, id, bodyOf(req)) }),
+  },
+  {
+    method: "POST",
+    path: "/v1/agreements",
+    handler: async ({ req, res, caller }) => {
+      const key = requireIdempotencyKeyHeader(req);
+      const { id, agreement, replayed } = await createAgreement(caller, bodyOf(req), key);
+      if (replayed) res.set("Idempotent-Replayed", "true");
+      return { status: replayed ? 200 : 201, body: serializeAgreement(id, agreement) };
+    },
+  },
+  {
+    method: "GET",
+    path: "/v1/agreements/:id",
+    handler: async ({ caller }, { id }) => {
+      await requireAgreementPartner(caller);
+      return { body: serializeAgreement(id, await getOwnAgreement(caller, id)) };
+    },
+  },
+  {
+    method: "POST",
+    path: "/v1/agreements/:id/revoke",
+    handler: async ({ caller }, { id }) => ({ body: serializeAgreement(id, await revokeOwnAgreement(caller, id)) }),
+  },
+  {
+    method: "POST",
+    path: "/v1/test_helpers/agreements/:id/approve",
+    handler: async ({ caller }, { id }) => {
+      if (caller.livemode) throw testModeOnly();
+      await requireAgreementPartner(caller);
+      return { body: serializeAgreement(id, await approveTestAgreement(caller, id)) };
+    },
   },
   {
     method: "POST",

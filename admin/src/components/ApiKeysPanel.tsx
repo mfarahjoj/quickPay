@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, type ApiKeyRow, type ApiPartnerRow } from "../api";
+import { api, type ApiAgreementRow, type ApiKeyRow, type ApiPartnerRow } from "../api";
 import { ReasonPrompt } from "./ReasonPrompt";
 
 /**
@@ -18,6 +18,9 @@ export function ApiKeysPanel({ merchantId, disabled }: { merchantId: string; dis
   const [copied, setCopied] = useState(false);
   const [testMode, setTestMode] = useState(false);
   const [transfers, setTransfers] = useState(false);
+  const [agreementsScope, setAgreementsScope] = useState(false);
+  const [agreements, setAgreements] = useState<ApiAgreementRow[] | null>(null);
+  const [revokingAgreement, setRevokingAgreement] = useState<ApiAgreementRow | null>(null);
   const [partner, setPartner] = useState<ApiPartnerRow | null>(null);
   const [editingPartner, setEditingPartner] = useState<ApiPartnerRow | null>(null);
   // The test numbers as typed; split when saved, so a new line can be typed.
@@ -29,6 +32,7 @@ export function ApiKeysPanel({ merchantId, disabled }: { merchantId: string; dis
       const [k, p] = await Promise.all([api.listApiKeys(merchantId), api.getApiPartner(merchantId)]);
       setKeys(k);
       setPartner(p);
+      setAgreements(p.agreementsEnabled ? await api.listAgreements(merchantId) : []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load API keys");
     }
@@ -42,6 +46,7 @@ export function ApiKeysPanel({ merchantId, disabled }: { merchantId: string; dis
     const created = await api.issueApiKey(merchantId, label.trim(), reason, {
       mode: testMode ? "test" : "live",
       transfers,
+      agreements: agreementsScope,
     });
     setFresh({ label: created.label, apiKey: created.apiKey });
     setCopied(false);
@@ -49,6 +54,14 @@ export function ApiKeysPanel({ merchantId, disabled }: { merchantId: string; dis
     setLabel("");
     setTestMode(false);
     setTransfers(false);
+    setAgreementsScope(false);
+    await load();
+  };
+
+  const revokeAgreement = async (reason: string) => {
+    if (!revokingAgreement) return;
+    await api.revokeAgreement(revokingAgreement.id, reason);
+    setRevokingAgreement(null);
     await load();
   };
 
@@ -61,6 +74,7 @@ export function ApiKeysPanel({ merchantId, disabled }: { merchantId: string; dis
       .filter(Boolean);
     setPartner(await api.setApiPartner(merchantId, { ...settings, testPhoneNumbers }, reason));
     setEditingPartner(null);
+    await load();
   };
 
   const revoke = async (reason: string) => {
@@ -138,6 +152,7 @@ export function ApiKeysPanel({ merchantId, disabled }: { merchantId: string; dis
                     {k.label}
                     {k.mode === "test" && <span className="badge"> test</span>}
                     {k.scopes?.includes("transfers") && <span className="badge"> transfers</span>}
+                    {k.scopes?.includes("agreements") && <span className="badge"> agreements</span>}
                   </td>
                   <td>
                     <code>{k.hint}</code>
@@ -194,6 +209,16 @@ export function ApiKeysPanel({ merchantId, disabled }: { merchantId: string; dis
               <span>Can make transfers (pays Zapp accounts from this merchant's wallet, no PIN)</span>
             </label>
           )}
+          {partner?.agreementsEnabled && (
+            <label className="row" style={{ gap: 6 }}>
+              <input
+                type="checkbox"
+                checked={agreementsScope}
+                onChange={(e) => setAgreementsScope(e.target.checked)}
+              />
+              <span>Agreements (customers approve payments in this merchant's app on their phone)</span>
+            </label>
+          )}
         </ReasonPrompt>
       )}
 
@@ -224,14 +249,77 @@ export function ApiKeysPanel({ merchantId, disabled }: { merchantId: string; dis
           Charge fee:{" "}
           {partner.chargeFeeRate === null ? "standard" : `${(partner.chargeFeeRate * 100).toFixed(2)}%`}.{" "}
           Test numbers:{" "}
-          {partner.testPhoneNumbers?.length ? partner.testPhoneNumbers.join(", ") : "none (+252 numbers only)"}.
+          {partner.testPhoneNumbers?.length ? partner.testPhoneNumbers.join(", ") : "none (+252 numbers only)"}.{" "}
+          Linked payments:{" "}
+          {partner.agreementsEnabled ? (
+            <>
+              <strong>On.</strong> Up to {usd(partner.agreementMaxChargeUsdCents)} a payment and{" "}
+              {usd(partner.agreementDailyUsdCents)} a day.
+            </>
+          ) : (
+            "Off."
+          )}
         </p>
+      )}
+
+      {partner?.agreementsEnabled && agreements && (
+        <>
+          <h3 style={{ marginTop: 16, marginBottom: 4 }}>
+            Linked customers ({agreements.filter((a) => a.status === "active").length} active)
+          </h3>
+          {agreements.length === 0 ? (
+            <div className="empty">No customer has linked yet.</div>
+          ) : (
+            <table>
+              <thead>
+                <tr>
+                  <th>Customer</th>
+                  <th>Phone</th>
+                  <th>Limits</th>
+                  <th>Linked</th>
+                  <th>Status</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {agreements.map((a) => (
+                  <tr key={a.id}>
+                    <td>
+                      {a.customerPhone}
+                      {!a.livemode && <span className="badge"> test</span>}
+                    </td>
+                    <td className="muted">{a.deviceLabel ?? "—"}</td>
+                    <td className="muted">
+                      {a.maxChargeUsdCents !== null && a.dailyUsdCents !== null
+                        ? `${usd(a.maxChargeUsdCents)} / ${usd(a.dailyUsdCents)} a day`
+                        : "—"}
+                    </td>
+                    <td className="muted">{a.approvedAt ? new Date(a.approvedAt).toLocaleString() : "—"}</td>
+                    <td>
+                      <span className={`badge ${a.status === "active" ? "active" : "closed"}`}>
+                        {a.status}
+                        {a.revokedBy ? ` (${a.revokedBy})` : ""}
+                      </span>
+                    </td>
+                    <td className="num">
+                      {a.status === "active" && (
+                        <button className="danger" onClick={() => setRevokingAgreement(a)} disabled={disabled}>
+                          Revoke
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </>
       )}
 
       {editingPartner && (
         <ReasonPrompt
           title="Partner transfers"
-          description="A partner's transfer keys pay any Zapp account from its wallet with no PIN (Ridy paying drivers). Super admins only."
+          description="A partner's transfer keys pay any Zapp account from its wallet with no PIN (Ridy paying drivers). Linked payments let its customers approve payments in its app. Super admins only."
           confirmLabel="Save"
           onConfirm={savePartner}
           onCancel={() => setEditingPartner(null)}
@@ -282,6 +370,36 @@ export function ApiKeysPanel({ merchantId, disabled }: { merchantId: string; dis
               }
             />
           </label>
+          <label className="row" style={{ gap: 6, marginTop: 8 }}>
+            <input
+              type="checkbox"
+              checked={editingPartner.agreementsEnabled}
+              onChange={(e) => setEditingPartner({ ...editingPartner, agreementsEnabled: e.target.checked })}
+            />
+            <span>Linked payments on (customers link once in Zapp, then approve each payment in this merchant's app with Face ID or their phone passcode)</span>
+          </label>
+          <label className="stack">
+            <span className="muted">Most per linked payment (US$). Larger ones are approved in Zapp.</span>
+            <input
+              type="number"
+              min={1}
+              value={editingPartner.agreementMaxChargeUsdCents / 100}
+              onChange={(e) =>
+                setEditingPartner({ ...editingPartner, agreementMaxChargeUsdCents: Math.round(Number(e.target.value) * 100) })
+              }
+            />
+          </label>
+          <label className="stack">
+            <span className="muted">Most per customer per day, linked payments (US$)</span>
+            <input
+              type="number"
+              min={1}
+              value={editingPartner.agreementDailyUsdCents / 100}
+              onChange={(e) =>
+                setEditingPartner({ ...editingPartner, agreementDailyUsdCents: Math.round(Number(e.target.value) * 100) })
+              }
+            />
+          </label>
           <label className="stack">
             <span className="muted">
               Test numbers outside +252 (Firebase test phone numbers), one per line. This merchant may charge,
@@ -295,6 +413,17 @@ export function ApiKeysPanel({ merchantId, disabled }: { merchantId: string; dis
             />
           </label>
         </ReasonPrompt>
+      )}
+
+      {revokingAgreement && (
+        <ReasonPrompt
+          title={`Revoke the link for ${revokingAgreement.customerPhone}`}
+          description="The merchant can no longer take payments approved in its app from this customer. Their next payment is approved in Zapp instead."
+          confirmLabel="Revoke link"
+          danger
+          onConfirm={revokeAgreement}
+          onCancel={() => setRevokingAgreement(null)}
+        />
       )}
 
       {revoking && (

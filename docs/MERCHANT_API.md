@@ -210,6 +210,85 @@ checks and records the transfer, but looks nobody up and moves nothing. A
 `destination_phone` ending in `0000` fails as `recipient_not_found`, and looks
 up as not found.
 
+## 4b. Agreements: paying inside the partner's app (partners only)
+
+For a partner whose customers should pay without leaving the partner's app,
+approving each payment with Face ID, a fingerprint or their phone's passcode.
+Needs **Linked payments** on for the merchant (console → Merchants → API keys
+→ Partner) and a key with the **Agreements** scope; anything else gets 403
+`agreements_not_enabled`.
+
+**Link once.** The partner's app makes an **EC P-256** key pair on the phone's
+secure chip (iPhone Secure Enclave, Android Keystore) that only the user's
+face, fingerprint or phone passcode can use, and sends the public half here:
+
+```
+POST /v1/agreements      Idempotency-Key required
+{ "customer_phone": "+252634111222",
+  "device_public_key": "<base64 SPKI DER, EC P-256>",
+  "device_label": "iPhone 15",          optional, shown to the customer
+  "reference": "Ridy rides" }           optional
+→ 201 { "id": "agr_…", "object": "agreement", "status": "pending",
+        "deep_link": "zapppay://agreement/agr_…", "expires_at": "…", … }
+```
+
+Open `deep_link` on the phone. Zapp Pay shows the merchant, the device label
+and the limits; the customer approves with their Zapp PIN. The request lapses
+after 15 minutes. Then:
+
+```
+GET  /v1/agreements/{id}          status: pending | active | revoked | expired
+                                  max_charge, daily_limit: US cents, once active
+POST /v1/agreements/{id}/revoke   end it (also possible from the customer's app and the console)
+```
+
+The limits are the partner's at the moment the customer approves, copied onto
+the agreement: raising them later does not raise an existing agreement's.
+Approving a new agreement replaces the customer's earlier one with the same
+partner.
+
+**Each payment.** Create the charge with the agreement:
+
+```
+POST /v1/charges   { …, "customer_phone": "+252634111222", "agreement": "agr_…" }
+→ 201 { …, "status": "pending", "agreement": "agr_…",
+        "auto_pay": { "status": "requires_confirmation",
+                      "payload": "zapp-agreement-charge:v1:ch_…:agr_…:30000:SLS" } }
+```
+
+On the phone, check `payload` names the amount you are showing, sign it with the
+key (ECDSA-SHA256, DER signature, base64) after Face ID / passcode, and send it:
+
+```
+POST /v1/charges/{id}/confirm   { "signature": "<base64>" }
+→ 200 the charge: "status": "succeeded", "auto_pay": { "status": "paid" }
+```
+
+A paid confirm raises `charge.succeeded` as any charge does. Retrying a confirm
+returns the charge and moves nothing.
+
+**When it can't be paid this way** the charge stays `pending` and the customer
+can approve it in Zapp Pay with the PIN, as any charge (Zapp pushes them the
+request). `auto_pay` says why:
+
+| `auto_pay` | Meaning |
+|---|---|
+| `{"status":"declined","declined_code":"over_charge_limit"}` | Over the per-payment limit. Answered at create. |
+| `over_daily_limit` | Over the day's limit. |
+| `insufficient_balance` | Not enough in the wallet. |
+| `customer_limit` | The customer's own limits, velocity, or the pause after a PIN reset. |
+| `account_unavailable` | The customer's account is frozen or inactive. |
+| `agreement_not_active` | Revoked, expired, never approved, or not yours. Also after 5 bad signatures. |
+| `customer_mismatch` | `customer_phone` isn't the agreement's customer. |
+
+A wrong signature is **402 `signature_invalid`** and changes nothing (try
+again). Confirming a charge that isn't waiting for the phone is 409
+`charge_not_confirmable`.
+
+**Test mode.** Test keys create test agreements; approve one with
+`POST /v1/test_helpers/agreements/{id}/approve`. Test charges on it need a
+valid signature and settle without moving money.
+
 ## 5. Webhooks
 
 ```
@@ -319,6 +398,17 @@ outcome returns it unchanged; a different outcome is `409 charge_not_pending`.
 ---
 
 ## Operator notes (Zapp internal)
+
+**Agreements** (`functions/src/api/agreements.ts`, `approveApiAgreement.ts`,
+`agreementSignature.ts`, `settleCharge.ts`). Collections `api_agreements` and
+`api_agreements/{id}/days/{YYYY-MM-DD}`, server-only. Functions: `api`,
+`getApiAgreement`, `approveApiAgreement`, `listMyAgreements`,
+`revokeMyAgreement`, `adminListAgreements`, `adminRevokeAgreement`, and
+`approveApiCharge` (its payment step moved to `settleCharge.ts`). Deploy the
+three `api_agreements` indexes first and wait for them to build. A confirmed
+charge posts the same `apicharge_{id}` entry as a PIN approval; its
+transaction row carries `approvedVia: "partner_device"` and `apiAgreementId`.
+
 
 **How money moves.** No API route debits anyone. A charge is paid only in
 `approveApiCharge`, under the customer's PIN, with the same guards as a shop

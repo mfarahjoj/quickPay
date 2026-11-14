@@ -58,6 +58,8 @@ interface IssueApiKeyInput {
   mode?: "live" | "test";
   /** Give the key the transfers scope. Partners only. */
   transfers?: boolean;
+  /** Give the key the agreements scope. Partners with linked payments on only. */
+  agreements?: boolean;
 }
 
 export const adminIssueApiKey = https.onCall(
@@ -98,11 +100,20 @@ export const adminIssueApiKey = https.onCall(
     }
 
     const mode = request.data?.mode === "test" ? "test" : "live";
-    const scopes: ApiKeyScope[] = request.data?.transfers === true ? ["transfers"] : [];
-    if (scopes.length && !(await getPartner(merchantId))?.transfersEnabled) {
+    const scopes: ApiKeyScope[] = [];
+    if (request.data?.transfers === true) scopes.push("transfers");
+    if (request.data?.agreements === true) scopes.push("agreements");
+    const partner = scopes.length ? await getPartner(merchantId) : undefined;
+    if (scopes.includes("transfers") && !partner?.transfersEnabled) {
       throw new https.HttpsError(
         "failed-precondition",
         "Only a partner's keys can make transfers. Turn on transfers for this merchant first."
+      );
+    }
+    if (scopes.includes("agreements") && !partner?.agreementsEnabled) {
+      throw new https.HttpsError(
+        "failed-precondition",
+        "Only a partner's keys can use agreements. Turn on linked payments for this merchant first."
       );
     }
 

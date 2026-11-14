@@ -81,6 +81,8 @@ export interface Transaction {
   reference?: string;
   /** Zapp receipt number, e.g. "ZP-7K3M-9QX2". Absent on older payments. */
   receiptNumber?: string;
+  /** Approved in a partner's app, on the customer's phone (Linked apps). */
+  approvedVia?: 'partner_device';
 }
 
 export interface QRCodeData {

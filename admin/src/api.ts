@@ -151,7 +151,27 @@ export interface ApiPartnerRow {
   chargeFeeRate: number | null;
   /** Numbers outside +252 it may charge, pay and look up: Firebase test numbers. */
   testPhoneNumbers: string[];
+  /** Linked payments: customers link once, then approve each payment in the merchant's app on their phone. */
+  agreementsEnabled: boolean;
+  agreementMaxChargeUsdCents: number;
+  agreementDailyUsdCents: number;
   updatedAt: string | null;
+}
+
+/** One customer's link to a merchant (functions/src/admin/apiAgreements.ts). */
+export interface ApiAgreementRow {
+  id: string;
+  /** Last four digits only. */
+  customerPhone: string;
+  status: string;
+  deviceLabel: string | null;
+  maxChargeUsdCents: number | null;
+  dailyUsdCents: number | null;
+  livemode: boolean;
+  createdAt: string | null;
+  approvedAt: string | null;
+  revokedAt: string | null;
+  revokedBy: string | null;
 }
 
 export interface RoleRequestRow {
@@ -521,10 +541,10 @@ export const api = {
     merchantId: string,
     label: string,
     reason: string,
-    opts: { mode?: "live" | "test"; transfers?: boolean } = {}
+    opts: { mode?: "live" | "test"; transfers?: boolean; agreements?: boolean } = {}
   ) =>
     call<
-      { merchantId: string; label: string; reason: string; mode?: "live" | "test"; transfers?: boolean },
+      { merchantId: string; label: string; reason: string; mode?: "live" | "test"; transfers?: boolean; agreements?: boolean },
       ApiKeyRow & { apiKey: string }
     >("adminIssueApiKey", { merchantId, label, reason, ...opts }),
 
@@ -540,6 +560,12 @@ export const api = {
       "adminSetApiPartner",
       { merchantId, reason, ...settings }
     ),
+
+  listAgreements: (merchantId: string) =>
+    call<{ merchantId: string }, ApiAgreementRow[]>("adminListAgreements", { merchantId }),
+
+  revokeAgreement: (agreementId: string, reason: string) =>
+    call<{ agreementId: string; reason: string }, ApiAgreementRow>("adminRevokeAgreement", { agreementId, reason }),
 
   revokeApiKey: (keyId: string, reason: string) =>
     call<{ keyId: string; reason: string }, ApiKeyRow>("adminRevokeApiKey", {

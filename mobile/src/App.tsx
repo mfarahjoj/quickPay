@@ -15,6 +15,7 @@ import { registerForPushNotifications } from './services/notification.service';
 import crashlytics from '@react-native-firebase/crashlytics';
 import { firebase } from '@react-native-firebase/app-check';
 import { parseChargeLink } from './services/apiCharge.service';
+import { parseAgreementLink } from './services/apiAgreement.service';
 import { ThemeProvider, useTheme } from './theme';
 
 /** Give up on a pending deep link if the customer hasn't signed in by then. */
@@ -27,10 +28,19 @@ const PENDING_LINK_TIMEOUT_MS = 2 * 60 * 1000;
  * customer unlocks.
  */
 function navigateToApiCharge(chargeId: string) {
+  navigateWhenSignedIn(() => navigationRef.navigate('ApprovePayment', { chargeId }));
+}
+
+/** Same, for a partner's request to link (zapppay://agreement/{id}). */
+function navigateToAgreement(agreementId: string) {
+  navigateWhenSignedIn(() => navigationRef.navigate('ApproveAgreement', { agreementId }));
+}
+
+function navigateWhenSignedIn(go: () => void) {
   const startedAt = Date.now();
   const waitAndNavigate = () => {
     if (navigationRef.isReady() && auth().currentUser) {
-      navigationRef.navigate('ApprovePayment', { chargeId });
+      go();
     } else if (Date.now() - startedAt < PENDING_LINK_TIMEOUT_MS) {
       setTimeout(waitAndNavigate, 500);
     }
@@ -154,10 +164,17 @@ function AppContent() {
   }, [t]);
 
   // zapppay://charge/{id} — the "Open Zapp Pay" button on the hosted checkout.
+  // zapppay://agreement/{id} — a partner's app asking to link (Ridy).
   useEffect(() => {
     const open = (url: string | null) => {
-      const chargeId = url ? parseChargeLink(url) : null;
-      if (chargeId) navigateToApiCharge(chargeId);
+      if (!url) return;
+      const chargeId = parseChargeLink(url);
+      if (chargeId) {
+        navigateToApiCharge(chargeId);
+        return;
+      }
+      const agreementId = parseAgreementLink(url);
+      if (agreementId) navigateToAgreement(agreementId);
     };
     Linking.getInitialURL().then(open).catch(() => undefined);
     const sub = Linking.addEventListener('url', ({ url }) => open(url));
