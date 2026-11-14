@@ -6,7 +6,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import QRCode from 'react-native-qrcode-svg';
 import { useWallet } from '../../hooks/useWallet';
-import { formatMoney, leadCurrency } from '../../utils/money';
+import { formatMoney, moneyParts } from '../../utils/money';
+import { useHomeCurrency } from '../../hooks/useHomeCurrency';
 import { useTransactions } from '../../hooks/useTransactions';
 import { typography, spacing, borderRadius, makeStyles, useColors, useTheme, wallpaper, tints } from '../../theme';
 import { CURRENCY_SYMBOL } from '../../config/constants';
@@ -291,6 +292,11 @@ export default function DashboardScreen({ navigation }: Props) {
   const { transactions, loading: txLoading, error: txError, refresh: refreshTx } = useTransactions(undefined, 30);
   const [refreshing, setRefreshing] = useState(false);
   const [balanceVisible, setBalanceVisible] = useState(true);
+  // Home shows one balance; the currency button switches to the other.
+  const { currency: homeCurrency, switchCurrency } = useHomeCurrency(
+    wallet?.balanceCents ?? 0,
+    wallet?.slsBalance ?? 0
+  );
   const [idleTick, setIdleTick] = useState(0);
   // Light Home: the status bar turns dark once the coral header has scrolled away.
   const [headerHeight, setHeaderHeight] = useState(0);
@@ -471,6 +477,11 @@ export default function DashboardScreen({ navigation }: Props) {
     triggerHaptic('light');
     setBalanceVisible((prev) => !prev);
   };
+  const slsParts = moneyParts(wallet?.slsBalance ?? 0, 'SLS');
+  const onSwitchCurrency = () => {
+    triggerHaptic('light');
+    switchCurrency();
+  };
 
   const offlineBanner = !isConnected && (
     <View style={styles.offlineBanner}>
@@ -609,6 +620,8 @@ export default function DashboardScreen({ navigation }: Props) {
               initials={initialsOf(profile?.fullName)}
               usdCents={wallet?.balanceCents ?? 0}
               slsBalance={wallet?.slsBalance ?? 0}
+              currency={homeCurrency}
+              onSwitchCurrency={onSwitchCurrency}
               balanceVisible={balanceVisible}
               onToggleBalance={onToggleBalance}
               language={profile?.preferredLanguage}
@@ -755,15 +768,36 @@ export default function DashboardScreen({ navigation }: Props) {
         <TouchableOpacity activeOpacity={0.9} onPress={onToggleBalance} style={styles.balanceBlock}>
           <View style={styles.balanceHeader}>
             <Text style={styles.balanceLabel}>{t('dashboard.availableBalance')}</Text>
+            <TouchableOpacity
+              onPress={onSwitchCurrency}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              style={styles.currencyChip}
+              accessibilityRole="button"
+              accessibilityLabel={t(homeCurrency === 'SLS' ? 'dashboard.showDollars' : 'dashboard.showShillings')}
+            >
+              <Text style={styles.currencyChipText}>{homeCurrency === 'SLS' ? 'SLSH' : 'USD'} ⇄</Text>
+            </TouchableOpacity>
             <Text style={styles.eyeIcon}>
               {balanceVisible ? t('common.hide') : t('common.show')}
             </Text>
           </View>
           <Animated.View style={[balanceVeilStyle, styles.balanceAmountWrap]}>
             {balanceVisible ? (
-              leadCurrency(wallet?.balanceCents ?? 0, wallet?.slsBalance ?? 0) === 'SLS' ? (
-                <Text style={styles.balanceAmount} numberOfLines={1} adjustsFontSizeToFit>
-                  {formatMoney(wallet?.slsBalance ?? 0, 'SLS')}
+              homeCurrency === 'SLS' ? (
+                <Text
+                  style={[
+                    styles.balanceAmount,
+                    slsParts.main.length > 12
+                      ? styles.balanceAmountSmall
+                      : slsParts.main.length > 9
+                        ? styles.balanceAmountMedium
+                        : null,
+                  ]}
+                  numberOfLines={1}
+                  accessibilityLabel={formatMoney(wallet?.slsBalance ?? 0, 'SLS')}
+                >
+                  {slsParts.main}
+                  <Text style={styles.balanceAmountTail}>{slsParts.tail}</Text>
                 </Text>
               ) : (
                 <AnimatedNumber
@@ -777,13 +811,6 @@ export default function DashboardScreen({ navigation }: Props) {
               <Text style={styles.balanceAmount}>••••••</Text>
             )}
           </Animated.View>
-          {balanceVisible &&
-          leadCurrency(wallet?.balanceCents ?? 0, wallet?.slsBalance ?? 0) === 'SLS' &&
-          (wallet?.balanceCents ?? 0) > 0 ? (
-            <Text style={styles.balanceLabel}>
-              {t('dashboard.alsoBalance', { amount: formatMoney(wallet?.balanceCents ?? 0, 'USD') })}
-            </Text>
-          ) : null}
         </TouchableOpacity>
 
         {/* Action tiles: cascade in, squish on press, icons react in character */}
@@ -1131,6 +1158,17 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
     fontSize: 12,
     color: colors.ui.textDim,
   },
+  currencyChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.ui.textFaint,
+  },
+  currencyChipText: {
+    ...typography.captionBold,
+    color: colors.ui.text,
+  },
   eyeIcon: {
     ...typography.captionBold,
     color: colors.ui.textFaint,
@@ -1145,6 +1183,20 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
     lineHeight: 62,
     color: colors.ui.text,
     fontVariant: ['tabular-nums'],
+  },
+  // Shilling amounts run long, and shrink-to-fit draws them as a dot here:
+  // step the size down by length instead.
+  balanceAmountMedium: {
+    fontSize: 42,
+    letterSpacing: -1.5,
+  },
+  balanceAmountSmall: {
+    fontSize: 32,
+    letterSpacing: -1,
+  },
+  balanceAmountTail: {
+    fontSize: 24,
+    letterSpacing: -0.5,
   },
   // ─── Action tiles ───
   tilesRow: {

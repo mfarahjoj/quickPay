@@ -1,4 +1,4 @@
-import { balanceIn, formatMajor, formatMoney, leadCurrency, moneyParts, toCurrency } from '../money';
+import { balanceIn, formatMajor, formatMoney, leadCurrency, moneyParts, otherCurrency, toCurrency } from '../money';
 
 describe('money', () => {
   it('formats each currency from its smallest unit', () => {
@@ -37,5 +37,10 @@ describe('money', () => {
     expect(balanceIn(wallet, 'USD')).toBe(1250);
     expect(balanceIn(wallet, 'SLS')).toBe(30000);
     expect(balanceIn(null, 'SLS')).toBe(0);
+  });
+
+  it('switches to the other currency', () => {
+    expect(otherCurrency('SLS')).toBe('USD');
+    expect(otherCurrency('USD')).toBe('SLS');
   });
 });

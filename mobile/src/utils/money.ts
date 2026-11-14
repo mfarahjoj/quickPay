@@ -48,11 +48,17 @@ export function moneyParts(amount: number, currency: Currency): { main: string; 
 }
 
 /**
- * Which balance leads on Home. Shillings are the main currency; someone who
- * only ever held dollars keeps seeing their dollars first.
+ * Which balance Home shows until the customer picks one (`useHomeCurrency`).
+ * Shillings are the main currency; someone who only ever held dollars sees
+ * their dollars first.
  */
 export function leadCurrency(usdCents: number, slsBalance: number): Currency {
   return usdCents > 0 && slsBalance <= 0 ? 'USD' : 'SLS';
+}
+
+/** Dollars for shillings, shillings for dollars. */
+export function otherCurrency(currency: Currency): Currency {
+  return currency === 'SLS' ? 'USD' : 'SLS';
 }
 
 /** The balance a payment in [currency] comes out of. */
