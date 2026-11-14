@@ -19,6 +19,22 @@ export const DEFAULT_MAX_TRANSFER_USD_CENTS = 10_000; // $100
 export const DEFAULT_DAILY_TRANSFER_USD_CENTS = 200_000; // $2,000
 /** Fee rates a partner may be given; above this is a typo, not a deal. */
 export const MAX_PARTNER_FEE_RATE = 0.1;
+/** Test numbers a partner may list. */
+export const MAX_TEST_PHONE_NUMBERS = 50;
+/** Any country's number in E.164: a + and 8 to 15 digits. */
+export const E164_PATTERN = /^\+[1-9][0-9]{7,14}$/;
+
+/**
+ * The partner's test numbers, or none. Read only for a number that isn't
+ * +252, so a merchant charging Somaliland numbers pays no extra read.
+ */
+export async function testPhoneNumbersFor(merchantId: string, phone: unknown): Promise<string[]> {
+  if (typeof phone !== "string" || !E164_PATTERN.test(phone.trim()) || phone.trim().startsWith("+252")) {
+    return [];
+  }
+  const list = (await getPartner(merchantId))?.testPhoneNumbers;
+  return Array.isArray(list) ? list.filter((p) => typeof p === "string") : [];
+}
 
 export async function getPartner(merchantId: string): Promise<ApiPartner | undefined> {
   const snap = await admin.firestore().collection(API_PARTNERS_COLLECTION).doc(merchantId).get();

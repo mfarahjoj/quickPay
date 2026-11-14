@@ -20,6 +20,8 @@ export function ApiKeysPanel({ merchantId, disabled }: { merchantId: string; dis
   const [transfers, setTransfers] = useState(false);
   const [partner, setPartner] = useState<ApiPartnerRow | null>(null);
   const [editingPartner, setEditingPartner] = useState<ApiPartnerRow | null>(null);
+  // The test numbers as typed; split when saved, so a new line can be typed.
+  const [testNumbersText, setTestNumbersText] = useState("");
 
   const load = useCallback(async () => {
     setError(null);
@@ -53,7 +55,11 @@ export function ApiKeysPanel({ merchantId, disabled }: { merchantId: string; dis
   const savePartner = async (reason: string) => {
     if (!editingPartner) return;
     const { updatedAt: _updatedAt, ...settings } = editingPartner;
-    setPartner(await api.setApiPartner(merchantId, settings, reason));
+    const testPhoneNumbers = testNumbersText
+      .split(/[,;\n]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    setPartner(await api.setApiPartner(merchantId, { ...settings, testPhoneNumbers }, reason));
     setEditingPartner(null);
   };
 
@@ -194,7 +200,14 @@ export function ApiKeysPanel({ merchantId, disabled }: { merchantId: string; dis
       <div className="row" style={{ marginTop: 16 }}>
         <h3 style={{ margin: 0 }}>Partner transfers</h3>
         <div className="spacer" />
-        <button onClick={() => partner && setEditingPartner({ ...partner })} disabled={disabled || !partner}>
+        <button
+          onClick={() => {
+            if (!partner) return;
+            setEditingPartner({ ...partner });
+            setTestNumbersText((partner.testPhoneNumbers ?? []).join("\n"));
+          }}
+          disabled={disabled || !partner}
+        >
           Edit
         </button>
       </div>
@@ -209,7 +222,9 @@ export function ApiKeysPanel({ merchantId, disabled }: { merchantId: string; dis
             "Off. This merchant's keys cannot pay anyone."
           )}{" "}
           Charge fee:{" "}
-          {partner.chargeFeeRate === null ? "standard" : `${(partner.chargeFeeRate * 100).toFixed(2)}%`}.
+          {partner.chargeFeeRate === null ? "standard" : `${(partner.chargeFeeRate * 100).toFixed(2)}%`}.{" "}
+          Test numbers:{" "}
+          {partner.testPhoneNumbers?.length ? partner.testPhoneNumbers.join(", ") : "none (+252 numbers only)"}.
         </p>
       )}
 
@@ -265,6 +280,18 @@ export function ApiKeysPanel({ merchantId, disabled }: { merchantId: string; dis
                   chargeFeeRate: e.target.value === "" ? null : Number(e.target.value) / 100,
                 })
               }
+            />
+          </label>
+          <label className="stack">
+            <span className="muted">
+              Test numbers outside +252 (Firebase test phone numbers), one per line. This merchant may charge,
+              pay and look these up; every other number must be +252.
+            </span>
+            <textarea
+              rows={3}
+              placeholder="+447700900123"
+              value={testNumbersText}
+              onChange={(e) => setTestNumbersText(e.target.value)}
             />
           </label>
         </ReasonPrompt>

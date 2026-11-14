@@ -149,6 +149,8 @@ export interface ApiPartnerRow {
   dailyTransferUsdCents: number;
   /** null: the standard online payment fee. */
   chargeFeeRate: number | null;
+  /** Numbers outside +252 it may charge, pay and look up: Firebase test numbers. */
+  testPhoneNumbers: string[];
   updatedAt: string | null;
 }
 
