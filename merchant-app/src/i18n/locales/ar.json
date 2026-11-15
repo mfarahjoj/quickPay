@@ -961,5 +961,8 @@
   "send.available": "المتاح: {{amount}}",
   "send.notEnough": "أكثر مما لديك بهذه العملة.",
   "send.pinSubtitle": "لإرسال {{amount}} إلى {{name}}.",
-  "send.done": "تم إرسال {{amount}} إلى {{name}}."
+  "send.done": "تم إرسال {{amount}} إلى {{name}}.",
+  "autoPayout.shillingsToggle": "الشلن أيضًا",
+  "autoPayout.shillingsHint": "يُحوَّل الشلن الزائد عن الرصيد الذي تحتفظ به كشلن، ولا يُحوَّل أبدًا إلى دولار.",
+  "autoPayout.keepSlsLabel": "الشلن المحتفظ به"
 }

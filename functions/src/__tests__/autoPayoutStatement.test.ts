@@ -75,6 +75,49 @@ describe("automatic payouts (3.6, D11)", () => {
     expect(db.get("ledger_balances/platform:settlement_hold")!.balance).toBe(10_000);
   });
 
+  describe("in shillings", () => {
+    const sls = (balance: number) => ({ sls: { balance, totalSent: 0, totalReceived: 0 } });
+
+    it("pays shillings out as shillings, only when the shop turned them on", async () => {
+      let db = seed({ [`wallets/${SHOP}`]: wallet(12_000, sls(500_000)) });
+      expect((await runNow()).queued).toBe(1);
+      expect(payouts(db).map((p) => p.currency ?? "USD")).toEqual(["USD"]);
+      restore?.();
+
+      db = seed({
+        [`wallets/${SHOP}`]: wallet(12_000, sls(500_000)),
+        [`merchantProfiles/${SHOP}`]: { businessName: "Hooyo Shop", ...settings({ shillings: { enabled: true, keep: 100_000 } }) },
+        "config/rates": { slsPerUsd: 8_000 },
+      });
+      expect(await runNow()).toEqual({ queued: 2, skipped: 0 });
+      const slsPayout = payouts(db).find((p) => p.currency === "SLS")!;
+      expect(slsPayout).toMatchObject({ amountCents: 400_000, auto: true, status: "requested" });
+      expect(db.get(`wallets/${SHOP}`)!.sls.balance).toBe(100_000);
+      expect(db.get(`wallets/${SHOP}`)!.balance).toBe(2_000);
+      expect(db.get("ledger_balances/platform:settlement_hold@SLS")!.balance).toBe(400_000);
+    });
+
+    it("skips shillings under the minimum, counted at the rate", async () => {
+      const db = seed({
+        [`wallets/${SHOP}`]: wallet(0, sls(150_000)),
+        [`merchantProfiles/${SHOP}`]: { businessName: "Hooyo Shop", ...settings({ shillings: { enabled: true, keep: 100_000 } }) },
+        "config/rates": { slsPerUsd: 8_000, autoPayoutMinCents: 1_000 },
+      });
+      // 50,000 shillings above the kept balance; $10 is 80,000 shillings.
+      expect((await runNow()).queued).toBe(0);
+      expect(payouts(db)).toHaveLength(0);
+    });
+
+    it("is switched on with its own balance to keep, and older apps leave it alone", async () => {
+      const db = seed({ [`merchantProfiles/${SHOP}`]: { businessName: "Hooyo Shop" } });
+      await setAuto({ data: { enabled: true, keepCents: 1_000, shillingsEnabled: true, keepSls: 50_000, pin: "123456" }, auth: { uid: SHOP } });
+      expect(db.get(`merchantProfiles/${SHOP}`)!.autoPayout.shillings).toEqual({ enabled: true, keep: 50_000 });
+      // An app that knows nothing of shillings changes only the dollar side.
+      await setAuto({ data: { enabled: true, keepCents: 3_000, pin: "123456" }, auth: { uid: SHOP } });
+      expect(db.get(`merchantProfiles/${SHOP}`)!.autoPayout).toMatchObject({ keepCents: 3_000, shillings: { enabled: true, keep: 50_000 } });
+    });
+  });
+
   it("never counts money reserved for a lost dispute", async () => {
     const db = seed({ [`wallets/${SHOP}`]: wallet(12_000, { reservedCents: 9_500 }) });
     expect((await runNow()).queued).toBe(0);

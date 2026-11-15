@@ -961,5 +961,8 @@
   "send.available": "Diyaar: {{amount}}",
   "send.notEnough": "Wuu ka badan yahay waxa aad ku haysato lacagtan.",
   "send.pinSubtitle": "Si aad {{amount}} ugu dirto {{name}}.",
-  "send.done": "{{amount}} ayaa loo diray {{name}}."
+  "send.done": "{{amount}} ayaa loo diray {{name}}.",
+  "autoPayout.shillingsToggle": "Shilinka sidoo kale",
+  "autoPayout.shillingsHint": "Shilinka ka badan inta aad haysato waxaa laguu bixiyaa shilin ahaan, weligood looma beddelo doolar.",
+  "autoPayout.keepSlsLabel": "Shilinka la hayo"
 }
