@@ -1,5 +1,6 @@
 /**
  * Payment links: `zapppay://send?to=%2B252634120987&amount=4.70&note=Ridy%20ride`
+ * or, in shillings, `zapppay://send?to=…&amount=30000&currency=SLSH`.
  *
  * A link only PRE-FILLS the send flow. The recipient is still resolved by
  * phone through `lookupRecipient`, so the payer sees the account's name;
@@ -13,13 +14,20 @@
 export interface PaymentLink {
   /** E.164 (`+252…`) or local digits; the send screen adds the prefix. */
   to: string;
-  /** Dollars, at most two decimals, e.g. "4.70". */
+  /**
+   * Dollars with at most two decimals ("4.70"), or whole shillings
+   * ("30000") when `currency` is SLS.
+   */
   amount?: string;
+  /** Absent: dollars, as every link before shillings. */
+  currency?: 'USD' | 'SLS';
   note?: string;
 }
 
 /** Anything above this is not a fare or a bill; refuse to pre-fill it. */
 const MAX_LINK_AMOUNT = 1000;
+/** The same ceiling in shillings, at the default 8,000 a dollar. */
+const MAX_LINK_SHILLINGS = 8_000_000;
 const MAX_NOTE_LENGTH = 60;
 
 function decode(value: string): string | null {
@@ -63,8 +71,21 @@ export function parsePaymentLink(url: string | null | undefined): PaymentLink | 
 
   const link: PaymentLink = { to };
 
+  // A link names its currency, or it is dollars. Anything else is not a
+  // currency Zapp holds: refuse the link rather than guess.
+  const code = params.currency?.trim().toUpperCase();
+  if (code && code !== 'USD' && code !== 'SLS' && code !== 'SLSH') return null;
+  const shillings = code === 'SLS' || code === 'SLSH';
+  if (shillings) link.currency = 'SLS';
+
   const amount = params.amount?.trim();
-  if (amount && /^\d{1,4}(\.\d{1,2})?$/.test(amount)) {
+  if (amount && shillings) {
+    // Whole shillings only: "30000.50" is not a shilling amount.
+    if (/^\d{1,7}$/.test(amount)) {
+      const value = Number(amount);
+      if (value > 0 && value <= MAX_LINK_SHILLINGS) link.amount = amount;
+    }
+  } else if (amount && /^\d{1,4}(\.\d{1,2})?$/.test(amount)) {
     const value = Number(amount);
     if (value > 0 && value <= MAX_LINK_AMOUNT) link.amount = amount;
   }

@@ -48,6 +48,27 @@ describe('parsePaymentLink', () => {
     expect(link?.note?.startsWith('abc')).toBe(true);
     expect(link?.note?.length).toBe(60);
   });
+
+  it('reads a shilling link: whole shillings, never dollars', () => {
+    expect(parsePaymentLink('zapppay://send?to=634120987&amount=30000&currency=SLSH')).toEqual({
+      to: '634120987',
+      amount: '30000',
+      currency: 'SLS',
+    });
+    expect(parsePaymentLink('zapppay://send?to=634120987&amount=30000&currency=sls')?.currency).toBe('SLS');
+    // Decimals or an implausible amount are dropped; the recipient is kept.
+    expect(parsePaymentLink('zapppay://send?to=634120987&amount=30000.50&currency=SLSH')).toEqual({
+      to: '634120987',
+      currency: 'SLS',
+    });
+    expect(parsePaymentLink('zapppay://send?to=634120987&amount=9000000&currency=SLSH')?.amount).toBeUndefined();
+  });
+
+  it('keeps links without a currency in dollars, and refuses one Zapp does not hold', () => {
+    expect(parsePaymentLink('zapppay://send?to=634120987&amount=4.70')).toEqual({ to: '634120987', amount: '4.70' });
+    expect(parsePaymentLink('zapppay://send?to=634120987&amount=4.70&currency=USD')?.currency).toBeUndefined();
+    expect(parsePaymentLink('zapppay://send?to=634120987&amount=470&currency=KES')).toBeNull();
+  });
 });
 
 describe('normaliseLinkPhone', () => {
