@@ -66,7 +66,7 @@ ever paid at it.
 | Partner transfers (`POST /v1/transfers`, `currency: "SLSH"`) | Yes |
 | `getBalance` (`slsBalance`), `getTransactions` (whole shillings) | Yes |
 | Account deletion | Refused while shillings remain |
-| Customer app: Home, charge approval, history, Zaad top-up | Yes |
+| Customer app: Home, Send, charge approval, history, Zaad top-up | Yes (payment links into Send stay in dollars) |
 | Shop QR (`generateQRCode`, `processPayment`, `payMerchant`), customer-QR requests, payroll, remittance | **Dollars only** (`validateCurrency` refuses SLS) |
 | Agent cash-in, cash-out and float | **Dollars only** |
 | Merchant payouts to Zaad | **Dollars only** |

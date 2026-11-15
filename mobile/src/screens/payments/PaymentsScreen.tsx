@@ -25,7 +25,7 @@ import Animated, {
 import QRCode from 'react-native-qrcode-svg';
 import { Card, Button, PinInput } from '../../components';
 import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
-import { CURRENCY_SYMBOL, PHONE_PREFIX } from '../../config/constants';
+import { PHONE_PREFIX } from '../../config/constants';
 import { Springs } from '../../constants/springs';
 import { SuccessCheckIcon } from '../../components/icons/AuthIcons';
 import { formatCountdown } from '../../utils/time';
@@ -41,6 +41,17 @@ import {
   secondsLeftFromToken,
 } from '../../services/customerToken.service';
 import type { PaymentLink } from '../../services/paymentLink.service';
+import { useWallet } from '../../hooks/useWallet';
+import { useHomeCurrency } from '../../hooks/useHomeCurrency';
+import { pressAmountKey, type AmountKey } from '../../utils/amountKeypad';
+import {
+  amountInputLabel,
+  amountInputUnits,
+  balanceIn,
+  formatMoney,
+  otherCurrency,
+  type Currency,
+} from '../../utils/money';
 
 type PaymentTab = 'send' | 'receive';
 type SendStep = 'phone' | 'amount' | 'review' | 'pin' | 'success';
@@ -76,6 +87,12 @@ export default function PaymentsScreen({ route }: Props) {
   const [phoneInput, setPhoneInput] = useState('');
   const [recipient, setRecipient] = useState<RecipientInfo | null>(null);
   const [amountText, setAmountText] = useState('');
+  // Dollars or shillings. Starts on the currency Home shows; a payment link
+  // is always in dollars. Never converted: it comes out of that balance.
+  const { wallet } = useWallet();
+  const { currency: homeCurrency } = useHomeCurrency(wallet?.balanceCents ?? 0, wallet?.slsBalance ?? 0);
+  const [pickedCurrency, setPickedCurrency] = useState<Currency | null>(null);
+  const currency = pickedCurrency ?? homeCurrency;
   const [note, setNote] = useState('');
   const [pin, setPin] = useState('');
   const [sending, setSending] = useState(false);
@@ -263,12 +280,24 @@ export default function PaymentsScreen({ route }: Props) {
     successBtnsOp.value = withDelay(580, withTiming(1, { duration: 200 }));
   }, [step, successRingScale, successRingOpacity, successTitleOp, successTitleY, successAmountOp, successBtnsOp]);
 
-  const amount = Number(amountText || '0');
+  /** Cents or whole shillings: what `sendP2P` takes. */
+  const amountUnits = amountInputUnits(amountText, currency);
+  const amountLabel = formatMoney(amountUnits, currency);
 
   const appendDigit = (digit: string) => {
-    if (digit === '.' && amountText.includes('.')) return;
+    // Shillings have no smaller unit, so no decimal point.
+    if (digit === '.' && currency === 'SLS') return;
+    const next = pressAmountKey(amountText, digit as AmountKey);
+    if (next === amountText) return;
     triggerHaptic('light');
-    setAmountText((prev) => `${prev}${digit}`);
+    setAmountText(next);
+  };
+
+  const switchSendCurrency = () => {
+    triggerHaptic('light');
+    setPickedCurrency(otherCurrency(currency));
+    // "4.70" dollars is not 4.70 shillings: start the amount again.
+    setAmountText('');
   };
 
   const backspace = () => {
@@ -281,6 +310,7 @@ export default function PaymentsScreen({ route }: Props) {
     setPhoneInput('');
     setRecipient(null);
     setAmountText('');
+    setPickedCurrency(null);
     setNote('');
     setPin('');
     setSending(false);
@@ -344,6 +374,7 @@ export default function PaymentsScreen({ route }: Props) {
     setTab('send');
     resetSend();
     setFromLink(true);
+    setPickedCurrency('USD');
     const local = prefill.to.startsWith(PHONE_PREFIX) ? prefill.to.slice(PHONE_PREFIX.length) : prefill.to;
     setPhoneInput(local);
     setAmountText(prefill.amount ?? '');
@@ -357,12 +388,11 @@ export default function PaymentsScreen({ route }: Props) {
     try {
       setSending(true);
       triggerHaptic('medium');
-      const amountCents = Math.round(amount * 100);
       const sendFn = functions().httpsCallable('sendP2P');
       const result = await sendFn({
         recipientPhone: recipient!.phoneNumber,
-        amount: amountCents,
-        currency: 'USD',
+        amount: amountUnits,
+        currency,
         pin,
         note: note || undefined,
       });
@@ -395,7 +425,7 @@ export default function PaymentsScreen({ route }: Props) {
       title: t('payments.receiptShareTitle'),
       message: t('common.sharePaymentReceipt', {
         recipient: recipient?.fullName ?? fullPhone,
-        amount: `${CURRENCY_SYMBOL}${amount.toFixed(2)}`,
+        amount: amountLabel,
         note: note || 'N/A',
       }),
     });
@@ -468,10 +498,31 @@ export default function PaymentsScreen({ route }: Props) {
                   <Text style={styles.contactHandle}>{recipient.phoneNumber}</Text>
                 </View>
               </View>
-              <Animated.Text style={[styles.amountLarge, amountAnimStyle]}>
-                {CURRENCY_SYMBOL}
-                {amountText || '0'}
+              <Animated.Text
+                style={[
+                  styles.amountLarge,
+                  amountInputLabel(amountText, currency).length > 10 && styles.amountLargeLong,
+                  amountAnimStyle,
+                ]}
+                numberOfLines={1}
+              >
+                {amountInputLabel(amountText, currency)}
               </Animated.Text>
+              <View style={styles.currencyRow}>
+                <Text style={styles.availableText}>
+                  {t('payments.available', { amount: formatMoney(balanceIn(wallet, currency), currency) })}
+                </Text>
+                {!fromLink && (
+                  <TouchableOpacity
+                    onPress={switchSendCurrency}
+                    style={styles.currencyChip}
+                    accessibilityRole="button"
+                    accessibilityLabel={t(currency === 'SLS' ? 'payments.sendInDollars' : 'payments.sendInShillings')}
+                  >
+                    <Text style={styles.currencyChipText}>{currency === 'SLS' ? 'SLSH' : 'USD'} ⇄</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
               <TextInput
                 placeholder={t('payments.addNote')}
                 placeholderTextColor={colors.text.muted}
@@ -480,21 +531,26 @@ export default function PaymentsScreen({ route }: Props) {
                 style={styles.noteInput}
               />
               <View style={styles.keypad}>
-                {['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '<'].map((key) => (
-                  <TouchableOpacity
-                    key={key}
-                    style={styles.key}
-                    onPress={() => (key === '<' ? backspace() : appendDigit(key))}
-                    activeOpacity={0.75}
-                  >
-                    <Text style={styles.keyText}>{key}</Text>
-                  </TouchableOpacity>
-                ))}
+                {['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '<'].map((key) =>
+                  // Shillings have no smaller unit, so no decimal point.
+                  key === '.' && currency === 'SLS' ? (
+                    <View key={key} style={styles.keyBlank} />
+                  ) : (
+                    <TouchableOpacity
+                      key={key}
+                      style={styles.key}
+                      onPress={() => (key === '<' ? backspace() : appendDigit(key))}
+                      activeOpacity={0.75}
+                    >
+                      <Text style={styles.keyText}>{key}</Text>
+                    </TouchableOpacity>
+                  )
+                )}
               </View>
               <Button
                 title={t('common.continue')}
                 onPress={() => { triggerHaptic('medium'); setStep('review'); }}
-                disabled={amount <= 0}
+                disabled={amountUnits <= 0}
                 fullWidth
                 style={styles.primaryCta}
               />
@@ -526,13 +582,11 @@ export default function PaymentsScreen({ route }: Props) {
               </View>
               <View style={styles.reviewRow}>
                 <Text style={styles.reviewKey}>{t('common.amount')}</Text>
-                <Text style={styles.reviewValue}>
-                  {CURRENCY_SYMBOL}{amount.toFixed(2)}
-                </Text>
+                <Text style={styles.reviewValue}>{amountLabel}</Text>
               </View>
               <View style={styles.reviewRow}>
                 <Text style={styles.reviewKey}>{t('common.fee')}</Text>
-                <Text style={styles.reviewValue}>{CURRENCY_SYMBOL}0.00</Text>
+                <Text style={styles.reviewValue}>{formatMoney(0, currency)}</Text>
               </View>
               <View style={styles.reviewRow}>
                 <Text style={styles.reviewKey}>{t('common.delivery')}</Text>
@@ -565,7 +619,7 @@ export default function PaymentsScreen({ route }: Props) {
               <Text style={styles.stepTitle}>{t('payments.enterPin')}</Text>
               <Text style={styles.pinSubtitle}>
                 {t('payments.sendingTo', {
-                  amount: `${CURRENCY_SYMBOL}${amount.toFixed(2)}`,
+                  amount: amountLabel,
                   name: recipient?.fullName ?? '',
                 })}
               </Text>
@@ -607,7 +661,7 @@ export default function PaymentsScreen({ route }: Props) {
                 <Text style={styles.successTitle}>{t('payments.paymentSent')}</Text>
               </Animated.View>
               <Animated.View style={successAmountStyle}>
-                <Text style={styles.successAmount}>{CURRENCY_SYMBOL}{amount.toFixed(2)}</Text>
+                <Text style={styles.successAmount}>{amountLabel}</Text>
                 <Text style={styles.successRecipient}>{t('common.toRecipient', { name: recipient?.fullName ?? '' })}</Text>
               </Animated.View>
               <Animated.View style={successBtnsStyle}>
@@ -835,6 +889,37 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
     textAlign: 'center',
     marginVertical: spacing.smPlus,
     fontVariant: ['tabular-nums'],
+  },
+  amountLargeLong: {
+    fontSize: 30,
+    lineHeight: 38,
+    letterSpacing: -0.5,
+  },
+  currencyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  availableText: {
+    ...typography.caption,
+    color: colors.text.muted,
+  },
+  currencyChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.ui.glassBorder,
+    backgroundColor: colors.ui.glass,
+  },
+  currencyChipText: {
+    ...typography.captionBold,
+    color: colors.text.primary,
+  },
+  keyBlank: {
+    width: '31%',
   },
   noteInput: {
     height: 44,

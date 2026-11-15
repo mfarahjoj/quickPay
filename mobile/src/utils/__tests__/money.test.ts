@@ -1,4 +1,14 @@
-import { balanceIn, formatMajor, formatMoney, leadCurrency, moneyParts, otherCurrency, toCurrency } from '../money';
+import {
+  amountInputLabel,
+  amountInputUnits,
+  balanceIn,
+  formatMajor,
+  formatMoney,
+  leadCurrency,
+  moneyParts,
+  otherCurrency,
+  toCurrency,
+} from '../money';
 
 describe('money', () => {
   it('formats each currency from its smallest unit', () => {
@@ -42,5 +52,22 @@ describe('money', () => {
   it('switches to the other currency', () => {
     expect(otherCurrency('SLS')).toBe('USD');
     expect(otherCurrency('USD')).toBe('SLS');
+  });
+
+  it('reads a typed amount in its smallest unit', () => {
+    expect(amountInputUnits('12.5', 'USD')).toBe(1250);
+    expect(amountInputUnits('0.07', 'USD')).toBe(7);
+    expect(amountInputUnits('30000', 'SLS')).toBe(30000);
+    expect(amountInputUnits('', 'USD')).toBe(0);
+    expect(amountInputUnits('0.', 'USD')).toBe(0);
+    expect(amountInputUnits('', 'SLS')).toBe(0);
+  });
+
+  it('shows a typed amount while it is being typed', () => {
+    expect(amountInputLabel('1234.5', 'USD')).toBe('$1,234.5');
+    expect(amountInputLabel('12.', 'USD')).toBe('$12.');
+    expect(amountInputLabel('', 'USD')).toBe('$0');
+    expect(amountInputLabel('30000', 'SLS')).toBe('30,000 SLSH');
+    expect(amountInputLabel('', 'SLS')).toBe('0 SLSH');
   });
 });
