@@ -73,9 +73,9 @@ ever paid at it.
 | Shop till QR (`generateQRCode`, `validateQRCode`, `processPayment`), charges to a scanned customer code (`createPaymentRequest`, `approvePaymentRequest`), refunds, counter display | Yes. See below |
 | Shop sticker QR (`payMerchant`), cash-out at the counter, payroll, remittance | **Dollars only** |
 | Agents buying float by Zaad, and Move to float | Yes: the agent picks the currency in the merchant app; a shilling payment or wallet shillings become shilling float. See below |
-| Merchant payouts to Zaad | **Dollars only** |
-| Merchant app | Balance switch, Send, Receive, Charge, refunds, agent float, cash-in, cash-out, Buy float by Zaad, Move to float and history rows in shillings. **Payouts dollars only** |
-| Admin console | Float desk in shillings. **Other balances dollars only on screen** |
+| Merchant payouts to Zaad (`requestPayout`, the payout desk), statements | Yes. See below. **Automatic daily payouts stay in dollars** |
+| Merchant app | Balance switch, Send, Receive, Charge, refunds, agent float, cash-in, cash-out, Buy float by Zaad, Move to float, Withdraw, statement totals and history rows in shillings |
+| Admin console | Float desk and payout desk in shillings. **Other balances dollars only on screen** |
 
 ### Agent cash-in and cash-out
 
@@ -140,6 +140,22 @@ Limits and the allowance after a PIN reset count it at `slsPerUsd`.
   doc and flashes carry `currency`.
 - Cash-out at the counter and the shop's sticker QR stay in dollars.
 
+### Payouts in shillings
+
+The merchant app's Withdraw has a Shillings / Dollars switch.
+`requestPayout` with `currency: "SLS"` holds the shop's shillings in
+`platform:settlement_hold@SLS`. Ops settles it to `float:zaad@SLS` once the
+Zaad transfer is sent, or declines it back to the shilling balance; nothing
+converts. The $5 floor, the $1,000,000 cap and the senior-approval
+threshold count shillings at `slsPerUsd`. An app that sends no currency
+withdraws dollars, as older builds expect. Automatic daily payouts stay in
+dollars.
+
+The CSV statement names each row's currency and gives each currency its own
+totals line. It used to add every amount into dollars, so shilling movements
+read as cents. `getStatement` returns `totals` (dollars, as older apps show)
+and `totalsSls`.
+
 ## Before shillings are useful to Ridy drivers
 
 Drivers paid in shillings need to turn them into cash. Next, in order:
@@ -147,7 +163,7 @@ Drivers paid in shillings need to turn them into cash. Next, in order:
 1. ~~Agent shilling float, cash-in and cash-out~~: built (above).
 2. ~~Agents buying shilling float themselves: by Zaad, and Move to float~~:
    built (below).
-3. Payouts in shillings to the Zaad account on file.
+3. ~~Payouts in shillings to the Zaad account on file~~: built (below).
 4. The rest of the merchant app and console showing shilling balances.
 5. The Zaad SMS parsers (`mobileMoney/parsers.ts`) are still empty for both
    currencies: every top-up waits for an admin until real samples are in.
