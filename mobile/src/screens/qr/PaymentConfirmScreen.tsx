@@ -20,7 +20,7 @@ import {
   prepareBiometricApproval,
 } from '../../services/biometric.service';
 import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
-import { CURRENCY_SYMBOL } from '../../config/constants';
+import { formatMajor, toCurrency } from '../../utils/money';
 import { PinInput } from '../../components/PinInput';
 import { Header } from '../../components/Header';
 
@@ -107,7 +107,7 @@ export default function PaymentConfirmScreen({ navigation, route }: Props) {
   const handleBiometricPay = async () => {
     if (processing) return;
     const storedPin = await getBiometricCredential(
-      t('common.confirmPaymentAmount', { amount: `${CURRENCY_SYMBOL}${amount.toFixed(2)}` })
+      t('common.confirmPaymentAmount', { amount: formatMajor(amount, currency) })
     );
     if (storedPin) {
       await processWithPin(storedPin);
@@ -132,10 +132,9 @@ export default function PaymentConfirmScreen({ navigation, route }: Props) {
         <Text style={styles.merchantName}>{merchantName || t('common.merchant')}</Text>
 
         <View style={styles.amountBox}>
-          <Text style={styles.currencyLabel}>{currency}</Text>
-          <Text style={styles.amount}>
-            {CURRENCY_SYMBOL}
-            {amount.toFixed(2)}
+          {toCurrency(currency) === 'SLS' ? null : <Text style={styles.currencyLabel}>{currency}</Text>}
+          <Text style={styles.amount} numberOfLines={1} adjustsFontSizeToFit>
+            {formatMajor(amount, currency)}
           </Text>
           {reference ? (
             <Text style={styles.referenceLabel}>{reference}</Text>

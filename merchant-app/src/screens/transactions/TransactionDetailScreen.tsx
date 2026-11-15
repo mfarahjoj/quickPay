@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Alert, TouchableOpacity, ActivityIndicator, Share, TextInput } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { CURRENCY_SYMBOL } from '../../config/constants';
 import { Transaction } from '../../types';
 import { DarkScreen, GlassCard, PinInput, ACCENT, TEXT_DIM, TEXT_FAINT } from '../../components';
 import { functions } from '../../services/firebase.config';
 import { newIdempotencyKey } from '../../utils/idempotency';
-import { formatMajor } from '../../utils/money';
+import { formatAmount, formatMajor, isShillings, sanitizeAmountFor, toAmount } from '../../utils/money';
 
 interface Props {
   route: { params: { transaction: Transaction } };
@@ -24,13 +23,6 @@ const TYPE_KEYS: Record<string, string> = {
   refund: 'transactions.kind.refund',
 };
 
-
-function money(n: number) {
-  return `${CURRENCY_SYMBOL}${(n ?? 0).toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
 
 function statusStyle(status: string) {
   switch (status) {
@@ -62,11 +54,15 @@ export default function TransactionDetailScreen({ route, navigation }: Props) {
   // Partial refunds (plan 3.3): cents given back so far, the amount being
   // refunded now, and one idempotency key per refund attempt.
   const [refundedCents, setRefundedCents] = useState(transaction.refundedCents ?? 0);
-  const totalCents = Math.round(transaction.amount * 100);
+  // Refunds are in the payment's own currency. History rows carry whole
+  // units (12.5 dollars, 30000 shillings); the server takes the smallest unit.
+  const sls = isShillings(transaction.currency);
+  const units = (n: number) => formatAmount(n, transaction.currency);
+  const totalCents = sls ? Math.round(transaction.amount) : Math.round(transaction.amount * 100);
   const remainingCents = totalCents - refundedCents;
   const [refundText, setRefundText] = useState('');
   const [refundKey, setRefundKey] = useState(newIdempotencyKey);
-  const refundCents = Math.round(parseFloat(refundText || '0') * 100);
+  const refundCents = toAmount(refundText, transaction.currency);
   const refundValid = refundCents > 0 && refundCents <= remainingCents;
   const [pin, setPin] = useState('');
 
@@ -142,7 +138,7 @@ export default function TransactionDetailScreen({ route, navigation }: Props) {
       : navigation.navigate('ReportProblem', { transactionId: transaction.id });
 
   const startRefund = () => {
-    setRefundText((remainingCents / 100).toFixed(2));
+    setRefundText(sls ? String(remainingCents) : (remainingCents / 100).toFixed(2));
     setRefundKey(newIdempotencyKey());
     setRefundStep('amount');
   };
@@ -164,8 +160,8 @@ export default function TransactionDetailScreen({ route, navigation }: Props) {
       Alert.alert(
         t('common.success'),
         left === 0
-          ? t('transactions.refund.successMessage', { amount: money(refundCents / 100) })
-          : t('transactions.refund.partialSuccess', { amount: money(refundCents / 100), left: money(left / 100) }),
+          ? t('transactions.refund.successMessage', { amount: units(refundCents) })
+          : t('transactions.refund.partialSuccess', { amount: units(refundCents), left: units(left) }),
         left === 0 ? [{ text: t('common.ok'), onPress: () => navigation.goBack() }] : undefined
       );
     } catch (e: any) {
@@ -179,7 +175,7 @@ export default function TransactionDetailScreen({ route, navigation }: Props) {
             ? t('transactions.refund.notRefundable')
             : reason === 'refund_window_closed'
               ? t('transactions.refund.windowClosed', { days: e.details.refundWindowDays })
-              : t('transactions.refund.amountTooHigh', { amount: money((e.details.remainingCents ?? 0) / 100) })
+              : t('transactions.refund.amountTooHigh', { amount: units(e.details.remainingCents ?? 0) })
         );
         setRefundStep('idle');
         return;
@@ -195,13 +191,13 @@ export default function TransactionDetailScreen({ route, navigation }: Props) {
       <DarkScreen edges={[]} keyboard contentStyle={styles.pinWrap}>
         <Text style={styles.pinTitle}>{t('transactions.refund.amountTitle')}</Text>
         <Text style={styles.pinSubtitle}>
-          {t('transactions.refund.amountHint', { amount: money(remainingCents / 100) })}
+          {t('transactions.refund.amountHint', { amount: units(remainingCents) })}
         </Text>
         <TextInput
           style={styles.refundInput}
           value={refundText}
-          onChangeText={setRefundText}
-          keyboardType="decimal-pad"
+          onChangeText={(v) => setRefundText(sanitizeAmountFor(v, transaction.currency))}
+          keyboardType={sls ? 'number-pad' : 'decimal-pad'}
           selectTextOnFocus
           accessibilityLabel={t('transactions.refund.amountTitle')}
         />
@@ -225,7 +221,7 @@ export default function TransactionDetailScreen({ route, navigation }: Props) {
       <DarkScreen edges={[]} keyboard contentStyle={styles.pinWrap}>
         <Text style={styles.pinTitle}>{t('transactions.refund.confirmTitle')}</Text>
         <Text style={styles.pinSubtitle}>
-          {t('transactions.refund.confirmSubtitle', { amount: money(refundCents / 100) })}
+          {t('transactions.refund.confirmSubtitle', { amount: units(refundCents) })}
         </Text>
         {refundStep === 'processing' ? (
           <ActivityIndicator size="large" color={ACCENT} style={{ marginTop: 32 }} />
@@ -320,7 +316,7 @@ export default function TransactionDetailScreen({ route, navigation }: Props) {
         {refundedCents > 0 && (
           <DetailRow
             label={t('transactions.refund.refundedLabel')}
-            value={t('transactions.refund.refundedOf', { refunded: money(refundedCents / 100), total: formatMajor(transaction.amount, transaction.currency) })}
+            value={t('transactions.refund.refundedOf', { refunded: units(refundedCents), total: formatMajor(transaction.amount, transaction.currency) })}
           />
         )}
         {!!method && <DetailRow label={t('transactions.detail.method')} value={method} />}

@@ -66,14 +66,15 @@ ever paid at it.
 | Partner transfers (`POST /v1/transfers`, `currency: "SLSH"`) | Yes |
 | `getBalance` (`slsBalance`), `getTransactions` (whole shillings) | Yes |
 | Account deletion | Refused while shillings remain |
-| Customer app: Home, Send, charge approval, history, Zaad top-up, agent top-up, cash-out | Yes (payment links into Send stay in dollars) |
+| Customer app: Home, Send, charge approval, history, Zaad top-up, agent top-up, cash-out, paying a shop's QR | Yes (payment links into Send stay in dollars) |
 | Agent cash-in and cash-out (`customerRequestAgentTopup`, `customerCashOut` with `currency: "SLS"`) | Yes, from and to the agent's shilling float `agent:{uid}@SLS`. See below |
 | Float desk (`adminRequestFloat` with `currency: "SLS"`) | Yes: issue and withdraw shilling float |
 | Disputes (`openDispute`, `adminResolveDispute`) | Yes: a remedy is paid in the disputed movement's currency. **The wait-for-funds reserve (D8) is dollars only**: a shilling claim the other party can't cover is refused (`insufficient_shillings`), to be paid from Zapp or retried. Disputes from before this were all recorded as dollars |
-| Shop QR (`generateQRCode`, `processPayment`, `payMerchant`), customer-QR requests, payroll, remittance | **Dollars only** (`validateCurrency` refuses SLS) |
+| Shop till QR (`generateQRCode`, `validateQRCode`, `processPayment`), charges to a scanned customer code (`createPaymentRequest`, `approvePaymentRequest`), refunds, counter display | Yes. See below |
+| Shop sticker QR (`payMerchant`), cash-out at the counter, payroll, remittance | **Dollars only** |
 | Agents buying float by Zaad, and Move to float | Yes: the agent picks the currency in the merchant app; a shilling payment or wallet shillings become shilling float. See below |
 | Merchant payouts to Zaad | **Dollars only** |
-| Merchant app | Agent float, cash-in, cash-out, Buy float by Zaad, Move to float and history rows in shillings. **Shop balance and payouts dollars only on screen** |
+| Merchant app | Balance switch, Send, Receive, Charge, refunds, agent float, cash-in, cash-out, Buy float by Zaad, Move to float and history rows in shillings. **Payouts dollars only** |
 | Admin console | Float desk in shillings. **Other balances dollars only on screen** |
 
 ### Agent cash-in and cash-out
@@ -113,6 +114,31 @@ screens, each with a Shillings / Dollars picker. Neither converts.
 Older merchant builds never send `currency`, so they keep buying and moving
 dollars. Shilling float an agent already holds doesn't show on their
 screens, but nothing they do with it can go wrong: they can't spend it.
+
+### Shops taking payment in shillings
+
+The merchant app's Receive and Charge have a Shillings / Dollars switch. A
+shilling sale is whole shillings from start to finish: the customer pays from
+their shilling balance, the shop is credited the net in shillings, and the fee
+(`paymentFeeRate`, rounded to a whole shilling) goes to `platform:fees@SLS`.
+Limits and the allowance after a PIN reset count it at `slsPerUsd`.
+
+- **Older customer apps read every amount as cents** and would show 30,000
+  shillings as "$300.00". So `validateQRCode` and `processPayment` hand a
+  shilling code only to an app that sends `currencies: ["USD", "SLS"]`;
+  anything else is told to update (`updateFor: "shillings"`, `reason:
+  "update_for_shillings"`) and the code stays active. Charges to a scanned
+  customer code are approved on the charge screen, which has shown shillings
+  since customer build 75.
+- **The QR payload** carries no amount for a shilling sale. Somaliland
+  shillings have no ISO 4217 code, and 706 (the Somali shilling, a different
+  currency) with an amount would be misread by any other wallet. Zapp reads
+  the amount from the `qrCodes` doc, as it always has.
+- **Refunds** are in the payment's currency. `refundPayment` returns `amount`
+  in whole units and the `currency`.
+- **The counter display** shows each amount in its own currency; its state
+  doc and flashes carry `currency`.
+- Cash-out at the counter and the shop's sticker QR stay in dollars.
 
 ## Before shillings are useful to Ridy drivers
 

@@ -6,8 +6,9 @@ export type Lang = "en" | "so" | "ar";
 export interface StateSale {
   id: string;
   qrData: string;
+  /** In the currency's smallest unit: cents, or whole shillings. */
   amountCents: number;
-  currency: "USD";
+  currency: "USD" | "SLS";
   reference?: string;
   createdAtMs: number;
   expiresAtMs: number;
@@ -15,8 +16,9 @@ export interface StateSale {
 
 export interface StateRequest {
   id: string;
+  /** In the currency's smallest unit: cents, or whole shillings. */
   amountCents: number;
-  currency: "USD";
+  currency: "USD" | "SLS";
   customerFirstName: string;
   createdAtMs: number;
   expiresAtMs: number;
@@ -25,6 +27,8 @@ export interface StateRequest {
 export interface StateFlash {
   kind: "paid" | "declined" | "expired";
   amountCents: number;
+  /** Absent from servers before shillings: dollars. */
+  currency?: "USD" | "SLS";
   receiptNumber?: string;
   atMs: number;
   showUntilMs: number;

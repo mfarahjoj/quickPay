@@ -18,7 +18,7 @@ import { listMyDisplays } from '../../services/counterDisplay.service';
 import { useCounterDisplayOn } from '../../hooks/useCounterDisplayOn';
 import { triggerHaptic } from '../../services/haptics.service';
 import { QRCodeData, QRSettlement } from '../../types';
-import { toCents, formatCents } from '../../utils/money';
+import { formatAmount, toAmount } from '../../utils/money';
 import { REFERENCE_MAX_LENGTH } from '../../utils/receiptParser';
 import { callableErrorKey } from '../../utils/errors';
 import {
@@ -34,11 +34,13 @@ import {
   AmountKeypad,
   ReceiptScanner,
   PaidReferenceSheet,
+  CurrencyToggle,
   ACCENT,
   TEXT_DIM,
   TEXT_FAINT,
 } from '../../components';
 import type { ReceiptDetails } from '../../components/ReceiptScanner';
+import type { FloatCurrency } from '../../components/CurrencyToggle';
 import { ScanIcon, SuccessCheckIcon, ReceiptIcon, CloseIcon, QrIcon } from '../../components/icons/AuthIcons';
 
 type Phase = 'entry' | 'showing' | 'paid' | 'expired';
@@ -62,6 +64,8 @@ export default function GenerateQRScreen() {
   const { height: screenHeight } = useWindowDimensions();
   const navigation = useNavigation<any>();
 
+  // Shillings or dollars: a sale is in one, never converted (SHILLINGS.md).
+  const [currency, setCurrency] = useState<FloatCurrency>('USD');
   const [amount, setAmount] = useState('');
   const [reference, setReference] = useState('');
   const [qrData, setQrData] = useState<QRCodeData | null>(null);
@@ -87,7 +91,9 @@ export default function GenerateQRScreen() {
   // a fresh code after the first expires doesn't ask a second time.
   const [confirmedReference, setConfirmedReference] = useState<string | null>(null);
 
-  const amountCents = toCents(amount);
+  // In the currency's smallest unit: cents, or whole shillings.
+  const amountCents = toAmount(amount, currency);
+  const show = (n: number) => formatAmount(n, currency);
   const trimmedReference = reference.trim();
 
   // ── Counter display ─────────────────────────────
@@ -178,6 +184,7 @@ export default function GenerateQRScreen() {
               customerName: '',
               customerId: '',
               amountCents: data.amount,
+              currency: data.currency === 'SLS' ? 'SLS' : 'USD',
               reference: data.reference,
             });
           } else if (data.status === 'expired') {
@@ -205,7 +212,7 @@ export default function GenerateQRScreen() {
       setLoading(true);
       setError(null);
       setRefEditing(false);
-      const result = await generateQRCode(amountCents, 'USD', ref, {
+      const result = await generateQRCode(amountCents, currency, ref, {
         checkPaidReference: !!ref && shouldCheckPaidReference(ref, referenceKind),
         confirmPaidReference: chargeAgain || (!!ref && ref === confirmedReference),
       });
@@ -267,6 +274,7 @@ export default function GenerateQRScreen() {
     setPhase('entry');
     navigation.navigate('ScanCharge', {
       amountCents,
+      currency,
       reference: trimmedReference || undefined,
     });
   };
@@ -284,7 +292,12 @@ export default function GenerateQRScreen() {
     setScannerOpen(false);
     setError(null);
     if (details.amountCents !== null) {
-      setAmount((details.amountCents / 100).toFixed(2));
+      // The receipt reader reads cents; a shilling sale is whole shillings.
+      setAmount(
+        currency === 'SLS'
+          ? String(Math.round(details.amountCents / 100))
+          : (details.amountCents / 100).toFixed(2)
+      );
       setFromReceipt(true);
     }
     if (details.reference) {
@@ -297,6 +310,7 @@ export default function GenerateQRScreen() {
     <PaidReferenceSheet
       prior={prior}
       amountCents={amountCents}
+      currency={currency}
       loading={loading}
       onCancel={() => setPrior(null)}
       onChargeAgain={() => handleGenerate(true)}
@@ -321,7 +335,7 @@ export default function GenerateQRScreen() {
           <SuccessCheckIcon size={76} />
         </View>
         <Text style={styles.paidTitle}>{t('qr.paid.title')}</Text>
-        <Text style={styles.paidAmount}>{formatCents(gross)}</Text>
+        <Text style={styles.paidAmount}>{show(gross)}</Text>
         {settlement.paidByName ? (
           <Text style={styles.paidFrom}>
             {t('qr.paid.from', { name: settlement.paidByName })}
@@ -342,18 +356,18 @@ export default function GenerateQRScreen() {
           ) : null}
           <View style={styles.breakdownRow}>
             <Text style={styles.breakdownLabel}>{t('qr.paid.gross')}</Text>
-            <Text style={styles.breakdownValue}>{formatCents(gross)}</Text>
+            <Text style={styles.breakdownValue}>{show(gross)}</Text>
           </View>
           {hasSplit ? (
             <>
               <View style={styles.breakdownRow}>
                 <Text style={styles.breakdownLabel}>{t('qr.paid.fee')}</Text>
-                <Text style={styles.breakdownValue}>−{formatCents(fee!)}</Text>
+                <Text style={styles.breakdownValue}>−{show(fee!)}</Text>
               </View>
               <View style={styles.breakdownDivider} />
               <View style={styles.breakdownRow}>
                 <Text style={styles.breakdownLabelStrong}>{t('qr.paid.net')}</Text>
-                <Text style={styles.breakdownNet}>{formatCents(net!)}</Text>
+                <Text style={styles.breakdownNet}>{show(net!)}</Text>
               </View>
             </>
           ) : null}
@@ -382,7 +396,7 @@ export default function GenerateQRScreen() {
         <ScreenHeader title={t('qr.expired.title')} subtitle={t('qr.expired.message')} />
         <View style={styles.expiredAmount}>
           <Text style={styles.expiredLabel}>{t('qr.display.amount')}</Text>
-          <Text style={styles.expiredValue}>{formatCents(amountCents)}</Text>
+          <Text style={styles.expiredValue}>{show(amountCents)}</Text>
           {trimmedReference ? <Text style={styles.expiredRef}>{trimmedReference}</Text> : null}
         </View>
         <View style={styles.resultFooter}>
@@ -435,7 +449,7 @@ export default function GenerateQRScreen() {
             </>
           ) : null}
           <Text style={styles.ticketAmount} numberOfLines={1} adjustsFontSizeToFit>
-            {formatCents(amountCents)}
+            {show(amountCents)}
           </Text>
           {trimmedReference ? (
             <View style={styles.ticketRef}>
@@ -467,7 +481,7 @@ export default function GenerateQRScreen() {
           <View style={styles.statusBody}>
             <Text style={styles.statusText}>{t('qr.display.waiting')}</Text>
             <Text style={styles.statusSub}>
-              {t('qr.display.youReceive', { amount: formatCents(qrData.netCents) })}
+              {t('qr.display.youReceive', { amount: show(qrData.netCents) })}
             </Text>
             {onCounter ? <Text style={styles.statusSub}>{t('qr.display.alsoOnCounter')}</Text> : null}
           </View>
@@ -523,15 +537,30 @@ export default function GenerateQRScreen() {
       ) : null}
 
       <>
+          <CurrencyToggle
+            value={currency}
+            onChange={(next) => {
+              if (next === currency) return;
+              setCurrency(next);
+              setAmount('');
+              setFromReceipt(false);
+              setPrior(null);
+            }}
+            disabled={loading}
+            style={styles.currencyToggle}
+          />
+
           {/* Amount */}
           <View style={styles.amountBlock}>
             <Text
               style={[styles.amountText, amountEmpty && styles.amountTextEmpty]}
               numberOfLines={1}
               adjustsFontSizeToFit
-              accessibilityLabel={`${t('qr.receive.amountLabel')} ${formatCents(amountCents)}`}
+              accessibilityLabel={`${t('qr.receive.amountLabel')} ${show(amountCents)}`}
             >
-              ${amountEmpty ? '0' : amount}
+              {currency === 'SLS'
+                ? `${amountEmpty ? '0' : Number(amount).toLocaleString('en-US')} SLSH`
+                : `$${amountEmpty ? '0' : amount}`}
             </Text>
             <Text style={[styles.amountNote, fromReceipt && styles.amountNoteWarn]}>
               {fromReceipt ? t('qr.receive.checkAmount') : t('qr.receive.amountHint')}
@@ -621,6 +650,7 @@ export default function GenerateQRScreen() {
                 onChange={handleAmountChange}
                 keyHeight={keyHeight}
                 deleteLabel={t('qr.receive.delete')}
+                wholeOnly={currency === 'SLS'}
               />
             </View>
           )}
@@ -655,6 +685,7 @@ export default function GenerateQRScreen() {
 }
 
 const styles = StyleSheet.create({
+  currencyToggle: { marginHorizontal: 24, marginTop: 4 },
   content: {
     paddingBottom: 16,
   },

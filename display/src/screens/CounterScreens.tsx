@@ -44,7 +44,7 @@ export function CounterScreen({ view, lang, scannerOn, cameraOn, camera }: Props
             </div>
             <h1 className="flash-title">{t("flash.paid")}</h1>
             <p className="amount" dir="ltr">
-              {formatAmount(f.amountCents)}
+              {formatAmount(f.amountCents, f.currency)}
             </p>
             {f.receiptNumber && (
               <p className="muted" dir="ltr">
@@ -70,7 +70,7 @@ export function CounterScreen({ view, lang, scannerOn, cameraOn, camera }: Props
       return (
         <main className="screen center">
           <div className="phone-pulse" aria-hidden />
-          <h1>{t("approving.title", { name: view.request.customerFirstName, amount: formatAmount(view.request.amountCents) })}</h1>
+          <h1>{t("approving.title", { name: view.request.customerFirstName, amount: formatAmount(view.request.amountCents, view.request.currency) })}</h1>
           <p className="lead">{t("approving.hint")}</p>
           <p className="countdown">{t("countdown", { time: formatCountdown(view.secondsLeft) })}</p>
         </main>
@@ -85,7 +85,7 @@ export function CounterScreen({ view, lang, scannerOn, cameraOn, camera }: Props
           <section className="split-info">
             <p className="payto">{t("sale.payTo", { shop: view.merchantName })}</p>
             <p className="amount" dir="ltr">
-              {formatAmount(view.sale.amountCents)}
+              {formatAmount(view.sale.amountCents, view.sale.currency)}
             </p>
             {view.sale.reference && (
               <p className="reference">

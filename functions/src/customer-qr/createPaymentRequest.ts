@@ -5,7 +5,6 @@ import { enforcePerTransactionLimit } from "../utils/limits";
 import {
   requireAuth,
   validateAmount,
-  validateCurrency,
 } from "../utils/validation";
 import { sendPushNotification } from "../utils/notifications";
 import { PushMessage } from "../utils/pushTemplates";
@@ -20,6 +19,7 @@ import {
   User,
 } from "../types";
 import { requestExpiryMillis } from "./requestExpiry";
+import { parseCurrency, pushAmount } from "../utils/money";
 
 /**
  * How long after the scan the charge may be raised. Matches the customer
@@ -87,7 +87,9 @@ function replay(
 
 interface CreatePaymentRequestInput {
   tokenId: string;
-  amount: number; // In cents
+  /** In the currency's smallest unit: cents, or whole shillings. */
+  amount: number;
+  /** "USD" or "SLS" (also "SLSH"). A cash-out stays in dollars. */
   currency: string;
   reference?: string;
   /** "cash_out" from an agent paying out cash; a shop charge otherwise. */
@@ -131,7 +133,8 @@ export const createPaymentRequest = https.onCall(
     // Stop a frozen merchant raising new charges against customers.
     assertAccountActive(merchant);
 
-    const { tokenId, amount, currency } = request.data;
+    const { tokenId, amount } = request.data;
+    const currency = parseCurrency(request.data.currency, "USD");
     const reference = cleanReference(request.data.reference);
 
     // The token ID becomes a document ID in two collections, so it must be a
@@ -142,13 +145,16 @@ export const createPaymentRequest = https.onCall(
     if (!validateAmount(amount)) {
       throw new https.HttpsError(
         "invalid-argument",
-        "Amount must be a positive integer (cents)"
+        "Amount must be a positive integer in the currency's smallest unit"
       );
     }
-    if (!validateCurrency(currency)) {
+    // A shop may charge in shillings; the customer approves it in shillings
+    // and pays from their shilling balance, never converted. Cash-out at the
+    // counter stays in dollars.
+    if (!currency || (currency === "SLS" && purpose === "cash_out")) {
       throw new https.HttpsError(
         "invalid-argument",
-        "Currency must be USD"
+        purpose === "cash_out" ? "Cash-out at the counter is in dollars" : "Currency must be USD or SLS"
       );
     }
 
@@ -192,7 +198,7 @@ export const createPaymentRequest = https.onCall(
     const { paymentRequestTtlSeconds, cashOutFeeRate } = await getRates();
     // A cash-out's fee is fixed now, so the customer approves the exact total.
     const feeCents = purpose === "cash_out" ? computePaymentFee(amount, cashOutFeeRate) : 0;
-    await enforcePerTransactionLimit(amount + feeCents, customer);
+    await enforcePerTransactionLimit(amount + feeCents, customer, currency);
 
     const now = admin.firestore.Timestamp.now();
     const expiresAt = admin.firestore.Timestamp.fromMillis(
@@ -237,7 +243,7 @@ export const createPaymentRequest = https.onCall(
       return replay(outcome.request, merchantId, requestRef.id);
     }
 
-    const amountText = `${currency} ${(amount / 100).toFixed(2)}`;
+    const amountText = pushAmount(amount, currency);
     const notification: PushMessage = purpose === "cash_out"
       ? { key: "cashout.request", params: { merchant: merchant.fullName, amount: amountText } }
       : reference

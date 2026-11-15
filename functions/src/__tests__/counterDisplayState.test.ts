@@ -92,7 +92,7 @@ describe("counter display state: what the triggers flash", () => {
       { status: "active", amount: 1250 } as any,
       { status: "used", amount: 1250, paidAmount: 1250, receiptNumber: "ZP-1111-2222", usedAt: ts(50_000) } as any
     );
-    expect(f).toEqual({ kind: "paid", amountCents: 1250, receiptNumber: "ZP-1111-2222", atMs: 50_000, showUntilMs: 58_000 });
+    expect(f).toEqual({ kind: "paid", amountCents: 1250, currency: "USD", receiptNumber: "ZP-1111-2222", atMs: 50_000, showUntilMs: 58_000 });
     // A QR the cashier cancelled, or a tablet scan replaced, shows no flash.
     expect(flashForQr({ status: "active" } as any, { status: "expired" } as any)).toBeUndefined();
   });

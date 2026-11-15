@@ -3,7 +3,7 @@ import { triggerHaptic } from '../../services/haptics.service';
 import { useTranslation } from 'react-i18next';
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 import { scanCustomerToken } from '../../services/scan.service';
-import { formatCents } from '../../utils/money';
+import { formatAmount } from '../../utils/money';
 import { CodeSheet, QrScannerView, ScannerButton } from '../../components/QrScannerView';
 
 /**
@@ -20,6 +20,7 @@ export default function ScanCustomerScreen() {
   // A sale already typed on Receive: its amount stays in sight while scanning.
   const amountCents: number | undefined =
     typeof params?.amountCents === 'number' && params.amountCents > 0 ? params.amountCents : undefined;
+  const currency: 'USD' | 'SLS' = params?.currency === 'SLS' ? 'SLS' : 'USD';
   const reference: string | undefined = params?.reference;
   const [loading, setLoading] = useState(false);
   const [isScanning, setIsScanning] = useState(true);
@@ -54,6 +55,7 @@ export default function ScanCustomerScreen() {
           customerId: result.customerId,
           purpose,
           amountCents,
+          currency,
           reference,
         });
       } catch (e: any) {
@@ -64,7 +66,7 @@ export default function ScanCustomerScreen() {
         setLoading(false);
       }
     },
-    [loading, navigation, t, purpose, amountCents, reference]
+    [loading, navigation, t, purpose, amountCents, currency, reference]
   );
 
   return (
@@ -74,7 +76,7 @@ export default function ScanCustomerScreen() {
           purpose === 'cash_out'
             ? t('scan.cashOut.scanTitle')
             : amountCents
-              ? t('scan.chargingAmount', { amount: formatCents(amountCents) })
+              ? t('scan.chargingAmount', { amount: formatAmount(amountCents, currency) })
               : t('scan.title')
         }
         hint={purpose === 'cash_out' ? t('scan.cashOut.hint') : t('scan.cameraHint')}

@@ -72,3 +72,13 @@ export function formatAmount(amount: number, currency: Currency): string {
   const sign = amount < 0 ? "-" : "";
   return `${sign}$${(Math.abs(amount) / 100).toFixed(2)}`;
 }
+
+/**
+ * Whether an app said it shows [currency] correctly. Apps that understand
+ * shillings send `currencies: ["USD", "SLS"]`; older ones read every amount as
+ * cents and would show 30,000 shillings as "$300.00". Dollars always pass.
+ */
+export function appReads(currency: Currency, currencies: unknown): boolean {
+  if (currency === "USD") return true;
+  return Array.isArray(currencies) && currencies.includes(currency);
+}

@@ -24,7 +24,8 @@ export function flashForQr(before: QRCode | undefined, after: QRCode | undefined
       "paid",
       after.paidAmount ?? after.amount,
       toMillis(after.usedAt, Date.now()),
-      after.receiptNumber
+      after.receiptNumber,
+      after.currency
     );
   }
   return undefined;
@@ -40,11 +41,11 @@ export function flashForRequest(
   const at = toMillis(after.resolvedAt, Date.now());
   switch (after.status) {
     case "approved":
-      return makeFlash("paid", after.amount, at, after.receiptNumber);
+      return makeFlash("paid", after.amount, at, after.receiptNumber, after.currency);
     case "rejected":
-      return makeFlash("declined", after.amount, at);
+      return makeFlash("declined", after.amount, at, undefined, after.currency);
     case "expired":
-      return makeFlash("expired", after.amount, at);
+      return makeFlash("expired", after.amount, at, undefined, after.currency);
     default:
       // Cancelled by the cashier: they know; the screen just moves on.
       return undefined;
@@ -61,7 +62,7 @@ export function flashForTransaction(tx: Transaction | undefined): { merchantId: 
   if (typeof tx.toUserId !== "string") return undefined;
   return {
     merchantId: tx.toUserId,
-    flash: makeFlash("paid", tx.amount, toMillis(tx.createdAt, Date.now()), tx.receiptNumber),
+    flash: makeFlash("paid", tx.amount, toMillis(tx.createdAt, Date.now()), tx.receiptNumber, tx.currency),
   };
 }
 

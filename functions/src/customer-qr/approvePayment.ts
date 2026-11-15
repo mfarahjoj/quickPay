@@ -28,6 +28,7 @@ import { counterCashOutEntryId, counterCashOutLines } from "./counterCashOut";
 import { cashedInWithAgentSince } from "../topup/agentConfirmCashOut";
 import { claimReceiptNumber, reserveReceiptNumber } from "../utils/receiptNumber";
 import { recordPaidReference } from "../utils/paidReferences";
+import { parseCurrency, toLimitCents } from "../utils/money";
 
 interface ApprovePaymentInput {
   requestId: string;
@@ -114,7 +115,15 @@ export const approvePaymentRequest = https.onCall(
     // refused outright during the pause, like the code-based cash-out.
     const isCashOut = preRequest?.purpose === "cash_out";
     const preTotal = (preRequest?.amount ?? 0) + (isCashOut ? preRequest?.feeCents ?? 0 : 0);
-    await assertResetCooldownAllows(customerId, isCashOut ? "other" : "shop_payment", preTotal);
+    // A shop may charge in shillings (SHILLINGS.md). The allowance after a PIN
+    // reset is in dollars, so a shilling total counts at the limits rate.
+    const preCurrency = parseCurrency(preRequest?.currency) ?? "USD";
+    const { slsPerUsd } = await getRates();
+    await assertResetCooldownAllows(
+      customerId,
+      isCashOut ? "other" : "shop_payment",
+      toLimitCents(preTotal, preCurrency, slsPerUsd)
+    );
 
     const customerData = await requireActiveAccount(customerId);
 
@@ -123,7 +132,7 @@ export const approvePaymentRequest = https.onCall(
     // Limits are checked against the requested amount before posting. The
     // transaction below re-reads the request as the authoritative copy.
     if (preRequest) {
-      await enforceTransactionLimits(customerId, preTotal, customerData);
+      await enforceTransactionLimits(customerId, preTotal, customerData, undefined, preCurrency);
     }
 
     const { paymentFeeRate, cashOutCommissionRate, roundTripWindowHours } = await getRates();
@@ -205,6 +214,10 @@ export const approvePaymentRequest = https.onCall(
 
       approvedAmount = paymentReq.amount;
       approvedCurrency = paymentReq.currency;
+      // The limits were checked in the currency read before the PIN.
+      if (preRequest && (parseCurrency(approvedCurrency) ?? "USD") !== preCurrency) {
+        throw new https.HttpsError("aborted", "This charge changed. Ask the shop to charge again.");
+      }
       approvedMerchantId = paymentReq.merchantId;
       approvedReference = paymentReq.reference;
       cashOut = paymentReq.purpose === "cash_out";

@@ -17,6 +17,7 @@ import { requestExpiryMillis } from "../customer-qr/requestExpiry";
 import { buildStickerPayload } from "../merchants/generateMerchantSticker";
 import { isAccountActive } from "../utils/accountStatus";
 import { MerchantPaymentRequest, QRCode } from "../types";
+import { parseCurrency } from "../utils/money";
 import { MERCHANT_TYPES } from "./guard";
 import {
   CounterDisplayState,
@@ -61,11 +62,14 @@ export function makeFlash(
   kind: StateFlash["kind"],
   amountCents: number,
   atMs: number,
-  receiptNumber?: string
+  receiptNumber?: string,
+  currency?: unknown
 ): StateFlash {
+  const shown = parseCurrency(currency) ?? "USD";
   return {
     kind,
     amountCents,
+    currency: shown,
     atMs,
     showUntilMs: atMs + (kind === "paid" ? PAID_FLASH_MS : OTHER_FLASH_MS),
     ...(receiptNumber ? { receiptNumber } : {}),
@@ -124,7 +128,7 @@ export async function deriveCounterState(
     request = {
       id: doc.id,
       amountCents: r.amount,
-      currency: "USD",
+      currency: parseCurrency(r.currency) ?? "USD",
       customerFirstName: firstName(r.customerName),
       createdAtMs: millis(r.createdAt),
       expiresAtMs,
@@ -142,7 +146,7 @@ export async function deriveCounterState(
         id: qrDoc.id,
         qrData: q.emvQrData,
         amountCents: q.amount,
-        currency: "USD",
+        currency: parseCurrency(q.currency) ?? "USD",
         ...(q.reference ? { reference: q.reference } : {}),
         createdAtMs: millis(q.createdAt),
         expiresAtMs,
