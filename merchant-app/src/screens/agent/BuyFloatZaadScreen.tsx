@@ -9,7 +9,8 @@
  *
  *   link     → the agent's Zaad number
  *   activate → send the small activation payment from it; done when Zapp sees it
- *   amount   → how much float to buy
+ *   amount   → how much float to buy, in shillings or dollars: each buys
+ *              float in its own currency, never converted (SHILLINGS.md)
  *   send     → dial the prefilled Zaad code; done when the float arrives
  *
  * Android opens the dialer with the code typed in. iOS won't let apps dial
@@ -30,9 +31,18 @@ import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import { firestore, functions } from '../../services/firebase.config';
 import { useAuth } from '../../hooks/useAuth';
-import { DarkScreen, ScreenHeader, GlassCard, PillButton, TEXT_DIM, TEXT_FAINT } from '../../components';
+import {
+  CurrencyToggle,
+  DarkScreen,
+  ScreenHeader,
+  GlassCard,
+  PillButton,
+  TEXT_DIM,
+  TEXT_FAINT,
+  type FloatCurrency,
+} from '../../components';
 import { SuccessCheckIcon } from '../../components/icons/AuthIcons';
-import { formatCents, toCents, sanitizeAmountInput } from '../../utils/money';
+import { formatAmount, formatCents, sanitizeAmountFor, toAmount } from '../../utils/money';
 import { formatLocal, normaliseSomaliMsisdn } from '../../utils/zaad';
 import { callableErrorKey } from '../../utils/errors';
 
@@ -47,7 +57,9 @@ interface Profile {
 interface Pending {
   collectionNumber: string;
   dialCode: string | null;
+  /** In [currency]'s smallest unit: cents, or whole shillings. */
   amountCents: number;
+  currency: FloatCurrency;
 }
 
 const ussdUrl = (code: string) => `tel:${code.replace(/#/g, '%23')}`;
@@ -60,10 +72,11 @@ export default function BuyFloatZaadScreen() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [step, setStep] = useState<Step>('loading');
   const [numberText, setNumberText] = useState('');
+  const [currency, setCurrency] = useState<FloatCurrency>('USD');
   const [amount, setAmount] = useState('');
   const [limits, setLimits] = useState<{ min: number; max: number } | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
-  const [credited, setCredited] = useState(0);
+  const [credited, setCredited] = useState<{ amount: number; currency: unknown }>({ amount: 0, currency: 'USD' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const sentAt = useRef<Date | null>(null);
@@ -111,7 +124,7 @@ export default function BuyFloatZaadScreen() {
             // Not the activation payment, which can land minutes before.
             .find((d) => d.fromUserId === 'zaad' && d.status === 'completed' && !/linked$/.test(d.description ?? ''));
           if (row) {
-            setCredited(row.amount as number);
+            setCredited({ amount: row.amount as number, currency: row.currency });
             setStep('done');
           }
         },
@@ -119,9 +132,10 @@ export default function BuyFloatZaadScreen() {
       );
   }, [step, user]);
 
+  // The server sends the range in the currency asked for.
   const fail = (e: any) => setError(t(e?.details?.reason === 'amount_out_of_range' ? 'buyFloat.outOfRange' : callableErrorKey(e), {
-    min: formatCents(e?.details?.minCents ?? 0),
-    max: formatCents(e?.details?.maxCents ?? 0),
+    min: formatAmount(e?.details?.minCents ?? 0, e?.details?.currency),
+    max: formatAmount(e?.details?.maxCents ?? 0, e?.details?.currency),
   }));
 
   const link = async () => {
@@ -139,7 +153,8 @@ export default function BuyFloatZaadScreen() {
       if (data.status === 'verified') {
         setStep('amount');
       } else {
-        setPending({ collectionNumber: data.collectionNumber, dialCode: data.dialCode, amountCents: data.activationCents });
+        // Activation is always in dollars.
+        setPending({ collectionNumber: data.collectionNumber, dialCode: data.dialCode, amountCents: data.activationCents, currency: 'USD' });
         setStep('activate');
       }
     } catch (e: any) {
@@ -150,14 +165,14 @@ export default function BuyFloatZaadScreen() {
   };
 
   const prepare = async () => {
-    const cents = toCents(amount);
+    const cents = toAmount(amount, currency);
     if (cents <= 0) return;
     setBusy(true);
     setError('');
     try {
-      const res = await functions().httpsCallable('getTopupInstructions')({ provider: 'zaad', amountCents: cents });
+      const res = await functions().httpsCallable('getTopupInstructions')({ provider: 'zaad', amountCents: cents, currency });
       const data = (res.data as any).data;
-      setPending({ collectionNumber: data.collectionNumber, dialCode: data.dialCode, amountCents: cents });
+      setPending({ collectionNumber: data.collectionNumber, dialCode: data.dialCode, amountCents: cents, currency });
       sentAt.current = new Date();
       setStep('send');
     } catch (e: any) {
@@ -188,7 +203,7 @@ export default function BuyFloatZaadScreen() {
       <DarkScreen edges={[]} contentStyle={styles.centered}>
         <SuccessCheckIcon size={72} />
         <Text style={styles.bigTitle}>{t('buyFloat.doneTitle')}</Text>
-        <Text style={styles.bigAmount}>{formatCents(credited)}</Text>
+        <Text style={styles.bigAmount}>{formatAmount(credited.amount, credited.currency)}</Text>
         <Text style={styles.sub}>{t('buyFloat.doneHint')}</Text>
         <View style={styles.block}>
           <PillButton label={t('common.done')} onPress={() => navigation.goBack()} />
@@ -206,7 +221,7 @@ export default function BuyFloatZaadScreen() {
         <View style={styles.body}>
           <Text style={styles.sub}>
             {t(activating ? 'buyFloat.activateHint' : 'buyFloat.sendHint', {
-              amount: formatCents(pending.amountCents),
+              amount: formatAmount(pending.amountCents, pending.currency),
               from: numberText,
               to: formatLocal(pending.collectionNumber),
             })}
@@ -233,24 +248,33 @@ export default function BuyFloatZaadScreen() {
   }
 
   if (step === 'amount') {
-    const cents = toCents(amount);
+    const cents = toAmount(amount, currency);
+    const pickCurrency = (next: FloatCurrency) => {
+      if (next === currency) return;
+      setCurrency(next);
+      setAmount('');
+      setError('');
+    };
     return (
       <DarkScreen edges={[]} scroll keyboard contentStyle={styles.content}>
         {header}
         <View style={styles.body}>
+          <CurrencyToggle value={currency} onChange={pickCurrency} disabled={busy} />
           <Text style={styles.label}>{t('buyFloat.amountLabel')}</Text>
           <GlassCard style={styles.inputCard}>
             <TextInput
               style={styles.amountInput}
               value={amount}
-              onChangeText={(v) => setAmount(sanitizeAmountInput(v))}
-              keyboardType="decimal-pad"
-              placeholder="0.00"
+              onChangeText={(v) => setAmount(sanitizeAmountFor(v, currency))}
+              keyboardType={currency === 'SLS' ? 'number-pad' : 'decimal-pad'}
+              placeholder={currency === 'SLS' ? '0' : '0.00'}
               placeholderTextColor="rgba(255,255,255,0.25)"
               autoFocus
             />
           </GlassCard>
-          {limits ? (
+          {/* The limits are set in dollars; a shilling amount outside them is
+              told its range in shillings when it's checked. */}
+          {limits && currency === 'USD' ? (
             <Text style={styles.hint}>{t('buyFloat.limits', { min: formatCents(limits.min), max: formatCents(limits.max) })}</Text>
           ) : null}
           <Text style={styles.hint}>

@@ -100,8 +100,8 @@ describe("agent float account", () => {
     it("moves sales into float, once per key", async () => {
       const db = seed();
       const res = await call(2_000);
-      expect(res.data).toEqual({ floatCents: 2_000, walletCents: 3_000 });
-      expect((await call(2_000)).data).toEqual({ floatCents: 2_000, walletCents: 3_000 });
+      expect(res.data).toEqual({ floatCents: 2_000, walletCents: 3_000, currency: "USD" });
+      expect((await call(2_000)).data).toEqual({ floatCents: 2_000, walletCents: 3_000, currency: "USD" });
       expect(db.get(`wallets/${AGENT}`)!.balance).toBe(3_000);
       expect(db.get(`ledger_balances/agent:${AGENT}`)!.balance).toBe(2_000);
       expect(db.get(`transactions/floatmove_${AGENT}_${KEY}`)).toMatchObject({ kind: "float", amount: 2_000 });
@@ -112,6 +112,48 @@ describe("agent float account", () => {
       const err = await call(1_500).catch((e: any) => e);
       expect(err.details).toEqual({ reason: "insufficient_balance" });
       await expect(call(6_000, AGENT, "5b2a6c1e-9b4d-4a77-8e21-0c5d7a9f1b33")).rejects.toThrow(/that much/);
+    });
+
+    describe("in shillings", () => {
+      const sls = (balance: number) => ({ balance, totalSent: 0, totalReceived: 0 });
+      const callSls = (amount: number, key = KEY) =>
+        move({ data: { amountCents: amount, currency: "SLS", pin: "123456", idempotencyKey: key }, auth: { uid: AGENT } });
+
+      it("moves wallet shillings into shilling float, once per key, leaving dollars alone", async () => {
+        const db = seed({ [`wallets/${AGENT}`]: wallet(5_000, { sls: sls(100_000) }) });
+        const res = await callSls(60_000);
+        expect(res.data).toEqual({ floatCents: 60_000, walletCents: 40_000, currency: "SLS" });
+        expect((await callSls(60_000)).data).toEqual({ floatCents: 60_000, walletCents: 40_000, currency: "SLS" });
+        expect(db.get(`wallets/${AGENT}`)!.sls.balance).toBe(40_000);
+        expect(db.get(`wallets/${AGENT}`)!.balance).toBe(5_000);
+        expect(db.get(`ledger_balances/agent:${AGENT}@SLS`)!.balance).toBe(60_000);
+        expect(db.get(`ledger_balances/agent:${AGENT}`)).toBeUndefined();
+        expect(db.get(`transactions/floatmove_sls_${AGENT}_${KEY}`)).toMatchObject({
+          kind: "float",
+          amount: 60_000,
+          currency: "SLS",
+        });
+      });
+
+      it("never pays shillings out of dollars", async () => {
+        seed({ [`wallets/${AGENT}`]: wallet(500_000) });
+        const err = await callSls(8_000).catch((e: any) => e);
+        expect(err.details).toEqual({ reason: "insufficient_balance" });
+        expect(err.message).toMatch(/shillings/);
+      });
+
+      it("counts the cap at the limits rate", async () => {
+        seed({ [`wallets/${AGENT}`]: wallet(0, { sls: sls(900_000_000) }) });
+        // $100,000 at 8,000 a dollar is 800,000,000 shillings.
+        await expect(callSls(800_000_008)).rejects.toThrow(/up to \$100000\.00/);
+      });
+
+      it("refuses a currency Zapp doesn't hold", async () => {
+        seed();
+        await expect(
+          move({ data: { amountCents: 100, currency: "KES", pin: "123456", idempotencyKey: KEY }, auth: { uid: AGENT } })
+        ).rejects.toThrow(/USD or SLS/);
+      });
     });
 
     it("is for agents only, with the PIN", async () => {

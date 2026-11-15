@@ -41,6 +41,8 @@ export interface User {
 export interface Wallet {
   balance: number;
   balanceCents: number;
+  /** Shillings, in whole shillings (wallets/{uid}.sls.balance); 0 when none. */
+  slsBalance: number;
   currency: string;
   totalReceived: number;
   totalSent: number;

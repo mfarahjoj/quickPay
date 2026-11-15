@@ -13,5 +13,7 @@ export { LanguageSelector } from './LanguageSelector';
 export { AmountKeypad } from './AmountKeypad';
 export { ReceiptScanner } from './ReceiptScanner';
 export { PaidReferenceSheet } from './PaidReferenceSheet';
+export { CurrencyToggle } from './CurrencyToggle';
+export type { FloatCurrency } from './CurrencyToggle';
 export { DarkScreen, ScreenHeader, GlassCard, PillButton, ACCENT, GLASS, GLASS_BORDER, TEXT_DIM, TEXT_FAINT } from './DarkScreen';
 export * from './auth';

@@ -59,11 +59,9 @@ export const adminAssignMobileMoney = https.onCall({ enforceAppCheck: true }, as
     if (!currency) throw new https.HttpsError("failed-precondition", `Zapp can't hold ${r.currency}`);
     const userSnap = await tx.get(db.collection("users").doc(uid));
     if (!userSnap.exists) throw new https.HttpsError("not-found", "No such customer");
-    // Money from an agent buys float, as it would have if it had matched.
+    // Money from an agent buys float in its own currency, as it would have
+    // if it had matched.
     const forFloat = isAgentRole(userSnap.get("accountType"));
-    if (forFloat && currency !== "USD") {
-      throw new https.HttpsError("failed-precondition", "Agents' float is in dollars only for now. Send it back instead.");
-    }
 
     const entry = forFloat
       ? assignFloatEntry(receiptId, r.amountCents, currency, uid, actor.uid, transactionId)

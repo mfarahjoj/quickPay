@@ -60,7 +60,7 @@ ever paid at it.
 | Flow | Shillings |
 |---|---|
 | Ledger, wallets, invariant check, activity monitor | Yes |
-| Zaad top-ups (`*220*` dial code, SMS `SLSH`), held payments, admin assign and refund | Yes, to the wallet. **Not to an agent's float** (held for an admin) |
+| Zaad top-ups (`*220*` dial code, SMS `SLSH`), held payments, admin assign and refund | Yes: to a customer's wallet, or to an agent's shilling float (`agent:{uid}@SLS`) |
 | P2P (`sendP2P`, `currency: "SLS"`) | Yes |
 | Merchant API: charges (`currency: "SLSH"`), approval, refunds, webhooks, hosted checkout | Yes |
 | Partner transfers (`POST /v1/transfers`, `currency: "SLSH"`) | Yes |
@@ -71,9 +71,9 @@ ever paid at it.
 | Float desk (`adminRequestFloat` with `currency: "SLS"`) | Yes: issue and withdraw shilling float |
 | Disputes (`openDispute`, `adminResolveDispute`) | Yes: a remedy is paid in the disputed movement's currency. **The wait-for-funds reserve (D8) is dollars only**: a shilling claim the other party can't cover is refused (`insufficient_shillings`), to be paid from Zapp or retried. Disputes from before this were all recorded as dollars |
 | Shop QR (`generateQRCode`, `processPayment`, `payMerchant`), customer-QR requests, payroll, remittance | **Dollars only** (`validateCurrency` refuses SLS) |
-| Agents buying float by Zaad, and Move to float | **Dollars only** (a shilling Zaad payment from an agent's number is held for an admin) |
+| Agents buying float by Zaad, and Move to float | Yes: the agent picks the currency in the merchant app; a shilling payment or wallet shillings become shilling float. See below |
 | Merchant payouts to Zaad | **Dollars only** |
-| Merchant app | Agent float, cash-in, cash-out and history rows in shillings. **Shop balance and payouts dollars only on screen** |
+| Merchant app | Agent float, cash-in, cash-out, Buy float by Zaad, Move to float and history rows in shillings. **Shop balance and payouts dollars only on screen** |
 | Admin console | Float desk in shillings. **Other balances dollars only on screen** |
 
 ### Agent cash-in and cash-out
@@ -94,13 +94,33 @@ refuses a shilling request to an app that doesn't (`reason:
 confirms it, the customer cancels, or it expires. A cash-in confirm must also
 send `expectedCurrency`, which has to match the request.
 
+### Agents adding shilling float themselves
+
+Besides the float desk, an agent adds float in the merchant app's two
+screens, each with a Shillings / Dollars picker. Neither converts.
+
+- **Buy float by Zaad:** `getTopupInstructions` with `currency: "SLS"` gives
+  the `*220*` code. A shilling payment from the agent's linked number posts
+  `float:zaad@SLS → agent:{uid}@SLS` (`floatEntry`), under the agents' float
+  limit counted at `slsPerUsd`. An admin assigning a held shilling payment to
+  an agent posts shilling float the same way. The activation payment stays
+  in dollars.
+- **Move to float:** `moveToFloat` with `currency: "SLS"` moves
+  `user:{uid}@SLS → agent:{uid}@SLS` (wallet `sls.balance` into shilling
+  float). The $100,000 cap counts shillings at `slsPerUsd`. A call with no
+  currency moves dollars, as older merchant builds expect.
+
+Older merchant builds never send `currency`, so they keep buying and moving
+dollars. Shilling float an agent already holds doesn't show on their
+screens, but nothing they do with it can go wrong: they can't spend it.
+
 ## Before shillings are useful to Ridy drivers
 
 Drivers paid in shillings need to turn them into cash. Next, in order:
 
-1. ~~Agent shilling float, cash-in and cash-out~~: built (above). Agents get
-   shilling float only from the float desk for now.
-2. Agents buying shilling float themselves: by Zaad, and Move to float.
+1. ~~Agent shilling float, cash-in and cash-out~~: built (above).
+2. ~~Agents buying shilling float themselves: by Zaad, and Move to float~~:
+   built (below).
 3. Payouts in shillings to the Zaad account on file.
 4. The rest of the merchant app and console showing shilling balances.
 5. The Zaad SMS parsers (`mobileMoney/parsers.ts`) are still empty for both

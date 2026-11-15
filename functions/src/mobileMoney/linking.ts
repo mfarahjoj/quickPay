@@ -134,9 +134,6 @@ export const getTopupInstructions = https.onCall({ enforceAppCheck: true }, asyn
   const caller = (await admin.firestore().collection("users").doc(uid).get()).data();
   const creditsFloat = isAgentRole(caller?.accountType);
   const limits = limitsFor(rates, creditsFloat);
-  if (currency === "SLS" && !limits.shillings) {
-    throw new https.HttpsError("failed-precondition", "Agents buy float in dollars for now", { reason: "currency" });
-  }
   // The limits are in dollars; shown to the customer in the currency they chose.
   const min = fromLimitCents(limits.topupMinCents, currency, rates.slsPerUsd, "up");
   const max = fromLimitCents(limits.topupMaxCents, currency, rates.slsPerUsd, "down");

@@ -2,6 +2,8 @@ import * as crypto from "crypto";
 import {
   assignEntry,
   decideReceipt,
+  floatEntry,
+  limitsFor,
   linkId,
   normaliseSomaliMsisdn,
   receiptId,
@@ -26,7 +28,7 @@ const payment: ReceivedPayment = {
   senderName: "Abdi Warsame",
   receivedAtMs: Date.UTC(2026, 9, 22, 9),
 };
-const limits = { topupMinCents: 500, topupMaxCents: 10000, slsPerUsd: 8000, shillings: true };
+const limits = { topupMinCents: 500, topupMaxCents: 10000, slsPerUsd: 8000 };
 const link = (status: LinkedNumber["status"]): LinkedNumber => ({
   uid: "u1", provider: "zaad", msisdn: "+252634123456", status,
 });
@@ -77,10 +79,21 @@ describe("decideReceipt", () => {
       .toEqual({ action: "suspense", reason: "above_max", uid: "u1" });
     expect(decideReceipt({ ...sls, amountCents: 800 }, link("pending"), limits).action).toBe("activate");
   });
-  it("holds shillings for an agent's float, which is dollars only for now", () => {
-    const sls = { ...payment, currency: "SLSH", amountCents: 80_000 };
-    expect(decideReceipt(sls, link("verified"), { ...limits, shillings: false }))
-      .toEqual({ action: "suspense", reason: "currency", uid: "u1" });
+  it("credits shillings to an agent's float, at the agent's own limit", () => {
+    const agentLimits = limitsFor(
+      { topupMinCents: 500, topupMaxCents: 10_000, agentFloatTopupMaxCents: 500_000, slsPerUsd: 8000 },
+      true
+    );
+    // $5,000 at 8,000 a dollar: up to 40,000,000 shillings of float.
+    const sls = { ...payment, currency: "SLSH", amountCents: 4_000_000 };
+    expect(decideReceipt(sls, link("verified"), agentLimits)).toEqual({ action: "credit", uid: "u1" });
+    expect(decideReceipt({ ...sls, amountCents: 40_000_008 }, link("verified"), agentLimits).action).toBe("suspense");
+    const e = floatEntry({ ...sls, operatorTxnId: "SLS1" }, "u1", "t1");
+    expect(e.currency).toBe("SLS");
+    expect(e.lines).toEqual([
+      { account: "float:zaad", debit: 4_000_000, credit: 0 },
+      { account: "agent:u1", debit: 0, credit: 4_000_000 },
+    ]);
   });
   it("holds a currency Zapp doesn't hold", () => {
     expect(decideReceipt({ ...payment, currency: "KES" }, link("verified"), limits))

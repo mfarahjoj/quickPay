@@ -16,7 +16,8 @@
  * When the linked account is an agent's, "credited" means their float
  * (agent:{uid}), not their wallet: that is how an agent buys float with Zaad
  * instead of a trip to ops (floatEntry below). Agents have their own, larger
- * limit (`agentFloatTopupMaxCents`).
+ * limit (`agentFloatTopupMaxCents`). A payment in shillings buys shilling
+ * float (agent:{uid}@SLS), never converted (SHILLINGS.md).
  *
  * Every movement is one journal entry keyed by the operator's transaction ID,
  * so the same SMS can never credit twice. This file is pure: no Firestore.
@@ -61,8 +62,6 @@ export interface TopupLimits {
   topupMinCents: number;
   topupMaxCents: number;
   slsPerUsd: number;
-  /** Whether shillings can be credited (not yet to an agent's float). */
-  shillings: boolean;
 }
 
 /** The ledger currency of a payment, or null for one Zapp doesn't hold. */
@@ -109,10 +108,10 @@ export function decideReceipt(
   limits: TopupLimits
 ): Decision {
   if (!link) return { action: "suspense", reason: "unknown_sender", uid: null };
-  // Shillings go to the wallet's shilling pocket. Agents' float is dollars
-  // only until agents cash in and out in shillings.
+  // Shillings go to the shilling pocket: a customer's wallet, or an agent's
+  // shilling float. Anything else Zapp doesn't hold.
   const currency = paymentCurrency(payment);
-  if (!currency || (currency === "SLS" && !limits.shillings)) {
+  if (!currency) {
     return { action: "suspense", reason: "currency", uid: link.uid };
   }
   if (link.status === "pending") return { action: "activate", uid: link.uid };
@@ -208,7 +207,6 @@ export function limitsFor(
     topupMinCents: rates.topupMinCents,
     topupMaxCents: forFloat ? rates.agentFloatTopupMaxCents : rates.topupMaxCents,
     slsPerUsd: rates.slsPerUsd,
-    shillings: !forFloat,
   };
 }
 
