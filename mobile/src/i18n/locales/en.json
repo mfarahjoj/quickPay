@@ -1184,6 +1184,7 @@
   "wallet.kind.float": "Agent float",
   "wallet.kind.card_topup": "Card top-up",
   "wallet.kind.mobile_money_topup": "Mobile money top-up",
+  "wallet.kind.bank_topup": "Bank top-up",
   "wallet.kind.mobile_money_cashout": "Mobile money withdrawal",
   "wallet.kind.remittance": "Remittance",
   "wallet.detail.type": "Type",

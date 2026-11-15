@@ -265,6 +265,25 @@ export interface FloatMigrationRow {
 /** Float is issued and held in dollars or shillings, never converted. */
 export type FloatCurrency = "USD" | "SLS";
 
+/** Where the money for a console top-up arrived. */
+export type TopupSource = "zaad" | "edahab" | "bank";
+
+export interface TopupRow {
+  id: string;
+  uid: string;
+  name?: string;
+  /** In the currency's smallest unit: cents, or whole shillings. */
+  amountCents: number;
+  currency: FloatCurrency;
+  source: TopupSource;
+  reference: string;
+  reason: string;
+  postedBy: string;
+  postedByEmail?: string;
+  journalEntryId: string;
+  createdAtMs: number;
+}
+
 /** Cents as "$12.50", whole shillings as "30,000 SLSH". */
 export function formatFloat(amount: number, currency: FloatCurrency | undefined): string {
   if (currency === "SLS") return `${Math.round(amount).toLocaleString("en-US")} SLSH`;
@@ -736,6 +755,24 @@ export const api = {
     reason: string;
     idempotencyKey: string;
   }) => call<typeof payload, AdjustmentResult>("adminPostAdjustment", payload),
+
+  /** `idempotencyKey` must stay the same across retries of one top-up. */
+  topupWallet: (payload: {
+    uid: string;
+    amountCents: number;
+    currency: FloatCurrency;
+    source: TopupSource;
+    reference: string;
+    reason: string;
+    idempotencyKey: string;
+  }) =>
+    call<typeof payload, { topupId: string; journalEntryId: string; alreadyPosted: boolean }>(
+      "adminTopupWallet",
+      payload
+    ),
+
+  listTopups: async () =>
+    (await call<{ limit: number }, { topups: TopupRow[] }>("adminListTopups", { limit: 30 })).topups,
 
   // A full journal replay can outlast the SDK's 70s default.
   runLedgerCheck: (reason: string) =>

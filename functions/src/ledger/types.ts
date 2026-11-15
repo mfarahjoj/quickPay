@@ -43,6 +43,8 @@ export type JournalEntryType =
   | "float_move"
   | "opening_balance"
   | "adjustment"
+  /** Ops credit a wallet with money that reached a float account: float → user. */
+  | "admin_topup"
   /**
    * Money reached Zapp's Zaad/eDahab collection number but couldn't be
    * credited (unknown sender, outside the limits): float → platform:mm_suspense.
