@@ -6,7 +6,10 @@ export type PayoutStatus = 'requested' | 'paid' | 'rejected';
 
 /** Payouts go to the Zaad account on file (functions/src/auth/zaadAccount.ts). */
 export interface PayoutRequestInput {
+  /** In the currency's smallest unit: cents, or whole shillings. */
   amountCents: number;
+  /** "USD" or "SLS": the balance it comes out of, never converted. */
+  currency?: 'USD' | 'SLS';
   note?: string;
   pin: string;
 }
@@ -14,6 +17,8 @@ export interface PayoutRequestInput {
 export interface PayoutRecord {
   id: string;
   amountCents: number;
+  /** Payouts from before shillings have none: dollars. */
+  currency: 'USD' | 'SLS';
   route: PayoutRoute;
   destinationName: string;
   destinationRef: string;
@@ -78,6 +83,7 @@ export function watchMyPayouts(
             return {
               id: doc.id,
               amountCents: d.amountCents ?? 0,
+              currency: d.currency === 'SLS' ? 'SLS' : 'USD',
               route: d.route,
               destinationName: d.destinationName ?? '',
               destinationRef: d.destinationRef ?? '',

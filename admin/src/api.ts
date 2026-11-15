@@ -40,6 +40,8 @@ export interface PayoutRow {
   merchantName?: string;
   businessName?: string;
   amountCents: number;
+  /** Absent on payouts from before shillings: dollars. */
+  currency?: FloatCurrency;
   route: "cash" | "zaad" | "edahab" | "bank";
   destinationName: string;
   destinationRef: string;

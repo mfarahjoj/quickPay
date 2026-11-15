@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import { DarkScreen, ScreenHeader, GlassCard, PillButton, TEXT_DIM, TEXT_FAINT } from '../../components';
 import { functions } from '../../services/firebase.config';
-import { formatCents } from '../../utils/money';
+import { formatAmount } from '../../utils/money';
 
 /** The last six calendar months, newest first, as [start, end) in local time. */
 function months(count = 6) {
@@ -36,14 +36,18 @@ export default function StatementScreen() {
     setSummary(null);
     try {
       const res = await functions().httpsCallable('getStatement')({ fromMs: m.start.getTime(), toMs: m.end.getTime() });
-      const data = (res.data as any).data as { csv: string; totals: { inCents: number; outCents: number; feeCents: number; count: number }; truncated: boolean };
-      setSummary(
+      type Totals = { inCents: number; outCents: number; feeCents: number; count: number };
+      const data = (res.data as any).data as { csv: string; totals: Totals; totalsSls?: Totals; truncated: boolean };
+      // Dollars and shillings are never added together: one line each.
+      const line = (x: Totals, currency: 'USD' | 'SLS') =>
         t('statement.summary', {
-          count: data.totals.count,
-          in: formatCents(data.totals.inCents),
-          out: formatCents(data.totals.outCents),
-          fees: formatCents(data.totals.feeCents),
-        })
+          count: x.count,
+          in: formatAmount(x.inCents, currency),
+          out: formatAmount(x.outCents, currency),
+          fees: formatAmount(x.feeCents, currency),
+        });
+      setSummary(
+        [line(data.totals, 'USD'), ...(data.totalsSls?.count ? [line(data.totalsSls, 'SLS')] : [])].join('\n')
       );
       await Share.share({ title: t('statement.shareTitle', { month: m.label }), message: data.csv });
       if (data.truncated) Alert.alert(t('statement.truncatedTitle'), t('statement.truncated'));
