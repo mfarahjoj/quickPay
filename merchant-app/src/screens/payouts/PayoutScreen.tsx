@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import {
@@ -18,13 +18,19 @@ import { useMerchantProfile } from '../../hooks/useMerchantProfile';
 import { formatLocal } from '../../utils/zaad';
 import { ZaadDestination } from './ZaadDestination';
 import { useExitGuard } from '../../hooks/useExitGuard';
-import { toCents, formatCents, sanitizeAmountInput } from '../../utils/money';
+import { formatAmount, formatCents, sanitizeAmountFor, toAmount } from '../../utils/money';
+import { CurrencyToggle, type FloatCurrency } from '../../components/CurrencyToggle';
 import { isWrongPin, pinActionErrorKey } from '../../utils/errors';
 import { functions } from '../../services/firebase.config';
+import { AmountInput } from '../../components/AmountInput';
 
 type Step = 'form' | 'pin' | 'sent';
 
-/** Mirrors MIN_PAYOUT_CENTS in functions/src/payouts/requestPayout.ts. */
+/**
+ * Mirrors MIN_PAYOUT_CENTS in functions/src/payouts/requestPayout.ts. A
+ * shilling payout's floor is this at the limits rate, which only the server
+ * knows, so for shillings the server says (reason "below_min").
+ */
 const MIN_PAYOUT_CENTS = 500;
 
 function payoutErrorKey(error: any): string {
@@ -35,6 +41,7 @@ function payoutErrorKey(error: any): string {
   if (error?.code === 'functions/failed-precondition' && /Add your Zaad/i.test(message)) {
     return 'payout.noZaad';
   }
+  if (error?.details?.reason === 'below_min') return 'payout.minimum';
   if (error?.code === 'functions/invalid-argument') return 'payout.checkDetails';
   return pinActionErrorKey(error);
 }
@@ -46,6 +53,8 @@ export default function PayoutScreen() {
   const zaad = useMerchantProfile().profile?.zaad;
 
   const [step, setStep] = useState<Step>('form');
+  // Shillings or dollars: a payout comes out of one balance, never converted.
+  const [currency, setCurrency] = useState<FloatCurrency>('USD');
   const [amount, setAmount] = useState('');
   const [pin, setPin] = useState('');
   const [pinError, setPinError] = useState<string | null>(null);
@@ -76,9 +85,10 @@ export default function PayoutScreen() {
     [],
   );
 
-  const amountCents = toCents(amount);
-  const balanceCents = wallet?.balanceCents;
-  const belowMinimum = amountCents > 0 && amountCents < MIN_PAYOUT_CENTS;
+  const amountCents = toAmount(amount, currency);
+  const balanceCents = currency === 'SLS' ? wallet?.slsBalance : wallet?.balanceCents;
+  const show = (n: number) => formatAmount(n, currency);
+  const belowMinimum = currency === 'USD' && amountCents > 0 && amountCents < MIN_PAYOUT_CENTS;
   const overBalance = balanceCents !== undefined && amountCents > balanceCents;
   const canSubmit = amountCents > 0 && !belowMinimum && !overBalance && !!zaad;
 
@@ -106,7 +116,7 @@ export default function PayoutScreen() {
     setSubmitting(true);
     setError(null);
     try {
-      await requestPayout({ amountCents, pin: enteredPin });
+      await requestPayout({ amountCents, currency, pin: enteredPin });
       setStep('sent');
       setAmount('');
     } catch (e: any) {
@@ -116,7 +126,11 @@ export default function PayoutScreen() {
       } else {
         // A new Zaad number holds payouts for a while (zaadChangeHoldHours).
         const hold = /(\d+) hours after the change/.exec(e?.message ?? '');
-        setError(hold ? t('payout.zaadChangedWait', { hours: hold[1] }) : t(payoutErrorKey(e)));
+        setError(
+          hold
+            ? t('payout.zaadChangedWait', { hours: hold[1] })
+            : t(payoutErrorKey(e), { amount: formatCents(MIN_PAYOUT_CENTS) })
+        );
         setStep('form');
       }
     } finally {
@@ -130,7 +144,7 @@ export default function PayoutScreen() {
       <DarkScreen edges={[]} contentStyle={styles.centered}>
         <Text style={styles.bigTitle}>{t('payout.pinTitle')}</Text>
         <Text style={styles.sub}>
-          {t('payout.pinSubtitle', { amount: formatCents(amountCents) })}
+          {t('payout.pinSubtitle', { amount: show(amountCents) })}
         </Text>
         <PinInput
           value={pin}
@@ -179,18 +193,30 @@ export default function PayoutScreen() {
       />
 
       <View style={styles.body}>
+        <CurrencyToggle
+          value={currency}
+          onChange={(next) => {
+            if (next === currency) return;
+            setCurrency(next);
+            setAmount('');
+            setError(null);
+          }}
+          disabled={submitting}
+          style={styles.currencyToggle}
+        />
         <Text style={styles.label}>{t('payout.amountLabel')}</Text>
         <GlassCard style={styles.card}>
           <View style={styles.amountRow}>
-            <Text style={styles.currency}>$</Text>
-            <TextInput
+            {currency === 'USD' ? <Text style={styles.currency}>$</Text> : null}
+            <AmountInput
               style={styles.amountInput}
               value={amount}
-              onChangeText={(v) => setAmount(sanitizeAmountInput(v))}
-              keyboardType="decimal-pad"
-              placeholder="0.00"
+              onChangeText={(v) => setAmount(sanitizeAmountFor(v, currency))}
+              keyboardType={currency === 'SLS' ? 'number-pad' : 'decimal-pad'}
+              placeholder={currency === 'SLS' ? '0,000' : '0.00'}
               placeholderTextColor="rgba(255,255,255,0.2)"
             />
+            {currency === 'SLS' ? <Text style={styles.currency}>SLSH</Text> : null}
           </View>
         </GlassCard>
         {belowMinimum || overBalance ? (
@@ -201,7 +227,7 @@ export default function PayoutScreen() {
           </Text>
         ) : balanceCents !== undefined ? (
           <Text style={styles.available}>
-            {t('payout.available', { amount: formatCents(balanceCents) })}
+            {t('payout.available', { amount: show(balanceCents) })}
           </Text>
         ) : null}
 
@@ -235,7 +261,7 @@ export default function PayoutScreen() {
           payouts.map((p) => (
             <GlassCard key={p.id} style={styles.historyCard}>
               <View style={styles.historyRow}>
-                <Text style={styles.historyAmount}>{formatCents(p.amountCents)}</Text>
+                <Text style={styles.historyAmount}>{formatAmount(p.amountCents, p.currency)}</Text>
                 <Text
                   style={[
                     styles.status,
@@ -282,6 +308,7 @@ export default function PayoutScreen() {
 }
 
 const styles = StyleSheet.create({
+  currencyToggle: { marginBottom: 16 },
   body: { paddingHorizontal: 24, paddingBottom: 48, gap: 6 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
   bigTitle: {
@@ -307,14 +334,17 @@ const styles = StyleSheet.create({
   },
   historyLabel: { marginTop: 32 },
   card: { padding: 0, marginBottom: 4 },
-  amountRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16 },
+  // A fixed height: on its own (no "$" beside it) a single-line input sizes
+  // to its padding and iOS clips the top of a 32pt number.
+  amountRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, height: 72 },
   currency: { fontSize: 28, fontWeight: '700', color: TEXT_DIM },
   amountInput: {
     flex: 1,
+    height: 72,
     fontSize: 32,
     fontWeight: '700',
     color: '#FFFFFF',
-    paddingVertical: 14,
+    paddingVertical: 0,
     paddingHorizontal: 8,
   },
   available: { fontSize: 12, color: TEXT_FAINT, marginTop: 4 },

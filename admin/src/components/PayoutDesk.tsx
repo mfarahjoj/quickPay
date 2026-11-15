@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, type PayoutRow } from "../api";
+import { api, formatFloat, type PayoutRow } from "../api";
 import { Icon } from "./Icon";
 import { ReasonPrompt } from "./ReasonPrompt";
 import { EmptyState, Loading } from "./ui";
 
-function money(cents: number) {
-  return `$${(cents / 100).toFixed(2)}`;
+/** "$12.50", or "30,000 SLSH": a payout is sent in the currency it was asked in. */
+function money(row: Pick<PayoutRow, "amountCents" | "currency">) {
+  return formatFloat(row.amountCents, row.currency);
 }
 
 function when(ts?: { _seconds?: number; seconds?: number }) {
@@ -63,7 +64,7 @@ export function PayoutDesk() {
     if (!settling) return;
     await api.settlePayout(settling.id, reference.trim(), reason);
     setNotice(
-      `Recorded ${money(settling.amountCents)} to ${
+      `Recorded ${money(settling)} to ${
         settling.businessName || settling.merchantName || settling.merchantId
       } as sent.`
     );
@@ -136,7 +137,7 @@ export function PayoutDesk() {
                         </div>
                       )}
                     </td>
-                    <td className="num">{money(row.amountCents)}</td>
+                    <td className="num">{money(row)}</td>
                     <td className="wide">
                       {row.route} · {row.destinationName}
                       <div className="muted">{row.destinationRef}</div>
@@ -178,7 +179,7 @@ export function PayoutDesk() {
 
       {settling && (
         <ReasonPrompt
-          title={`Mark ${money(settling.amountCents)} as sent`}
+          title={`Mark ${money(settling)} as sent`}
           description={`Send the money first, on ${settling.route}, to ${settling.destinationName} (${settling.destinationRef}). Then enter the transfer reference — without it this payout cannot be matched to a statement later.`}
           confirmLabel="Record as sent"
           confirmDisabled={reference.trim().length < 3}
@@ -201,7 +202,7 @@ export function PayoutDesk() {
 
       {rejecting && (
         <ReasonPrompt
-          title={`Decline ${money(rejecting.amountCents)}`}
+          title={`Decline ${money(rejecting)}`}
           description="The money goes straight back to the merchant's balance, and they are told why — so write the reason for them, not for us."
           confirmLabel="Decline and return"
           danger

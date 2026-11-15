@@ -136,11 +136,24 @@ describe("statements (3.6, D11)", () => {
   it("puts net in, money out and fees in their own columns, with totals", () => {
     const { csv, totals } = buildStatementCsv(SHOP, rows);
     const lines = csv.split("\n");
-    expect(lines[0]).toBe("Date (UTC),Type,Description,Money in,Money out,Fee,Status,Reference,Transaction ID");
-    expect(lines[1]).toBe("2026-10-01 09:00:00,merchant_payment,Payment from Amina,9.90,,0.10,completed,,t1");
-    expect(lines[2]).toBe("2026-10-02 10:00:00,refund,Partial refund,,3.00,,completed,,t2");
+    expect(lines[0]).toBe("Date (UTC),Type,Description,Currency,Money in,Money out,Fee,Status,Reference,Transaction ID");
+    expect(lines[1]).toBe("2026-10-01 09:00:00,merchant_payment,Payment from Amina,USD,9.90,,0.10,completed,,t1");
+    expect(lines[2]).toBe("2026-10-02 10:00:00,refund,Partial refund,USD,,3.00,,completed,,t2");
     expect(totals).toEqual({ inCents: 990, outCents: 300, feeCents: 10, count: 3 });
-    expect(lines[lines.length - 1]).toBe("Totals (completed only),,,9.90,3.00,0.10,,,");
+    expect(lines[lines.length - 1]).toBe("Totals (completed only),,,USD,9.90,3.00,0.10,,,");
+  });
+
+  it("never adds shillings into the dollar totals", () => {
+    const sls = { id: "t4", type: "payment", kind: "merchant_payment", fromUserId: "c1", toUserId: SHOP, amount: 30_000, feeCents: 300, netCents: 29_700, currency: "SLS", status: "completed", description: "Payment from Amina", createdAt: at("2026-10-04T09:00:00Z") };
+    const { csv, totals, totalsSls } = buildStatementCsv(SHOP, [...rows, sls]);
+    const lines = csv.split("\n");
+    expect(lines[4]).toBe("2026-10-04 09:00:00,merchant_payment,Payment from Amina,SLSH,29700,,300,completed,,t4");
+    expect(totals).toEqual({ inCents: 990, outCents: 300, feeCents: 10, count: 3 });
+    expect(totalsSls).toEqual({ inCents: 29_700, outCents: 0, feeCents: 300, count: 1 });
+    expect(lines.slice(-2)).toEqual([
+      "Totals (completed only),,,USD,9.90,3.00,0.10,,,",
+      "Totals (completed only),,,SLSH,29700,0,300,,,",
+    ]);
   });
 
   it("quotes commas and quotes, and defuses spreadsheet formulas", () => {

@@ -32,6 +32,7 @@ import {
 } from "../ledger";
 import { ApiResponse, PayoutRequest, PayoutStatus, Transaction } from "../types";
 import { PAYOUT_REQUESTS_COLLECTION } from "../payouts/requestPayout";
+import { parseCurrency, pushAmount } from "../utils/money";
 
 interface ListPayoutsInput {
   status?: PayoutStatus;
@@ -135,7 +136,8 @@ export const adminSettlePayout = https.onCall(
       const prepared = await prepareJournalEntry(tx, {
         entryId: journalEntryId,
         type: "payout_settled",
-        currency: "USD",
+        // Sent in the currency it was held in: shillings are never converted.
+        currency: parseCurrency(payout.currency) ?? "USD",
         lines: [
           { account: SETTLEMENT_HOLD, debit: payout.amountCents, credit: 0 },
           { account: floatAccount, debit: 0, credit: payout.amountCents },
@@ -191,6 +193,7 @@ export const adminSettlePayout = https.onCall(
         journalEntryId,
         merchantId: payout.merchantId,
         amountCents: payout.amountCents,
+        currency: payout.currency ?? "USD",
         route: payout.route,
       };
     });
@@ -201,7 +204,7 @@ export const adminSettlePayout = https.onCall(
       {
         key: "payout.sent",
         params: {
-          amount: `$${(result.amountCents / 100).toFixed(2)}`,
+          amount: pushAmount(result.amountCents, result.currency),
           route: PAYOUT_ROUTE_NAMES[result.route] ?? result.route,
         },
       }
@@ -257,7 +260,8 @@ export const adminRejectPayout = https.onCall(
       const prepared = await prepareJournalEntry(tx, {
         entryId: journalEntryId,
         type: "payout_cancelled",
-        currency: "USD",
+        // Back to the balance it came from.
+        currency: parseCurrency(payout.currency) ?? "USD",
         lines: [
           { account: SETTLEMENT_HOLD, debit: payout.amountCents, credit: 0 },
           {
@@ -305,13 +309,17 @@ export const adminRejectPayout = https.onCall(
         journalEntryId,
       });
 
-      return { merchantId: payout.merchantId, amountCents: payout.amountCents };
+      return {
+        merchantId: payout.merchantId,
+        amountCents: payout.amountCents,
+        currency: payout.currency ?? "USD",
+      };
     });
 
     notifyUser(
       result.merchantId,
       "payout_rejected",
-      { key: "payout.declined", params: { amount: `$${(result.amountCents / 100).toFixed(2)}`, reason } }
+      { key: "payout.declined", params: { amount: pushAmount(result.amountCents, result.currency), reason } }
     ).catch((err) => console.error("Failed to notify merchant:", err));
 
     return { success: true, message: "Returned to the merchant", data: { payoutId } };

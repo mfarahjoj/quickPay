@@ -45,6 +45,7 @@ import { SuccessCheckIcon } from '../../components/icons/AuthIcons';
 import { formatAmount, formatCents, sanitizeAmountFor, toAmount } from '../../utils/money';
 import { formatLocal, normaliseSomaliMsisdn } from '../../utils/zaad';
 import { callableErrorKey } from '../../utils/errors';
+import { AmountInput } from '../../components/AmountInput';
 
 type Step = 'loading' | 'link' | 'activate' | 'amount' | 'send' | 'done';
 
@@ -262,12 +263,12 @@ export default function BuyFloatZaadScreen() {
           <CurrencyToggle value={currency} onChange={pickCurrency} disabled={busy} />
           <Text style={styles.label}>{t('buyFloat.amountLabel')}</Text>
           <GlassCard style={styles.inputCard}>
-            <TextInput
+            <AmountInput
               style={styles.amountInput}
               value={amount}
               onChangeText={(v) => setAmount(sanitizeAmountFor(v, currency))}
               keyboardType={currency === 'SLS' ? 'number-pad' : 'decimal-pad'}
-              placeholder={currency === 'SLS' ? '0' : '0.00'}
+              placeholder={currency === 'SLS' ? '0,000' : '0.00'}
               placeholderTextColor="rgba(255,255,255,0.25)"
               autoFocus
             />

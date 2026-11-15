@@ -18,6 +18,11 @@
  *   request   — debit user:{merchant}, credit platform:settlement_hold
  *   settle    — debit platform:settlement_hold, credit float:{route}
  *   reject    — debit platform:settlement_hold, credit user:{merchant}
+ *
+ * A payout is in one currency (SHILLINGS.md): shillings come out of the
+ * wallet's shilling balance, are held in platform:settlement_hold@SLS and
+ * are sent as shillings, never converted. The limits are in dollars and
+ * count shillings at `slsPerUsd`.
  */
 
 import * as admin from "firebase-admin";
@@ -38,6 +43,7 @@ import {
   WalletNotFoundError,
 } from "../ledger";
 import { ApiResponse, PayoutRequest, Transaction, User } from "../types";
+import { Currency, formatAmount, parseCurrency, toLimitCents } from "../utils/money";
 
 export const PAYOUT_REQUESTS_COLLECTION = "payoutRequests";
 
@@ -51,7 +57,10 @@ const MAX_PAYOUT_CENTS = 1_000_000_00;
 const MAX_OPEN_REQUESTS = 3;
 
 interface RequestPayoutInput {
+  /** In the currency's smallest unit: cents, or whole shillings. */
   amountCents: number;
+  /** "USD" (the default, and all older apps send) or "SLS". */
+  currency?: string;
   note?: string;
   pin: string;
   // Older apps still send a route and destination. Payouts now go only to
@@ -63,6 +72,8 @@ interface RequestPayoutInput {
 
 export interface PayoutInput {
   amountCents: number;
+  /** Dollars unless said otherwise. */
+  currency?: Currency;
   route: FloatRoute;
   destinationName: string;
   destinationRef: string;
@@ -85,6 +96,7 @@ export async function createPayoutRequest(
   input: PayoutInput
 ): Promise<{ payoutId: string }> {
   const { amountCents, route } = input;
+  const currency: Currency = input.currency ?? "USD";
     const open = await db
       .collection(PAYOUT_REQUESTS_COLLECTION)
       .where("merchantId", "==", merchantId)
@@ -109,7 +121,11 @@ export async function createPayoutRequest(
     // Reuses the float desk's threshold: the question ("is this big enough to
     // need a second pair of eyes?") is the same one, and one number is easier
     // to reason about during a pilot than two.
-    const { floatApprovalThresholdCents } = await getRates();
+    const { floatApprovalThresholdCents, slsPerUsd } = await getRates();
+    // Every payout counts in dollars towards the threshold, shillings at the
+    // limits rate, so switching currency doesn't reset the total.
+    const asCents = (amount: number, c: unknown) =>
+      toLimitCents(amount, parseCurrency(c) ?? "USD", slsPerUsd);
 
     const payoutRef = db.collection(PAYOUT_REQUESTS_COLLECTION).doc();
     const holdEntryId = `payout_hold_${payoutRef.id}`;
@@ -128,12 +144,14 @@ export async function createPayoutRequest(
             .where("createdAt", ">=", rollingWindowStart(now.toMillis()))
         );
         const requiresSeniorApproval =
-          sumStandingCents(recent.docs) + amountCents >= floatApprovalThresholdCents;
+          sumStandingCents(recent.docs, undefined, (d) => asCents(d.amountCents, d.currency)) +
+            asCents(amountCents, currency) >=
+          floatApprovalThresholdCents;
 
         const prepared = await prepareJournalEntry(tx, {
           entryId: holdEntryId,
           type: "payout_hold",
-          currency: "USD",
+          currency,
           lines: [
             { account: userAccount(merchantId), debit: amountCents, credit: 0 },
             { account: SETTLEMENT_HOLD, debit: 0, credit: amountCents },
@@ -150,6 +168,7 @@ export async function createPayoutRequest(
           merchantName: merchant.fullName,
           ...(businessName ? { businessName } : {}),
           amountCents,
+          ...(currency === "USD" ? {} : { currency }),
           route,
           destinationName: input.destinationName,
           destinationRef: input.destinationRef,
@@ -174,7 +193,7 @@ export async function createPayoutRequest(
           toUserId: "system",
           participants: [merchantId],
           amount: amountCents,
-          currency: "USD",
+          currency,
           status: "pending",
           description: input.auto ? `Automatic payout (${route})` : `Payout requested (${route})`,
           journalEntryId: holdEntryId,
@@ -186,7 +205,9 @@ export async function createPayoutRequest(
       if (error instanceof InsufficientBalanceError) {
         throw new https.HttpsError(
           "failed-precondition",
-          "You don't have that much in your balance"
+          currency === "USD"
+            ? "You don't have that much in your balance"
+            : "You don't have that many shillings in your balance"
         );
       }
       if (error instanceof WalletNotFoundError) {
@@ -209,7 +230,7 @@ export const requestPayout = https.onCall(
   { enforceAppCheck: true },
   async (
     request: https.CallableRequest<RequestPayoutInput>
-  ): Promise<ApiResponse<{ payoutId: string; amountCents: number }>> => {
+  ): Promise<ApiResponse<{ payoutId: string; amountCents: number; currency: Currency }>> => {
     requireAuth(request);
     const merchantId = request.auth!.uid;
 
@@ -218,20 +239,29 @@ export const requestPayout = https.onCall(
     if (!pin) {
       throw new https.HttpsError("invalid-argument", "PIN is required");
     }
-    if (
-      typeof amountCents !== "number" ||
-      !Number.isInteger(amountCents) ||
-      amountCents < MIN_PAYOUT_CENTS
-    ) {
+    const currency = parseCurrency(request.data?.currency);
+    if (!currency) {
+      throw new https.HttpsError("invalid-argument", "Currency must be USD or SLS");
+    }
+    // The limits are dollars; a shilling amount counts at the limits rate.
+    const limitCents =
+      typeof amountCents !== "number" || !Number.isInteger(amountCents)
+        ? 0
+        : currency === "USD"
+          ? amountCents
+          : toLimitCents(amountCents, currency, (await getRates()).slsPerUsd);
+    if (limitCents < MIN_PAYOUT_CENTS) {
       throw new https.HttpsError(
         "invalid-argument",
-        `Payouts start at $${MIN_PAYOUT_CENTS / 100}`
+        `Payouts start at $${MIN_PAYOUT_CENTS / 100}`,
+        { reason: "below_min" }
       );
     }
-    if (amountCents > MAX_PAYOUT_CENTS) {
+    if (limitCents > MAX_PAYOUT_CENTS) {
       throw new https.HttpsError(
         "invalid-argument",
-        `A single payout is capped at $${MAX_PAYOUT_CENTS / 100}`
+        `A single payout is capped at $${MAX_PAYOUT_CENTS / 100}`,
+        { reason: "above_max" }
       );
     }
     const db = admin.firestore();
@@ -271,6 +301,7 @@ export const requestPayout = https.onCall(
 
     const { payoutId } = await createPayoutRequest(db, merchantId, merchant, {
       amountCents,
+      currency,
       route: "zaad",
       destinationName: zaad.name,
       destinationRef: zaad.msisdn,
@@ -279,8 +310,8 @@ export const requestPayout = https.onCall(
 
     return {
       success: true,
-      message: `Requested — we'll send it to ${zaadLabel(zaad.msisdn)} and confirm here`,
-      data: { payoutId, amountCents },
+      message: `Requested — we'll send ${formatAmount(amountCents, currency)} to ${zaadLabel(zaad.msisdn)} and confirm here`,
+      data: { payoutId, amountCents, currency },
     };
   }
 );
