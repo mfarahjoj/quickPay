@@ -179,10 +179,11 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
     textAlign: 'center',
     width: '100%',
   },
+  // Theme colours: a fixed pale fill left the theme's white text unreadable in dark mode.
   secondary: {
-    backgroundColor: '#F0F4FF',
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: '#C2CEFF',
+    borderColor: colors.ui.glassBorderStrong,
   },
   secondaryText: {
     fontSize: 17,
