@@ -124,7 +124,7 @@ export interface UserDetail {
   /** Locked after too many wrong PINs; a reset or Clear lockouts opens it. */
   pinHardLocked?: boolean;
   pinFailedAttempts?: number;
-  wallet: { balance?: number; currency?: string; frozen?: boolean } | null;
+  wallet: { balance?: number; currency?: string; frozen?: boolean; sls?: { balance?: number } } | null;
   kyc: Record<string, unknown> | null;
   trustedDeviceCount: number;
   transactions: TransactionRow[];
@@ -223,7 +223,7 @@ export interface KycSubmission {
     kycStatus?: string;
     dateOfBirth?: string | null;
   };
-  wallet: { balance?: number; currency?: string } | null;
+  wallet: { balance?: number; currency?: string; sls?: { balance?: number } } | null;
 }
 
 export type FloatRoute = "cash" | "zaad" | "edahab" | "bank";
@@ -437,6 +437,8 @@ export interface DisputeRow {
   status: DisputeStatus;
   raisedBy: string;
   against: string | null;
+  /** The disputed movement's currency; absent on old disputes: dollars. */
+  currency?: FloatCurrency;
   amountCents: number;
   transactionAmountCents: number;
   messages: DisputeMessage[];
@@ -729,6 +731,8 @@ export const api = {
     debitAccount: string;
     creditAccount: string;
     amountCents: number;
+    /** "USD" (the default) or "SLS": both accounts move in it. */
+    currency?: FloatCurrency;
     reason: string;
     idempotencyKey: string;
   }) => call<typeof payload, AdjustmentResult>("adminPostAdjustment", payload),

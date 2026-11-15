@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, type UserDetail as Detail } from "../api";
+import { api, type UserDetail as Detail, formatFloat } from "../api";
 import { Icon } from "./Icon";
 import { ReasonPrompt } from "./ReasonPrompt";
 import { Avatar, EmptyState, Loading } from "./ui";
@@ -39,9 +39,10 @@ const ACTION_COPY: Record<
   },
 };
 
-function money(cents?: number, currency = "USD") {
-  if (cents === undefined || cents === null) return "—";
-  return `${currency} ${(cents / 100).toFixed(2)}`;
+/** "$12.50" or "30,000 SLSH": shillings are whole, never cents. */
+function money(amount?: number, currency = "USD") {
+  if (amount === undefined || amount === null) return "—";
+  return formatFloat(amount, currency === "SLS" || currency === "SLSH" ? "SLS" : "USD");
 }
 
 function when(ts?: { _seconds?: number; seconds?: number }) {
@@ -195,6 +196,7 @@ export function UserDetail({ userId, canAdjust = false }: { userId: string; canA
           <span className="stat-label">Balance</span>
           <span className="stat-value">
             <Figure text={money(detail.wallet?.balance, detail.wallet?.currency)} />
+            {detail.wallet?.sls?.balance ? <Figure text={money(detail.wallet.sls.balance, "SLS")} /> : null}
           </span>
         </div>
         <dl className="kv">
