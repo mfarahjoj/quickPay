@@ -57,25 +57,30 @@ ever paid at it.
 
 ## What works in shillings
 
+Everything a customer, shop or agent can do in dollars they can do in
+shillings, each balance on its own and never converted. The two exceptions
+are rails that only exist in dollars (end of the table).
+
 | Flow | Shillings |
 |---|---|
 | Ledger, wallets, invariant check, activity monitor | Yes |
 | Zaad top-ups (`*220*` dial code, SMS `SLSH`), held payments, admin assign and refund | Yes: to a customer's wallet, or to an agent's shilling float (`agent:{uid}@SLS`) |
-| P2P (`sendP2P`, `currency: "SLS"`) | Yes |
+| P2P (`sendP2P`, `currency: "SLS"`), payment links (`currency=SLSH`) | Yes. A link without a currency is dollars, as before |
 | Merchant API: charges (`currency: "SLSH"`), approval, refunds, webhooks, hosted checkout | Yes |
 | Partner transfers (`POST /v1/transfers`, `currency: "SLSH"`) | Yes |
 | `getBalance` (`slsBalance`), `getTransactions` (whole shillings) | Yes |
-| Account deletion | Refused while shillings remain |
-| Customer app: Home, Send, charge approval, history, Zaad top-up, agent top-up, cash-out, paying a shop's QR | Yes (payment links into Send stay in dollars) |
-| Agent cash-in and cash-out (`customerRequestAgentTopup`, `customerCashOut` with `currency: "SLS"`) | Yes, from and to the agent's shilling float `agent:{uid}@SLS`. See below |
-| Float desk (`adminRequestFloat` with `currency: "SLS"`) | Yes: issue and withdraw shilling float |
-| Disputes (`openDispute`, `adminResolveDispute`) | Yes: a remedy is paid in the disputed movement's currency. **The wait-for-funds reserve (D8) is dollars only**: a shilling claim the other party can't cover is refused (`insufficient_shillings`), to be paid from Zapp or retried. Disputes from before this were all recorded as dollars |
-| Shop till QR (`generateQRCode`, `validateQRCode`, `processPayment`), charges to a scanned customer code (`createPaymentRequest`, `approvePaymentRequest`), refunds, counter display | Yes. See below |
-| Shop sticker QR (`payMerchant`), cash-out at the counter, payroll, remittance | **Dollars only** |
-| Agents buying float by Zaad, and Move to float | Yes: the agent picks the currency in the merchant app; a shilling payment or wallet shillings become shilling float. See below |
-| Merchant payouts to Zaad (`requestPayout`, the payout desk), statements | Yes. See below. **Automatic daily payouts stay in dollars** |
-| Merchant app | Balance switch, Send, Receive, Charge, refunds, agent float, cash-in, cash-out, Buy float by Zaad, Move to float, Withdraw, statement totals and history rows in shillings |
-| Admin console | Float desk and payout desk in shillings. **Other balances dollars only on screen** |
+| Account deletion | Refused while shillings, or reserved shillings, remain |
+| Agent cash-in and cash-out (`customerRequestAgentTopup`, `customerCashOut`), top up by phone (`manualTopup`), cash-out at the counter | Yes, from and to the agent's shilling float. See below |
+| Agents buying float by Zaad, Move to float, the float desk | Yes. See below |
+| Shop till QR, sticker QR (`payMerchant`), charges to a scanned customer code, refunds, counter display | Yes. See below |
+| Payroll (`payrollPayout`, `currency: "SLS"`) | Yes: a run is in one currency, paid from that balance |
+| Merchant payouts to Zaad, automatic daily payouts, statements | Yes. Automatic shilling payouts are their own opt-in. See below |
+| Disputes, including the wait-for-funds reserve (D8) | Yes: a remedy is paid in the disputed movement's currency; a shilling claim the other party can't cover is reserved in their shilling pocket (`wallets.sls.reservedCents`) and collected when shillings arrive |
+| Admin console | Corrections (`adminPostAdjustment` with `currency: "SLS"`), float desk, payout desk, user, dispute, KYC and ledger screens all show and take shillings |
+| Customer app | Everything above, with a Shillings / Dollars choice wherever an amount is typed |
+| Merchant app | Everything above, with a Shillings / Dollars switch wherever an amount is typed |
+| **Card top-ups (Stripe remittance)** | **Dollars only**: Stripe can't charge in Somaliland shillings |
+| **Mobile-money top-up stubs** (`topup/mobileMoneyTopup.ts`) | **Dollars only**: sandbox code, switched off in production |
 
 ### Agent cash-in and cash-out
 
@@ -138,7 +143,11 @@ Limits and the allowance after a PIN reset count it at `slsPerUsd`.
   in whole units and the `currency`.
 - **The counter display** shows each amount in its own currency; its state
   doc and flashes carry `currency`.
-- Cash-out at the counter and the shop's sticker QR stay in dollars.
+- **The sticker QR** (`payMerchant`): the customer picks Shillings or Dollars
+  on the amount screen. Older customer apps only ever send dollars.
+- **Cash-out at the counter**: the agent picks the currency; the customer
+  pays amount and fee from that balance, the agent's float in it takes the
+  amount, and the commission is in it too.
 
 ### Payouts in shillings
 
@@ -148,8 +157,13 @@ The merchant app's Withdraw has a Shillings / Dollars switch.
 Zaad transfer is sent, or declines it back to the shilling balance; nothing
 converts. The $5 floor, the $1,000,000 cap and the senior-approval
 threshold count shillings at `slsPerUsd`. An app that sends no currency
-withdraws dollars, as older builds expect. Automatic daily payouts stay in
-dollars.
+withdraws dollars, as older builds expect.
+
+Automatic daily payouts pay shillings only when the shop turns
+"Shillings too" on (`autoPayout.shillings: { enabled, keep }`), so a shop
+that set up dollar payouts before shillings is never sent shillings it
+didn't ask for. Each currency is its own payout, with its own balance to
+keep; the minimum counts shillings at `slsPerUsd`.
 
 The CSV statement names each row's currency and gives each currency its own
 totals line. It used to add every amount into dollars, so shilling movements
