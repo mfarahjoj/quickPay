@@ -74,3 +74,21 @@ export function formatMajor(amount: number, currency: unknown): string {
  * correctly, so the server may hand it shilling requests.
  */
 export const READS_CURRENCIES = ['USD', 'SLS'];
+
+/**
+ * Free text to an amount in [currency]'s smallest unit: cents for dollars,
+ * whole shillings for shillings (no decimals: SLSH has no coins in use).
+ */
+export function toAmount(text: string, currency: unknown): number {
+  if (!isShillings(currency)) return toCents(text);
+  const digits = sanitizeAmountFor(text, currency);
+  return digits ? parseInt(digits, 10) : 0;
+}
+
+/** Constrain typing to a well-formed amount in [currency]. */
+export function sanitizeAmountFor(raw: string, currency: unknown): string {
+  if (!isShillings(currency)) return sanitizeAmountInput(raw);
+  // Whole shillings: anything after a decimal point is dropped, never joined
+  // on ("20000.50" is 20,000, not 2,000,050).
+  return (raw ?? '').split('.')[0].replace(/[^0-9]/g, '').slice(0, 10);
+}

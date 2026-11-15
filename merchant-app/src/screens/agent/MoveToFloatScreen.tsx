@@ -3,17 +3,30 @@
  * from their own sales and earnings, so they can serve more cash-ins
  * without a trip to ops. One way only: float goes back to sales only
  * through Zapp Pay's float desk.
+ *
+ * In shillings or dollars: wallet shillings become shilling float, never
+ * converted (SHILLINGS.md).
  */
 
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, ActivityIndicator, Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
-import { DarkScreen, ScreenHeader, GlassCard, PillButton, PinInput, TEXT_DIM, TEXT_FAINT } from '../../components';
+import {
+  CurrencyToggle,
+  DarkScreen,
+  ScreenHeader,
+  GlassCard,
+  PillButton,
+  PinInput,
+  TEXT_DIM,
+  TEXT_FAINT,
+  type FloatCurrency,
+} from '../../components';
 import { functions } from '../../services/firebase.config';
 import { useWallet } from '../../hooks/useWallet';
 import { useFloat } from '../../hooks/useFloat';
-import { toCents, formatCents, sanitizeAmountInput } from '../../utils/money';
+import { formatAmount, sanitizeAmountFor, toAmount } from '../../utils/money';
 import { isWrongPin, pinActionErrorKey } from '../../utils/errors';
 import { newIdempotencyKey } from '../../utils/idempotency';
 
@@ -21,8 +34,9 @@ export default function MoveToFloatScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
   const { wallet } = useWallet();
-  const { floatCents } = useFloat(true, wallet?.lastTransactionAt?.getTime());
+  const { floatCents, floatSls } = useFloat(true, wallet?.lastTransactionAt?.getTime());
 
+  const [currency, setCurrency] = useState<FloatCurrency>('USD');
   const [amount, setAmount] = useState('');
   const [step, setStep] = useState<'amount' | 'pin'>('amount');
   const [pin, setPin] = useState('');
@@ -31,16 +45,31 @@ export default function MoveToFloatScreen() {
   // One key per attempt, kept across retries of that attempt.
   const [key, setKey] = useState(newIdempotencyKey);
 
-  const cents = toCents(amount);
-  const available = wallet?.balanceCents ?? 0;
+  // In the chosen currency's smallest unit: cents, or whole shillings.
+  const cents = toAmount(amount, currency);
+  const available = (currency === 'SLS' ? wallet?.slsBalance : wallet?.balanceCents) ?? 0;
+  const float = currency === 'SLS' ? floatSls : floatCents;
   const valid = cents > 0 && cents <= available;
+  const show = (n: number) => formatAmount(n, currency);
+
+  const pickCurrency = (next: FloatCurrency) => {
+    if (next === currency) return;
+    setCurrency(next);
+    setAmount('');
+    setKey(newIdempotencyKey());
+  };
 
   const submit = async (enteredPin: string) => {
     if (busy) return;
     setBusy(true);
     try {
-      await functions().httpsCallable('moveToFloat')({ amountCents: cents, pin: enteredPin, idempotencyKey: key });
-      Alert.alert(t('common.success'), t('moveToFloat.done', { amount: formatCents(cents) }), [
+      await functions().httpsCallable('moveToFloat')({
+        amountCents: cents,
+        currency,
+        pin: enteredPin,
+        idempotencyKey: key,
+      });
+      Alert.alert(t('common.success'), t('moveToFloat.done', { amount: show(cents) }), [
         { text: t('common.ok'), onPress: () => navigation.goBack() },
       ]);
     } catch (e: any) {
@@ -51,7 +80,9 @@ export default function MoveToFloatScreen() {
         setKey(newIdempotencyKey());
         Alert.alert(
           t('common.error'),
-          e?.details?.reason === 'insufficient_balance' ? t('moveToFloat.notEnough') : t(pinActionErrorKey(e))
+          e?.details?.reason === 'insufficient_balance'
+            ? t(currency === 'SLS' ? 'moveToFloat.notEnoughSls' : 'moveToFloat.notEnough')
+            : t(pinActionErrorKey(e))
         );
       }
     } finally {
@@ -64,7 +95,7 @@ export default function MoveToFloatScreen() {
     return (
       <DarkScreen edges={[]} contentStyle={styles.centered}>
         <Text style={styles.bigTitle}>{t('payout.pinTitle')}</Text>
-        <Text style={styles.sub}>{t('moveToFloat.pinSubtitle', { amount: formatCents(cents) })}</Text>
+        <Text style={styles.sub}>{t('moveToFloat.pinSubtitle', { amount: show(cents) })}</Text>
         <PinInput
           value={pin}
           onChange={(v) => {
@@ -87,14 +118,15 @@ export default function MoveToFloatScreen() {
     <DarkScreen scroll keyboard>
       <ScreenHeader title={t('moveToFloat.title')} subtitle={t('moveToFloat.subtitle')} onBack={() => navigation.goBack()} />
       <View style={styles.body}>
+        <CurrencyToggle value={currency} onChange={pickCurrency} />
         <View style={styles.balances}>
           <GlassCard style={styles.balanceCard}>
             <Text style={styles.balanceLabel}>{t('dashboard.balance.salesLabel')}</Text>
-            <Text style={styles.balanceValue}>{formatCents(available)}</Text>
+            <Text style={styles.balanceValue}>{show(available)}</Text>
           </GlassCard>
           <GlassCard style={styles.balanceCard}>
             <Text style={styles.balanceLabel}>{t('dashboard.float.label')}</Text>
-            <Text style={styles.balanceValue}>{floatCents === null ? '…' : formatCents(floatCents)}</Text>
+            <Text style={styles.balanceValue}>{float === null ? '…' : show(float)}</Text>
           </GlassCard>
         </View>
 
@@ -103,9 +135,9 @@ export default function MoveToFloatScreen() {
           <TextInput
             style={styles.input}
             value={amount}
-            onChangeText={(v) => setAmount(sanitizeAmountInput(v))}
-            keyboardType="decimal-pad"
-            placeholder="0.00"
+            onChangeText={(v) => setAmount(sanitizeAmountFor(v, currency))}
+            keyboardType={currency === 'SLS' ? 'number-pad' : 'decimal-pad'}
+            placeholder={currency === 'SLS' ? '0' : '0.00'}
             placeholderTextColor={TEXT_FAINT}
           />
         </GlassCard>
@@ -126,7 +158,7 @@ const styles = StyleSheet.create({
   pinError: { fontSize: 14, color: '#FF6961', textAlign: 'center', marginTop: 16 },
   spinner: { marginTop: 20 },
   block: { alignSelf: 'stretch', marginTop: 28 },
-  balances: { flexDirection: 'row', gap: 10, marginTop: 8 },
+  balances: { flexDirection: 'row', gap: 10, marginTop: 16 },
   balanceCard: { flex: 1, padding: 14 },
   balanceLabel: { fontSize: 11, fontWeight: '700', color: TEXT_FAINT, letterSpacing: 1, textTransform: 'uppercase' },
   balanceValue: { fontSize: 20, fontWeight: '800', color: '#FFFFFF', marginTop: 6 },

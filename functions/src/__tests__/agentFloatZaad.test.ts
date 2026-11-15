@@ -98,6 +98,20 @@ describe("agents buy float with Zaad", () => {
     expect(db.get(`mobile_money_receipts/${outcome.receiptId}`)).toMatchObject({ creditedTo: "float" });
   });
 
+  it("buys shilling float with a shilling payment, never converted", async () => {
+    const db = seed();
+    const p = { ...pay(AGENT_NUMBER, 400_000), currency: "SLSH" };
+    const outcome = await processReceipt(p);
+    expect(outcome).toMatchObject({ status: "credited", uid: AGENT });
+    expect(db.get(`ledger_balances/agent:${AGENT}@SLS`)!.balance).toBe(400_000);
+    expect(float(db)).toBe(0);
+    expect(db.get(`wallets/${AGENT}`)!.sls).toBeUndefined();
+    expect(db.get(`ledger_balances/float:zaad@SLS`)!.balance).toBe(-400_000);
+    const entry = db.get(`journal_entries/${floatEntry(p, AGENT, "x").entryId}`)!;
+    expect(entry).toMatchObject({ type: "float_issue", currency: "SLS" });
+    expect(db.get(`transactions/${entry.refs.transactionId}`)).toMatchObject({ kind: "float", amount: 400_000, currency: "SLS" });
+  });
+
   it("never credits the same SMS twice", async () => {
     const db = seed();
     const p = pay(AGENT_NUMBER, 20_000);
@@ -166,6 +180,12 @@ describe("agents buy float with Zaad", () => {
       ).rejects.toMatchObject({ details: { reason: "amount_out_of_range", maxCents: DEFAULT_RATES.topupMaxCents } });
     });
 
+    it("gives an agent the shilling dial code for shilling float", async () => {
+      seed();
+      const res = await instructions({ data: { provider: "zaad", amountCents: 400_000, currency: "SLS" }, auth: { uid: AGENT } });
+      expect(res.data).toMatchObject({ creditsFloat: true, currency: "SLS", dialCode: "*220*634999999*400000#" });
+    });
+
     it("gives an agent linking a number the float limit", async () => {
       const db = seed();
       db.store.delete(`linked_numbers/zaad_${AGENT_NUMBER.slice(1)}`);
@@ -187,6 +207,16 @@ describe("agents buy float with Zaad", () => {
       expect(float(db)).toBe(40_000);
       expect(db.get(`wallets/${AGENT}`)!.balance).toBe(0);
       expect(db.get(`journal_entries/mmassignfloat_${held.receiptId}`)!.type).toBe("float_issue");
+    });
+
+    it("to an agent, as shilling float when it was shillings", async () => {
+      const db = seed();
+      const held = await processReceipt({ ...pay("+252634777779", 320_000), currency: "SLSH" });
+      expect(held.status).toBe("held");
+      await assign({ data: { receiptId: held.receiptId, uid: AGENT, reason: "Agent paid from a second SIM" }, auth: admin_ });
+      expect(db.get(`ledger_balances/agent:${AGENT}@SLS`)!.balance).toBe(320_000);
+      expect(float(db)).toBe(0);
+      expect(db.get(`journal_entries/mmassignfloat_${held.receiptId}`)).toMatchObject({ type: "float_issue", currency: "SLS" });
     });
 
     it("to a customer, as before", async () => {
