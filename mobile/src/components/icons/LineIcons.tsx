@@ -179,6 +179,15 @@ export function BackIcon(props: IconProps) {
   );
 }
 
+/** Two arrows, one each way: switch between two things. */
+export function SwapIcon(props: IconProps) {
+  return (
+    <Line {...props}>
+      <Path d="M4 8h15 M15 4l4 4-4 4 M20 16H5 M9 12l-4 4 4 4" />
+    </Line>
+  );
+}
+
 export function ChevronIcon(props: IconProps) {
   return (
     <Line {...props} flipInRtl>

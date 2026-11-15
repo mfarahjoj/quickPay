@@ -4,9 +4,9 @@ import Animated from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import { Wallpaper } from '../Wallpaper';
 import { LanguageSelector } from '../LanguageSelector';
-import { BellIcon, CashIcon, EyeIcon, PersonIcon, PlusIcon, QrIcon, ScanIcon } from '../icons/LineIcons';
+import { BellIcon, CashIcon, EyeIcon, PersonIcon, PlusIcon, QrIcon, ScanIcon, SwapIcon } from '../icons/LineIcons';
 import { wallpaper } from '../../theme';
-import { formatMoney, leadCurrency, moneyParts } from '../../utils/money';
+import { formatMoney, moneyParts, type Currency } from '../../utils/money';
 import type { PreferredLanguage } from '../../types';
 
 /** How far the wallpaper runs on under the first card below the header. */
@@ -20,6 +20,10 @@ interface Props {
   usdCents: number;
   /** The shilling balance, in whole shillings. */
   slsBalance: number;
+  /** The one balance on show. */
+  currency: Currency;
+  /** Show the other balance instead. */
+  onSwitchCurrency: () => void;
   balanceVisible: boolean;
   onToggleBalance: () => void;
   language?: PreferredLanguage;
@@ -42,11 +46,10 @@ interface Props {
  */
 export function LightHomeHeader(props: Props) {
   const { t } = useTranslation();
-  // Shillings lead; the other balance shows underneath when there is any.
-  const lead = leadCurrency(props.usdCents, props.slsBalance);
+  // One balance at a time; the currency button switches to the other.
+  const lead = props.currency;
   const leadAmount = lead === 'SLS' ? props.slsBalance : props.usdCents;
   const { main, tail } = moneyParts(leadAmount, lead);
-  const other = lead === 'SLS' ? props.usdCents : 0;
 
   const actions = [
     {
@@ -98,10 +101,18 @@ export function LightHomeHeader(props: Props) {
         <View style={styles.balanceBlock}>
           <View style={styles.labelRow}>
             <View style={styles.pill}>
-              <Text style={styles.pillText}>
-                {t('dashboard.availableBalance')} · {lead === 'SLS' ? 'SLSH' : 'USD'}
-              </Text>
+              <Text style={styles.pillText}>{t('dashboard.availableBalance')}</Text>
             </View>
+            <Pressable
+              onPress={props.onSwitchCurrency}
+              hitSlop={10}
+              style={({ pressed }) => [styles.pill, styles.currencyPill, pressed && styles.pressed]}
+              accessibilityRole="button"
+              accessibilityLabel={t(lead === 'SLS' ? 'dashboard.showDollars' : 'dashboard.showShillings')}
+            >
+              <Text style={styles.pillText}>{lead === 'SLS' ? 'SLSH' : 'USD'}</Text>
+              <SwapIcon size={13} color="#FFFFFF" strokeWidth={2.2} />
+            </Pressable>
             <Pressable
               onPress={props.onToggleBalance}
               hitSlop={10}
@@ -125,11 +136,6 @@ export function LightHomeHeader(props: Props) {
           ) : (
             <Text style={styles.amount}>••••••</Text>
           )}
-          {props.balanceVisible && other > 0 ? (
-            <Text style={styles.otherBalance}>
-              {t('dashboard.alsoBalance', { amount: formatMoney(other, 'USD') })}
-            </Text>
-          ) : null}
         </View>
 
         <View style={styles.actions}>
@@ -229,6 +235,12 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     justifyContent: 'center',
   },
+  currencyPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+  },
   pillText: {
     color: '#FFFFFF',
     fontSize: 13,
@@ -254,13 +266,6 @@ const styles = StyleSheet.create({
   cents: {
     fontSize: 34,
     letterSpacing: -1,
-  },
-  otherBalance: {
-    marginTop: 2,
-    color: 'rgba(255,255,255,0.85)',
-    fontSize: 15,
-    fontWeight: '600',
-    fontVariant: ['tabular-nums'],
   },
   actions: {
     flexDirection: 'row',
