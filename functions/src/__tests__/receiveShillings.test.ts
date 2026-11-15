@@ -65,7 +65,9 @@ describe("a shop receiving shillings", () => {
     charge = test.wrap((await import("../customer-qr/createPaymentRequest")).createPaymentRequest);
     approve = test.wrap((await import("../customer-qr/approvePayment")).approvePaymentRequest);
     refund = test.wrap((await import("../qr-payments/refundPayment")).refundPayment);
+    payMerchant = test.wrap((await import("../qr-payments/payMerchant")).payMerchant);
   });
+  let payMerchant: any;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -240,6 +242,32 @@ describe("a shop receiving shillings", () => {
     it("keeps cash-out at the counter in dollars", async () => {
       seed({ ...scanned, [`users/${SHOP}`]: { accountType: "agent_merchant", fullName: "Hodan Ali" } });
       await expect(raise({ amount: 20_000, currency: "SLS", purpose: "cash_out" })).rejects.toThrow(/in dollars/);
+    });
+  });
+
+  describe("paying the shop's printed sticker", () => {
+    const paySticker = (amount: number, currency: string) =>
+      payMerchant({
+        data: { merchantId: SHOP, amount, currency, pin: "123456", idempotencyKey: "6b2a6c1e-9b4d-4a77-8e21-0c5d7a9f1b33" },
+        auth: { uid: CUSTOMER },
+      });
+
+    it("pays in shillings the customer chose, fee in shillings", async () => {
+      const db = seed();
+      const res = await paySticker(20_000, "SLSH");
+      expect(sls(db, CUSTOMER)).toBe(80_000);
+      expect(sls(db, SHOP)).toBe(19_800);
+      expect(db.get("ledger_balances/platform:fees@SLS")!.balance).toBe(200);
+      expect(usd(db, CUSTOMER)).toBe(5_000);
+      expect(db.get(`transactions/${res.data.transactionId}`)).toMatchObject({ currency: "SLS", amount: 20_000 });
+      expect(enforceTransactionLimits).toHaveBeenCalledWith(CUSTOMER, 20_000, expect.anything(), undefined, "SLS");
+    });
+
+    it("still pays dollars when the app says dollars", async () => {
+      const db = seed();
+      await paySticker(1_000, "USD");
+      expect(usd(db, CUSTOMER)).toBe(4_000);
+      expect(sls(db, CUSTOMER)).toBe(100_000);
     });
   });
 

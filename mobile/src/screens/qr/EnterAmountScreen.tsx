@@ -30,6 +30,16 @@ import { AmountCaret, AmountKeypad } from '../../components/AmountKeypad';
 import { BackIcon, StoreIcon } from '../../components/icons/LineIcons';
 import { pressAmountKey } from '../../utils/amountKeypad';
 import { useWallet } from '../../hooks/useWallet';
+import { useHomeCurrency } from '../../hooks/useHomeCurrency';
+import { CurrencySegment } from '../../components/CurrencySegment';
+import {
+  amountInputLabel,
+  amountInputUnits,
+  balanceIn,
+  formatMoney,
+  type Currency,
+} from '../../utils/money';
+import { MAX_AMOUNT_LENGTH } from '../../utils/amountKeypad';
 
 interface Props {
   navigation: any;
@@ -55,12 +65,18 @@ export default function EnterAmountScreen({ navigation, route }: Props) {
   const styles = useStyles();
   const lightStyles = useLightStyles();
   const { t } = useTranslation();
-  const { merchantId, merchantName, currency } = route.params;
+  const { merchantId, merchantName } = route.params;
   // Light mode types the amount on its own keypad, under an amount card.
   const { scheme } = useTheme();
   const isLight = scheme === 'light';
   const insets = useSafeAreaInsets();
   const { wallet } = useWallet();
+
+  // Shillings or dollars: the customer pays from that balance, never
+  // converted. Starts on the currency Home shows.
+  const { currency: homeCurrency } = useHomeCurrency(wallet?.balanceCents ?? 0, wallet?.slsBalance ?? 0);
+  const [pickedCurrency, setPickedCurrency] = useState<Currency | null>(null);
+  const currency: Currency = pickedCurrency ?? homeCurrency;
 
   const [amount, setAmount] = useState('');
   const [step, setStep] = useState<Step>('amount');
@@ -90,8 +106,28 @@ export default function EnterAmountScreen({ navigation, route }: Props) {
     );
   }, []);
 
-  const parsedAmount = parseFloat(amount);
-  const isValidAmount = !isNaN(parsedAmount) && parsedAmount > 0;
+  // In the smallest unit: cents, or whole shillings.
+  const amountUnits = amountInputUnits(amount, currency);
+  const isValidAmount = amountUnits > 0;
+  const amountLabel = formatMoney(amountUnits, currency);
+  // Whole units, as the paid screen takes them: 12.5 dollars, 30000 shillings.
+  const majorAmount = currency === 'SLS' ? amountUnits : amountUnits / 100;
+
+  const pickCurrency = (next: Currency) => {
+    setPickedCurrency(next);
+    // 4.70 dollars is not 4.70 shillings: start the amount again.
+    setAmount('');
+    setError(null);
+  };
+
+  // The decimal key types 000 for shillings; other keys as usual.
+  const typeKey = (current: string, key: Parameters<typeof pressAmountKey>[1]) => {
+    if (currency === 'SLS' && key === '.') {
+      if (!current || current === '0') return current;
+      return (current + '000').slice(0, MAX_AMOUNT_LENGTH);
+    }
+    return pressAmountKey(current, key);
+  };
 
   const handleContinue = () => {
     if (!isValidAmount) {
@@ -110,7 +146,7 @@ export default function EnterAmountScreen({ navigation, route }: Props) {
       setError(null);
       const result = await payMerchant(
         merchantId,
-        parsedAmount,
+        amountUnits,
         currency,
         pinToUse,
         idempotencyKey.current ?? undefined,
@@ -119,7 +155,7 @@ export default function EnterAmountScreen({ navigation, route }: Props) {
       navigation.replace('PaymentSuccess', {
         transactionId: result.transactionId,
         receiptNumber: result.receiptNumber,
-        amount: parsedAmount,
+        amount: majorAmount,
         currency,
         merchantId,
         merchantName,
@@ -147,7 +183,7 @@ export default function EnterAmountScreen({ navigation, route }: Props) {
   const handleBiometricPay = async () => {
     if (processing) return;
     const storedPin = await getBiometricCredential(
-      t('common.confirmPaymentAmount', { amount: `${CURRENCY_SYMBOL}${parsedAmount.toFixed(2)}` })
+      t('common.confirmPaymentAmount', { amount: amountLabel })
     );
     if (storedPin) {
       await processWithPin(storedPin);
@@ -157,7 +193,7 @@ export default function EnterAmountScreen({ navigation, route }: Props) {
   };
 
   if (step === 'amount' && isLight) {
-    const payLabel = `${CURRENCY_SYMBOL}${(isValidAmount ? parsedAmount : 0).toFixed(2)}`;
+    const payLabel = amountLabel;
     return (
       <View style={[lightStyles.container, { paddingTop: insets.top + 6, paddingBottom: insets.bottom + 16 }]}>
         <TouchableOpacity
@@ -180,6 +216,8 @@ export default function EnterAmountScreen({ navigation, route }: Props) {
           <Text style={lightStyles.merchantSub}>{t('qr.enterAmount.zappMerchant')}</Text>
         </View>
 
+        <CurrencySegment value={currency} onChange={pickCurrency} />
+
         <View style={lightStyles.amountCard}>
           <Text style={lightStyles.cardLabel}>{t('qr.enterAmount.youPay')}</Text>
           <View style={lightStyles.amountRow}>
@@ -189,23 +227,22 @@ export default function EnterAmountScreen({ navigation, route }: Props) {
                 numberOfLines={1}
                 adjustsFontSizeToFit
               >
-                {CURRENCY_SYMBOL}
-                {amount || '0'}
+                {amountInputLabel(amount, currency)}
               </Text>
               <AmountCaret color={colors.ui.accent} height={44} />
             </View>
             <View style={lightStyles.currencyPill}>
               <View style={lightStyles.currencyCoin}>
-                <Text style={lightStyles.currencyCoinText}>{CURRENCY_SYMBOL}</Text>
+                <Text style={lightStyles.currencyCoinText}>{currency === 'SLS' ? 'Sh' : CURRENCY_SYMBOL}</Text>
               </View>
-              <Text style={lightStyles.currencyText}>{currency}</Text>
+              <Text style={lightStyles.currencyText}>{currency === 'SLS' ? 'SLSH' : 'USD'}</Text>
             </View>
           </View>
           <View style={lightStyles.cardDivider} />
           <View style={lightStyles.balanceRow}>
             <Text style={lightStyles.balanceKey}>{t('qr.enterAmount.balance')}</Text>
             <Text style={lightStyles.balanceValue}>
-              {wallet ? `${CURRENCY_SYMBOL}${wallet.balance.toFixed(2)}` : '—'}
+              {wallet ? formatMoney(balanceIn(wallet, currency), currency) : '—'}
             </Text>
           </View>
         </View>
@@ -217,9 +254,10 @@ export default function EnterAmountScreen({ navigation, route }: Props) {
         <AmountKeypad
           onKey={(key) => {
             setError(null);
-            setAmount((current) => pressAmountKey(current, key));
+            setAmount((current) => typeKey(current, key));
           }}
           onClear={() => setAmount('')}
+          wholeOnly={currency === 'SLS'}
         />
         <TouchableOpacity
           style={[lightStyles.payButton, !isValidAmount && styles.buttonDisabled]}
@@ -252,16 +290,19 @@ export default function EnterAmountScreen({ navigation, route }: Props) {
             <Text style={styles.merchantNameLarge}>{merchantName}</Text>
           </View>
 
+          <CurrencySegment value={currency} onChange={pickCurrency} />
           <Text style={styles.amountLabel}>{t('qr.enterAmount.enterAmount')}</Text>
           <View style={styles.amountInputRow}>
-            <Text style={styles.currencyPrefix}>{CURRENCY_SYMBOL}</Text>
+            {currency === 'USD' ? <Text style={styles.currencyPrefix}>{CURRENCY_SYMBOL}</Text> : null}
             <TextInput
               style={styles.amountInput}
               value={amount}
-              onChangeText={setAmount}
-              placeholder="0.00"
+              onChangeText={(v) =>
+                setAmount(currency === 'SLS' ? v.split('.')[0].replace(/[^0-9]/g, '') : v)
+              }
+              placeholder={currency === 'SLS' ? '0,000' : '0.00'}
               placeholderTextColor={colors.text.tertiary}
-              keyboardType="decimal-pad"
+              keyboardType={currency === 'SLS' ? 'number-pad' : 'decimal-pad'}
               autoFocus
               maxLength={10}
             />
@@ -307,10 +348,9 @@ export default function EnterAmountScreen({ navigation, route }: Props) {
         <Text style={styles.merchantNameConfirm}>{merchantName}</Text>
 
         <View style={styles.amountBox}>
-          <Text style={styles.amountCurrencyLabel}>{currency}</Text>
-          <Text style={styles.amountDisplay}>
-            {CURRENCY_SYMBOL}
-            {parsedAmount.toFixed(2)}
+          {currency === 'SLS' ? null : <Text style={styles.amountCurrencyLabel}>{currency}</Text>}
+          <Text style={styles.amountDisplay} numberOfLines={1} adjustsFontSizeToFit>
+            {amountLabel}
           </Text>
         </View>
 
