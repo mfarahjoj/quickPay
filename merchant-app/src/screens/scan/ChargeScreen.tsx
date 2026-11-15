@@ -25,7 +25,8 @@ import {
 } from '../../components';
 import { SuccessCheckIcon, CloseIcon } from '../../components/icons/AuthIcons';
 import { useExitGuard } from '../../hooks/useExitGuard';
-import { toCents, formatCents, sanitizeAmountInput } from '../../utils/money';
+import { formatAmount, sanitizeAmountFor, toAmount } from '../../utils/money';
+import { CurrencyToggle, type FloatCurrency } from '../../components/CurrencyToggle';
 import { callableErrorKey } from '../../utils/errors';
 import {
   PriorPayment,
@@ -43,6 +44,8 @@ interface Props {
       customerId: string;
       purpose?: 'payment' | 'cash_out';
       amountCents?: number;
+      /** "USD" (the default) or "SLS". A cash-out is always dollars. */
+      currency?: 'USD' | 'SLS';
       reference?: string;
       /** A request already raised (a scan at the counter display): wait on it. */
       requestId?: string;
@@ -99,9 +102,18 @@ export default function ChargeScreen({ route, navigation }: Props) {
   // A cash-out: the agent hands over cash once the customer approves.
   const cashOut = route.params.purpose === 'cash_out';
   const k = (key: string) => (cashOut ? `scan.cashOut.${key}` : `scan.charge.${key}`);
+  // A charge is in one currency, never converted. A cash-out is dollars.
+  const [currency, setCurrency] = useState<FloatCurrency>(
+    !cashOut && route.params.currency === 'SLS' ? 'SLS' : 'USD'
+  );
+  const show = (n: number) => formatAmount(n, currency);
   // Filled in already when the sale was typed on Receive.
   const [amount, setAmount] = useState(
-    route.params.amountCents ? (route.params.amountCents / 100).toFixed(2) : ''
+    route.params.amountCents
+      ? route.params.currency === 'SLS' && !cashOut
+        ? String(route.params.amountCents)
+        : (route.params.amountCents / 100).toFixed(2)
+      : ''
   );
   const [reference, setReference] = useState(route.params.reference ?? '');
   const [phase, setPhase] = useState<Phase>(resumedId ? 'waiting' : 'idle');
@@ -201,7 +213,7 @@ export default function ChargeScreen({ route, navigation }: Props) {
       t('scan.charge.cancelConfirmTitle'),
       t('scan.charge.cancelConfirmMessage', {
         name: customerName,
-        amount: formatCents(chargedCents),
+        amount: show(chargedCents),
       }),
       [
         { text: t('scan.charge.keepWaiting'), style: 'cancel' },
@@ -224,7 +236,7 @@ export default function ChargeScreen({ route, navigation }: Props) {
     cancelPaymentRequest(tokenId)
       .then((final) => {
         if (final === 'approved') {
-          setChargedCents(toCents(amount));
+          setChargedCents(toAmount(amount, currency));
           settle('approved');
         } else {
           leave();
@@ -244,7 +256,7 @@ export default function ChargeScreen({ route, navigation }: Props) {
   });
 
   const handleCharge = async (chargeAgain = false) => {
-    const cents = toCents(amount);
+    const cents = toAmount(amount, currency);
     if (cents <= 0) {
       Alert.alert(t('common.invalidAmount'), t('common.invalidAmountMessage'));
       return;
@@ -255,7 +267,7 @@ export default function ChargeScreen({ route, navigation }: Props) {
       const result = await createPaymentRequest(
         tokenId,
         cents,
-        'USD',
+        currency,
         ref,
         cashOut ? 'cash_out' : 'payment',
         {
@@ -295,6 +307,7 @@ export default function ChargeScreen({ route, navigation }: Props) {
       ? navigation.navigate('ScanCashOut', { purpose: 'cash_out' })
       : navigation.navigate('ScanCharge', {
           amountCents: route.params.amountCents,
+          currency,
           reference: route.params.reference,
         });
 
@@ -304,7 +317,7 @@ export default function ChargeScreen({ route, navigation }: Props) {
       <DarkScreen edges={[]} contentStyle={styles.resultWrap}>
         <SuccessCheckIcon size={72} />
         <Text style={styles.resultTitle}>{t(k('paymentReceived'))}</Text>
-        <Text style={styles.resultAmount}>{formatCents(chargedCents)}</Text>
+        <Text style={styles.resultAmount}>{show(chargedCents)}</Text>
         <Text style={styles.resultSubtitle}>{t(k('fromCustomer'), { name: customerName })}</Text>
         {receiptNumber ? (
           <View style={styles.receiptPill}>
@@ -370,7 +383,7 @@ export default function ChargeScreen({ route, navigation }: Props) {
         <ActivityIndicator size="large" color={ACCENT} style={styles.spinner} />
         <Text style={styles.resultTitle}>{t(k('waitingApproval'))}</Text>
         <Text style={styles.resultSubtitle}>{t(k('confirmMessage'), { name: customerName })}</Text>
-        <Text style={styles.waitingAmount}>{formatCents(chargedCents)}</Text>
+        <Text style={styles.waitingAmount}>{show(chargedCents)}</Text>
         {reference.trim() ? (
           <Text style={styles.waitingRef}>{reference.trim()}</Text>
         ) : null}
@@ -423,18 +436,31 @@ export default function ChargeScreen({ route, navigation }: Props) {
 
         <Text style={[styles.label, styles.amountLabel]}>{t(k('amountLabel'))}</Text>
         <GlassCard style={[styles.amountCard, focused && styles.amountCardFocused]}>
-          <Text style={styles.currency}>$</Text>
+          {currency === 'USD' ? <Text style={styles.currency}>$</Text> : null}
           <TextInput
             style={styles.amountInput}
-            placeholder="0.00"
+            placeholder={currency === 'SLS' ? '0' : '0.00'}
             placeholderTextColor="rgba(255,255,255,0.25)"
             value={amount}
-            onChangeText={(v) => setAmount(sanitizeAmountInput(v))}
-            keyboardType="decimal-pad"
+            onChangeText={(v) => setAmount(sanitizeAmountFor(v, currency))}
+            keyboardType={currency === 'SLS' ? 'number-pad' : 'decimal-pad'}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
           />
+          {currency === 'SLS' ? <Text style={styles.currency}>SLSH</Text> : null}
         </GlassCard>
+        {cashOut ? null : (
+          <CurrencyToggle
+            value={currency}
+            onChange={(next) => {
+              if (next === currency) return;
+              setCurrency(next);
+              setAmount('');
+            }}
+            disabled={phase !== 'idle'}
+            style={styles.currencyToggle}
+          />
+        )}
       </View>
 
       <View style={styles.footer}>
@@ -442,13 +468,14 @@ export default function ChargeScreen({ route, navigation }: Props) {
           label={t(k('chargeCustomer'))}
           onPress={() => handleCharge()}
           loading={phase === 'sending'}
-          disabled={toCents(amount) <= 0 || phase === 'sending'}
+          disabled={toAmount(amount, currency) <= 0 || phase === 'sending'}
         />
       </View>
 
       <PaidReferenceSheet
         prior={prior}
-        amountCents={toCents(amount)}
+        amountCents={toAmount(amount, currency)}
+        currency={currency}
         loading={phase === 'sending'}
         onCancel={() => setPrior(null)}
         onChargeAgain={() => handleCharge(true)}
@@ -458,6 +485,7 @@ export default function ChargeScreen({ route, navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
+  currencyToggle: { marginTop: 16 },
   content: { flex: 1, paddingTop: 20 },
   body: { flex: 1, paddingHorizontal: 24 },
   footer: { paddingHorizontal: 24, paddingBottom: 24 },

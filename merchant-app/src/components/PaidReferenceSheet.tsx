@@ -4,13 +4,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { PillButton, TEXT_DIM, TEXT_FAINT } from './DarkScreen';
 import { PriorPayment } from '../utils/paidReference';
-import { formatCents } from '../utils/money';
+import { formatAmount } from '../utils/money';
 
 interface PaidReferenceSheetProps {
   /** The earlier payment, or null to hide the sheet. */
   prior: PriorPayment | null;
-  /** What the merchant is about to charge, in cents. */
+  /** What the merchant is about to charge, in [currency]'s smallest unit. */
   amountCents: number;
+  /** "USD" or "SLS": the sale's currency. */
+  currency?: string;
   onCancel: () => void;
   onChargeAgain: () => void;
   loading?: boolean;
@@ -32,6 +34,7 @@ function formatWhen(iso: string): string {
 export function PaidReferenceSheet({
   prior,
   amountCents,
+  currency = 'USD',
   onCancel,
   onChargeAgain,
   loading,
@@ -52,11 +55,11 @@ export function PaidReferenceSheet({
             </View>
             <Text style={styles.title}>{t('paidRef.title', { reference: prior.reference })}</Text>
             <Text style={styles.subtitle}>
-              {t('paidRef.subtitle', { amount: formatCents(amountCents) })}
+              {t('paidRef.subtitle', { amount: formatAmount(amountCents, currency) })}
             </Text>
 
             <View style={styles.card}>
-              <Row label={t('paidRef.amount')} value={formatCents(prior.amount)} strong />
+              <Row label={t('paidRef.amount')} value={formatAmount(prior.amount, prior.currency)} strong />
               {prior.paidByName ? <Row label={t('paidRef.by')} value={prior.paidByName} /> : null}
               {when ? <Row label={t('paidRef.when')} value={when} /> : null}
               <Row label={t('paidRef.receipt')} value={prior.receiptNumber} mono last={prior.count < 2} />

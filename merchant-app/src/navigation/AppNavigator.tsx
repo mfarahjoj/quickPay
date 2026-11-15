@@ -46,11 +46,13 @@ type MerchantStackParamList = {
     purpose?: 'payment' | 'cash_out';
     /** The sale typed on Receive, when the customer couldn't scan its code. */
     amountCents?: number;
+    /** Its currency: "USD" (the default) or "SLS". */
+    currency?: 'USD' | 'SLS';
     reference?: string;
     /** A request already raised (a scan at the counter display): wait on it. */
     requestId?: string;
   };
-  ScanCharge: { amountCents?: number; reference?: string } | undefined;
+  ScanCharge: { amountCents?: number; currency?: 'USD' | 'SLS'; reference?: string } | undefined;
   CounterCode: undefined;
   ScanCashOut: { purpose: 'cash_out' };
   TransactionDetail: { transaction: any };
