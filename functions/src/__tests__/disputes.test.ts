@@ -350,15 +350,28 @@ describe("disputes", () => {
         expect(balance(db, FRIEND)).toBe(2_000);
       });
 
-      it("refuses, moving nothing, when the other party is short of shillings", async () => {
-        // Dollars don't count: nothing is converted, and the reserve is dollars only.
+      it("reserves shillings when the other party is short, and collects them later", async () => {
+        // Dollars don't count: nothing is converted. The shortfall is reserved
+        // in their shilling pocket, as dollars are on the wallet (D8).
         const db = seed({ "transactions/p2p-sls": slsP2p });
         const { data } = await raise({ transactionId: "p2p-sls", kind: "wrong_recipient" });
-        const err = await decide({ disputeId: data.disputeId, outcome: "upheld" }).catch((e: any) => e);
-        expect(err.details.reason).toBe("insufficient_shillings");
-        expect(dispute(db, data.disputeId).status).not.toBe("awaiting_funds");
+        const res = await decide({ disputeId: data.disputeId, outcome: "upheld" });
+        expect(res.data.status).toBe("awaiting_funds");
+        expect(dispute(db, data.disputeId)).toMatchObject({ status: "awaiting_funds", owedCents: 20_000 });
+        expect(db.get(`wallets/${FRIEND}`)!.sls.reservedCents).toBe(20_000);
         expect(db.get(`wallets/${FRIEND}`)!.reservedCents).toBeUndefined();
         expect(sls(db, CUSTOMER)).toBe(0);
+
+        // Shillings arrive; the reserve keeps them from being spent, then pays.
+        db.store.set(`wallets/${FRIEND}`, {
+          ...db.get(`wallets/${FRIEND}`)!,
+          sls: { balance: 25_000, totalSent: 0, totalReceived: 25_000, reservedCents: 20_000 },
+        });
+        expect(await collect()).toBe(1);
+        expect(dispute(db, data.disputeId).status).toBe("resolved");
+        expect(sls(db, CUSTOMER)).toBe(20_000);
+        expect(sls(db, FRIEND)).toBe(5_000);
+        expect(db.get(`wallets/${FRIEND}`)!.sls.reservedCents).toBe(0);
       });
 
       it("counts shillings at the rate against the senior-admin threshold", async () => {

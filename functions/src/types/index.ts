@@ -253,6 +253,11 @@ export interface CurrencyPocket {
   balance: number;
   totalReceived: number;
   totalSent: number;
+  /**
+   * Shillings owed on a lost dispute, set aside until it is settled (D8),
+   * like `Wallet.reservedCents` for dollars. Whole shillings.
+   */
+  reservedCents?: number;
 }
 
 export interface Wallet {

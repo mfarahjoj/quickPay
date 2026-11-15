@@ -162,7 +162,8 @@ export async function runAutoPayoutsNow(): Promise<{ queued: number; skipped: nu
         due.push({ amountCents: Math.min(available, MAX_AUTO_PAYOUT_CENTS), currency: "USD" });
       }
       if (settings.shillings?.enabled) {
-        const slsAvailable = (wallet?.sls?.balance ?? 0) - settings.shillings.keep;
+        const slsAvailable =
+          (wallet?.sls?.balance ?? 0) - (wallet?.sls?.reservedCents ?? 0) - settings.shillings.keep;
         if (slsAvailable >= minSls) {
           const maxSls = fromLimitCents(MAX_AUTO_PAYOUT_CENTS, "SLS", slsPerUsd, "down");
           due.push({ amountCents: Math.min(slsAvailable, maxSls), currency: "SLS" });

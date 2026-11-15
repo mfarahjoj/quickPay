@@ -17,7 +17,8 @@ function holdsMoney(wallet: FirebaseFirestore.DocumentData | undefined): boolean
   return (
     (wallet?.balance ?? 0) > 0 ||
     (wallet?.sls?.balance ?? 0) > 0 ||
-    (wallet?.reservedCents ?? 0) > 0
+    (wallet?.reservedCents ?? 0) > 0 ||
+    (wallet?.sls?.reservedCents ?? 0) > 0
   );
 }
 
