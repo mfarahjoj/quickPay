@@ -28,6 +28,8 @@ export function useWallet() {
               balance: data!.balance / 100,
               balanceCents: data!.balance,
               slsBalance: typeof data!.sls?.balance === 'number' ? data!.sls.balance : 0,
+              slsTotalReceived: typeof data!.sls?.totalReceived === 'number' ? data!.sls.totalReceived : 0,
+              slsTotalSent: typeof data!.sls?.totalSent === 'number' ? data!.sls.totalSent : 0,
               currency: data!.currency,
               totalReceived: data!.totalReceived / 100,
               totalSent: data!.totalSent / 100,

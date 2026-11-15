@@ -43,6 +43,9 @@ export interface Wallet {
   balanceCents: number;
   /** Shillings, in whole shillings (wallets/{uid}.sls.balance); 0 when none. */
   slsBalance: number;
+  /** Whole shillings received and sent (wallets/{uid}.sls); 0 when none. */
+  slsTotalReceived: number;
+  slsTotalSent: number;
   currency: string;
   totalReceived: number;
   totalSent: number;

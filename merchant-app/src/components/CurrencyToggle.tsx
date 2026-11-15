@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleProp, StyleSheet, Text, TouchableOpacity, View, ViewStyle } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { GLASS, GLASS_BORDER, TEXT_DIM } from './DarkScreen';
 
@@ -14,16 +14,17 @@ interface Props {
   value: FloatCurrency;
   onChange: (currency: FloatCurrency) => void;
   disabled?: boolean;
+  style?: StyleProp<ViewStyle>;
 }
 
-export function CurrencyToggle({ value, onChange, disabled }: Props) {
+export function CurrencyToggle({ value, onChange, disabled, style }: Props) {
   const { t } = useTranslation();
   const options: Array<{ currency: FloatCurrency; label: string }> = [
     { currency: 'SLS', label: t('currency.shillings') },
     { currency: 'USD', label: t('currency.dollars') },
   ];
   return (
-    <View style={styles.row} accessibilityRole="radiogroup">
+    <View style={[styles.row, style]} accessibilityRole="radiogroup">
       {options.map((o) => {
         const on = o.currency === value;
         return (

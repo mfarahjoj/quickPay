@@ -68,6 +68,7 @@ type MerchantStackParamList = {
   AutoPayout: undefined;
   Statement: undefined;
   MoveToFloat: undefined;
+  Send: undefined;
   BuyFloatZaad: undefined;
   Security: undefined;
   Devices: undefined;
@@ -297,6 +298,11 @@ function MainStackNavigator() {
       <MainStack.Screen
         name="DisputeDetail"
         getComponent={() => require('../screens/disputes/DisputeDetailScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="Send"
+        getComponent={() => require('../screens/send/SendScreen').default}
         options={{ headerShown: false }}
       />
       <MainStack.Screen

@@ -944,5 +944,22 @@
   "counterDisplay.errors.limit": "يمكن للمتجر ربط 3 شاشات كحد أقصى. افصل واحدة أولًا.",
   "counterDisplay.errors.tooManyCodes": "رموز خاطئة كثيرة. حاول مرة أخرى بعد بضع دقائق.",
   "counterDisplay.errors.notShop": "يمكن للمتاجر فقط ربط شاشة الكاشير.",
-  "qr.display.alsoOnCounter": "معروض أيضًا على شاشة الكاشير"
+  "qr.display.alsoOnCounter": "معروض أيضًا على شاشة الكاشير",
+  "dashboard.quickActions.send": "إرسال",
+  "send.title": "إرسال أموال",
+  "send.subtitle": "من مبيعاتك إلى حساب Zapp Pay لشخص",
+  "send.numberLabel": "رقمه",
+  "send.numberHint": "رقم من صوماليلاند، أو أي رقم يبدأ بـ +.",
+  "send.find": "بحث",
+  "send.invalidNumber": "أدخل رقمًا مثل 063 412 3456.",
+  "send.notFound": "لا يوجد حساب Zapp Pay بهذا الرقم.",
+  "send.self": "هذا رقمك أنت.",
+  "send.recipientIsBusiness": "{{name}} نشاط تجاري. يُدفع للأنشطة التجارية بمسح رمز QR الخاص بـ Zapp Pay.",
+  "send.lookupLimit": "عمليات بحث كثيرة. حاول مرة أخرى بعد ساعة.",
+  "send.to": "إلى",
+  "send.amountLabel": "المبلغ",
+  "send.available": "المتاح: {{amount}}",
+  "send.notEnough": "أكثر مما لديك بهذه العملة.",
+  "send.pinSubtitle": "لإرسال {{amount}} إلى {{name}}.",
+  "send.done": "تم إرسال {{amount}} إلى {{name}}."
 }
