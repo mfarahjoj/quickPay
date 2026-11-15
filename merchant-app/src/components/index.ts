@@ -11,6 +11,7 @@ export { EmptyState } from './EmptyState';
 export { TransactionItem } from './TransactionItem';
 export { LanguageSelector } from './LanguageSelector';
 export { AmountKeypad } from './AmountKeypad';
+export { AmountInput } from './AmountInput';
 export { ReceiptScanner } from './ReceiptScanner';
 export { PaidReferenceSheet } from './PaidReferenceSheet';
 export { CurrencyToggle } from './CurrencyToggle';

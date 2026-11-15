@@ -35,6 +35,7 @@ import {
 } from '../../utils/paidReference';
 import { REFERENCE_MAX_LENGTH } from '../../utils/receiptParser';
 import { triggerHaptic } from '../../services/haptics.service';
+import { AmountInput } from '../../components/AmountInput';
 
 interface Props {
   route: {
@@ -437,9 +438,9 @@ export default function ChargeScreen({ route, navigation }: Props) {
         <Text style={[styles.label, styles.amountLabel]}>{t(k('amountLabel'))}</Text>
         <GlassCard style={[styles.amountCard, focused && styles.amountCardFocused]}>
           {currency === 'USD' ? <Text style={styles.currency}>$</Text> : null}
-          <TextInput
+          <AmountInput
             style={styles.amountInput}
-            placeholder={currency === 'SLS' ? '0' : '0.00'}
+            placeholder={currency === 'SLS' ? '0,000' : '0.00'}
             placeholderTextColor="rgba(255,255,255,0.25)"
             value={amount}
             onChangeText={(v) => setAmount(sanitizeAmountFor(v, currency))}

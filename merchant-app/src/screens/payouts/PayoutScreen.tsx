@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import {
@@ -22,6 +22,7 @@ import { formatAmount, formatCents, sanitizeAmountFor, toAmount } from '../../ut
 import { CurrencyToggle, type FloatCurrency } from '../../components/CurrencyToggle';
 import { isWrongPin, pinActionErrorKey } from '../../utils/errors';
 import { functions } from '../../services/firebase.config';
+import { AmountInput } from '../../components/AmountInput';
 
 type Step = 'form' | 'pin' | 'sent';
 
@@ -207,14 +208,15 @@ export default function PayoutScreen() {
         <GlassCard style={styles.card}>
           <View style={styles.amountRow}>
             {currency === 'USD' ? <Text style={styles.currency}>$</Text> : null}
-            <TextInput
+            <AmountInput
               style={styles.amountInput}
               value={amount}
               onChangeText={(v) => setAmount(sanitizeAmountFor(v, currency))}
               keyboardType={currency === 'SLS' ? 'number-pad' : 'decimal-pad'}
-              placeholder={currency === 'SLS' ? '0' : '0.00'}
+              placeholder={currency === 'SLS' ? '0,000' : '0.00'}
               placeholderTextColor="rgba(255,255,255,0.2)"
             />
+            {currency === 'SLS' ? <Text style={styles.currency}>SLSH</Text> : null}
           </View>
         </GlassCard>
         {belowMinimum || overBalance ? (
@@ -332,14 +334,17 @@ const styles = StyleSheet.create({
   },
   historyLabel: { marginTop: 32 },
   card: { padding: 0, marginBottom: 4 },
-  amountRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16 },
+  // A fixed height: on its own (no "$" beside it) a single-line input sizes
+  // to its padding and iOS clips the top of a 32pt number.
+  amountRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, height: 72 },
   currency: { fontSize: 28, fontWeight: '700', color: TEXT_DIM },
   amountInput: {
     flex: 1,
+    height: 72,
     fontSize: 32,
     fontWeight: '700',
     color: '#FFFFFF',
-    paddingVertical: 14,
+    paddingVertical: 0,
     paddingHorizontal: 8,
   },
   available: { fontSize: 12, color: TEXT_FAINT, marginTop: 4 },

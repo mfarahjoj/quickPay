@@ -137,7 +137,7 @@ export default function MoveToFloatScreen() {
             value={amount}
             onChangeText={(v) => setAmount(sanitizeAmountFor(v, currency))}
             keyboardType={currency === 'SLS' ? 'number-pad' : 'decimal-pad'}
-            placeholder={currency === 'SLS' ? '0' : '0.00'}
+            placeholder={currency === 'SLS' ? '0,000' : '0.00'}
             placeholderTextColor={TEXT_FAINT}
           />
         </GlassCard>
