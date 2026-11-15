@@ -53,7 +53,15 @@ export type JournalEntryType =
   /** An admin gives a held payment to its customer: suspense → user. */
   | "mobile_money_assign"
   /** An admin sent a held payment back to its sender: suspense → float. */
-  | "mobile_money_refund";
+  | "mobile_money_refund"
+  /** Agent float held for an accepted Zaad top-up (zaadAgent/). */
+  | "zaad_agent_hold"
+  /** A held Zaad top-up paid to the customer. */
+  | "zaad_agent_topup"
+  /** A held Zaad top-up returned to the agent. */
+  | "zaad_agent_release"
+  /** Zapp repays an agent for a Zaad payment Telesom reversed. */
+  | "zaad_agent_reversal";
 
 export type LedgerCurrency = "USD" | "SLS";
 

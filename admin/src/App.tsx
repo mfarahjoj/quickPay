@@ -16,6 +16,7 @@ import { FloatDesk } from "./components/FloatDesk";
 import { KycQueue } from "./components/KycQueue";
 import { PayoutDesk } from "./components/PayoutDesk";
 import { ZaadDesk } from "./components/ZaadDesk";
+import { AgentZaadDesk } from "./components/AgentZaadDesk";
 import { LedgerBanner } from "./components/LedgerBanner";
 import { LedgerDesk } from "./components/LedgerDesk";
 import { DisputeDesk } from "./components/DisputeDesk";
@@ -25,7 +26,7 @@ import { TopupDesk } from "./components/TopupDesk";
 import { Icon, type IconName } from "./components/Icon";
 import { Avatar, BrandMark, EmptyState, Loading } from "./components/ui";
 
-type Tab = "users" | "topups" | "roles" | "kyc" | "float" | "payouts" | "zaad" | "disputes" | "ledger" | "pricing";
+type Tab = "users" | "topups" | "roles" | "kyc" | "float" | "payouts" | "zaad" | "agentzaad" | "disputes" | "ledger" | "pricing";
 
 /** `short` is what the phone tab bar shows; the sidebar uses `label`. */
 const TABS: Record<
@@ -73,6 +74,12 @@ const TABS: Record<
     short: "Zaad",
     icon: "inbox",
     subtitle: "Payments to the collection number that couldn't be credited, the texts behind them, and the listener phones.",
+  },
+  agentzaad: {
+    label: "Zaad via agents",
+    short: "Agents",
+    icon: "send",
+    subtitle: "Customers pay an online agent's Zaad and the agent's float tops them up. Decide disputes and reversals, and set up agents' receiving numbers.",
   },
   disputes: {
     label: "Disputes",
@@ -193,7 +200,7 @@ export default function App() {
   const visibleTabs: Tab[] = ["users"];
   if (canRunFloatDesk) visibleTabs.push("topups");
   if (canReviewRoles) visibleTabs.push("roles", "kyc");
-  if (canRunFloatDesk) visibleTabs.push("float", "payouts", "zaad", "disputes", "ledger");
+  if (canRunFloatDesk) visibleTabs.push("float", "payouts", "zaad", "agentzaad", "disputes", "ledger");
   visibleTabs.push("pricing");
 
   return (
@@ -291,6 +298,8 @@ export default function App() {
             {tab === "payouts" && canRunFloatDesk && <PayoutDesk />}
 
             {tab === "zaad" && canRunFloatDesk && <ZaadDesk isSuper={claims.adminRoles.includes("super")} />}
+
+            {tab === "agentzaad" && canRunFloatDesk && <AgentZaadDesk />}
 
             {tab === "disputes" && canRunFloatDesk && <DisputeDesk />}
 
