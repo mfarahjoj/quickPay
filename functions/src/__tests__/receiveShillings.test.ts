@@ -239,9 +239,21 @@ describe("a shop receiving shillings", () => {
       expect(enforceTransactionLimits).toHaveBeenCalledWith(CUSTOMER, 20_000, expect.anything(), undefined, "SLS");
     });
 
-    it("keeps cash-out at the counter in dollars", async () => {
-      seed({ ...scanned, [`users/${SHOP}`]: { accountType: "agent_merchant", fullName: "Hodan Ali" } });
-      await expect(raise({ amount: 20_000, currency: "SLS", purpose: "cash_out" })).rejects.toThrow(/in dollars/);
+    it("pays out cash at the counter in shillings: shilling float in, shillings out", async () => {
+      const db = seed({
+        ...scanned,
+        [`users/${SHOP}`]: { accountType: "agent_merchant", fullName: "Hodan Ali" },
+        "config/rates": { slsPerUsd: 8_000, cashOutFeeRate: 0.01, cashOutCommissionRate: 0.01, roundTripWindowHours: 0 },
+      });
+      await raise({ amount: 20_000, currency: "SLS", purpose: "cash_out" });
+      expect(db.get(`paymentRequests/${TOKEN}`)).toMatchObject({ amount: 20_000, currency: "SLS", feeCents: 200 });
+      await approve({ data: { requestId: TOKEN, pin: "123456", expectedAmount: 20_000 }, auth: { uid: CUSTOMER } });
+      // 20,000 handed over plus the 200 fee; the agent's float takes the 20,000.
+      expect(sls(db, CUSTOMER)).toBe(79_800);
+      expect(db.get(`ledger_balances/agent:${SHOP}@SLS`)!.balance).toBe(20_000);
+      // The 200 commission to the agent's own wallet, in shillings.
+      expect(sls(db, SHOP)).toBe(200);
+      expect(usd(db, CUSTOMER)).toBe(5_000);
     });
   });
 

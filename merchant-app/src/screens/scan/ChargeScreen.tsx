@@ -103,15 +103,15 @@ export default function ChargeScreen({ route, navigation }: Props) {
   // A cash-out: the agent hands over cash once the customer approves.
   const cashOut = route.params.purpose === 'cash_out';
   const k = (key: string) => (cashOut ? `scan.cashOut.${key}` : `scan.charge.${key}`);
-  // A charge is in one currency, never converted. A cash-out is dollars.
+  // A charge or a cash-out is in one currency, never converted.
   const [currency, setCurrency] = useState<FloatCurrency>(
-    !cashOut && route.params.currency === 'SLS' ? 'SLS' : 'USD'
+    route.params.currency === 'SLS' ? 'SLS' : 'USD'
   );
   const show = (n: number) => formatAmount(n, currency);
   // Filled in already when the sale was typed on Receive.
   const [amount, setAmount] = useState(
     route.params.amountCents
-      ? route.params.currency === 'SLS' && !cashOut
+      ? route.params.currency === 'SLS'
         ? String(route.params.amountCents)
         : (route.params.amountCents / 100).toFixed(2)
       : ''
@@ -450,18 +450,16 @@ export default function ChargeScreen({ route, navigation }: Props) {
           />
           {currency === 'SLS' ? <Text style={styles.currency}>SLSH</Text> : null}
         </GlassCard>
-        {cashOut ? null : (
-          <CurrencyToggle
-            value={currency}
-            onChange={(next) => {
-              if (next === currency) return;
-              setCurrency(next);
-              setAmount('');
-            }}
-            disabled={phase !== 'idle'}
-            style={styles.currencyToggle}
-          />
-        )}
+        <CurrencyToggle
+          value={currency}
+          onChange={(next) => {
+            if (next === currency) return;
+            setCurrency(next);
+            setAmount('');
+          }}
+          disabled={phase !== 'idle'}
+          style={styles.currencyToggle}
+        />
       </View>
 
       <View style={styles.footer}>
