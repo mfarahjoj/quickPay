@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { typography, spacing, makeStyles } from '../theme';
+import { SafeAreaView } from './SafeAreaView';
 
 interface HeaderProps {
   title: string;
@@ -10,24 +11,29 @@ interface HeaderProps {
 
 export function Header({ title, onBack, rightAction }: HeaderProps) {
   const styles = useStyles();
+  // Screens that hide the navigator's bar put this header at the very top,
+  // under the status bar. The safe area pads only what actually overlaps it,
+  // so a header below a navigator bar gets no extra space.
   return (
-    <View style={styles.container}>
-      <View style={styles.left}>
-        {onBack ? (
-          <TouchableOpacity onPress={onBack} style={styles.backButton} hitSlop={12}>
-            <Text style={styles.backIcon}>←</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.placeholder} />
-        )}
+    <SafeAreaView>
+      <View style={styles.container}>
+        <View style={styles.left}>
+          {onBack ? (
+            <TouchableOpacity onPress={onBack} style={styles.backButton} hitSlop={12}>
+              <Text style={styles.backIcon}>←</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.placeholder} />
+          )}
+        </View>
+        <Text style={styles.title} numberOfLines={1}>
+          {title}
+        </Text>
+        <View style={styles.right}>
+          {rightAction ?? <View style={styles.placeholder} />}
+        </View>
       </View>
-      <Text style={styles.title} numberOfLines={1}>
-        {title}
-      </Text>
-      <View style={styles.right}>
-        {rightAction ?? <View style={styles.placeholder} />}
-      </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
