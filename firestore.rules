@@ -269,6 +269,10 @@ service cloud.firestore {
     match /adjustments/{adjustmentId} {
       allow read, write: if false;
     }
+    // Ops top-ups from a float account. Server-only, like adjustments.
+    match /admin_topups/{topupId} {
+      allow read, write: if false;
+    }
     // Disputes: the raiser and the party it's against read their own, so the
     // apps can follow the thread live. Every write is a callable (openDispute,
     // postDisputeMessage, withdrawDispute, adminResolveDispute).

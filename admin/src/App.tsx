@@ -21,10 +21,11 @@ import { LedgerDesk } from "./components/LedgerDesk";
 import { DisputeDesk } from "./components/DisputeDesk";
 import { AuthMigrationPanel } from "./components/AuthMigrationPanel";
 import { PricingPanel } from "./components/PricingPanel";
+import { TopupDesk } from "./components/TopupDesk";
 import { Icon, type IconName } from "./components/Icon";
 import { Avatar, BrandMark, EmptyState, Loading } from "./components/ui";
 
-type Tab = "users" | "roles" | "kyc" | "float" | "payouts" | "zaad" | "disputes" | "ledger" | "pricing";
+type Tab = "users" | "topups" | "roles" | "kyc" | "float" | "payouts" | "zaad" | "disputes" | "ledger" | "pricing";
 
 /** `short` is what the phone tab bar shows; the sidebar uses `label`. */
 const TABS: Record<
@@ -36,6 +37,12 @@ const TABS: Record<
     short: "Customers",
     icon: "user",
     subtitle: "Look up a customer to review their account, wallet and recent activity.",
+  },
+  topups: {
+    label: "Top up a wallet",
+    short: "Top up",
+    icon: "banknote",
+    subtitle: "Add dollars or shillings to an account with money Zapp has received on Zaad, eDahab or the bank.",
   },
   roles: {
     label: "Role applications",
@@ -184,6 +191,7 @@ export default function App() {
     claims.adminRoles.includes("ops") || claims.adminRoles.includes("super");
 
   const visibleTabs: Tab[] = ["users"];
+  if (canRunFloatDesk) visibleTabs.push("topups");
   if (canReviewRoles) visibleTabs.push("roles", "kyc");
   if (canRunFloatDesk) visibleTabs.push("float", "payouts", "zaad", "disputes", "ledger");
   visibleTabs.push("pricing");
@@ -271,6 +279,8 @@ export default function App() {
                 )}
               </div>
             )}
+
+            {tab === "topups" && canRunFloatDesk && <TopupDesk />}
 
             {tab === "roles" && canReviewRoles && <RoleQueue />}
 

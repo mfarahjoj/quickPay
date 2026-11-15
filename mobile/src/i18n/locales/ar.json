@@ -1184,6 +1184,7 @@
   "wallet.kind.float": "رصيد الوكيل",
   "wallet.kind.card_topup": "شحن بالبطاقة",
   "wallet.kind.mobile_money_topup": "شحن عبر المال المتنقل",
+  "wallet.kind.bank_topup": "شحن من البنك",
   "wallet.kind.mobile_money_cashout": "سحب عبر المال المتنقل",
   "wallet.kind.remittance": "حوالة",
   "wallet.detail.type": "النوع",

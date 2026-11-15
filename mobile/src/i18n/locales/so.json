@@ -1184,6 +1184,7 @@
   "wallet.kind.float": "Lacagta wakiilka",
   "wallet.kind.card_topup": "Lacag-shub kaar",
   "wallet.kind.mobile_money_topup": "Lacag-shub mobile money",
+  "wallet.kind.bank_topup": "Lacag ku shubid bangi",
   "wallet.kind.mobile_money_cashout": "Lacag-bixin mobile money",
   "wallet.kind.remittance": "Xawaalad",
   "wallet.detail.type": "Nooca",

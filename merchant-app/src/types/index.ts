@@ -99,6 +99,7 @@ export type TransactionKind =
   | 'card_topup'
   | 'mobile_money_topup'
   | 'mobile_money_cashout'
+  | 'bank_topup'
   | 'remittance';
 
 export type SummaryPeriod = 'today' | 'week' | 'month';

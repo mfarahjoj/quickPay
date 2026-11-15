@@ -201,6 +201,8 @@ export {
 export { adminGetRates, adminUpdateRates, getPricing } from "./admin/pricing";
 // Corrections: a balanced `adjustment` entry, never a balance edit
 export { adminPostAdjustment, adminListAdjustments } from "./admin/adjustments";
+// Top-up desk: ops credit a wallet with money a float account received
+export { adminTopupWallet, adminListTopups } from "./admin/topups";
 
 // Disputes (WALLET_READINESS_PLAN.md 2.2): raised in the apps, decided by ops.
 export {

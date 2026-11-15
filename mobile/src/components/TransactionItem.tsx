@@ -170,6 +170,7 @@ function rowLook(tx: Transaction): RowLook {
     case 'cash_in':
     case 'card_topup':
     case 'mobile_money_topup':
+    case 'bank_topup':
     case 'payroll':
       return { tint: tints.green, Icon: ArrowInIcon };
     case 'cash_out':
