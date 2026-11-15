@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { firestore } from '../services/firebase.config';
-import { zaadTopupsOn } from '../services/mobileMoney.utils';
+import { zaadAgentTopupsOn, zaadTopupsOn } from '../services/mobileMoney.utils';
 
 /** The last answer, so a screen opened again doesn't wait for it. */
 let lastKnown = false;
@@ -30,5 +30,28 @@ export function useZaadTopups(): boolean {
     };
   }, []);
 
+  return on;
+}
+
+let lastKnownAgent = false;
+
+/** Whether Zaad top-ups through agents are open (zaadAgentTopupsOn). */
+export function useZaadAgentTopups(): boolean {
+  const [on, setOn] = useState(lastKnownAgent);
+  useEffect(() => {
+    let cancelled = false;
+    firestore()
+      .collection('config')
+      .doc('app_client')
+      .get()
+      .then((snap) => {
+        lastKnownAgent = zaadAgentTopupsOn(snap.data());
+        if (!cancelled) setOn(lastKnownAgent);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   return on;
 }

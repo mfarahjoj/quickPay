@@ -67,3 +67,11 @@ export function dollars(cents: number): string {
 export function zaadTopupsOn(appClient: unknown): boolean {
   return (appClient as { customer?: { zaadTopups?: unknown } } | undefined)?.customer?.zaadTopups === true;
 }
+
+/**
+ * Whether Zaad top-ups through agents are open: `customer.zaadAgentTopups` in
+ * config/app_client, which the console's switch (config/rates) mirrors.
+ */
+export function zaadAgentTopupsOn(appClient: unknown): boolean {
+  return (appClient as { customer?: { zaadAgentTopups?: unknown } } | undefined)?.customer?.zaadAgentTopups === true;
+}
