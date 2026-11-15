@@ -71,8 +71,9 @@ export type DisplayLang = "en" | "so" | "ar";
 export interface StateSale {
   id: string;
   qrData: string;
+  /** In the currency's smallest unit: cents, or whole shillings. */
   amountCents: number;
-  currency: "USD";
+  currency: "USD" | "SLS";
   reference?: string;
   createdAtMs: number;
   expiresAtMs: number;
@@ -80,8 +81,9 @@ export interface StateSale {
 
 export interface StateRequest {
   id: string;
+  /** In the currency's smallest unit: cents, or whole shillings. */
   amountCents: number;
-  currency: "USD";
+  currency: "USD" | "SLS";
   customerFirstName: string;
   createdAtMs: number;
   expiresAtMs: number;
@@ -92,6 +94,8 @@ export type FlashKind = "paid" | "declined" | "expired";
 export interface StateFlash {
   kind: FlashKind;
   amountCents: number;
+  /** Absent on flashes from before shillings: dollars. */
+  currency?: "USD" | "SLS";
   receiptNumber?: string;
   /** When it happened, from the source doc, never "now". */
   atMs: number;

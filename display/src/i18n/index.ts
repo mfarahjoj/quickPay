@@ -13,9 +13,15 @@ export function translate(lang: Lang, key: StringKey, params: Record<string, str
 
 export const isRtl = (lang: Lang) => lang === "ar";
 
-/** "$12.50", as the merchant app shows USD amounts. */
-export function formatAmount(cents: number): string {
-  return "$" + (cents / 100).toFixed(2);
+/**
+ * "$12.50", or "30,000 SLSH" for whole shillings, as the merchant app shows
+ * them. Customers pay what this says, so shillings never go through cents.
+ */
+export function formatAmount(amount: number, currency: string = "USD"): string {
+  if (currency === "SLS" || currency === "SLSH") {
+    return `${Math.round(amount).toLocaleString("en-US")} SLSH`;
+  }
+  return "$" + (amount / 100).toFixed(2);
 }
 
 /** 9:05, or 45s under a minute. */

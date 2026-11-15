@@ -596,6 +596,8 @@ export interface QRPaymentRequest {
   qrCodeId: string;
   customerId: string;
   pin: string;
+  /** The currencies the paying app shows correctly, e.g. ["USD", "SLS"]. */
+  currencies?: string[];
 }
 
 export interface PaymentResponse {

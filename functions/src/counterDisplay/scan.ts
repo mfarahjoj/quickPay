@@ -21,6 +21,7 @@ import { getRates } from "../config/rates";
 import { ENCRYPTION_KEY, PIN_PEPPER } from "../config/secrets";
 import { decrypt } from "../utils/encryption";
 import { enforcePerTransactionLimit } from "../utils/limits";
+import { parseCurrency, pushAmount } from "../utils/money";
 import { sendPushNotification } from "../utils/notifications";
 import { PushMessage } from "../utils/pushTemplates";
 import { CustomerToken, MerchantPaymentRequest, QRCode, User } from "../types";
@@ -97,7 +98,7 @@ export const displayScanCustomer = https.onCall(
       throw fail("not-found", "That Zapp Pay code isn't valid any more.", "token_invalid");
     }
     if (salePeek && salePeek.merchantId === merchantId && salePeek.status === "active") {
-      await enforcePerTransactionLimit(salePeek.amount, customer);
+      await enforcePerTransactionLimit(salePeek.amount, customer, parseCurrency(salePeek.currency) ?? "USD");
     }
     const { paymentRequestTtlSeconds } = await getRates();
 
@@ -167,7 +168,7 @@ export const displayScanCustomer = https.onCall(
     if (outcome.created) {
       const profile = (await db.collection("merchantProfiles").doc(merchantId).get()).data();
       const name = shopName(merchant, profile);
-      const amountText = `${req.currency} ${(req.amount / 100).toFixed(2)}`;
+      const amountText = pushAmount(req.amount, req.currency);
       const message: PushMessage = req.reference
         ? { key: "payment.request_with_reference", params: { merchant: name, amount: amountText, reference: req.reference } }
         : { key: "payment.request", params: { merchant: name, amount: amountText } };

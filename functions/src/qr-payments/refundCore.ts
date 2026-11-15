@@ -19,6 +19,7 @@ import {
   PLATFORM_FEES,
 } from "../ledger";
 import { claimReceiptNumber, reserveReceiptNumber } from "../utils/receiptNumber";
+import { formatAmount, parseCurrency } from "../utils/money";
 
 /**
  * The entries a merchant may refund from the app: payments a customer made
@@ -103,11 +104,13 @@ export async function prepareRefund(
     throw new https.HttpsError("failed-precondition", "This payment has already been refunded");
   }
 
+  // In the payment's own currency: cents, or whole shillings.
+  const refundCurrency = parseCurrency(original.currency) ?? "USD";
   const amount = opts.amountCents ?? remaining;
   if (!Number.isInteger(amount) || amount <= 0 || amount > remaining) {
     throw new https.HttpsError(
       "invalid-argument",
-      `You can refund between $0.01 and $${(remaining / 100).toFixed(2)}`,
+      `You can refund between ${formatAmount(1, refundCurrency)} and ${formatAmount(remaining, refundCurrency)}`,
       { reason: "refund_amount", remainingCents: remaining }
     );
   }

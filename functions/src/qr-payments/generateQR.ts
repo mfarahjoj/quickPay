@@ -1,7 +1,8 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { assertAccountActive } from "../utils/accountStatus";
-import { requireAuth, validateAmount, validateCurrency } from "../utils/validation";
+import { requireAuth, validateAmount } from "../utils/validation";
+import { parseCurrency } from "../utils/money";
 import { generateSecureId } from "../utils/encryption";
 import { generateEmvQRPayload } from "../utils/emvqr";
 import { getRates, computePaymentFee } from "../config/rates";
@@ -10,7 +11,9 @@ import { cleanReference, guardPaidReference } from "../utils/paidReferences";
 import { syncCounterStateQuietly } from "../counterDisplay/state";
 
 interface GenerateQRRequest {
-  amount: number; // In cents
+  /** In the currency's smallest unit: cents, or whole shillings. */
+  amount: number;
+  /** "USD" or "SLS" (also "SLSH"). Shillings are never converted. */
   currency: string;
   reference?: string;
   /**
@@ -48,21 +51,22 @@ export const generateQRCode = https.onCall(
     requireAuth(request);
     const merchantId = request.auth!.uid;
 
-    const { amount, currency } = request.data;
+    const { amount } = request.data;
+    const currency = parseCurrency(request.data.currency, "USD");
     const reference = cleanReference(request.data.reference);
 
     // Validate inputs
     if (!validateAmount(amount)) {
       throw new https.HttpsError(
         "invalid-argument",
-        "Amount must be a positive integer (in cents)"
+        "Amount must be a positive integer in the currency's smallest unit"
       );
     }
 
-    if (!validateCurrency(currency)) {
+    if (!currency) {
       throw new https.HttpsError(
         "invalid-argument",
-        "Invalid currency. Supported: USD"
+        "Invalid currency. Supported: USD, SLS"
       );
     }
 
@@ -120,8 +124,12 @@ export const generateQRCode = https.onCall(
         merchantId,
         qrCodeId,
         merchantCategoryCode: userData?.merchantCategoryCode || "5999",
-        currencyCode: "840",
-        amount: amount / 100,
+        // The payload only routes to this code; the amount Zapp charges is read
+        // from the qrCodes doc. Somaliland shillings have no ISO 4217 code, so a
+        // shilling code carries no amount for other wallets to misread: 706 is
+        // the Somali shilling, a different currency.
+        currencyCode: currency === "USD" ? "840" : "706",
+        ...(currency === "USD" ? { amount: amount / 100 } : {}),
         countryCode: "SO",
         merchantName: merchantName.slice(0, EMV_NAME_MAX),
         merchantCity: "Hargeisa",
