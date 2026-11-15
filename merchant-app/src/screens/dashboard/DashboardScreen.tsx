@@ -28,7 +28,9 @@ import {
   HistoryIcon,
   WalletIcon,
   HandshakeIcon,
+  SendIcon,
 } from '../../components/icons/AuthIcons';
+import { CurrencyToggle, type FloatCurrency } from '../../components/CurrencyToggle';
 import { Transaction } from '../../types';
 import { CURRENCY_SYMBOL } from '../../config/constants';
 
@@ -105,6 +107,13 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
   const { disputes } = useMyDisputes();
   const repliesDue = disputes.filter((d) => needsReply(d, user?.uid)).length;
   const [refreshing, setRefreshing] = React.useState(false);
+  // Shillings and dollars are separate balances, never converted
+  // (SHILLINGS.md). Starts on whichever this shop holds, dollars when both.
+  const [picked, setPicked] = React.useState<FloatCurrency | null>(null);
+  const shown: FloatCurrency =
+    picked ?? ((wallet?.slsBalance ?? 0) > 0 && (wallet?.balanceCents ?? 0) === 0 ? 'SLS' : 'USD');
+  const balanceText =
+    shown === 'SLS' ? formatAmount(wallet?.slsBalance ?? 0, 'SLS') : money(wallet?.balance ?? 0);
 
   const accountType = profile?.accountType ?? '';
   const isMerchantRole = accountType === 'merchant' || accountType === 'agent_merchant';
@@ -127,6 +136,7 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
     ] : []),
     ...(isMerchantRole ? [
       { key: 'withdraw', label: t('dashboard.quickActions.withdraw'), Icon: WalletIcon, route: 'Payout' },
+      { key: 'send', label: t('dashboard.quickActions.send'), Icon: SendIcon, route: 'Send' },
       { key: 'payroll', label: t('dashboard.quickActions.payroll'), Icon: HandshakeIcon, route: 'Payroll' },
     ] : []),
   ];
@@ -190,13 +200,20 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
 
           {/* Balance */}
           <View style={styles.balanceBlock}>
+            <CurrencyToggle value={shown} onChange={setPicked} style={styles.currencyToggle} />
             <Text style={styles.balanceLabel}>
               {isAgentRole ? t('dashboard.balance.salesLabel') : t('dashboard.balance.label')}
             </Text>
             {walletLoading && !wallet ? (
               <ActivityIndicator color="#FFFFFF" size="large" style={{ marginVertical: 14 }} />
             ) : (
-              <Text style={styles.balanceAmount}>{money(wallet?.balance ?? 0)}</Text>
+              <Text
+                style={[styles.balanceAmount, shown === 'SLS' && styles.balanceAmountSls]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+              >
+                {balanceText}
+              </Text>
             )}
 
             <View style={styles.statPills}>
@@ -204,14 +221,18 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
                 <Text style={styles.statPillArrow}>↓</Text>
                 <View>
                   <Text style={styles.statPillLabel}>{t('dashboard.balance.totalReceived')}</Text>
-                  <Text style={styles.statPillValue}>{money(wallet?.totalReceived ?? 0)}</Text>
+                  <Text style={styles.statPillValue}>
+                    {shown === 'SLS' ? formatAmount(wallet?.slsTotalReceived ?? 0, 'SLS') : money(wallet?.totalReceived ?? 0)}
+                  </Text>
                 </View>
               </View>
               <View style={styles.statPill}>
                 <Text style={styles.statPillArrow}>↑</Text>
                 <View>
                   <Text style={styles.statPillLabel}>{t('dashboard.balance.totalSent')}</Text>
-                  <Text style={styles.statPillValue}>{money(wallet?.totalSent ?? 0)}</Text>
+                  <Text style={styles.statPillValue}>
+                    {shown === 'SLS' ? formatAmount(wallet?.slsTotalSent ?? 0, 'SLS') : money(wallet?.totalSent ?? 0)}
+                  </Text>
                 </View>
               </View>
             </View>
@@ -401,6 +422,15 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.4)',
     marginBottom: 8,
     letterSpacing: 0.2,
+  },
+  currencyToggle: {
+    alignSelf: 'stretch',
+    marginHorizontal: 24,
+    marginBottom: 18,
+  },
+  balanceAmountSls: {
+    fontSize: 40,
+    letterSpacing: -1.5,
   },
   balanceAmount: {
     fontSize: 52,

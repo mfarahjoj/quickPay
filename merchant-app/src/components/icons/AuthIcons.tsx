@@ -334,6 +334,16 @@ export function TopUpIcon({ size = 24, color = colors.primary }: IconProps) {
   );
 }
 
+/** Send — an arrow leaving, up and to the right */
+export function SendIcon({ size = 24, color = colors.primary }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M7 17L17 7" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
+      <Path d="M9 7h8v8" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
 /** History — clock with hands */
 export function HistoryIcon({ size = 24, color = colors.primary }: IconProps) {
   return (

@@ -944,5 +944,22 @@
   "counterDisplay.errors.limit": "A shop can link up to 3 screens. Unlink one first.",
   "counterDisplay.errors.tooManyCodes": "Too many wrong codes. Try again in a few minutes.",
   "counterDisplay.errors.notShop": "Only shops can link a counter display.",
-  "qr.display.alsoOnCounter": "Also on your counter display"
+  "qr.display.alsoOnCounter": "Also on your counter display",
+  "dashboard.quickActions.send": "Send",
+  "send.title": "Send money",
+  "send.subtitle": "From your sales, to a person's Zapp Pay",
+  "send.numberLabel": "Their number",
+  "send.numberHint": "A Somaliland number, or any number starting with +.",
+  "send.find": "Find",
+  "send.invalidNumber": "Enter a number like 063 412 3456.",
+  "send.notFound": "No Zapp Pay account has this number.",
+  "send.self": "That's your own number.",
+  "send.recipientIsBusiness": "{{name}} is a business. Businesses are paid by scanning their Zapp Pay QR code.",
+  "send.lookupLimit": "Too many lookups. Try again in an hour.",
+  "send.to": "To",
+  "send.amountLabel": "Amount",
+  "send.available": "Available: {{amount}}",
+  "send.notEnough": "More than you have in this currency.",
+  "send.pinSubtitle": "To send {{amount}} to {{name}}.",
+  "send.done": "{{amount}} sent to {{name}}."
 }
