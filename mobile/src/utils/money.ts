@@ -69,3 +69,22 @@ export function balanceIn(
   if (!wallet) return 0;
   return currency === 'SLS' ? wallet.slsBalance : wallet.balanceCents;
 }
+
+/*
+ * An amount being typed on the keypad (`pressAmountKey`), in whole units:
+ * "12.5" dollars or "30000" shillings. Shillings have no decimal point.
+ */
+
+/** The typed amount in the smallest unit: cents, or whole shillings. */
+export function amountInputUnits(text: string, currency: Currency): number {
+  const value = Number(text || '0');
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return currency === 'SLS' ? Math.floor(value) : Math.round(value * 100);
+}
+
+/** The typed amount as it shows while typing: "$12.5" or "30,000 SLSH". */
+export function amountInputLabel(text: string, currency: Currency): string {
+  if (currency === 'SLS') return `${withCommas(String(amountInputUnits(text, 'SLS')))} SLSH`;
+  const [whole, decimals] = (text || '0').split('.');
+  return `$${withCommas(whole || '0')}${decimals === undefined ? '' : `.${decimals}`}`;
+}
