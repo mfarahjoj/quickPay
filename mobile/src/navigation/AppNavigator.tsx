@@ -293,7 +293,7 @@ function MainStackNavigator() {
       <MainStack.Screen
         name="PaymentConfirm"
         getComponent={() => require('../screens/qr/PaymentConfirmScreen').default}
-        options={{ title: t('nav.screen.confirmPayment'), presentation: 'modal' }}
+        options={{ title: t('nav.screen.confirmPayment'), headerShown: false, presentation: 'modal' }}
       />
       <MainStack.Screen
         name="PaymentSuccess"
@@ -333,12 +333,12 @@ function MainStackNavigator() {
       <MainStack.Screen
         name="Notifications"
         getComponent={() => require('../screens/notifications/NotificationsScreen').default}
-        options={{ title: t('nav.screen.notifications') }}
+        options={{ title: t('nav.screen.notifications'), headerShown: false }}
       />
       <MainStack.Screen
         name="TransactionDetail"
         getComponent={() => require('../screens/wallet/TransactionDetailScreen').default}
-        options={{ title: t('nav.screen.transactionDetails') }}
+        options={{ title: t('nav.screen.transactionDetails'), headerShown: false }}
       />
       <MainStack.Screen
         name="RaiseDispute"
@@ -358,7 +358,7 @@ function MainStackNavigator() {
       <MainStack.Screen
         name="Security"
         getComponent={() => require('../screens/profile/SecurityScreen').default}
-        options={{ title: t('nav.screen.security') }}
+        options={{ title: t('nav.screen.security'), headerShown: false }}
       />
       <MainStack.Screen
         name="ChangePhone"
@@ -413,17 +413,17 @@ function MainStackNavigator() {
       <MainStack.Screen
         name="EditProfile"
         getComponent={() => require('../screens/profile/EditProfileScreen').default}
-        options={{ title: t('nav.screen.editProfile') }}
+        options={{ title: t('nav.screen.editProfile'), headerShown: false }}
       />
       <MainStack.Screen
         name="KYC"
         getComponent={() => require('../screens/profile/KYCScreen').default}
-        options={{ title: t('nav.screen.identityVerification') }}
+        options={{ title: t('nav.screen.identityVerification'), headerShown: false }}
       />
       <MainStack.Screen
         name="LinkedAccounts"
         getComponent={() => require('../screens/profile/LinkedAccountsScreen').default}
-        options={{ title: t('nav.screen.linkedAccounts') }}
+        options={{ title: t('nav.screen.linkedAccounts'), headerShown: false }}
       />
       <MainStack.Screen
         name="ZaadAccount"
@@ -433,12 +433,12 @@ function MainStackNavigator() {
       <MainStack.Screen
         name="TransactionLimits"
         getComponent={() => require('../screens/profile/TransactionLimitsScreen').default}
-        options={{ title: t('nav.screen.transactionLimits') }}
+        options={{ title: t('nav.screen.transactionLimits'), headerShown: false }}
       />
       <MainStack.Screen
         name="About"
         getComponent={() => require('../screens/profile/AboutScreen').default}
-        options={{ title: t('nav.screen.about') }}
+        options={{ title: t('nav.screen.about'), headerShown: false }}
       />
       <MainStack.Screen
         name="Invite"
