@@ -16,7 +16,7 @@ import { SuccessCheckIcon } from '../../components/icons/AuthIcons';
 import { typography, spacing, borderRadius, makeStyles, useColors, useTheme, wallpaper } from '../../theme';
 import { Wallpaper } from '../../components/Wallpaper';
 import { CheckIcon, ShareIcon } from '../../components/icons/LineIcons';
-import { CURRENCY_SYMBOL } from '../../config/constants';
+import { formatMajor, toCurrency } from '../../utils/money';
 import { triggerHaptic } from '../../services/haptics.service';
 import { Springs } from '../../constants/springs';
 import { useCountUp } from '../../hooks/useCountUp';
@@ -113,12 +113,12 @@ export default function PaymentSuccessScreen({ navigation, route }: Props) {
   // Count-up amount
   const [activeAmount, setActiveAmount] = useState(0);
   const countValue = useCountUp(activeAmount, 650);
-  const [displayAmount, setDisplayAmount] = useState('0.00');
+  const [displayAmount, setDisplayAmount] = useState(0);
 
   useAnimatedReaction(
     () => countValue.value,
     (current) => {
-      runOnJS(setDisplayAmount)(current.toFixed(2));
+      runOnJS(setDisplayAmount)(current);
     },
   );
 
@@ -192,7 +192,8 @@ export default function PaymentSuccessScreen({ navigation, route }: Props) {
     navigation.navigate('MainTabs', { screen: 'Home' });
   };
 
-  const amountText = `${CURRENCY_SYMBOL}${amount.toFixed(2)}`;
+  // Whole units of the payment's currency: "$12.50" or "30,000 SLSH".
+  const amountText = formatMajor(amount, currency);
   // The Zapp receipt number when the backend issued one; the start of the
   // transaction id for a payment from before they existed.
   const reference = receiptNumber ?? transactionId.slice(0, 12);
@@ -299,10 +300,10 @@ export default function PaymentSuccessScreen({ navigation, route }: Props) {
 
         {/* Summary card with count-up amount */}
         <Animated.View style={[styles.summary, cardStyle]}>
-          <Text style={styles.summaryAmount}>
-            {CURRENCY_SYMBOL}{displayAmount}
+          <Text style={styles.summaryAmount} numberOfLines={1} adjustsFontSizeToFit>
+            {formatMajor(displayAmount, currency)}
           </Text>
-          <Text style={styles.summaryLabel}>{currency}</Text>
+          {toCurrency(currency) === 'SLS' ? null : <Text style={styles.summaryLabel}>{currency}</Text>}
           <View style={styles.divider} />
           <View style={styles.summaryRow}>
             {receiptNumber ? (

@@ -88,3 +88,10 @@ export function amountInputLabel(text: string, currency: Currency): string {
   const [whole, decimals] = (text || '0').split('.');
   return `$${withCommas(whole || '0')}${decimals === undefined ? '' : `.${decimals}`}`;
 }
+
+/**
+ * Sent when scanning and paying a shop's code: this app shows shillings as
+ * shillings, so the server may hand it a shilling sale. Older apps send
+ * nothing and are told to update instead.
+ */
+export const READS_CURRENCIES = ['USD', 'SLS'];

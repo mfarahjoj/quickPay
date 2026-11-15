@@ -1,6 +1,7 @@
 import { functions } from './firebase.config';
 import { QRCodeData, PaymentResult } from '../types';
 import { logger } from '../utils/logger';
+import { READS_CURRENCIES } from '../utils/money';
 
 /**
  * Generate a QR code for merchant payment
@@ -52,7 +53,7 @@ export async function validateQRCode(qrData: string): Promise<{
 }> {
   try {
     const validateQRFunction = functions().httpsCallable('validateQRCode');
-    const result = await validateQRFunction({ qrData });
+    const result = await validateQRFunction({ qrData, currencies: READS_CURRENCIES });
 
     const data = result.data as {
       data: {
@@ -87,6 +88,7 @@ export async function processPayment(
       qrCodeId,
       customerId: '', // Will be set by backend from auth context
       pin,
+      currencies: READS_CURRENCIES,
     });
 
     const data = result.data as { success: boolean; error?: string; data: PaymentResult };

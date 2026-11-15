@@ -5,6 +5,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { QrScannerView } from '../../components/QrScannerView';
 import { validateQRCode } from '../../services/qr.service';
 import { parseChargeLink } from '../../services/apiCharge.service';
+import { toCurrency } from '../../utils/money';
 
 interface Props {
   navigation: any;
@@ -57,7 +58,8 @@ export default function ScanQRScreen({ navigation }: Props) {
       } else {
         navigation.navigate('PaymentConfirm', {
           qrCodeId: validation.qrCodeId,
-          amount: validation.amount! / 100,
+          // Whole units of the code's currency: dollars, or shillings.
+          amount: toCurrency(validation.currency) === 'SLS' ? validation.amount! : validation.amount! / 100,
           currency: validation.currency!,
           merchantId: validation.merchantId,
           merchantName: validation.merchantName,
