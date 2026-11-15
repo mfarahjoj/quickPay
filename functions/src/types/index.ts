@@ -190,6 +190,8 @@ export interface PayoutRequest {
   merchantName?: string;
   businessName?: string;
   amountCents: number;
+  /** "USD" or "SLS"; absent on payouts from before shillings: dollars. */
+  currency?: "USD" | "SLS";
   /** Which float account the money will leave from when it is sent. */
   route: FloatRouteName;
   /** Account name as the merchant gave it — what ops types into the bank. */
