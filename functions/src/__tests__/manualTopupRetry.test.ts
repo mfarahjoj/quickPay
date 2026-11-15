@@ -94,6 +94,27 @@ describe("manualTopup is safe to retry", () => {
     expect(notifyTopupCompleted).toHaveBeenCalledTimes(1);
   });
 
+  it("tops up in shillings from shilling float, never converted", async () => {
+    const db = seed({
+      [`ledger_balances/agent:${AGENT}@SLS`]: { account: `agent:${AGENT}`, balance: 400_000, currency: "SLS" },
+      "config/rates": { slsPerUsd: 8_000, cashInCommissionRate: 0.02 },
+    });
+    const res = await topup({ amount: 30_000, currency: "SLSH" });
+    expect(res.data).toMatchObject({ amount: 30_000, commission: 600, currency: "SLS" });
+    expect(db.get(`ledger_balances/agent:${AGENT}@SLS`)!.balance).toBe(370_000);
+    expect(db.get(`ledger_balances/agent:${AGENT}`)!.balance).toBe(FLOAT);
+    expect(db.get(`wallets/${CUSTOMER}`)!.sls.balance).toBe(30_000);
+    expect(db.get(`wallets/${CUSTOMER}`)!.balance).toBe(1_234);
+    // The retry answers in shillings too.
+    expect((await topup({ amount: 30_000, currency: "SLSH" })).data).toEqual(res.data);
+    expect(journalEntries(db)).toHaveLength(1);
+  });
+
+  it("refuses a shilling top-up the agent's shilling float can't cover, whatever their dollars", async () => {
+    seed({ "config/rates": { slsPerUsd: 8_000 } });
+    await expect(topup({ amount: 30_000, currency: "SLS" })).rejects.toThrow(/Insufficient float.*30,000 SLSH/);
+  });
+
   it("posts once when the tap and its retry arrive together", async () => {
     const db = seed();
     const [a, b] = await Promise.all([topup(), topup()]);
@@ -169,7 +190,7 @@ describe("manualTopup is safe to retry", () => {
   it("never tells the agent the customer's balance", async () => {
     seed();
     const res = await topup();
-    expect(Object.keys(res.data).sort()).toEqual(["amount", "commission", "transactionId", "userId"]);
+    expect(Object.keys(res.data).sort()).toEqual(["amount", "commission", "currency", "transactionId", "userId"]);
     // $12.34 before, $62.34 after: neither figure is in the reply.
     expect(JSON.stringify(res)).not.toMatch(/62\.34|6234|newBalance/);
   });
