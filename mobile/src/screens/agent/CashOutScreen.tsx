@@ -23,8 +23,10 @@ import { cooldownMessage } from '../../utils/cooldownMessage';
 import { functions } from '../../services/firebase.config';
 import { triggerHaptic } from '../../services/haptics.service';
 import { makeStyles, useColors } from '../../theme';
-import { CURRENCY_SYMBOL } from '../../config/constants';
 import { Springs } from '../../constants/springs';
+import { useWallet } from '../../hooks/useWallet';
+import { useHomeCurrency } from '../../hooks/useHomeCurrency';
+import { amountInputUnits, balanceIn, formatMoney, type Currency } from '../../utils/money';
 import { SuccessCheckIcon } from '../../components/icons/AuthIcons';
 import { AnimatedXMark } from '../../components/icons/StatusIcons';
 
@@ -94,7 +96,26 @@ export default function CashOutScreen() {
   // Countdown pulse
   const timerGlow = useSharedValue(0);
 
-  const amount = parseFloat(amountText || '0');
+  // Dollars or shillings: the cash comes out of that balance, and the agent
+  // pays it in that currency. Starts on the currency Home shows.
+  const { wallet } = useWallet();
+  const { currency: homeCurrency } = useHomeCurrency(wallet?.balanceCents ?? 0, wallet?.slsBalance ?? 0);
+  const [pickedCurrency, setPickedCurrency] = useState<Currency | null>(null);
+  const currency = pickedCurrency ?? homeCurrency;
+
+  /** Cents or whole shillings: what the server takes. */
+  const amount = amountInputUnits(amountText, currency);
+  const amountLabel = formatMoney(amount, currency);
+  // The server rounds the fee the same way (computePaymentFee).
+  const feeUnits = Math.min(Math.round(amount * feeRate), amount);
+
+  const pickCurrency = (next: Currency) => {
+    if (next === currency) return;
+    triggerHaptic('light');
+    setPickedCurrency(next);
+    // 4.70 dollars is not 4.70 shillings: start the amount again.
+    setAmountText('');
+  };
 
   // Countdown timer for OTP expiry
   useEffect(() => {
@@ -127,8 +148,12 @@ export default function CashOutScreen() {
       return;
     }
     if (key === '⌫') { setAmountText((p) => p.slice(0, -1)); return; }
-    if (key === '.' && amountText.includes('.')) return;
-    const next = amountText + key;
+    // Shillings are whole; dollars take two decimals.
+    if (key === '.' && (currency === 'SLS' || amountText.includes('.'))) return;
+    const decimals = amountText.split('.')[1];
+    if (decimals !== undefined && decimals.length >= 2) return;
+    if (amountText.replace('.', '').length >= 9) return;
+    const next = amountText === '0' && key !== '.' ? key : amountText + key;
     setAmountText(next);
     amountScale.value = withSequence(
       withSpring(1.06, Springs.feedback),
@@ -137,7 +162,7 @@ export default function CashOutScreen() {
   };
 
   const handleContinue = () => {
-    if (!amountText || amount <= 0) return;
+    if (amount <= 0) return;
     triggerHaptic('medium');
     setStep('pin');
   };
@@ -149,7 +174,7 @@ export default function CashOutScreen() {
 
     try {
       const fn = functions().httpsCallable('customerCashOut');
-      const result = await fn({ amount: Math.round(amount * 100), pin });
+      const result = await fn({ amount, pin, currency });
       const data = (result.data as any)?.data;
       if (!data?.otpCode || !data?.expiresAt) {
         throw new Error((result.data as any)?.error || 'Cash-out failed');
@@ -165,7 +190,7 @@ export default function CashOutScreen() {
       setErrorMsg(cooldownMessage(e, t) ?? (e.message || 'Something went wrong'));
       setStep('error');
     }
-  }, [pin, amount, otpOpacity, otpScale, t]);
+  }, [pin, amount, currency, otpOpacity, otpScale, t]);
 
   useEffect(() => {
     if (pin.length === 6) handleSubmit();
@@ -244,7 +269,7 @@ export default function CashOutScreen() {
               ))}
             </View>
             <Text style={styles.otpAmount}>
-              {t('cashout.willBePaid', { amount: `${CURRENCY_SYMBOL}${amount.toFixed(2)}` })}
+              {t('cashout.willBePaid', { amount: amountLabel })}
             </Text>
           </Animated.View>
 
@@ -331,12 +356,12 @@ export default function CashOutScreen() {
         </View>
         <View style={styles.pinSection}>
           <Text style={styles.pinAmountLabel}>Withdrawing</Text>
-          <Text style={styles.pinAmount}>{CURRENCY_SYMBOL}{amount.toFixed(2)}</Text>
+          <Text style={styles.pinAmount} numberOfLines={1}>{amountLabel}</Text>
           <Text style={styles.feeLine}>
             {feeRate > 0
               ? t('cashout.feeLine', {
-                  fee: `${CURRENCY_SYMBOL}${(Math.round(amount * 100 * feeRate) / 100).toFixed(2)}`,
-                  total: `${CURRENCY_SYMBOL}${(amount + Math.round(amount * 100 * feeRate) / 100).toFixed(2)}`,
+                  fee: formatMoney(feeUnits, currency),
+                  total: formatMoney(amount + feeUnits, currency),
                 })
               : t('cashout.free')}
           </Text>
@@ -376,34 +401,62 @@ export default function CashOutScreen() {
       </View>
 
       <View style={styles.amountSection}>
+        <View style={styles.segment} accessibilityRole="tablist">
+          {(['SLS', 'USD'] as Currency[]).map((c) => (
+            <TouchableOpacity
+              key={c}
+              style={[styles.segmentItem, currency === c && styles.segmentItemOn]}
+              onPress={() => pickCurrency(c)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: currency === c }}
+            >
+              <Text style={[styles.segmentText, currency === c && styles.segmentTextOn]}>
+                {c === 'SLS' ? t('topup.zaad.shillings') : t('topup.zaad.dollars')}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
         <Text style={styles.amountLabel}>Amount to withdraw</Text>
         <Animated.View style={[styles.amountRow, amountStyle]}>
-          <Text style={styles.amountCurrency}>{CURRENCY_SYMBOL}</Text>
-          <Text style={[styles.amountDisplay, !amountText && styles.amountPlaceholder]}>
-            {amountText || '0.00'}
+          {currency === 'USD' && <Text style={styles.amountCurrency}>$</Text>}
+          <Text
+            style={[styles.amountDisplay, !amountText && styles.amountPlaceholder]}
+            numberOfLines={1}
+          >
+            {currency === 'SLS'
+              ? formatMoney(amount, 'SLS').replace(' SLSH', '')
+              : amountText || '0.00'}
           </Text>
+          {currency === 'SLS' && <Text style={styles.amountSuffix}>SLSH</Text>}
         </Animated.View>
-        <Text style={styles.amountHint}>Agent will pay you this in cash</Text>
+        <Text style={styles.amountHint}>
+          {t('payments.available', { amount: formatMoney(balanceIn(wallet, currency), currency) })}
+        </Text>
       </View>
 
       <View style={styles.keypad}>
-        {KEYPAD.map((key) => (
-          <TouchableOpacity
-            key={key}
-            style={[styles.key, key === '⌫' && styles.keyDelete]}
-            onPress={() => appendDigit(key)}
-            activeOpacity={0.6}
-          >
-            <Text style={[styles.keyText, key === '⌫' && styles.keyDeleteText]}>{key}</Text>
-          </TouchableOpacity>
-        ))}
+        {KEYPAD.map((key) => {
+          // Shillings have no smaller unit, so no decimal point.
+          const hidden = key === '.' && currency === 'SLS';
+          return (
+            <TouchableOpacity
+              key={key}
+              style={[styles.key, key === '⌫' && styles.keyDelete, hidden && styles.keyHidden]}
+              onPress={() => appendDigit(key)}
+              disabled={hidden}
+              activeOpacity={0.6}
+            >
+              <Text style={[styles.keyText, key === '⌫' && styles.keyDeleteText]}>{key}</Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       <View style={styles.footer}>
         <TouchableOpacity
-          style={[styles.continueBtn, (!amountText || amount <= 0) && styles.continueBtnDisabled]}
+          style={[styles.continueBtn, amount <= 0 && styles.continueBtnDisabled]}
           onPress={handleContinue}
-          disabled={!amountText || amount <= 0}
+          disabled={amount <= 0}
           activeOpacity={0.8}
         >
           <Text style={styles.continueBtnText}>Continue</Text>
@@ -440,7 +493,17 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
   amountLabel: { fontSize: 13, fontWeight: '600', letterSpacing: 0.5, textTransform: 'uppercase', color: colors.ui.ink(0.4), marginBottom: 16 },
   amountRow: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 10 },
   amountCurrency: { fontSize: 36, fontWeight: '700', color: colors.ui.text, marginBottom: 6, marginRight: 4 },
-  amountDisplay: { fontSize: 64, fontWeight: '800', color: colors.ui.text, letterSpacing: -2 },
+  amountDisplay: { fontSize: 56, fontWeight: '800', color: colors.ui.text, letterSpacing: -2, flexShrink: 1 },
+  amountSuffix: { fontSize: 24, fontWeight: '700', color: colors.ui.text, marginBottom: 10, marginLeft: 8 },
+  segment: {
+    flexDirection: 'row', alignSelf: 'center', padding: 4, borderRadius: 14,
+    backgroundColor: colors.ui.ink(0.06), marginBottom: 24,
+  },
+  segmentItem: { paddingVertical: 8, paddingHorizontal: 18, borderRadius: 10 },
+  segmentItemOn: { backgroundColor: colors.ui.accentText },
+  segmentText: { fontSize: 14, fontWeight: '700', color: colors.ui.ink(0.6) },
+  segmentTextOn: { color: colors.ui.onSolid },
+  keyHidden: { opacity: 0 },
   amountPlaceholder: { color: colors.ui.ink(0.2) },
   amountHint: { fontSize: 13, color: colors.ui.ink(0.35) },
 

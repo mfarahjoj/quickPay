@@ -8,23 +8,30 @@ import { enforceTransactionLimits } from "../utils/limits";
 import { verifyUserPin } from "../auth/validatePin";
 import { enforceVelocity } from "../utils/velocity";
 import { ApiResponse, Wallet, CashOutRequest, Transaction } from "../types";
-import { prepareJournalEntry, userAccount, CASHOUT_HOLD } from "../ledger";
+import { prepareJournalEntry, userAccount, CASHOUT_HOLD, walletPocket } from "../ledger";
 import { releaseCashOutHold } from "./cashOutHold";
 import { getRates, computePaymentFee } from "../config/rates";
+import { requestCurrency } from "./agentCurrency";
+import { formatAmount, fromLimitCents, toLimitCents } from "../utils/money";
 
 const CASHOUT_EXPIRY_MINUTES = 30;
+// In dollars. A shilling cash-out is compared at slsPerUsd.
 const MIN_CASHOUT_CENTS = 100; // $1 minimum
 
 interface CustomerCashOutRequest {
-  amount: number; // In cents
+  /** In the currency's smallest unit: cents, or whole shillings. */
+  amount: number;
   pin: string;
+  /** "USD" or "SLS" (also "SLSH"). Absent from older apps: dollars. */
+  currency?: string;
 }
 
 interface CustomerCashOutResponse {
   cashOutId: string;
   otpCode: string;
   amount: number;
-  /** Cash-out fee paid on top, in cents (0 when cash-out is free). */
+  currency: string;
+  /** Cash-out fee paid on top, in the same unit (0 when cash-out is free). */
   feeCents: number;
   expiresAt: string;
 }
@@ -44,11 +51,15 @@ export const customerCashOut = https.onCall(
     const customerId = request.auth!.uid;
 
     const { amount, pin } = request.data;
+    // Cash out of the dollar balance or the shilling balance. The agent pays
+    // the cash and gets the same amount back as float in that currency.
+    const currency = requestCurrency(request.data?.currency);
+    const { cashOutFeeRate, slsPerUsd } = await getRates();
 
-    if (!validateAmount(amount) || amount < MIN_CASHOUT_CENTS) {
+    if (!validateAmount(amount) || toLimitCents(amount, currency, slsPerUsd) < MIN_CASHOUT_CENTS) {
       throw new https.HttpsError(
         "invalid-argument",
-        `Minimum cash-out is $${MIN_CASHOUT_CENTS / 100}`
+        `Minimum cash-out is ${formatAmount(fromLimitCents(MIN_CASHOUT_CENTS, currency, slsPerUsd, "up"), currency)}`
       );
     }
 
@@ -62,7 +73,7 @@ export const customerCashOut = https.onCall(
 
     const customerData = await requireActiveAccount(customerId);
 
-    await enforceTransactionLimits(customerId, amount, customerData);
+    await enforceTransactionLimits(customerId, amount, customerData, undefined, currency);
 
     await enforceVelocity(customerId);
 
@@ -75,11 +86,11 @@ export const customerCashOut = https.onCall(
     }
 
     const wallet = walletDoc.data() as Wallet;
-    // The fee (0 by default: free cash-out, D1) is paid on top of the cash.
-    const { cashOutFeeRate } = await getRates();
+    // The fee (0 by default: free cash-out, D1) is paid on top of the cash,
+    // in the same currency.
     const feeCents = computePaymentFee(amount, cashOutFeeRate);
     const heldCents = amount + feeCents;
-    if (wallet.balance < heldCents) {
+    if (walletPocket(wallet, currency).balance < heldCents) {
       throw new https.HttpsError("failed-precondition", "Insufficient balance");
     }
 
@@ -108,7 +119,7 @@ export const customerCashOut = https.onCall(
     const cashOutRecord: CashOutRequest = {
       customerId,
       amount,
-      currency: wallet.currency,
+      currency,
       otpCode,
       status: "pending",
       expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
@@ -124,7 +135,7 @@ export const customerCashOut = https.onCall(
       const pending = await prepareJournalEntry(tx, {
         entryId: holdEntryId,
         type: "agent_cashout",
-        currency: wallet.currency as "USD" | "SLS",
+        currency,
         lines: [
           { account: userAccount(customerId), debit: heldCents, credit: 0 },
           { account: CASHOUT_HOLD, debit: 0, credit: heldCents },
@@ -144,7 +155,7 @@ export const customerCashOut = https.onCall(
         participants: [customerId],
         amount,
         ...(feeCents > 0 ? { feeCents } : {}),
-        currency: wallet.currency,
+        currency,
         status: "pending",
         description: "Cash-out — show your code to an agent",
         journalEntryId: holdEntryId,
@@ -160,6 +171,7 @@ export const customerCashOut = https.onCall(
         cashOutId: cashOutRef.id,
         otpCode,
         amount,
+        currency,
         feeCents,
         expiresAt: expiresAt.toISOString(),
       },

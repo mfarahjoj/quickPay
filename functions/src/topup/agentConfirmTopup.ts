@@ -19,6 +19,8 @@ import {
   PLATFORM_FEES,
 } from "../ledger";
 import { codesMatch, findPendingRequest, isSixDigitCode } from "./requestTarget";
+import { assertAgentAppReads, storedCurrency } from "./agentCurrency";
+import { Currency, formatAmount, pushAmount, toLimitCents } from "../utils/money";
 
 /** Which request the code is for: from the customer's QR, or their phone typed with the code. */
 interface TopupTarget {
@@ -27,20 +29,28 @@ interface TopupTarget {
   requestId?: string;
   /** Typed by the agent when there is no QR: the customer's phone number. */
   customerPhone?: string;
+  /**
+   * The currencies the agent's app can show, e.g. ["USD", "SLS"]. Older
+   * builds send none and only ever get dollar requests (agentCurrency.ts).
+   */
+  currencies?: string[];
 }
 
 interface AgentConfirmTopupRequest extends TopupTarget {
   agentPin: string;
   /**
-   * The amount the agent was shown before entering their PIN, in cents. The
-   * top-up is refused unless it matches the request, so the agent's float
-   * only ever pays out what their screen said.
+   * The amount the agent was shown before entering their PIN, in the
+   * request's smallest unit. The top-up is refused unless it matches the
+   * request, so the agent's float only ever pays out what their screen said.
    */
   expectedAmount: number;
+  /** The currency the agent was shown with it. Required for shillings. */
+  expectedCurrency?: string;
 }
 
 interface AgentConfirmTopupResponse {
   amount: number;
+  currency: string;
   customerName: string;
   commission: number;
   confirmationId: string;
@@ -48,7 +58,10 @@ interface AgentConfirmTopupResponse {
 
 interface PreviewAgentTopupResponse {
   requestId: string;
-  /** What the customer asked for, in cents: the cash the agent should take. */
+  /**
+   * What the customer asked for, in the currency's smallest unit (cents, or
+   * whole shillings): the cash the agent should take.
+   */
   amount: number;
   currency: string;
   customerName: string;
@@ -145,11 +158,11 @@ async function verifyTopupCode(
   return { ref, topup, customerName };
 }
 
-function insufficientFloat(topup: AgentTopupRequest, floatCents: number): https.HttpsError {
+function insufficientFloat(amount: number, currency: Currency, floatCents: number): https.HttpsError {
   return new https.HttpsError(
     "failed-precondition",
-    `Insufficient float. This top-up needs ${topup.currency} ${(topup.amount / 100).toFixed(2)} but your float is ${topup.currency} ${(floatCents / 100).toFixed(2)}.`,
-    { reason: "insufficient_float", floatCents }
+    `Insufficient float. This top-up needs ${formatAmount(amount, currency)} but your float is ${formatAmount(floatCents, currency)}.`,
+    { reason: "insufficient_float", floatCents, currency }
   );
 }
 
@@ -182,11 +195,14 @@ export const previewAgentTopup = https.onCall(
     const db = admin.firestore();
     await requireActiveAgent(db, agentId, "confirm");
     const { ref, topup, customerName } = await verifyTopupCode(db, agentId, data);
+    const currency = storedCurrency(topup.currency);
+    assertAgentAppReads(currency, data.currencies);
 
-    // Said now, while the cash is still in the customer's hand.
-    const floatCents = await readFloatCents(agentId);
+    // Said now, while the cash is still in the customer's hand. Shillings are
+    // paid from shilling float, dollars from dollar float.
+    const floatCents = await readFloatCents(agentId, undefined, currency);
     if (floatCents < topup.amount) {
-      throw insufficientFloat(topup, floatCents);
+      throw insufficientFloat(topup.amount, currency, floatCents);
     }
 
     await ref.update({ scannedBy: agentId, scannedAt: admin.firestore.Timestamp.now() });
@@ -196,7 +212,7 @@ export const previewAgentTopup = https.onCall(
       data: {
         requestId: ref.id,
         amount: topup.amount,
-        currency: topup.currency,
+        currency,
         customerName,
         expiresInSeconds: Math.max(0, Math.round((topup.expiresAt.toMillis() - Date.now()) / 1000)),
       },
@@ -256,10 +272,15 @@ export const agentConfirmTopup = https.onCall(
     await assertResetCooldownAllows(agentId, "other", 0);
 
     const { ref: topupRef, topup, customerName } = await verifyTopupCode(db, agentId, data);
+    const currency = storedCurrency(topup.currency);
+    assertAgentAppReads(currency, data.currencies);
 
     // Checked only once the code has matched, so it can't be used to learn
-    // the amount of a request the caller has no code for.
-    if (expectedAmount !== topup.amount) {
+    // the amount of a request the caller has no code for. The currency is
+    // part of what the agent was shown: 30,000 is a different amount of cash
+    // in shillings than in cents.
+    const shownCurrency = data.expectedCurrency === undefined ? "USD" : storedCurrency(data.expectedCurrency);
+    if (expectedAmount !== topup.amount || shownCurrency !== currency) {
       throw new https.HttpsError(
         "failed-precondition",
         "The customer asked for a different amount than the one you were shown. Scan their code again.",
@@ -267,7 +288,8 @@ export const agentConfirmTopup = https.onCall(
       );
     }
 
-    const { cashInCommissionRate } = await getRates();
+    const { cashInCommissionRate, slsPerUsd } = await getRates();
+    // Paid in the request's currency, from Zapp's fees in that currency.
     const commissionCents = computeCommission(topup.amount, cashInCommissionRate);
     const now = admin.firestore.Timestamp.now();
     const transactionId = db.collection("transactions").doc().id;
@@ -289,9 +311,9 @@ export const agentConfirmTopup = https.onCall(
       // their own wallet in agent:{uid} (AGENT_FLOAT_SEPARATION.md), and every
       // top-up is funded from it. Shop sales and commission can't be handed
       // out as cash-ins; the agent moves them into float first.
-      const floatCents = await readFloatCents(agentId, tx);
+      const floatCents = await readFloatCents(agentId, tx, currency);
       if (floatCents < topup.amount) {
-        throw insufficientFloat(topup, floatCents);
+        throw insufficientFloat(topup.amount, currency, floatCents);
       }
 
       // Agent float funds the customer's credit; commission is paid back to
@@ -309,7 +331,7 @@ export const agentConfirmTopup = https.onCall(
       const pending = await prepareJournalEntry(tx, {
         entryId,
         type: "agent_topup",
-        currency: topup.currency as "USD" | "SLS",
+        currency,
         lines,
         refs: { transactionId, topupId: topupRef.id },
         description: "Zapp agent top-up",
@@ -327,7 +349,7 @@ export const agentConfirmTopup = https.onCall(
         participants: [agentId, topup.customerId],
         amount: topup.amount,
         commissionCents,
-        currency: topup.currency,
+        currency,
         status: "completed",
         description: "Zapp agent top-up",
         reference: confirmationId,
@@ -342,10 +364,12 @@ export const agentConfirmTopup = https.onCall(
         userId: topup.customerId,
         agentId,
         amount: topup.amount,
-        amountDollars: topup.amount / 100,
         commissionCents,
-        commissionDollars: commissionCents / 100,
-        currency: topup.currency,
+        // The dollar copies only mean anything for a dollar top-up.
+        ...(currency === "USD"
+          ? { amountDollars: topup.amount / 100, commissionDollars: commissionCents / 100 }
+          : {}),
+        currency,
         paymentMethod: "agent_cash",
         reference: confirmationId,
         notes: "",
@@ -373,24 +397,29 @@ export const agentConfirmTopup = https.onCall(
         key: "topup.by_agent",
         params: {
           agent: agentData.fullName,
-          amount: `${topup.currency} ${(topup.amount / 100).toFixed(2)}`,
+          amount: pushAmount(topup.amount, currency),
         },
       },
       {
         type: "topup_completed",
         amount: topup.amount.toString(),
-        currency: topup.currency,
+        currency,
         confirmationId,
       }
     ).catch((err) => console.error("Failed to notify customer:", err));
 
-    // A first qualifying cash-in may unlock the customer's referral bonus.
-    await maybeUnlockReferral(topup.customerId, { kind: "cash_in", amountCents: topup.amount });
+    // A first qualifying cash-in may unlock the customer's referral bonus. Its
+    // minimum is in dollars, so a shilling cash-in counts at the limits rate.
+    await maybeUnlockReferral(topup.customerId, {
+      kind: "cash_in",
+      amountCents: toLimitCents(topup.amount, currency, slsPerUsd),
+    });
 
     return {
       success: true,
       data: {
         amount: topup.amount,
+        currency,
         customerName,
         commission: commissionCents,
         confirmationId,

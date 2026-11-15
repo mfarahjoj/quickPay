@@ -6,6 +6,7 @@ import { Transaction } from '../../types';
 import { DarkScreen, GlassCard, PinInput, ACCENT, TEXT_DIM, TEXT_FAINT } from '../../components';
 import { functions } from '../../services/firebase.config';
 import { newIdempotencyKey } from '../../utils/idempotency';
+import { formatMajor } from '../../utils/money';
 
 interface Props {
   route: { params: { transaction: Transaction } };
@@ -22,6 +23,7 @@ const TYPE_KEYS: Record<string, string> = {
   withdrawal: 'transactions.kind.withdrawal',
   refund: 'transactions.kind.refund',
 };
+
 
 function money(n: number) {
   return `${CURRENCY_SYMBOL}${(n ?? 0).toLocaleString('en-US', {
@@ -112,11 +114,11 @@ export default function TransactionDetailScreen({ route, navigation }: Props) {
       '',
       `${t('transactions.detail.type')}: ${typeLabel}`,
       transaction.counterpartyName ? `${t('transactions.receipt.party')}: ${transaction.counterpartyName}` : '',
-      `${t('transactions.detail.amount')}: ${money(transaction.amount)}`,
-      transaction.fee > 0 ? `${t('transactions.detail.fee')}: ${money(transaction.fee)}` : '',
+      `${t('transactions.detail.amount')}: ${formatMajor(transaction.amount, transaction.currency)}`,
+      transaction.fee > 0 ? `${t('transactions.detail.fee')}: ${formatMajor(transaction.fee, transaction.currency)}` : '',
       commission
-        ? `${t('transactions.detail.commission')}: ${money(transaction.commission)}`
-        : `${t('transactions.detail.netReceived')}: ${money(transaction.net)}`,
+        ? `${t('transactions.detail.commission')}: ${formatMajor(transaction.commission, transaction.currency)}`
+        : `${t('transactions.detail.netReceived')}: ${formatMajor(transaction.net, transaction.currency)}`,
       `${t('transactions.detail.date')}: ${fmtDate(transaction.createdAt)}`,
       transaction.reference ? `${t('transactions.detail.reference')}: ${transaction.reference}` : '',
       // The number to quote back to the customer or to support; the raw id
@@ -254,7 +256,7 @@ export default function TransactionDetailScreen({ route, navigation }: Props) {
         )}
         <Text style={styles.amountLabel}>{heroLabel}</Text>
         <Text style={[styles.amount, { color: heroColor }]}>
-          {heroSign}{money(heroValue)}
+          {heroSign}{formatMajor(heroValue, transaction.currency)}
         </Text>
         <View style={[styles.statusPill, { backgroundColor: ss.bg, borderColor: ss.border }]}>
           <Text style={[styles.statusText, { color: ss.color }]}>{statusLabel}</Text>
@@ -270,24 +272,24 @@ export default function TransactionDetailScreen({ route, navigation }: Props) {
       <GlassCard style={styles.detailsCard}>
         {commission ? (
           <>
-            <DetailRow label={t('transactions.detail.topupAmount')} value={money(transaction.amount)} />
-            <DetailRow label={t('transactions.detail.commission')} value={`+${money(transaction.commission)}`} valueColor={GOLD} last />
+            <DetailRow label={t('transactions.detail.topupAmount')} value={formatMajor(transaction.amount, transaction.currency)} />
+            <DetailRow label={t('transactions.detail.commission')} value={`+${formatMajor(transaction.commission, transaction.currency)}`} valueColor={GOLD} last />
           </>
         ) : transaction.type === 'payment' || transaction.type === 'refund' ? (
           <>
-            <DetailRow label={t('transactions.detail.amount')} value={money(transaction.amount)} />
+            <DetailRow label={t('transactions.detail.amount')} value={formatMajor(transaction.amount, transaction.currency)} />
             {transaction.fee > 0 && (
-              <DetailRow label={t('transactions.detail.fee')} value={`−${money(transaction.fee)}`} valueColor={TEXT_DIM} />
+              <DetailRow label={t('transactions.detail.fee')} value={`−${formatMajor(transaction.fee, transaction.currency)}`} valueColor={TEXT_DIM} />
             )}
             <DetailRow
               label={transaction.type === 'refund' ? t('transactions.detail.refundNet') : t('transactions.detail.netReceived')}
-              value={`${incoming ? '+' : '−'}${money(transaction.net)}`}
+              value={`${incoming ? '+' : '−'}${formatMajor(transaction.net, transaction.currency)}`}
               valueColor={incoming ? GREEN : RED}
               last
             />
           </>
         ) : (
-          <DetailRow label={t('transactions.detail.amount')} value={money(transaction.amount)} last />
+          <DetailRow label={t('transactions.detail.amount')} value={formatMajor(transaction.amount, transaction.currency)} last />
         )}
       </GlassCard>
 
@@ -318,7 +320,7 @@ export default function TransactionDetailScreen({ route, navigation }: Props) {
         {refundedCents > 0 && (
           <DetailRow
             label={t('transactions.refund.refundedLabel')}
-            value={t('transactions.refund.refundedOf', { refunded: money(refundedCents / 100), total: money(transaction.amount) })}
+            value={t('transactions.refund.refundedOf', { refunded: money(refundedCents / 100), total: formatMajor(transaction.amount, transaction.currency) })}
           />
         )}
         {!!method && <DetailRow label={t('transactions.detail.method')} value={method} />}

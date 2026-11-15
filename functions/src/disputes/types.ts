@@ -136,11 +136,15 @@ export interface DisputeDoc {
   against: string | null;
   /** Who may read it: raiser, and the other party if any. */
   participants: string[];
-  /** What the raiser says they are owed, in cents. */
+  /** What the raiser says they are owed, in the currency's smallest unit. */
   amountCents: number;
   /** The disputed movement's own amount, the ceiling for any remedy. */
   transactionAmountCents: number;
-  currency: "USD";
+  /**
+   * The disputed movement's currency; any remedy is paid in it, never
+   * converted. Disputes from before shillings say "USD".
+   */
+  currency: "USD" | "SLS";
   messages: DisputeMessage[];
   createdAt: FirebaseFirestore.Timestamp;
   updatedAt: FirebaseFirestore.Timestamp;

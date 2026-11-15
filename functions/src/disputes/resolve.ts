@@ -12,6 +12,11 @@
  * `awaiting_funds`, `owedCents` is reserved in their wallet so they can't
  * spend it, and `disputeHousekeeping` posts the remedy as soon as their
  * balance allows. The customer is never paid from money that isn't there.
+ *
+ * A remedy is paid in the disputed movement's currency (SHILLINGS.md). The
+ * reserve is dollars only (`wallets.reservedCents` against `balance`), so a
+ * shilling dispute the other party can't cover is refused rather than
+ * parked: ops pay it from Zapp or try again once they can.
  */
 
 import * as admin from "firebase-admin";
@@ -26,6 +31,7 @@ import { getRates } from "../config/rates";
 import { notifyUser } from "../utils/notifications";
 import { PushMessage } from "../utils/pushTemplates";
 import { reviewAgentStanding } from "../agents/standing";
+import { Currency, formatAmount, parseCurrency, toLimitCents } from "../utils/money";
 import {
   userAccount,
   PLATFORM_FEES,
@@ -103,6 +109,7 @@ async function prepareRemedy(
     debitAccount: payFrom === "platform" ? PLATFORM_FEES : userAccount(d.against!),
     creditAccount: userAccount(d.raisedBy),
     amountCents,
+    currency: disputeCurrency(d),
     reason: `Dispute ${disputeId} upheld`,
     postedBy,
     disputeId,
@@ -123,7 +130,10 @@ function notifyBoth(d: DisputeDoc, disputeId: string, toRaiser: PushMessage, toA
   send(d.against, toAgainst);
 }
 
-const dollars = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+/** The disputed movement's currency; disputes from before shillings are dollars. */
+function disputeCurrency(d: Pick<DisputeDoc, "currency">): Currency {
+  return parseCurrency(d.currency) ?? "USD";
+}
 
 interface ResolveRequest {
   disputeId: string;
@@ -159,12 +169,13 @@ export const adminResolveDispute = https.onCall(
 
     const db = admin.firestore();
     const ref = db.collection(DISPUTES_COLLECTION).doc(disputeId);
-    const { floatApprovalThresholdCents } = await getRates();
+    const { floatApprovalThresholdCents, slsPerUsd } = await getRates();
 
     // Validation that needs the dispute, outside the money transaction.
     const pre = await ref.get();
     if (!pre.exists) throw new https.HttpsError("not-found", "Dispute not found");
     const preDoc = pre.data() as DisputeDoc;
+    const currency = disputeCurrency(preDoc);
     const payFrom: PayFrom = request.data?.payFrom ?? "counterparty";
     const amountCents = request.data?.amountCents ?? preDoc.amountCents;
     if (outcome === "upheld") {
@@ -181,7 +192,8 @@ export const adminResolveDispute = https.onCall(
       if (!Number.isInteger(amountCents) || amountCents <= 0 || amountCents > preDoc.transactionAmountCents) {
         throw new https.HttpsError("invalid-argument", "amountCents must be between 1 and the transaction amount");
       }
-      if (amountCents >= floatApprovalThresholdCents && !actor.roles.includes("super")) {
+      // The threshold is in dollars; a shilling remedy counts at the limits rate.
+      if (toLimitCents(amountCents, currency, slsPerUsd) >= floatApprovalThresholdCents && !actor.roles.includes("super")) {
         throw new https.HttpsError("permission-denied", "Upholding this much needs a senior admin", {
           reason: "needs_super",
         });
@@ -258,8 +270,8 @@ export const adminResolveDispute = https.onCall(
         notifyBoth(
           result.d,
           disputeId,
-          { key: "dispute.upheld", params: { amount: dollars(amountCents) } },
-          { key: "dispute.upheld_against", params: { amount: dollars(amountCents) } }
+          { key: "dispute.upheld", params: { amount: formatAmount(amountCents, currency) } },
+          { key: "dispute.upheld_against", params: { amount: formatAmount(amountCents, currency) } }
         );
         // Upheld against an agent counts towards their standing (2.6).
         if (payFrom === "counterparty") await reviewAgentStanding(result.d.against);
@@ -274,6 +286,15 @@ export const adminResolveDispute = https.onCall(
         },
       };
     } catch (error: any) {
+      // The reserve below is dollars only: a shilling remedy the other party
+      // can't cover moves nothing and says so.
+      if (error instanceof InsufficientBalanceError && outcome === "upheld" && currency !== "USD") {
+        throw new https.HttpsError(
+          "failed-precondition",
+          "The other party doesn't have enough shillings to cover this. Pay it from Zapp, or try again later.",
+          { reason: "insufficient_shillings" }
+        );
+      }
       // D8: the other party can't cover it. Reserve what they owe and settle later.
       if (error instanceof InsufficientBalanceError && outcome === "upheld" && payFrom === "counterparty") {
         const parked = await db.runTransaction(async (t) => {
@@ -310,8 +331,8 @@ export const adminResolveDispute = https.onCall(
         notifyBoth(
           parked.d,
           disputeId,
-          { key: "dispute.upheld_awaiting_funds", params: { amount: dollars(amountCents) } },
-          { key: "dispute.upheld_awaiting_funds_against", params: { amount: dollars(parked.payerDebitCents) } }
+          { key: "dispute.upheld_awaiting_funds", params: { amount: formatAmount(amountCents, "USD") } },
+          { key: "dispute.upheld_awaiting_funds_against", params: { amount: formatAmount(parked.payerDebitCents, "USD") } }
         );
         return {
           success: true,
@@ -391,8 +412,8 @@ export async function collectAwaitingDisputes(limit = 50): Promise<number> {
         notifyBoth(
           done,
           doc.id,
-          { key: "dispute.collected", params: { amount: dollars(done.resolution!.amountCents) } },
-          { key: "dispute.collected_against", params: { amount: dollars(done.owedCents!) } }
+          { key: "dispute.collected", params: { amount: formatAmount(done.resolution!.amountCents, "USD") } },
+          { key: "dispute.collected_against", params: { amount: formatAmount(done.owedCents!, "USD") } }
         );
       }
     } catch (err) {

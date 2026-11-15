@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, type AgentPosition, type FloatIssuanceRow } from "../api";
+import { api, formatFloat, type AgentPosition, type FloatIssuanceRow } from "../api";
 import { FloatRequestModal } from "./FloatRequestModal";
 import { Icon } from "./Icon";
 import { ReasonPrompt } from "./ReasonPrompt";
@@ -54,7 +54,7 @@ export function FloatDesk({ adminUid, isSuper = false }: { adminUid: string; isS
     if (decision.action === "approve") {
       await api.approveFloat(decision.row.issuanceId, reason);
       setNotice(
-        `Posted ${money(decision.row.amountCents)} ${decision.row.direction} for ${
+        `Posted ${formatFloat(decision.row.amountCents, decision.row.currency)} ${decision.row.direction} for ${
           decision.row.agentName || decision.row.agentId
         }.`
       );
@@ -120,7 +120,7 @@ export function FloatDesk({ adminUid, isSuper = false }: { adminUid: string; isS
                           </span>
                         )}
                       </td>
-                      <td className="num">{money(r.amountCents)}</td>
+                      <td className="num">{formatFloat(r.amountCents, r.currency)}</td>
                       <td className="actions">
                         <div className="row">
                           <button
@@ -171,6 +171,7 @@ export function FloatDesk({ adminUid, isSuper = false }: { adminUid: string; isS
                   <th>Phone</th>
                   <th>Role</th>
                   <th className="num">Float</th>
+                  <th className="num">Shilling float</th>
                   <th className="num">Wallet</th>
                   <th />
                 </tr>
@@ -201,6 +202,9 @@ export function FloatDesk({ adminUid, isSuper = false }: { adminUid: string; isS
                           </span>
                         )}
                         {money(a.balanceCents)}
+                      </td>
+                      <td className="num">
+                        {a.slsBalance === undefined ? "—" : formatFloat(a.slsBalance, "SLS")}
                       </td>
                       <td className="num muted">{a.walletCents === undefined ? "—" : money(a.walletCents)}</td>
                       <td className="actions">
@@ -236,7 +240,7 @@ export function FloatDesk({ adminUid, isSuper = false }: { adminUid: string; isS
         <ReasonPrompt
           title={
             decision.action === "approve"
-              ? `Approve ${money(decision.row.amountCents)} ${decision.row.direction}`
+              ? `Approve ${formatFloat(decision.row.amountCents, decision.row.currency)} ${decision.row.direction}`
               : "Reject this request"
           }
           description={

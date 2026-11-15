@@ -13,9 +13,11 @@ import { useTranslation } from 'react-i18next';
 import { functions } from '../../services/firebase.config';
 import { triggerHaptic } from '../../services/haptics.service';
 import { makeStyles, useColors } from '../../theme';
-import { CURRENCY_SYMBOL } from '../../config/constants';
 import { SuccessCheckIcon } from '../../components/icons/AuthIcons';
 import { AnimatedXMark } from '../../components/icons/StatusIcons';
+import { useWallet } from '../../hooks/useWallet';
+import { useHomeCurrency } from '../../hooks/useHomeCurrency';
+import { amountInputUnits, formatMoney, type Currency } from '../../utils/money';
 
 type Step = 'amount' | 'processing' | 'code' | 'done' | 'error';
 
@@ -50,7 +52,25 @@ export default function AgentTopupScreen() {
   const [timeLeft, setTimeLeft] = useState(0);
   const unsubRef = useRef<(() => void) | null>(null);
 
-  const amount = parseFloat(amountText || '0');
+  // Dollars or shillings: the agent's cash in that currency goes to that
+  // balance. Starts on the currency Home shows.
+  const { wallet } = useWallet();
+  const { currency: homeCurrency } = useHomeCurrency(wallet?.balanceCents ?? 0, wallet?.slsBalance ?? 0);
+  const [pickedCurrency, setPickedCurrency] = useState<Currency | null>(null);
+  const currency = pickedCurrency ?? homeCurrency;
+
+  /** Cents or whole shillings: what the server takes. */
+  const amountUnits = amountInputUnits(amountText, currency);
+  const amountLabel = formatMoney(amountUnits, currency);
+  const amount = amountUnits;
+
+  const pickCurrency = (next: Currency) => {
+    if (next === currency) return;
+    triggerHaptic('light');
+    setPickedCurrency(next);
+    // 4.70 dollars is not 4.70 shillings: start the amount again.
+    setAmountText('');
+  };
 
   // Countdown timer for code expiry
   useEffect(() => {
@@ -104,17 +124,21 @@ export default function AgentTopupScreen() {
       setAmountText((p) => p.slice(0, -1));
       return;
     }
-    if (key === '.' && amountText.includes('.')) return;
-    setAmountText((p) => p + key);
+    // Shillings are whole; dollars take two decimals.
+    if (key === '.' && (currency === 'SLS' || amountText.includes('.'))) return;
+    const decimals = amountText.split('.')[1];
+    if (decimals !== undefined && decimals.length >= 2) return;
+    if (amountText.replace('.', '').length >= 9) return;
+    setAmountText((p) => (p === '0' && key !== '.' ? key : p + key));
   };
 
   const handleGenerate = useCallback(async () => {
-    if (!amountText || amount <= 0) return;
+    if (amountUnits <= 0) return;
     triggerHaptic('medium');
     setStep('processing');
     try {
       const fn = functions().httpsCallable('customerRequestAgentTopup');
-      const result = await fn({ amount: Math.round(amount * 100) });
+      const result = await fn({ amount: amountUnits, currency });
       const data = (result.data as any).data;
       setOtpCode(data.otpCode);
       setRequestId(data.requestId);
@@ -127,7 +151,7 @@ export default function AgentTopupScreen() {
       setErrorMsg(e.message || t('common.error'));
       setStep('error');
     }
-  }, [amount, amountText, t]);
+  }, [amountUnits, currency, t]);
 
   const formatTime = (s: number) =>
     `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
@@ -155,9 +179,8 @@ export default function AgentTopupScreen() {
         <View style={styles.resultCenter}>
           <SuccessCheckIcon size={64} />
           <Text style={styles.doneTitle}>{t('topup.agent.toppedUp')}</Text>
-          <Text style={styles.doneAmount}>
-            {CURRENCY_SYMBOL}
-            {amount.toFixed(2)}
+          <Text style={styles.doneAmount} numberOfLines={1}>
+            {amountLabel}
           </Text>
           {confirmationId ? (
             <View style={styles.confBox}>
@@ -249,9 +272,7 @@ export default function AgentTopupScreen() {
               ))}
             </View>
             <Text style={styles.codeAmount}>
-              {t('topup.agent.payAgent', {
-                amount: `${CURRENCY_SYMBOL}${amount.toFixed(2)}`,
-              })}
+              {t('topup.agent.payAgent', { amount: amountLabel })}
             </Text>
           </View>
 
@@ -284,34 +305,60 @@ export default function AgentTopupScreen() {
       </View>
 
       <View style={styles.amountSection}>
+        <View style={styles.segment} accessibilityRole="tablist">
+          {(['SLS', 'USD'] as Currency[]).map((c) => (
+            <TouchableOpacity
+              key={c}
+              style={[styles.segmentItem, currency === c && styles.segmentItemOn]}
+              onPress={() => pickCurrency(c)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: currency === c }}
+            >
+              <Text style={[styles.segmentText, currency === c && styles.segmentTextOn]}>
+                {c === 'SLS' ? t('topup.zaad.shillings') : t('topup.zaad.dollars')}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
         <Text style={styles.amountLabel}>{t('topup.agent.amountLabel')}</Text>
         <View style={styles.amountRow}>
-          <Text style={styles.amountCurrency}>{CURRENCY_SYMBOL}</Text>
-          <Text style={[styles.amountDisplay, !amountText && styles.amountPlaceholder]}>
-            {amountText || '0.00'}
+          {currency === 'USD' && <Text style={styles.amountCurrency}>$</Text>}
+          <Text
+            style={[styles.amountDisplay, !amountText && styles.amountPlaceholder]}
+            numberOfLines={1}
+          >
+            {currency === 'SLS'
+              ? formatMoney(amountUnits, 'SLS').replace(' SLSH', '')
+              : amountText || '0.00'}
           </Text>
+          {currency === 'SLS' && <Text style={styles.amountSuffix}>SLSH</Text>}
         </View>
         <Text style={styles.amountHint}>{t('topup.agent.amountHint')}</Text>
       </View>
 
       <View style={styles.keypad}>
-        {KEYPAD.map((key) => (
-          <TouchableOpacity
-            key={key}
-            style={[styles.key, key === '⌫' && styles.keyDelete]}
-            onPress={() => appendDigit(key)}
-            activeOpacity={0.6}
-          >
-            <Text style={[styles.keyText, key === '⌫' && styles.keyDeleteText]}>{key}</Text>
-          </TouchableOpacity>
-        ))}
+        {KEYPAD.map((key) => {
+          // Shillings have no smaller unit, so no decimal point.
+          const hidden = key === '.' && currency === 'SLS';
+          return (
+            <TouchableOpacity
+              key={key}
+              style={[styles.key, key === '⌫' && styles.keyDelete, hidden && styles.keyHidden]}
+              onPress={() => appendDigit(key)}
+              disabled={hidden}
+              activeOpacity={0.6}
+            >
+              <Text style={[styles.keyText, key === '⌫' && styles.keyDeleteText]}>{key}</Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       <View style={styles.footer}>
         <TouchableOpacity
-          style={[styles.continueBtn, (!amountText || amount <= 0) && styles.continueBtnDisabled]}
+          style={[styles.continueBtn, amount <= 0 && styles.continueBtnDisabled]}
           onPress={handleGenerate}
-          disabled={!amountText || amount <= 0}
+          disabled={amount <= 0}
           activeOpacity={0.8}
         >
           <Text style={styles.continueBtnText}>{t('common.continue')}</Text>
@@ -348,7 +395,17 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
   amountLabel: { fontSize: 13, fontWeight: '600', letterSpacing: 0.5, textTransform: 'uppercase', color: colors.ui.ink(0.4), marginBottom: 16 },
   amountRow: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 10 },
   amountCurrency: { fontSize: 36, fontWeight: '700', color: colors.ui.text, marginBottom: 6, marginRight: 4 },
-  amountDisplay: { fontSize: 64, fontWeight: '800', color: colors.ui.text, letterSpacing: -2 },
+  amountSuffix: { fontSize: 24, fontWeight: '700', color: colors.ui.text, marginBottom: 10, marginLeft: 8 },
+  amountDisplay: { fontSize: 56, fontWeight: '800', color: colors.ui.text, letterSpacing: -2, flexShrink: 1 },
+  segment: {
+    flexDirection: 'row', alignSelf: 'center', padding: 4, borderRadius: 14,
+    backgroundColor: colors.ui.ink(0.06), marginBottom: 24,
+  },
+  segmentItem: { paddingVertical: 8, paddingHorizontal: 18, borderRadius: 10 },
+  segmentItemOn: { backgroundColor: colors.ui.accentText },
+  segmentText: { fontSize: 14, fontWeight: '700', color: colors.ui.ink(0.6) },
+  segmentTextOn: { color: colors.ui.onSolid },
+  keyHidden: { opacity: 0 },
   amountPlaceholder: { color: colors.ui.ink(0.2) },
   amountHint: { fontSize: 13, color: colors.ui.ink(0.35) },
 

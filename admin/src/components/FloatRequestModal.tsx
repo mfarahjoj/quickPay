@@ -1,5 +1,12 @@
 import { useId, useState } from "react";
-import { api, type AgentPosition, type FloatDirection, type FloatRoute } from "../api";
+import {
+  api,
+  formatFloat,
+  type AgentPosition,
+  type FloatCurrency,
+  type FloatDirection,
+  type FloatRoute,
+} from "../api";
 import { Spinner } from "./ui";
 
 interface Props {
@@ -19,6 +26,8 @@ const MIN_REASON = 8;
 
 export function FloatRequestModal({ agent, onDone, onCancel }: Props) {
   const [direction, setDirection] = useState<FloatDirection>("issue");
+  // Dollar float and shilling float are separate; nothing converts.
+  const [currency, setCurrency] = useState<FloatCurrency>("USD");
   const [amount, setAmount] = useState("");
   const [route, setRoute] = useState<FloatRoute>("cash");
   const [reference, setReference] = useState("");
@@ -29,13 +38,20 @@ export function FloatRequestModal({ agent, onDone, onCancel }: Props) {
 
   const routeMeta = ROUTES.find((r) => r.id === route)!;
 
-  // Parse dollars to integer cents at the edge — the API is cents-only.
-  const dollars = Number(amount);
+  // Parse to the API's unit at the edge: dollars to integer cents, shillings
+  // as whole shillings (a fraction of a shilling is refused, not rounded).
+  const typed = Number(amount);
   const amountCents =
-    Number.isFinite(dollars) && dollars > 0 ? Math.round(dollars * 100) : 0;
+    !Number.isFinite(typed) || typed <= 0
+      ? 0
+      : currency === "SLS"
+        ? Number.isInteger(typed)
+          ? typed
+          : 0
+        : Math.round(typed * 100);
 
-  const withdrawingTooMuch =
-    direction === "withdraw" && amountCents > agent.balanceCents;
+  const held = currency === "SLS" ? agent.slsBalance ?? 0 : agent.balanceCents;
+  const withdrawingTooMuch = direction === "withdraw" && amountCents > held;
 
   const valid =
     amountCents > 0 &&
@@ -52,6 +68,7 @@ export function FloatRequestModal({ agent, onDone, onCancel }: Props) {
         agentId: agent.agentId,
         direction,
         amountCents,
+        currency,
         route,
         ...(reference.trim() ? { externalReference: reference.trim() } : {}),
         reason: reason.trim(),
@@ -72,8 +89,9 @@ export function FloatRequestModal({ agent, onDone, onCancel }: Props) {
       <div className="modal">
         <h2 id={titleId}>Float for {agent.fullName || agent.agentId}</h2>
         <p>
-          Currently holding ${(agent.balanceCents / 100).toFixed(2)}. Requesting does
-          not move money — an approval posts it.
+          Currently holding {formatFloat(agent.balanceCents, "USD")} and{" "}
+          {formatFloat(agent.slsBalance ?? 0, "SLS")}. Requesting does not move
+          money — an approval posts it.
         </p>
 
         {error && <div className="banner error">{error}</div>}
@@ -91,18 +109,32 @@ export function FloatRequestModal({ agent, onDone, onCancel }: Props) {
           </label>
 
           <label className="stack">
-            <span className="muted">Amount (USD)</span>
+            <span className="muted">Currency</span>
+            <select
+              value={currency}
+              onChange={(e) => {
+                setCurrency(e.target.value as FloatCurrency);
+                setAmount("");
+              }}
+            >
+              <option value="USD">Dollars</option>
+              <option value="SLS">Shillings</option>
+            </select>
+          </label>
+
+          <label className="stack">
+            <span className="muted">Amount ({currency === "SLS" ? "SLSH, whole shillings" : "USD"})</span>
             <input
-              inputMode="decimal"
+              inputMode={currency === "SLS" ? "numeric" : "decimal"}
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              placeholder="500.00"
+              placeholder={currency === "SLS" ? "400000" : "500.00"}
               autoFocus
             />
           </label>
           {withdrawingTooMuch && (
             <div className="hint" style={{ color: "var(--danger)" }}>
-              More than the agent holds (${(agent.balanceCents / 100).toFixed(2)}).
+              More than the agent holds ({formatFloat(held, currency)}).
             </div>
           )}
 

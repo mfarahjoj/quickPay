@@ -154,7 +154,10 @@ export interface FloatIssuance {
   agentId: string;
   agentName?: string;
   direction: FloatDirection;
+  /** In the currency's smallest unit: cents, or whole shillings. */
   amountCents: number;
+  /** Absent on requests from before shillings: dollars. */
+  currency?: "USD" | "SLS";
   route: FloatRouteName;
   /** Zaad transaction id, deposit slip number, receipt number. */
   externalReference?: string;

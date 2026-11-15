@@ -22,7 +22,7 @@ import {
   TEXT_FAINT,
 } from '../../components';
 import { SuccessCheckIcon, CloseIcon, ScanIcon } from '../../components/icons/AuthIcons';
-import { formatCents } from '../../utils/money';
+import { formatAmount, READS_CURRENCIES } from '../../utils/money';
 import { isWrongPin, pinActionErrorKey } from '../../utils/errors';
 import { useExitGuard } from '../../hooks/useExitGuard';
 
@@ -57,6 +57,16 @@ function parseCashOutQr(value: string): { cashOutId: string; otpCode: string } |
 // Loose client check; the server normalises and decides.
 const phoneLooksValid = (v: string) => v.replace(/\D/g, '').length >= 7;
 
+/**
+ * A smaller size for a long amount ("400,000 SLSH"), so the cash to hand over
+ * never gets cut off. Shrink-to-fit isn't used: it can draw text as a dot.
+ */
+function longAmount(text: string) {
+  if (text.length > 12) return { fontSize: 30, letterSpacing: -1 };
+  if (text.length > 9) return { fontSize: 36, letterSpacing: -1 };
+  return null;
+}
+
 export default function ConfirmCashOutScreen({ navigation }: Props) {
   const { t } = useTranslation();
   const [step, setStep] = useState<Step>('enter');
@@ -70,7 +80,13 @@ export default function ConfirmCashOutScreen({ navigation }: Props) {
   // Confirming pays the customer cash and moves their held balance into this
   // agent's float, so the agent authorises it with their PIN.
   const [pin, setPin] = useState('');
-  const [result, setResult] = useState<{ amount: number; customerName: string; commission: number } | null>(null);
+  const [result, setResult] = useState<{
+    amount: number;
+    /** Absent from servers before shillings: dollars. */
+    currency?: string;
+    customerName: string;
+    commission: number;
+  } | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [pinError, setPinError] = useState('');
 
@@ -124,7 +140,7 @@ export default function ConfirmCashOutScreen({ navigation }: Props) {
     setStep('processing');
     try {
       const fn = functions().httpsCallable('agentConfirmCashOut');
-      const res = await fn({ ...target, agentPin });
+      const res = await fn({ ...target, agentPin, currencies: READS_CURRENCIES });
       const data = (res.data as any).data;
       setResult(data);
       setStep('success');
@@ -148,14 +164,17 @@ export default function ConfirmCashOutScreen({ navigation }: Props) {
       <DarkScreen edges={[]} contentStyle={styles.resultWrap}>
         <SuccessCheckIcon size={72} />
         <Text style={styles.resultTitle}>{t('cashout.confirm.successTitle')}</Text>
-        <Text style={styles.resultAmount}>{formatCents(result.amount)}</Text>
+        {/* The cash to hand over: shillings must read as shillings. */}
+        <Text style={[styles.resultAmount, longAmount(formatAmount(result.amount, result.currency))]} numberOfLines={1}>
+          {formatAmount(result.amount, result.currency)}
+        </Text>
         <Text style={styles.resultSub}>
           {t('cashout.confirm.paidTo', { name: result.customerName })}
         </Text>
         {result.commission > 0 && (
           <GlassCard style={styles.commissionCard}>
             <Text style={styles.commissionLabel}>{t('agent.yourCommission')}</Text>
-            <Text style={styles.commissionValue}>+{formatCents(result.commission)}</Text>
+            <Text style={styles.commissionValue}>+{formatAmount(result.commission, result.currency)}</Text>
           </GlassCard>
         )}
         <View style={styles.resultBtn}>
