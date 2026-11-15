@@ -4,9 +4,12 @@ import { https } from "firebase-functions/v2";
 import { requireAuth, validateAmount } from "../utils/validation";
 import { assertAccountActive } from "../utils/accountStatus";
 import { enforcePerTransactionLimit } from "../utils/limits";
-import { ApiResponse, Wallet, AgentTopupRequest, User } from "../types";
+import { ApiResponse, AgentTopupRequest, User } from "../types";
+import { getRates } from "../config/rates";
+import { assertAmountInRange, requestCurrency } from "./agentCurrency";
 
 const TOPUP_EXPIRY_MINUTES = 30;
+// In dollars. A shilling top-up is compared at slsPerUsd.
 const MIN_TOPUP_CENTS = 100; // $1 minimum
 const MAX_TOPUP_CENTS = 100000; // $1000 maximum (matches manualTopup cap)
 // Request-creation velocity — generous for real cash-in behaviour in Hargeisa
@@ -16,13 +19,17 @@ const MAX_REQUESTS_PER_HOUR = 5;
 const MAX_REQUESTS_PER_DAY = 15;
 
 interface CustomerRequestAgentTopupRequest {
-  amount: number; // In cents
+  /** In the currency's smallest unit: cents, or whole shillings. */
+  amount: number;
+  /** "USD" or "SLS" (also "SLSH"). Absent from older apps: dollars. */
+  currency?: string;
 }
 
 interface CustomerRequestAgentTopupResponse {
   requestId: string;
   otpCode: string;
   amount: number;
+  currency: string;
   expiresAt: string;
 }
 
@@ -48,19 +55,15 @@ export const customerRequestAgentTopup = https.onCall(
     const customerId = request.auth!.uid;
 
     const { amount } = request.data;
+    // Dollars or shillings, credited to the wallet's balance in that currency
+    // from the agent's float in that currency. Never converted.
+    const currency = requestCurrency(request.data?.currency);
 
-    if (!validateAmount(amount) || amount < MIN_TOPUP_CENTS) {
-      throw new https.HttpsError(
-        "invalid-argument",
-        `Minimum top-up is $${MIN_TOPUP_CENTS / 100}`
-      );
+    if (!validateAmount(amount)) {
+      throw new https.HttpsError("invalid-argument", `Minimum top-up is $${MIN_TOPUP_CENTS / 100}`);
     }
-    if (amount > MAX_TOPUP_CENTS) {
-      throw new https.HttpsError(
-        "invalid-argument",
-        `Maximum top-up is $${MAX_TOPUP_CENTS / 100}`
-      );
-    }
+    const { slsPerUsd } = await getRates();
+    assertAmountInRange(amount, currency, slsPerUsd, MIN_TOPUP_CENTS, MAX_TOPUP_CENTS, "top-up");
 
     const db = admin.firestore();
 
@@ -73,7 +76,7 @@ export const customerRequestAgentTopup = https.onCall(
     assertAccountActive(userData);
     // Cash-in is inbound, so the daily spend aggregate does not apply — only
     // the per-transaction ceiling.
-    await enforcePerTransactionLimit(amount, userData);
+    await enforcePerTransactionLimit(amount, userData, currency);
 
     // Velocity: cap how many requests a customer can create per hour/day.
     const nowMs = Date.now();
@@ -101,12 +104,11 @@ export const customerRequestAgentTopup = https.onCall(
       );
     }
 
-    // The wallet must exist (established at signup) so the currency is known.
+    // The wallet must exist (established at signup): it is what gets credited.
     const walletDoc = await db.collection("wallets").doc(customerId).get();
     if (!walletDoc.exists) {
       throw new https.HttpsError("not-found", "Wallet not found");
     }
-    const wallet = walletDoc.data() as Wallet;
 
     // Only one active request at a time — cancel any existing pending ones.
     const existing = await db
@@ -130,7 +132,7 @@ export const customerRequestAgentTopup = https.onCall(
     const record: AgentTopupRequest = {
       customerId,
       amount,
-      currency: wallet.currency,
+      currency,
       otpCode,
       status: "pending",
       expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
@@ -145,6 +147,7 @@ export const customerRequestAgentTopup = https.onCall(
         requestId: topupRef.id,
         otpCode,
         amount,
+        currency,
         expiresAt: expiresAt.toISOString(),
       },
     };

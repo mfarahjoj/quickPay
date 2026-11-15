@@ -15,7 +15,7 @@ import {
   TEXT_FAINT,
 } from '../../components';
 import { SuccessCheckIcon, CloseIcon } from '../../components/icons/AuthIcons';
-import { formatCents } from '../../utils/money';
+import { formatAmount, READS_CURRENCIES } from '../../utils/money';
 import { useExitGuard } from '../../hooks/useExitGuard';
 import { isWrongPin, pinActionErrorKey } from '../../utils/errors';
 
@@ -39,6 +39,8 @@ interface Preview {
 
 interface Result {
   amount: number;
+  /** Absent from servers before shillings: dollars. */
+  currency?: string;
   customerName: string;
   commission: number;
   confirmationId: string;
@@ -60,6 +62,17 @@ function parseTopupQr(value: string): { otpCode: string; requestId?: string } | 
 
 // Loose client check; the server normalises and decides.
 const phoneLooksValid = (v: string) => v.replace(/\D/g, '').length >= 7;
+
+/**
+ * A smaller size for a long amount ("400,000 SLSH"), so the figure the agent
+ * pays out never gets cut off. Shrink-to-fit isn't used: it can draw text as
+ * a dot.
+ */
+function longAmount(text: string) {
+  if (text.length > 12) return { fontSize: 30, letterSpacing: -1 };
+  if (text.length > 9) return { fontSize: 36, letterSpacing: -1 };
+  return null;
+}
 
 function shortConfirmation(id: string): string {
   return `ZP-${id.slice(-6).toUpperCase()}`;
@@ -123,7 +136,7 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
     setTarget(next);
     setStep('checking');
     try {
-      const res = await functions().httpsCallable('previewAgentTopup')(next);
+      const res = await functions().httpsCallable('previewAgentTopup')({ ...next, currencies: READS_CURRENCIES });
       const data = (res.data as any).data as Preview;
       // From here on the request is named by id, whichever way it was found.
       setTarget({ otpCode: next.otpCode, requestId: data.requestId });
@@ -146,6 +159,8 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
         ...target,
         agentPin,
         expectedAmount: preview.amount,
+        expectedCurrency: preview.currency,
+        currencies: READS_CURRENCIES,
       });
       setResult((res.data as any).data);
       triggerHaptic('success');
@@ -207,7 +222,9 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
       <DarkScreen edges={[]} contentStyle={styles.resultWrap}>
         <SuccessCheckIcon size={72} />
         <Text style={styles.resultTitle}>{t('topup.confirm.successTitle')}</Text>
-        <Text style={styles.resultAmount}>{formatCents(result.amount)}</Text>
+        <Text style={[styles.resultAmount, longAmount(formatAmount(result.amount, result.currency ?? preview?.currency))]} numberOfLines={1}>
+          {formatAmount(result.amount, result.currency ?? preview?.currency)}
+        </Text>
         <Text style={styles.resultSub}>
           {t('topup.confirm.creditedTo', { name: result.customerName })}
         </Text>
@@ -218,7 +235,7 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
         {result.commission > 0 && (
           <GlassCard style={styles.commissionCard}>
             <Text style={styles.commissionLabel}>{t('agent.yourCommission')}</Text>
-            <Text style={styles.commissionValue}>+{formatCents(result.commission)}</Text>
+            <Text style={styles.commissionValue}>+{formatAmount(result.commission, result.currency ?? preview?.currency)}</Text>
           </GlassCard>
         )}
         <View style={styles.resultBtn}>
@@ -255,16 +272,18 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
     return (
       <DarkScreen edges={[]} contentStyle={styles.resultWrap}>
         <Text style={styles.reviewLabel}>{t('topup.confirm.reviewLabel')}</Text>
-        <Text style={styles.reviewAmount}>{formatCents(preview.amount)}</Text>
+        <Text style={[styles.reviewAmount, longAmount(formatAmount(preview.amount, preview.currency))]} numberOfLines={1}>
+          {formatAmount(preview.amount, preview.currency)}
+        </Text>
         <Text style={styles.reviewName}>{preview.customerName}</Text>
         <GlassCard style={styles.reviewCard}>
           <Text style={styles.reviewHint}>
-            {t('topup.confirm.reviewHint', { amount: formatCents(preview.amount) })}
+            {t('topup.confirm.reviewHint', { amount: formatAmount(preview.amount, preview.currency) })}
           </Text>
         </GlassCard>
         <View style={styles.resultBtn}>
           <PillButton
-            label={t('topup.confirm.cashReceived', { amount: formatCents(preview.amount) })}
+            label={t('topup.confirm.cashReceived', { amount: formatAmount(preview.amount, preview.currency) })}
             onPress={() => {
               setPin('');
               setPinError('');
@@ -288,7 +307,7 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
       <DarkScreen edges={[]} contentStyle={styles.resultWrap}>
         <Text style={styles.resultTitle}>{t('topup.confirm.pinTitle')}</Text>
         <Text style={styles.resultSub}>
-          {t('topup.confirm.pinFor', { amount: formatCents(preview.amount), name: preview.customerName })}
+          {t('topup.confirm.pinFor', { amount: formatAmount(preview.amount, preview.currency), name: preview.customerName })}
         </Text>
         <PinInput
           value={pin}

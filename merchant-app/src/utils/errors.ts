@@ -64,7 +64,9 @@ export function pinActionErrorKey(error: any): string {
   if (reason === 'pin_reset_cooldown' || reason === 'phone_change_cooldown') return 'errors.sendingPaused';
   if (reason === 'agent_code_attempts') return 'errors.cashOutCodeAttempts';
   if (reason === 'amount_mismatch') return 'errors.topupAmountChanged';
-  if (reason === 'target_required' || reason === 'amount_required') return 'errors.updateApp';
+  if (reason === 'target_required' || reason === 'amount_required' || reason === 'update_for_shillings') {
+    return 'errors.updateApp';
+  }
   if (reason === 'idempotency_mismatch') return 'errors.startNewTopup';
 
   switch (code) {

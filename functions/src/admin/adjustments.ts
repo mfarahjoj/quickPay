@@ -38,6 +38,7 @@ import {
   SETTLEMENT_HOLD,
   InsufficientBalanceError,
   WalletNotFoundError,
+  type LedgerCurrency,
 } from "../ledger";
 
 export const ADJUSTMENTS_COLLECTION = "adjustments";
@@ -74,6 +75,11 @@ export interface AdjustmentInput {
   description?: string;
   /** Settling a lost dispute out of the reserve it created (D8). */
   useReserved?: boolean;
+  /**
+   * The currency of `amountCents`: dollars unless said otherwise. A dispute
+   * over a shilling payment is settled in shillings, never converted.
+   */
+  currency?: LedgerCurrency;
 }
 
 export interface PreparedAdjustment {
@@ -128,7 +134,7 @@ export async function prepareAdjustment(
   const prepared = await prepareJournalEntry(tx, {
     entryId: journalEntryId,
     type: "adjustment",
-    currency: "USD",
+    currency: input.currency ?? "USD",
     lines: [
       { account: input.debitAccount, debit: input.amountCents, credit: 0 },
       { account: input.creditAccount, debit: 0, credit: input.amountCents },
@@ -176,7 +182,7 @@ export async function prepareAdjustment(
           toUserId: isUserAccount(input.creditAccount) ? userIdOf(input.creditAccount) : "system",
           participants: userIds,
           amount: input.amountCents,
-          currency: "USD",
+          currency: input.currency ?? "USD",
           status: "completed",
           description: input.description ?? "Correction by Zapp Pay",
           journalEntryId,

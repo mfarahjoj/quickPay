@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Transaction } from '../types';
 import { colors, typography, spacing, borderRadius } from '../theme';
-import { CURRENCY_SYMBOL } from '../config/constants';
+import { formatMajor } from '../utils/money';
 
 interface TransactionItemProps {
   transaction: Transaction;
@@ -52,8 +52,7 @@ export function TransactionItem({ transaction, onPress }: TransactionItemProps) 
           ]}
         >
           {transaction.isIncoming ? '+' : '-'}
-          {CURRENCY_SYMBOL}
-          {transaction.amount.toFixed(2)}
+          {formatMajor(transaction.amount, transaction.currency)}
         </Text>
       </View>
     </TouchableOpacity>

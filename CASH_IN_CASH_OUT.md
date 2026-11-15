@@ -154,6 +154,32 @@ check catches drift.
 | Manual top-up retried after a lost reply | Second post from float | `idempotencyKey` (agent-scoped) → same transaction id, posted once |
 | Agent reads a customer's balance | `manualTopup` replied with `newBalance` | Removed from the reply |
 | Agent walks the phone book | `lookupUserByPhone` unlimited, showed frozen accounts | 60/hour, 300/day per agent; closed and frozen read as not found |
+| Agent pays out the wrong cash for shillings | An old merchant app would show 30,000 shillings as "$300.00" | Shilling requests only go to apps that send `currencies: ["USD","SLS"]`; a cash-in confirm also matches `expectedCurrency` |
+
+---
+
+## Dollars and shillings
+
+Every request above is in one currency, `USD` or `SLS`, chosen by the customer
+and stored on the request (`topup/agentCurrency.ts`, SHILLINGS.md). Nothing is
+ever converted:
+
+| | Dollars | Shillings |
+|---|---|---|
+| Agent's float | `agent:{uid}` (cents) | `agent:{uid}@SLS` (whole shillings) |
+| Customer's balance | `wallets/{uid}.balance` | `wallets/{uid}.sls.balance` |
+| Hold | `platform:cashout_hold` | `platform:cashout_hold@SLS` |
+| Commission | `platform:fees` → `user:{agent}` | the same, in shillings |
+
+- Each journal entry above is posted in the request's currency, with the same
+  lines.
+- Limits stay in dollars and compare a shilling amount at `slsPerUsd`.
+- Requests from before shillings have `currency: "USD"`, and a call that sends
+  no currency asks for dollars, so older customer apps keep working.
+- The agent's app must say it reads shillings before it is shown or allowed to
+  settle a shilling request (`reason: "update_for_shillings"`).
+- Shilling float comes from the float desk (`adminRequestFloat` with
+  `currency: "SLS"`). Agents can't yet buy it by Zaad or move sales into it.
 
 ## Agents buy float with Zaad (2026-11-10, functions deployed 2026-11-11, switched off)
 

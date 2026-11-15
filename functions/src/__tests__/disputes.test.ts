@@ -305,6 +305,85 @@ describe("disputes", () => {
       expect(err.details.reason).toBe("needs_super");
     });
 
+    // A dispute over shillings is settled in shillings: 30,000 shillings must
+    // never become 30,000 cents ($300).
+    describe("in shillings", () => {
+      const slsRequest = {
+        customerId: CUSTOMER,
+        amount: 30_000,
+        currency: "SLS",
+        status: "expired",
+        createdAt: ago(2 * HOUR_MS),
+        expiresAt: ago(HOUR_MS),
+      };
+      const slsP2p = {
+        ...payment({ toUserId: FRIEND, participants: [CUSTOMER, FRIEND], amount: 20_000, currency: "SLS" }),
+        feeCents: undefined,
+        netCents: undefined,
+        journalEntryId: "p2p_t1",
+      };
+      const sls = (db: FakeDb, uid: string) => db.get(`wallets/${uid}`)!.sls?.balance ?? 0;
+
+      it("records the currency, and pays an uncredited shilling cash-in in shillings", async () => {
+        const db = seed({ "agentTopupRequests/atr-sls": slsRequest });
+        const { data } = await raise({ agentTopupRequestId: "atr-sls", kind: "cash_given_not_credited" });
+        expect(dispute(db, data.disputeId)).toMatchObject({ currency: "SLS", amountCents: 30_000 });
+
+        await decide({ disputeId: data.disputeId, outcome: "upheld", payFrom: "platform" });
+        expect(sls(db, CUSTOMER)).toBe(30_000);
+        expect(balance(db, CUSTOMER)).toBe(0);
+        expect(db.get("ledger_balances/platform:fees@SLS")!.balance).toBe(-30_000);
+        expect(db.get("ledger_balances/platform:fees")).toBeUndefined();
+        const row = db.get(`transactions/adjustment_dispute_${data.disputeId}`)!;
+        expect(row).toMatchObject({ currency: "SLS", amount: 30_000 });
+      });
+
+      it("takes a shilling P2P back from the recipient's shillings", async () => {
+        const db = seed({
+          "transactions/p2p-sls": slsP2p,
+          [`wallets/${FRIEND}`]: wallet(2_000, { sls: { balance: 20_000, totalSent: 0, totalReceived: 20_000 } }),
+        });
+        const { data } = await raise({ transactionId: "p2p-sls", kind: "wrong_recipient" });
+        await decide({ disputeId: data.disputeId, outcome: "upheld" });
+        expect(sls(db, CUSTOMER)).toBe(20_000);
+        expect(sls(db, FRIEND)).toBe(0);
+        expect(balance(db, FRIEND)).toBe(2_000);
+      });
+
+      it("refuses, moving nothing, when the other party is short of shillings", async () => {
+        // Dollars don't count: nothing is converted, and the reserve is dollars only.
+        const db = seed({ "transactions/p2p-sls": slsP2p });
+        const { data } = await raise({ transactionId: "p2p-sls", kind: "wrong_recipient" });
+        const err = await decide({ disputeId: data.disputeId, outcome: "upheld" }).catch((e: any) => e);
+        expect(err.details.reason).toBe("insufficient_shillings");
+        expect(dispute(db, data.disputeId).status).not.toBe("awaiting_funds");
+        expect(db.get(`wallets/${FRIEND}`)!.reservedCents).toBeUndefined();
+        expect(sls(db, CUSTOMER)).toBe(0);
+      });
+
+      it("counts shillings at the rate against the senior-admin threshold", async () => {
+        // A $200 threshold. 4,000,000 shillings is $500 at 8,000 a dollar: over it.
+        const db = seed({
+          "agentTopupRequests/atr-big": { ...slsRequest, amount: 4_000_000 },
+          "config/rates": { slsPerUsd: 8_000, floatApprovalThresholdCents: 200_00 },
+        });
+        const { data } = await raise({ agentTopupRequestId: "atr-big", kind: "cash_given_not_credited" });
+        const err = await decide({ disputeId: data.disputeId, outcome: "upheld", payFrom: "platform" }).catch(
+          (e: any) => e
+        );
+        expect(err.details.reason).toBe("needs_super");
+        // 30,000 shillings is $3.75: under it. Read as cents ($300) it would be over.
+        const small = await decide({
+          disputeId: data.disputeId,
+          outcome: "upheld",
+          payFrom: "platform",
+          amountCents: 30_000,
+        });
+        expect(small.data.status).toBe("resolved");
+        expect(sls(db, CUSTOMER)).toBe(30_000);
+      });
+    });
+
     it("refuses non-admins and closed disputes", async () => {
       seed();
       const { data } = await raise({ transactionId: "pay-1" });

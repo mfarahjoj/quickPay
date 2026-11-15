@@ -17,6 +17,8 @@ import {
 } from "../ledger";
 import { releaseCashOutHold } from "./cashOutHold";
 import { codesMatch, findPendingRequest, isSixDigitCode, normaliseCustomerPhone } from "./requestTarget";
+import { assertAgentAppReads, storedCurrency } from "./agentCurrency";
+import { pushAmount } from "../utils/money";
 
 // The cash-out tests and older imports reach it through this module.
 export { normaliseCustomerPhone };
@@ -39,11 +41,19 @@ interface AgentConfirmCashOutRequest {
   cashOutId?: string;
   /** Typed by the agent when there is no QR: the customer's phone number. */
   customerPhone?: string;
+  /**
+   * The currencies the agent's app can show, e.g. ["USD", "SLS"]. The agent
+   * hands over cash from the success screen, so an app that would show
+   * shillings as cents never gets a shilling cash-out (agentCurrency.ts).
+   */
+  currencies?: string[];
 }
 
 interface AgentConfirmCashOutResponse {
   cashOutId: string;
+  /** The cash to hand over, in the currency's smallest unit. */
   amount: number;
+  currency: string;
   customerName: string;
   commission: number;
   /** Set when the commission was withheld on a round trip. */
@@ -93,7 +103,8 @@ export const agentConfirmCashOut = https.onCall(
   ): Promise<ApiResponse<AgentConfirmCashOutResponse>> => {
     requireAuth(request);
     const agentId = request.auth!.uid;
-    const { otpCode, agentPin, cashOutId, customerPhone } = request.data ?? ({} as AgentConfirmCashOutRequest);
+    const { otpCode, agentPin, cashOutId, customerPhone, currencies } =
+      request.data ?? ({} as AgentConfirmCashOutRequest);
 
     if (!isSixDigitCode(otpCode)) {
       throw new https.HttpsError("invalid-argument", "6-digit code required");
@@ -213,6 +224,13 @@ export const agentConfirmCashOut = https.onCall(
     assertAccountActive(customerDoc.data(), "counterparty");
     const customerName = customerDoc.data()?.fullName || "Customer";
 
+    // The held money, the agent's new float and the commission are all in the
+    // request's currency. An app that can't show it doesn't get to settle it:
+    // the customer's money stays held for another agent, or comes back on
+    // cancel or expiry.
+    const currency = storedCurrency(cashOut.currency);
+    assertAgentAppReads(currency, currencies);
+
     const { cashOutCommissionRate, roundTripWindowHours } = await getRates();
     const feeCents = cashOut.feeCents ?? 0;
     // No commission on cash this customer cashed in with this same agent
@@ -250,7 +268,7 @@ export const agentConfirmCashOut = https.onCall(
       const pending = await prepareJournalEntry(tx, {
         entryId,
         type: "agent_cashout",
-        currency: cashOut.currency as "USD" | "SLS",
+        currency,
         lines,
         refs: { transactionId, topupId: cashOutRef!.id },
         description: "Agent cash-out",
@@ -294,7 +312,7 @@ export const agentConfirmCashOut = https.onCall(
         key: "cashout.paid_by_agent",
         params: {
           agent: agentData.fullName,
-          amount: `${cashOut.currency} ${(cashOut.amount / 100).toFixed(2)}`,
+          amount: pushAmount(cashOut.amount, currency),
         },
       },
       { type: "cashout_complete", transactionId }
@@ -305,6 +323,7 @@ export const agentConfirmCashOut = https.onCall(
       data: {
         cashOutId: cashOutRef.id,
         amount: cashOut.amount,
+        currency,
         customerName,
         commission: commissionCents,
         ...(roundTrip ? { commissionWithheld: "round_trip" } : {}),

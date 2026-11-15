@@ -19,6 +19,7 @@ import { notifyUser } from "../utils/notifications";
 import { PushMessage } from "../utils/pushTemplates";
 import { JOURNAL_COLLECTION, JournalEntryType } from "../ledger";
 import { REFUNDABLE_ENTRY_TYPES } from "../qr-payments/refundCore";
+import { Currency, formatAmount, parseCurrency } from "../utils/money";
 import {
   ACTIVE_STATUSES,
   DISPUTES_COLLECTION,
@@ -64,7 +65,10 @@ export interface Disputable {
   disputedKind: DisputedKind;
   side: "payer" | "payee";
   against: string | null;
+  /** In the movement's currency: cents, or whole shillings. */
   transactionAmountCents: number;
+  /** The movement's currency; a remedy is paid in it. */
+  currency: Currency;
   happenedAt: number | undefined;
   /** One dispute per movement per person: this is its document id. */
   disputeId: string;
@@ -107,6 +111,7 @@ export async function describeDisputable(
       side,
       against: other && other !== "system" && other !== uid ? other : null,
       transactionAmountCents: tx.amount,
+      currency: parseCurrency(tx.currency) ?? "USD",
       happenedAt: (tx.completedAt ?? tx.createdAt)?.toMillis?.(),
       disputeId: `${transactionId}_${uid}`,
     };
@@ -140,6 +145,7 @@ export async function describeDisputable(
     side: "payee",
     against: scannedBy,
     transactionAmountCents: req.amount,
+    currency: parseCurrency(req.currency) ?? "USD",
     happenedAt: req.createdAt?.toMillis?.(),
     disputeId: `atr_${agentTopupRequestId}_${uid}`,
   };
@@ -190,7 +196,7 @@ export const openDispute = https.onCall(
     const db = admin.firestore();
     const rates = await getRates();
 
-    const { disputedKind, side, against, transactionAmountCents, happenedAt, disputeId } =
+    const { disputedKind, side, against, transactionAmountCents, currency, happenedAt, disputeId } =
       await describeDisputable(db, uid, { transactionId, agentTopupRequestId });
 
     if (!allowedKinds(disputedKind, side).includes(kind)) {
@@ -245,7 +251,7 @@ export const openDispute = https.onCall(
       participants: against ? [uid, against] : [uid],
       amountCents,
       transactionAmountCents,
-      currency: "USD",
+      currency,
       messages: [{ by: uid, role: "raiser", text: note, at: now }],
       createdAt: now,
       updatedAt: now,
@@ -274,7 +280,7 @@ export const openDispute = https.onCall(
       {
         key: kind === "refund_requested" ? "dispute.refund_requested" : "dispute.payment_disputed",
         params: {
-          amount: `$${(amountCents / 100).toFixed(2)}`,
+          amount: formatAmount(amountCents, currency),
           days: { days: Math.round(rates.disputeResponseHours / 24) },
         },
       },

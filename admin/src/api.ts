@@ -233,8 +233,10 @@ export interface AgentPosition {
   phoneNumber?: string;
   accountType?: string;
   accountStatus: string;
-  /** Float, in agent:{uid}. */
+  /** Dollar float, in cents, in agent:{uid}. */
   balanceCents: number;
+  /** Shilling float, in whole shillings, in agent:{uid}@SLS. Absent from older servers. */
+  slsBalance?: number;
   /** Their own wallet: commission and, for an agent-merchant, sales. */
   walletCents?: number;
 }
@@ -258,12 +260,24 @@ export interface FloatMigrationRow {
   shortfallCents: number;
 }
 
+/** Float is issued and held in dollars or shillings, never converted. */
+export type FloatCurrency = "USD" | "SLS";
+
+/** Cents as "$12.50", whole shillings as "30,000 SLSH". */
+export function formatFloat(amount: number, currency: FloatCurrency | undefined): string {
+  if (currency === "SLS") return `${Math.round(amount).toLocaleString("en-US")} SLSH`;
+  return `$${(amount / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 export interface FloatIssuanceRow {
   issuanceId: string;
   agentId: string;
   agentName?: string;
   direction: FloatDirection;
+  /** In the currency's smallest unit: cents, or whole shillings. */
   amountCents: number;
+  /** Absent on requests from before shillings: dollars. */
+  currency?: FloatCurrency;
   route: FloatRoute;
   externalReference?: string;
   status: string;
@@ -612,6 +626,7 @@ export const api = {
     agentId: string;
     direction: FloatDirection;
     amountCents: number;
+    currency: FloatCurrency;
     route: FloatRoute;
     externalReference?: string;
     reason: string;

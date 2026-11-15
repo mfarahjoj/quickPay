@@ -16,6 +16,7 @@ import { useWallet } from '../../hooks/useWallet';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useMerchantProfile } from '../../hooks/useMerchantProfile';
 import { useFloat } from '../../hooks/useFloat';
+import { formatAmount, formatMajor } from '../../utils/money';
 import { useZaadFloatOn } from '../../hooks/useZaadFloatOn';
 import { useAuth } from '../../hooks/useAuth';
 import { needsReply, useMyDisputes } from '../../services/dispute.service';
@@ -89,7 +90,7 @@ function TxRow({ tx, onPress }: { tx: Transaction; onPress: () => void }) {
         </Text>
       </View>
       <Text style={[styles.txAmount, incoming && styles.txAmountIn]}>
-        {incoming ? '+' : '−'}{money(tx.amount)}
+        {incoming ? '+' : '−'}{formatMajor(tx.amount, tx.currency)}
       </Text>
     </TouchableOpacity>
   );
@@ -109,7 +110,7 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
   const isMerchantRole = accountType === 'merchant' || accountType === 'agent_merchant';
   const isAgentRole = accountType === 'topup_agent' || accountType === 'agent_merchant';
   // Agents hold float apart from their sales and earnings.
-  const { floatCents } = useFloat(isAgentRole, wallet?.lastTransactionAt?.getTime());
+  const { floatCents, floatSls } = useFloat(isAgentRole, wallet?.lastTransactionAt?.getTime());
   // Buying float with Zaad, once the collection number is live.
   const zaadFloat = useZaadFloatOn();
 
@@ -222,6 +223,8 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
               <View style={styles.floatText}>
                 <Text style={styles.floatLabel}>{t('dashboard.float.label')}</Text>
                 <Text style={styles.floatAmount}>{floatCents === null ? '…' : money(floatCents / 100)}</Text>
+                {/* Shilling float is held apart and never converted; shown once there is any. */}
+                {floatSls ? <Text style={styles.floatSls}>{formatAmount(floatSls, 'SLS')}</Text> : null}
                 <Text style={styles.floatHint}>{t('dashboard.float.hint')}</Text>
               </View>
               <View style={styles.floatButtons}>
@@ -492,6 +495,7 @@ const styles = StyleSheet.create({
   floatText: { flex: 1, marginRight: 12 },
   floatLabel: { fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.45)', letterSpacing: 1, textTransform: 'uppercase' },
   floatAmount: { fontSize: 24, fontWeight: '800', color: '#FFFFFF', marginTop: 4, letterSpacing: -0.5 },
+  floatSls: { fontSize: 18, fontWeight: '800', color: '#FFFFFF', marginTop: 2, letterSpacing: -0.3 },
   floatHint: { fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 4, lineHeight: 16 },
   floatButtons: { gap: 8, alignItems: 'flex-end' },
   floatButton: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 999, backgroundColor: '#1A56FF' },
