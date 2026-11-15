@@ -15,6 +15,7 @@ import { maybeUnlockReferral } from "../referral/referralBonus";
 import { readFloatCents } from "../agents/float";
 import { ApiResponse, Transaction } from "../types";
 import { getRates, computeCommission } from "../config/rates";
+import { Currency, formatAmount, parseCurrency, toLimitCents } from "../utils/money";
 import {
   prepareJournalEntry,
   userAccount,
@@ -36,7 +37,14 @@ const MAX_NOTES_LENGTH = 280;
 
 interface ManualTopupRequest {
   userId: string; // User to top up
-  amount: number; // In dollars
+  /** Whole units of `currency`: dollars (12.5), or whole shillings (30000). */
+  amount: number;
+  /**
+   * "USD" (the default, and all older merchant builds send) or "SLS": the
+   * agent's shilling float pays the customer's shilling balance, never
+   * converted (SHILLINGS.md).
+   */
+  currency?: string;
   agentPin: string; // Agent's PIN for authorization
   paymentMethod: TopupPaymentMethod;
   reference?: string; // Optional reference number
@@ -55,6 +63,8 @@ interface ManualTopupResponse {
   userId: string;
   amount: number;
   commission: number; // Agent commission earned, in dollars
+  /** "USD" or "SLS": `amount` and `commission` are whole units of it. */
+  currency?: string;
 }
 
 /**
@@ -92,6 +102,10 @@ export const manualTopup = https.onCall(
 
     const data = request.data ?? ({} as ManualTopupRequest);
     const { userId, amount, agentPin } = data;
+    const currency = parseCurrency(data.currency, "USD");
+    if (!currency) {
+      throw new https.HttpsError("invalid-argument", "Currency must be USD or SLS");
+    }
 
     // Validate inputs
     if (typeof userId !== "string" || !userId || userId.includes("/")) {
@@ -115,14 +129,19 @@ export const manualTopup = https.onCall(
       );
     }
 
-    if (amount > 1000) {
+    // In the smallest unit: cents, or whole shillings.
+    const amountCents = currency === "USD" ? dollarsToCents(amount) : amount;
+    if (currency === "SLS" && !Number.isInteger(amount)) {
+      throw new https.HttpsError("invalid-argument", "Shillings are whole numbers");
+    }
+    // The $1,000 cap is dollars; a shilling top-up counts at the limits rate.
+    const { slsPerUsd } = await getRates();
+    if (toLimitCents(amountCents, currency, slsPerUsd) > 100_000) {
       throw new https.HttpsError(
         "invalid-argument",
         "Maximum top-up amount is $1000 per transaction"
       );
     }
-
-    const amountCents = dollarsToCents(amount);
 
     if (!validateAmount(amountCents)) {
       throw new https.HttpsError("invalid-argument", "Invalid amount");
@@ -168,7 +187,7 @@ export const manualTopup = https.onCall(
       if (key) {
         const sent = await db.collection("transactions").doc(transactionId).get();
         if (sent.exists) {
-          return replayOf(sent.data() as Transaction, transactionId, agentId, userId, amountCents);
+          return replayOf(sent.data() as Transaction, transactionId, agentId, userId, amountCents, currency);
         }
       }
 
@@ -188,7 +207,7 @@ export const manualTopup = https.onCall(
 
       // Cash-in is inbound for the customer, so only their per-transaction
       // ceiling applies — the same rule as customerRequestAgentTopup.
-      await enforcePerTransactionLimit(amountCents, userData ?? {});
+      await enforcePerTransactionLimit(amountCents, userData ?? {}, currency);
 
       // Every call pays commission, so how often an agent can call is a
       // control in its own right.
@@ -218,11 +237,12 @@ export const manualTopup = https.onCall(
 
         // Float model: the top-up is funded from the agent's float, held apart
         // from their own wallet in agent:{uid} (AGENT_FLOAT_SEPARATION.md).
-        const floatCents = await readFloatCents(agentId, transaction);
+        // Float in the top-up's own currency: shillings from shilling float.
+        const floatCents = await readFloatCents(agentId, transaction, currency);
         if (floatCents < amountCents) {
           throw new https.HttpsError(
             "failed-precondition",
-            `Insufficient float. This top-up needs $${amount.toFixed(2)} but your float is $${(floatCents / 100).toFixed(2)}.`,
+            `Insufficient float. This top-up needs ${formatAmount(amountCents, currency)} but your float is ${formatAmount(floatCents, currency)}.`,
             { reason: "insufficient_float", floatCents }
           );
         }
@@ -243,7 +263,7 @@ export const manualTopup = https.onCall(
         const pending = await prepareJournalEntry(transaction, {
           entryId,
           type: "agent_topup",
-          currency: "USD",
+          currency,
           lines,
           refs: { transactionId },
           description: `Manual top-up by agent (${paymentMethod})`,
@@ -263,7 +283,7 @@ export const manualTopup = https.onCall(
           participants: [agentId, userId],
           amount: amountCents,
           commissionCents,
-          currency: "USD",
+          currency,
           status: "completed",
           description: `Manual top-up by agent (${paymentMethod})`,
           reference: reference || undefined,
@@ -281,8 +301,8 @@ export const manualTopup = https.onCall(
           amount: amountCents,
           amountDollars: amount,
           commissionCents,
-          commissionDollars: commissionCents / 100,
-          currency: "USD",
+          commissionDollars: currency === "USD" ? commissionCents / 100 : 0,
+          currency,
           paymentMethod,
           reference: reference || "",
           notes: notes || "",
@@ -298,13 +318,17 @@ export const manualTopup = https.onCall(
 
       if (!posted) {
         const sent = await db.collection("transactions").doc(transactionId).get();
-        return replayOf(sent.data() as Transaction, transactionId, agentId, userId, amountCents);
+        return replayOf(sent.data() as Transaction, transactionId, agentId, userId, amountCents, currency);
       }
 
       // Send notification to user
-      await maybeUnlockReferral(userId, { kind: "cash_in", amountCents });
+      // The referral minimum is dollars; shillings count at the limits rate.
+      await maybeUnlockReferral(userId, {
+        kind: "cash_in",
+        amountCents: toLimitCents(amountCents, currency, slsPerUsd),
+      });
 
-      notifyTopupCompleted(userId, amountCents, "USD", paymentMethod).catch(
+      notifyTopupCompleted(userId, amountCents, currency, paymentMethod).catch(
         (err) => console.error("Failed to notify user:", err)
       );
 
@@ -318,7 +342,8 @@ export const manualTopup = https.onCall(
           transactionId,
           userId,
           amount,
-          commission: commissionCents / 100,
+          commission: currency === "USD" ? commissionCents / 100 : commissionCents,
+          currency,
         },
       };
     } catch (error: any) {
@@ -343,9 +368,16 @@ function replayOf(
   transactionId: string,
   agentId: string,
   userId: string,
-  amountCents: number
+  amountCents: number,
+  currency: Currency
 ): ApiResponse<ManualTopupResponse> {
-  if (!sent || sent.fromUserId !== agentId || sent.toUserId !== userId || sent.amount !== amountCents) {
+  if (
+    !sent ||
+    sent.fromUserId !== agentId ||
+    sent.toUserId !== userId ||
+    sent.amount !== amountCents ||
+    (parseCurrency(sent.currency) ?? "USD") !== currency
+  ) {
     throw new https.HttpsError(
       "failed-precondition",
       "This top-up was already sent with different details. Start a new one.",
@@ -357,8 +389,10 @@ function replayOf(
     data: {
       transactionId,
       userId,
-      amount: amountCents / 100,
-      commission: (sent.commissionCents ?? 0) / 100,
+      // Whole units, as the request sent them.
+      amount: currency === "USD" ? amountCents / 100 : amountCents,
+      commission: currency === "USD" ? (sent.commissionCents ?? 0) / 100 : sent.commissionCents ?? 0,
+      currency,
     },
   };
 }

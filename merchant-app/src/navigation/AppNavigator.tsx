@@ -46,7 +46,7 @@ type MerchantStackParamList = {
     purpose?: 'payment' | 'cash_out';
     /** The sale typed on Receive, when the customer couldn't scan its code. */
     amountCents?: number;
-    /** Its currency: "USD" (the default) or "SLS". */
+    /** Its currency: "USD" (the default) or "SLS"; a cash-out too. */
     currency?: 'USD' | 'SLS';
     reference?: string;
     /** A request already raised (a scan at the counter display): wait on it. */

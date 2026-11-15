@@ -25,10 +25,12 @@ interface Props {
   onKey: (key: AmountKey) => void;
   /** Holding delete clears the amount. */
   onClear?: () => void;
+  /** Whole shillings: the decimal key shows and types "000". */
+  wholeOnly?: boolean;
 }
 
 /** The number pad for typing an amount, in place of the phone's keyboard. */
-export function AmountKeypad({ onKey, onClear }: Props) {
+export function AmountKeypad({ onKey, onClear, wholeOnly }: Props) {
   const styles = useStyles();
   const colors = useColors();
   const { t } = useTranslation();
@@ -57,13 +59,19 @@ export function AmountKeypad({ onKey, onClear }: Props) {
               }
               accessibilityRole="button"
               accessibilityLabel={
-                key === 'del' ? t('common.delete') : key === '.' ? t('qr.enterAmount.decimalPoint') : key
+                key === 'del'
+                  ? t('common.delete')
+                  : key === '.'
+                    ? wholeOnly
+                      ? '000'
+                      : t('qr.enterAmount.decimalPoint')
+                    : key
               }
             >
               {key === 'del' ? (
                 <DeleteKeyIcon size={24} color={colors.ui.text} strokeWidth={1.9} />
               ) : (
-                <Text style={styles.keyText}>{key}</Text>
+                <Text style={styles.keyText}>{key === '.' && wholeOnly ? '000' : key}</Text>
               )}
             </Pressable>
           ))}

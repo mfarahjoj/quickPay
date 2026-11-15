@@ -92,6 +92,21 @@ describe("ledger currencies", () => {
     expect([...db.store.keys()].some((p) => p.startsWith("journal_entries/"))).toBe(false);
   });
 
+  it("keeps shillings reserved for a lost dispute out of reach, and only those", async () => {
+    // a holds 50,000 SLS of which 30,000 are reserved (D8), and $100 unreserved.
+    const db = seed();
+    db.store.set("wallets/a", {
+      ...db.get("wallets/a")!,
+      sls: { ...db.get("wallets/a")!.sls, reservedCents: 30_000 },
+    });
+    await expect(post(db, "SLS", 20_001)).rejects.toBeInstanceOf(InsufficientBalanceError);
+    await post(db, "SLS", 20_000, "a", "b", "free_part");
+    expect(db.get("wallets/a")!.sls.balance).toBe(30_000);
+    // A shilling reserve doesn't hold dollars back.
+    await post(db, "USD", 5_000, "a", "b", "dollars_free");
+    expect(db.get("wallets/a")!.balance).toBe(5_000);
+  });
+
   it("treats a wallet with no stored currency as a dollar wallet that can hold shillings", async () => {
     const db = seed();
     await post(db, "USD", 1_000, "legacy", "b");

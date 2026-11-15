@@ -115,7 +115,9 @@ function SubmissionView({
           <dt>Wallet balance</dt>
           <dd>
             {wallet
-              ? `${wallet.currency ?? "USD"} ${((wallet.balance ?? 0) / 100).toFixed(2)}`
+              ? `${wallet.currency ?? "USD"} ${((wallet.balance ?? 0) / 100).toFixed(2)}${
+                  wallet.sls?.balance ? ` · ${wallet.sls.balance.toLocaleString("en-US")} SLSH` : ""
+                }`
               : "no wallet"}
           </dd>
         </dl>

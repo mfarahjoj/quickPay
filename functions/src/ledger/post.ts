@@ -155,8 +155,10 @@ export async function prepareJournalEntry(
     }
     // Money owed on a lost dispute stays put until that dispute is settled.
     // Only debits are checked: a wallet below its reserve must still receive.
-    // Disputes reserve dollars only.
-    const reserved = input.currency === "USD" ? wallet.reservedCents ?? 0 : 0;
+    // Each currency has its own reserve: dollars on the wallet, shillings in
+    // its shilling pocket.
+    const reserved =
+      input.currency === "USD" ? wallet.reservedCents ?? 0 : wallet.sls?.reservedCents ?? 0;
     if (d.delta < 0 && reserved > 0 && newBalance < reserved && input.useReserved !== true) {
       throw new InsufficientBalanceError(d.account);
     }

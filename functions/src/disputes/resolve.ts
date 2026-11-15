@@ -14,7 +14,8 @@
  * balance allows. The customer is never paid from money that isn't there.
  *
  * A remedy is paid in the disputed movement's currency (SHILLINGS.md). The
- * reserve is dollars only (`wallets.reservedCents` against `balance`), so a
+ * reserve is per currency (`wallets.reservedCents` for dollars,
+ * `wallets.sls.reservedCents` for shillings), so a
  * shilling dispute the other party can't cover is refused rather than
  * parked: ops pay it from Zapp or try again once they can.
  */
@@ -133,6 +134,11 @@ function notifyBoth(d: DisputeDoc, disputeId: string, toRaiser: PushMessage, toA
 /** The disputed movement's currency; disputes from before shillings are dollars. */
 function disputeCurrency(d: Pick<DisputeDoc, "currency">): Currency {
   return parseCurrency(d.currency) ?? "USD";
+}
+
+/** Where a wallet's reserve in [currency] lives (D8). */
+function reserveField(currency: Currency): string {
+  return currency === "USD" ? "reservedCents" : "sls.reservedCents";
 }
 
 interface ResolveRequest {
@@ -286,15 +292,6 @@ export const adminResolveDispute = https.onCall(
         },
       };
     } catch (error: any) {
-      // The reserve below is dollars only: a shilling remedy the other party
-      // can't cover moves nothing and says so.
-      if (error instanceof InsufficientBalanceError && outcome === "upheld" && currency !== "USD") {
-        throw new https.HttpsError(
-          "failed-precondition",
-          "The other party doesn't have enough shillings to cover this. Pay it from Zapp, or try again later.",
-          { reason: "insufficient_shillings" }
-        );
-      }
       // D8: the other party can't cover it. Reserve what they owe and settle later.
       if (error instanceof InsufficientBalanceError && outcome === "upheld" && payFrom === "counterparty") {
         const parked = await db.runTransaction(async (t) => {
@@ -315,8 +312,9 @@ export const adminResolveDispute = https.onCall(
             decidedAt: now,
           };
           t.update(ref, { status: "awaiting_funds", owedCents: payerDebitCents, resolution, updatedAt: now });
+          // Reserved in the dispute's own currency, never converted.
           t.update(db.collection("wallets").doc(d.against!), {
-            reservedCents: admin.firestore.FieldValue.increment(payerDebitCents),
+            [reserveField(disputeCurrency(d))]: admin.firestore.FieldValue.increment(payerDebitCents),
           });
           const auditId = stageAuditEntry(t, {
             actor,
@@ -331,8 +329,8 @@ export const adminResolveDispute = https.onCall(
         notifyBoth(
           parked.d,
           disputeId,
-          { key: "dispute.upheld_awaiting_funds", params: { amount: formatAmount(amountCents, "USD") } },
-          { key: "dispute.upheld_awaiting_funds_against", params: { amount: formatAmount(parked.payerDebitCents, "USD") } }
+          { key: "dispute.upheld_awaiting_funds", params: { amount: formatAmount(amountCents, currency) } },
+          { key: "dispute.upheld_awaiting_funds_against", params: { amount: formatAmount(parked.payerDebitCents, currency) } }
         );
         return {
           success: true,
@@ -377,7 +375,9 @@ export async function collectAwaitingDisputes(limit = 50): Promise<number> {
         if (d.status !== "awaiting_funds" || !d.resolution || !d.against || !d.owedCents) return null;
         const walletRef = db.collection("wallets").doc(d.against);
         const wallet = (await t.get(walletRef)).data();
-        if (!wallet || wallet.balance < d.owedCents) return null;
+        const owedIn = disputeCurrency(d);
+        const held = owedIn === "USD" ? wallet?.balance : wallet?.sls?.balance;
+        if (!wallet || (held ?? 0) < d.owedCents) return null;
 
         const remedy = d.resolution.remedy === "refund" ? "refund" : "adjustment";
         const prepared = await prepareRemedy(
@@ -392,7 +392,7 @@ export async function collectAwaitingDisputes(limit = 50): Promise<number> {
         );
         prepared.write(t);
         const now = admin.firestore.Timestamp.now();
-        t.update(walletRef, { reservedCents: admin.firestore.FieldValue.increment(-d.owedCents) });
+        t.update(walletRef, { [reserveField(owedIn)]: admin.firestore.FieldValue.increment(-d.owedCents) });
         const resolution: DisputeResolution = {
           ...d.resolution,
           settledAt: now,
@@ -412,8 +412,8 @@ export async function collectAwaitingDisputes(limit = 50): Promise<number> {
         notifyBoth(
           done,
           doc.id,
-          { key: "dispute.collected", params: { amount: formatAmount(done.resolution!.amountCents, "USD") } },
-          { key: "dispute.collected_against", params: { amount: formatAmount(done.owedCents!, "USD") } }
+          { key: "dispute.collected", params: { amount: formatAmount(done.resolution!.amountCents, disputeCurrency(done)) } },
+          { key: "dispute.collected_against", params: { amount: formatAmount(done.owedCents!, disputeCurrency(done)) } }
         );
       }
     } catch (err) {

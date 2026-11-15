@@ -22,16 +22,23 @@ function when(ts: Ts) {
     : "—";
 }
 
-/** Cents → "$1,284.50", "−$12.00", or "+$3.00" when `signed`. */
-function cents(value: number | null | undefined, signed = false) {
+/**
+ * "$1,284.50", "−$12.00", or "+$3.00" when `signed`. A shilling balance
+ * ("user:x@SLS", or a row in SLS) is whole shillings: "30,000 SLSH".
+ */
+function cents(value: number | null | undefined, signed = false, sls = false) {
   if (value === null || value === undefined) return "—";
+  const sign = value < 0 ? "−" : signed && value > 0 ? "+" : "";
+  if (sls) return `${sign}${Math.round(Math.abs(value)).toLocaleString("en-US")} SLSH`;
   const abs = (Math.abs(value) / 100).toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-  if (value < 0) return `−$${abs}`;
-  return `${signed && value > 0 ? "+" : ""}$${abs}`;
+  return `${sign}$${abs}`;
 }
+
+/** A shilling balance key, as the check names it. */
+const inShillings = (account: string) => account.endsWith("@SLS");
 
 const n = (value: number) => value.toLocaleString();
 
@@ -239,16 +246,16 @@ function TraceSheet({ drift, onClose }: { drift: LedgerDriftRow; onClose: () => 
         </div>
 
         <div className="tiles compact">
-          <Tile label="Journal says" value={cents(drift.expected)} sub="at the check" />
-          <Tile label="Wallet held" value={cents(drift.actual)} sub="at the check" />
+          <Tile label="Journal says" value={cents(drift.expected, false, inShillings(drift.account))} sub="at the check" />
+          <Tile label="Wallet held" value={cents(drift.actual, false, inShillings(drift.account))} sub="at the check" />
           <Tile
             label="Difference"
-            value={cents(drift.difference, true)}
+            value={cents(drift.difference, true, inShillings(drift.account))}
             tone={drift.difference ? "bad" : undefined}
           />
           <Tile
             label="Wallet now"
-            value={cents(trace?.wallet ? trace.wallet.balance : drift.currentBalance)}
+            value={cents(trace?.wallet ? trace.wallet.balance : drift.currentBalance, false, inShillings(drift.account))}
             sub={trace?.wallet?.frozen ? "frozen" : undefined}
           />
         </div>
@@ -310,10 +317,10 @@ function TraceSheet({ drift, onClose }: { drift: LedgerDriftRow; onClose: () => 
                           {t.amount === null
                             ? "—"
                             : t.direction === "out"
-                              ? cents(-t.amount)
-                              : cents(t.amount, t.direction === "in")}
+                              ? cents(-t.amount, false, t.currency === "SLS")
+                              : cents(t.amount, t.direction === "in", t.currency === "SLS")}
                         </td>
-                        <td className="num">{cents(t.walletEffect, true)}</td>
+                        <td className="num">{cents(t.walletEffect, true, t.currency === "SLS")}</td>
                         <td className="nowrap">
                           <JournalBadge row={t} />
                         </td>
@@ -461,12 +468,12 @@ function AlertView({
                         </div>
                         <div className="muted drift-issue">{d.detail}</div>
                       </td>
-                      <td className="num">{cents(d.expected)}</td>
-                      <td className="num">{cents(d.actual)}</td>
+                      <td className="num">{cents(d.expected, false, inShillings(d.account))}</td>
+                      <td className="num">{cents(d.actual, false, inShillings(d.account))}</td>
                       <td className={`num${d.difference ? " diff" : ""}`}>
-                        {cents(d.difference, true)}
+                        {cents(d.difference, true, inShillings(d.account))}
                       </td>
-                      <td className="num muted">{cents(d.currentBalance)}</td>
+                      <td className="num muted">{cents(d.currentBalance, false, inShillings(d.account))}</td>
                       <td className="actions">
                         {d.user && <button onClick={() => setTracing(d)}>Trace</button>}
                       </td>

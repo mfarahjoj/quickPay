@@ -28,7 +28,7 @@ import { counterCashOutEntryId, counterCashOutLines } from "./counterCashOut";
 import { cashedInWithAgentSince } from "../topup/agentConfirmCashOut";
 import { claimReceiptNumber, reserveReceiptNumber } from "../utils/receiptNumber";
 import { recordPaidReference } from "../utils/paidReferences";
-import { parseCurrency, toLimitCents } from "../utils/money";
+import { parseCurrency, pushAmount, toLimitCents } from "../utils/money";
 
 interface ApprovePaymentInput {
   requestId: string;
@@ -362,7 +362,8 @@ export const approvePaymentRequest = https.onCall(
     }
 
     if (cashOut) {
-      const amountText = `${approvedCurrency!} ${(approvedAmount! / 100).toFixed(2)}`;
+      // The agent hands over cash from this: shillings as shillings.
+      const amountText = pushAmount(approvedAmount!, approvedCurrency!);
       // The agent hands over the cash on this.
       notifyUser(
         approvedMerchantId!,

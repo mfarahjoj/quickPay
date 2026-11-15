@@ -16,6 +16,8 @@ import { functions } from '../../services/firebase.config';
 import { GlassCard, PillButton, ACCENT, TEXT_DIM, TEXT_FAINT } from '../../components';
 import { pinActionErrorKey } from '../../utils/errors';
 import { useExitGuard } from '../../hooks/useExitGuard';
+import { CurrencyToggle, type FloatCurrency } from '../../components/CurrencyToggle';
+import { formatAmount, sanitizeAmountFor, toAmount } from '../../utils/money';
 
 type Step = 'build' | 'review' | 'pin' | 'processing' | 'result';
 
@@ -23,7 +25,7 @@ interface Employee {
   id: string;
   name: string;
   phone: string;
-  amount: string; // display string, e.g. "50.00"
+  amount: string; // as typed: "50.00" dollars, or "300000" shillings
 }
 
 interface PayrollResult {
@@ -34,16 +36,11 @@ interface PayrollResult {
   reason?: string;
 }
 
-const CURRENCY = 'USD';
-
-function formatUsd(cents: number) {
-  return `$${(cents / 100).toFixed(2)}`;
-}
-
-function parseCents(val: string): number {
-  const n = parseFloat(val.replace(/[^0-9.]/g, ''));
-  return isNaN(n) ? 0 : Math.round(n * 100);
-}
+/**
+ * A run is in one currency, paid from the shop's balance in it and received
+ * in it, never converted (SHILLINGS.md). Amounts are in its smallest unit:
+ * cents, or whole shillings.
+ */
 
 function newEmployee(): Employee {
   return { id: Math.random().toString(36).slice(2), name: '', phone: '', amount: '' };
@@ -63,6 +60,9 @@ interface Props {
 export default function PayrollScreen({ navigation }: Props) {
   const { t } = useTranslation();
   const [step, setStep] = useState<Step>('build');
+  const [currency, setCurrency] = useState<FloatCurrency>('USD');
+  const formatUsd = (units: number) => formatAmount(units, currency);
+  const parseCents = (val: string) => toAmount(val, currency);
   const [employees, setEmployees] = useState<Employee[]>([newEmployee()]);
   const [label, setLabel] = useState('');
   const [pin, setPin] = useState('');
@@ -132,7 +132,7 @@ export default function PayrollScreen({ navigation }: Props) {
           amount: parseCents(e.amount),
           name: e.name.trim() || undefined,
         })),
-        currency: CURRENCY,
+        currency,
         pin: enteredPin,
         payrollLabel: label.trim() || undefined,
       });
@@ -205,6 +205,17 @@ export default function PayrollScreen({ navigation }: Props) {
               </View>
             </View>
 
+            <CurrencyToggle
+              value={currency}
+              onChange={(next) => {
+                if (next === currency) return;
+                setCurrency(next);
+                // 50 dollars is not 50 shillings: amounts start again.
+                setEmployees((list) => list.map((e) => ({ ...e, amount: '' })));
+              }}
+              style={styles.currencyToggle}
+            />
+
             {/* Employee rows */}
             {employees.map((emp, index) => (
               <GlassCard key={emp.id} style={styles.empCard}>
@@ -246,10 +257,10 @@ export default function PayrollScreen({ navigation }: Props) {
                     <TextInput
                       style={[styles.input, { flex: 1 }]}
                       value={emp.amount}
-                      onChangeText={(v) => updateEmployee(emp.id, 'amount', v)}
-                      placeholder="0.00"
+                      onChangeText={(v) => updateEmployee(emp.id, 'amount', sanitizeAmountFor(v, currency))}
+                      placeholder={currency === 'SLS' ? '0,000' : '0.00'}
                       placeholderTextColor="rgba(255,255,255,0.2)"
-                      keyboardType="decimal-pad"
+                      keyboardType={currency === 'SLS' ? 'number-pad' : 'decimal-pad'}
                     />
                   </View>
                 </View>
@@ -453,6 +464,7 @@ const styles = StyleSheet.create({
   addRowText: { fontSize: 14, fontWeight: '600', color: '#5B8AFF' },
 
   totalCard: { padding: 20, alignItems: 'center', marginBottom: 8 },
+  currencyToggle: { marginBottom: 16 },
   totalLabel: { fontSize: 12, color: TEXT_FAINT, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 },
   totalAmount: { fontSize: 32, fontWeight: '800', color: '#fff', letterSpacing: -1 },
   totalSub: { fontSize: 13, color: TEXT_DIM, marginTop: 4 },

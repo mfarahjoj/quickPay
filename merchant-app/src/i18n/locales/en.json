@@ -961,5 +961,8 @@
   "send.available": "Available: {{amount}}",
   "send.notEnough": "More than you have in this currency.",
   "send.pinSubtitle": "To send {{amount}} to {{name}}.",
-  "send.done": "{{amount}} sent to {{name}}."
+  "send.done": "{{amount}} sent to {{name}}.",
+  "autoPayout.shillingsToggle": "Shillings too",
+  "autoPayout.shillingsHint": "Shillings above the balance you keep are paid out as shillings, never changed into dollars.",
+  "autoPayout.keepSlsLabel": "Shillings to keep"
 }

@@ -2,6 +2,9 @@
  * Automatic daily payouts (plan 3.6, D11): each evening, everything above the
  * balance the merchant chooses to keep is requested as a payout to their
  * Zaad account on file. Switching it on or off takes the PIN.
+ *
+ * Shillings are their own opt-in with their own balance to keep, paid out
+ * as shillings, never converted (SHILLINGS.md).
  */
 
 import React, { useEffect, useState } from 'react';
@@ -12,7 +15,7 @@ import { DarkScreen, ScreenHeader, GlassCard, PillButton, PinInput, ACCENT, TEXT
 import { firestore, functions } from '../../services/firebase.config';
 import { useAuth } from '../../hooks/useAuth';
 import { useMerchantProfile } from '../../hooks/useMerchantProfile';
-import { toCents, formatCents, sanitizeAmountInput } from '../../utils/money';
+import { toCents, formatCents, sanitizeAmountFor, sanitizeAmountInput, toAmount } from '../../utils/money';
 import { isWrongPin, pinActionErrorKey } from '../../utils/errors';
 import { ZaadDestination } from './ZaadDestination';
 
@@ -25,6 +28,8 @@ export default function AutoPayoutScreen() {
   const [loading, setLoading] = useState(true);
   const [enabled, setEnabled] = useState(false);
   const [keep, setKeep] = useState('20');
+  const [slsEnabled, setSlsEnabled] = useState(false);
+  const [keepSls, setKeepSls] = useState('0');
   const [minCents, setMinCents] = useState(1000);
   const [pinStep, setPinStep] = useState(false);
   const [pin, setPin] = useState('');
@@ -42,6 +47,10 @@ export default function AutoPayoutScreen() {
         if (a) {
           setEnabled(!!a.enabled);
           if (typeof a.keepCents === 'number') setKeep((a.keepCents / 100).toFixed(2));
+          if (a.shillings) {
+            setSlsEnabled(!!a.shillings.enabled);
+            if (typeof a.shillings.keep === 'number') setKeepSls(String(a.shillings.keep));
+          }
         }
         setMinCents((pricing.data as any)?.data?.autoPayoutMinCents ?? 1000);
       })
@@ -56,7 +65,15 @@ export default function AutoPayoutScreen() {
     setSaving(true);
     try {
       await functions().httpsCallable('setAutoPayout')(
-        enabled ? { enabled, keepCents: toCents(keep), pin: enteredPin } : { enabled, pin: enteredPin }
+        enabled
+          ? {
+              enabled,
+              keepCents: toCents(keep),
+              shillingsEnabled: slsEnabled,
+              keepSls: toAmount(keepSls, 'SLS'),
+              pin: enteredPin,
+            }
+          : { enabled, pin: enteredPin }
       );
       setPinStep(false);
       Alert.alert(t('common.success'), enabled ? t('autoPayout.savedOn') : t('autoPayout.savedOff'), [
@@ -127,6 +144,33 @@ export default function AutoPayoutScreen() {
                 </GlassCard>
                 <Text style={styles.hint}>{t('autoPayout.keepHint')}</Text>
 
+                <GlassCard style={[styles.toggleCard, styles.slsCard]}>
+                  <View style={styles.toggleRow}>
+                    <Text style={styles.toggleLabel}>{t('autoPayout.shillingsToggle')}</Text>
+                    <Switch
+                      value={slsEnabled}
+                      onValueChange={setSlsEnabled}
+                      trackColor={{ false: 'rgba(255,255,255,0.15)', true: ACCENT }}
+                      thumbColor="#FFFFFF"
+                    />
+                  </View>
+                  <Text style={styles.hint}>{t('autoPayout.shillingsHint')}</Text>
+                </GlassCard>
+                {slsEnabled && (
+                  <>
+                    <Text style={styles.label}>{t('autoPayout.keepSlsLabel')}</Text>
+                    <GlassCard>
+                      <TextInput
+                        style={styles.input}
+                        value={keepSls}
+                        onChangeText={(v) => setKeepSls(sanitizeAmountFor(v, 'SLS'))}
+                        keyboardType="number-pad"
+                        placeholderTextColor={TEXT_FAINT}
+                      />
+                    </GlassCard>
+                  </>
+                )}
+
                 <ZaadDestination zaad={zaad} />
               </>
             )}
@@ -155,4 +199,5 @@ const styles = StyleSheet.create({
   input: { fontSize: 15, color: '#FFFFFF', padding: 16 },
   hint: { fontSize: 12, color: TEXT_FAINT, marginTop: 10, lineHeight: 17 },
   save: { marginTop: 28 },
+  slsCard: { marginTop: 20 },
 });

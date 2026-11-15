@@ -17,6 +17,8 @@ import { SuccessCheckIcon, CloseIcon, TopUpIcon } from '../../components/icons/A
 import { lookupCustomer, topupCustomer } from '../../services/topup.service';
 import type { CustomerLookupResult, TopupResult } from '../../services/topup.service';
 import { CURRENCY_SYMBOL, MAX_TOPUP_AMOUNT } from '../../config/constants';
+import { CurrencyToggle, type FloatCurrency } from '../../components/CurrencyToggle';
+import { formatAmount, sanitizeAmountFor, toAmount } from '../../utils/money';
 import { newIdempotencyKey } from '../../utils/idempotency';
 import { isWrongPin, pinActionErrorKey } from '../../utils/errors';
 
@@ -56,7 +58,11 @@ export default function TopupCustomerScreen({ navigation }: { navigation: any })
   const [customer, setCustomer] = useState<CustomerLookupResult | null>(null);
   const inputRef = useRef<TextInput>(null);
 
+  // Shillings or dollars: the agent's float in that currency pays it.
+  const [currency, setCurrency] = useState<FloatCurrency>('USD');
   const [amount, setAmount] = useState('');
+  // As the customer will see it: "$12.50" or "30,000 SLSH".
+  const amountShown = formatAmount(toAmount(amount, currency), currency);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
   const [reference, setReference] = useState('');
 
@@ -114,12 +120,13 @@ export default function TopupCustomerScreen({ navigation }: { navigation: any })
   };
 
   const handleAmountNext = () => {
-    const amountNum = parseFloat(amount);
+    const amountNum = currency === 'SLS' ? toAmount(amount, 'SLS') : parseFloat(amount);
     if (!amountNum || amountNum <= 0) {
       Alert.alert(t('common.invalidAmount'), t('common.invalidAmountMessage'));
       return;
     }
-    if (amountNum > MAX_TOPUP_AMOUNT) {
+    // The $1,000 cap is checked by the server in shillings, at the rate.
+    if (currency === 'USD' && amountNum > MAX_TOPUP_AMOUNT) {
       Alert.alert(
         t('topup.alerts.limitExceededTitle'),
         t('topup.alerts.limitExceededMessage', { amount: `${CURRENCY_SYMBOL}${MAX_TOPUP_AMOUNT}` }),
@@ -138,7 +145,8 @@ export default function TopupCustomerScreen({ navigation }: { navigation: any })
       setSubmitting(true);
       const result = await topupCustomer({
         userId: customer.userId,
-        amount: parseFloat(amount),
+        amount: currency === 'SLS' ? toAmount(amount, 'SLS') : parseFloat(amount),
+        currency,
         agentPin: enteredPin,
         paymentMethod,
         reference: reference || undefined,
@@ -207,7 +215,7 @@ export default function TopupCustomerScreen({ navigation }: { navigation: any })
         <DarkScreen edges={[]} scroll contentStyle={styles.resultWrap}>
           <SuccessCheckIcon size={72} />
           <Text style={styles.resultTitle}>{t('topup.result.successTitle')}</Text>
-          <Text style={styles.resultAmount}>{CURRENCY_SYMBOL}{parseFloat(amount).toFixed(2)}</Text>
+          <Text style={styles.resultAmount}>{amountShown}</Text>
           <Text style={styles.resultSubtitle}>{t('topup.result.creditedTo', { name: customer?.fullName })}</Text>
 
           <GlassCard style={styles.receiptCard}>
@@ -249,14 +257,14 @@ export default function TopupCustomerScreen({ navigation }: { navigation: any })
         <Text style={styles.stepTitle}>{t('topup.pin.title')}</Text>
         <Text style={styles.stepSubtitle}>
           {t('topup.pin.subtitle', {
-            amount: `${CURRENCY_SYMBOL}${parseFloat(amount).toFixed(2)}`,
+            amount: amountShown,
             name: customer?.fullName,
           })}
         </Text>
 
         <GlassCard style={styles.summaryCard}>
           <Receipt label={t('topup.pin.customer')} value={customer?.fullName ?? ''} />
-          <Receipt label={t('topup.pin.amount')} value={`${CURRENCY_SYMBOL}${parseFloat(amount).toFixed(2)}`} />
+          <Receipt label={t('topup.pin.amount')} value={amountShown} />
           <Receipt label={t('topup.pin.method')} value={methodLabel(paymentMethod)} />
         </GlassCard>
 
@@ -282,7 +290,7 @@ export default function TopupCustomerScreen({ navigation }: { navigation: any })
 
   // ── AMOUNT ──
   if (step === 'amount') {
-    const amountValid = !!amount && parseFloat(amount) > 0;
+    const amountValid = toAmount(amount, currency) > 0;
     return (
       <DarkScreen edges={[]} scroll keyboard contentStyle={styles.scrollContent}>
         <GlassCard style={styles.customerCard}>
@@ -291,22 +299,33 @@ export default function TopupCustomerScreen({ navigation }: { navigation: any })
           <Text style={styles.customerPhone}>{customer?.phoneNumber}</Text>
         </GlassCard>
 
+        <CurrencyToggle
+          value={currency}
+          onChange={(next) => {
+            if (next === currency) return;
+            setCurrency(next);
+            setAmount('');
+          }}
+          style={styles.currencyToggle}
+        />
         <Text style={styles.label}>{t('topup.amount.amountLabel')}</Text>
         <GlassCard style={styles.amountCard}>
-          <Text style={styles.currency}>{CURRENCY_SYMBOL}</Text>
+          {currency === 'USD' ? <Text style={styles.currency}>{CURRENCY_SYMBOL}</Text> : null}
           <TextInput
             style={styles.amountInput}
-            placeholder="0.00"
+            placeholder={currency === 'SLS' ? '0,000' : '0.00'}
             placeholderTextColor={PLACEHOLDER}
             value={amount}
-            onChangeText={setAmount}
-            keyboardType="decimal-pad"
+            onChangeText={(v) => setAmount(sanitizeAmountFor(v, currency))}
+            keyboardType={currency === 'SLS' ? 'number-pad' : 'decimal-pad'}
             autoFocus
           />
         </GlassCard>
-        <Text style={styles.limitHint}>
-          {t('topup.amount.maximum', { amount: `${CURRENCY_SYMBOL}${MAX_TOPUP_AMOUNT.toLocaleString()}` })}
-        </Text>
+        {currency === 'USD' ? (
+          <Text style={styles.limitHint}>
+            {t('topup.amount.maximum', { amount: `${CURRENCY_SYMBOL}${MAX_TOPUP_AMOUNT.toLocaleString()}` })}
+          </Text>
+        ) : null}
 
         <Text style={styles.label}>{t('topup.amount.paymentMethod')}</Text>
         <View style={styles.methodRow}>
@@ -530,6 +549,7 @@ const styles = StyleSheet.create({
   customerName: { fontSize: 22, fontWeight: '700', color: '#FFFFFF', letterSpacing: -0.5 },
   customerPhone: { fontSize: 14, color: TEXT_DIM, marginTop: 2 },
 
+  currencyToggle: { marginBottom: 16 },
   amountCard: {
     flexDirection: 'row',
     alignItems: 'center',

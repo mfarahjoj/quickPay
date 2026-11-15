@@ -148,14 +148,11 @@ export const createPaymentRequest = https.onCall(
         "Amount must be a positive integer in the currency's smallest unit"
       );
     }
-    // A shop may charge in shillings; the customer approves it in shillings
-    // and pays from their shilling balance, never converted. Cash-out at the
-    // counter stays in dollars.
-    if (!currency || (currency === "SLS" && purpose === "cash_out")) {
-      throw new https.HttpsError(
-        "invalid-argument",
-        purpose === "cash_out" ? "Cash-out at the counter is in dollars" : "Currency must be USD or SLS"
-      );
+    // A shop may charge, and an agent pay out cash, in shillings: the
+    // customer approves it in shillings and it moves their shilling balance
+    // and the agent's shilling float, never converted (SHILLINGS.md).
+    if (!currency) {
+      throw new https.HttpsError("invalid-argument", "Currency must be USD or SLS");
     }
 
     // One scan raises at most one charge. The request is keyed by the scanned

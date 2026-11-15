@@ -88,7 +88,8 @@ export default function PaymentsScreen({ route }: Props) {
   const [recipient, setRecipient] = useState<RecipientInfo | null>(null);
   const [amountText, setAmountText] = useState('');
   // Dollars or shillings. Starts on the currency Home shows; a payment link
-  // is always in dollars. Never converted: it comes out of that balance.
+  // sets its own (dollars unless it says SLSH). Never converted: it comes out
+  // of that balance.
   const { wallet } = useWallet();
   const { currency: homeCurrency } = useHomeCurrency(wallet?.balanceCents ?? 0, wallet?.slsBalance ?? 0);
   const [pickedCurrency, setPickedCurrency] = useState<Currency | null>(null);
@@ -374,7 +375,8 @@ export default function PaymentsScreen({ route }: Props) {
     setTab('send');
     resetSend();
     setFromLink(true);
-    setPickedCurrency('USD');
+    // The link's own currency; links from before shillings are dollars.
+    setPickedCurrency(prefill.currency ?? 'USD');
     const local = prefill.to.startsWith(PHONE_PREFIX) ? prefill.to.slice(PHONE_PREFIX.length) : prefill.to;
     setPhoneInput(local);
     setAmountText(prefill.amount ?? '');

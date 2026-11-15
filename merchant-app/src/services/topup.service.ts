@@ -10,7 +10,10 @@ export interface CustomerLookupResult {
 
 export interface TopupRequest {
   userId: string;
+  /** Whole units: dollars (12.5), or whole shillings (30000). */
   amount: number;
+  /** "USD" or "SLS": paid from the agent's float in it, never converted. */
+  currency?: 'USD' | 'SLS';
   agentPin: string;
   paymentMethod: 'cash' | 'zaad' | 'edahab';
   reference?: string;
