@@ -28,6 +28,12 @@ import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
 
 export const navigationRef = createNavigationContainerRef<MerchantStackParamList>();
 
+// For ZaadOfferWatcher, which sits beside the navigator rather than in it.
+const zaadScreenShowing = () => navigationRef.isReady() && navigationRef.getCurrentRoute()?.name === 'ZaadTopups';
+const openZaadScreen = () => {
+  if (navigationRef.isReady()) navigationRef.navigate('ZaadTopups' as never);
+};
+
 type AuthStackParamList = {
   Welcome: undefined;
   Login: undefined;
@@ -457,7 +463,7 @@ export default function AppNavigator() {
       </RootStack.Navigator>
       {/* Agents taking Zaad top-ups: heartbeat, and opening offers as they
           ring. For anyone else zaad_agents/{uid} doesn't exist and it idles. */}
-      {user ? <ZaadOfferWatcher /> : null}
+      {user ? <ZaadOfferWatcher isShowing={zaadScreenShowing} open={openZaadScreen} /> : null}
     </NavigationContainer>
   );
 

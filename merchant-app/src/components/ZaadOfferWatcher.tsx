@@ -10,12 +10,18 @@
 import { useEffect, useRef } from 'react';
 import { AppState } from 'react-native';
 import { useAuth } from '../hooks/useAuth';
-import { navigationRef } from '../navigation/AppNavigator';
 import { getZaadStatus, watchZaadAgent, watchZaadTopup, type ZaadAgentDoc } from '../services/zaadAgent.service';
 
 const HEARTBEAT_MS = 60_000;
 
-export function ZaadOfferWatcher() {
+interface Props {
+  /** Whether the Zaad top-ups screen is already showing. */
+  isShowing: () => boolean;
+  /** Open it. */
+  open: () => void;
+}
+
+export function ZaadOfferWatcher({ isShowing, open }: Props) {
   const { user } = useAuth();
   const uid = user?.uid;
   const agent = useRef<ZaadAgentDoc | null>(null);
@@ -34,16 +40,14 @@ export function ZaadOfferWatcher() {
       stopTopup = watchZaadTopup(id, (req) => {
         if (req?.status !== 'offered' || req.offeredTo !== uid || shown.current === id) return;
         shown.current = id;
-        if (navigationRef.isReady() && navigationRef.getCurrentRoute()?.name !== 'ZaadTopups') {
-          (navigationRef as any).navigate('ZaadTopups');
-        }
+        if (!isShowing()) open();
       });
     });
     return () => {
       stopTopup?.();
       stopAgent();
     };
-  }, [uid]);
+  }, [uid, isShowing, open]);
 
   // The heartbeat, while online and the app is in front.
   useEffect(() => {
