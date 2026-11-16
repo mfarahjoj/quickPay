@@ -1363,5 +1363,11 @@
   "topup.agentFlow.receipt.txn": "رقم عملية زاد: {{id}}",
   "topup.agentFlow.reference": "المرجع: {{ref}}",
   "topup.agentFlow.referenceHint": "يرى {{agent}} المرجع نفسه. لا حاجة لكتابة أي شيء.",
-  "topup.agentFlow.somethingWrong": "هل هناك مشكلة؟"
+  "topup.agentFlow.somethingWrong": "هل هناك مشكلة؟",
+  "topup.agentFlow.cancel": "إلغاء الشحن",
+  "topup.agentFlow.cancelTitle": "إلغاء هذا الشحن؟",
+  "topup.agentFlow.cancelBody": "سيتوقف رمزك عن العمل. لم يُؤخذ منك أي شيء.",
+  "topup.agentFlow.cancelBodyScanned": "لا تلغِ إلا إذا لم تعطِ {{agent}} أي نقود. سيتوقف رمزك عن العمل.",
+  "topup.agentFlow.cancelConfirm": "إلغاء الشحن",
+  "topup.agentFlow.keep": "إبقاء"
 }

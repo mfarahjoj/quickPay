@@ -291,6 +291,8 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
           ? t('zaadTopups.errors.lowFloat', { float: formatAmount(e.details.floatCents ?? 0, 'USD') })
           : reason === 'zaad_not_set_up'
             ? t('zaadTopups.notSetUp')
+            : reason === 'customer_cancelled'
+              ? t('errors.topupCancelledByCustomer')
             : e?.message || t('qr.errors.generic'),
       );
     } finally {
