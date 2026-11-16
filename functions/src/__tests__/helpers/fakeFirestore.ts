@@ -29,6 +29,9 @@ function applyTransforms(base: Data | undefined, patch: Data, dotted = false): D
     const kind = value?.constructor?.name;
     if (kind === "NumericIncrementTransform") {
       target[field] = (typeof target[field] === "number" ? target[field] : 0) + value.operand;
+    } else if (kind === "ArrayUnionTransform") {
+      const have: any[] = Array.isArray(target[field]) ? target[field] : [];
+      target[field] = [...have, ...value.elements.filter((e: any) => !have.includes(e))];
     } else if (kind === "DeleteTransform") {
       delete target[field];
     } else {

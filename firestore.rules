@@ -116,6 +116,26 @@ service cloud.firestore {
 
     // Agent top-up requests (customer-initiated cash-in). Customer reads their
     // own request live to detect confirmation; the confirming agent can read it.
+    // Zaad top-ups through agents (functions/src/zaadAgent/). The customer,
+    // the agent who accepted, and the agent it is ringing on may read it.
+    match /zaadAgentTopups/{requestId} {
+      allow read: if isAuthenticated() &&
+                     (isOwner(resource.data.customerId) ||
+                      isOwner(resource.data.agentId) ||
+                      isOwner(resource.data.offeredTo));
+      allow write: if false;
+    }
+    match /zaad_agents/{agentId} {
+      allow read: if isOwner(agentId);
+      allow write: if false;
+    }
+    match /zaad_agent_customers/{userId} {
+      allow read, write: if false;
+    }
+    match /zaad_agent_txn_ids/{txnId} {
+      allow read, write: if false;
+    }
+
     match /agentTopupRequests/{requestId} {
       allow read: if isAuthenticated() &&
                      (isOwner(resource.data.customerId) ||

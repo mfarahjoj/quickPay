@@ -512,6 +512,68 @@ export interface RateRow {
   overridden: boolean;
 }
 
+// Zaad top-ups through agents (functions/src/zaadAgent/admin.ts).
+export type ZaadTopupStatus =
+  | "offered"
+  | "no_agent"
+  | "accepted"
+  | "customer_sent"
+  | "declined"
+  | "disputed"
+  | "completed"
+  | "released"
+  | "expired"
+  | "cancelled";
+
+export interface ZaadTopupRow {
+  id: string;
+  status: ZaadTopupStatus;
+  amountCents: number;
+  customerId: string;
+  customerName: string;
+  customerPhone: string | null;
+  agentId: string | null;
+  agentName: string | null;
+  agentReceiveNumber: string | null;
+  allowedSenders: string[];
+  customerZaadTxnId: string | null;
+  agentAnswer: "received" | "not_received" | "different_amount" | null;
+  disputedBy: "customer" | "timeout" | null;
+  disputeReason: string | null;
+  offers: number;
+  createdAt: number | null;
+  acceptedAt: number | null;
+  customerSentAt: number | null;
+  agentAnsweredAt: number | null;
+  disputedAt: number | null;
+  completedAt: number | null;
+  releasedAt: number | null;
+  resolution: { outcome: "customer" | "agent"; reason: string; at: number | null } | null;
+  reversal: {
+    status: "reported" | "confirmed" | "rejected";
+    note: string;
+    agentZaadTxnId: string | null;
+    reportedAt: number | null;
+    fromCustomerCents: number | null;
+    fromZappCents: number | null;
+  } | null;
+}
+
+export interface ZaadAgentRow {
+  id: string;
+  name: string;
+  phone: string | null;
+  receiveNumber: string | null;
+  enabled: boolean;
+  online: boolean;
+  lastSeenAt: number | null;
+  pausedUntil: number | null;
+  openRequestId: string | null;
+  floatCents: number;
+  flagged: boolean;
+  verifiedAt: number | null;
+}
+
 export const api = {
   // Zaad / eDahab top-ups through the collection number (functions/src/mobileMoney/).
   listHeldMobileMoney: () => call<undefined, HeldPayment[]>("adminListHeldMobileMoney"),
@@ -786,4 +848,30 @@ export const api = {
         activityFindingCount: number;
       }
     >("adminRunLedgerCheck", { reason }, 9 * 60 * 1000),
+
+  // Zaad top-ups through agents.
+  listZaadTopups: (view: "attention" | "open" | "recent") =>
+    call<{ view: string }, { topups: ZaadTopupRow[]; heldCents: number; reversalLossCents: number }>(
+      "adminListZaadTopups",
+      { view }
+    ),
+  listZaadAgents: () => call<void, { agents: ZaadAgentRow[] }>("adminListZaadAgents"),
+  setZaadAgent: (payload: { agentId: string; receiveMsisdn: string; enabled: boolean; reason: string }) =>
+    call<typeof payload, { receiveNumber: string; enabled: boolean; pausedUntil: string | null }>(
+      "adminSetZaadAgent",
+      payload
+    ),
+  resolveZaadTopup: (requestId: string, outcome: "customer" | "agent", reason: string) =>
+    call<{ requestId: string; outcome: string; reason: string }, unknown>("adminResolveZaadTopup", {
+      requestId,
+      outcome,
+      reason,
+    }),
+  decideZaadReversal: (requestId: string, confirm: boolean, reason: string) =>
+    call<
+      { requestId: string; confirm: boolean; reason: string },
+      { fromCustomerCents: number; fromZappCents: number } | { rejected: true }
+    >("adminDecideZaadReversal", { requestId, confirm, reason }),
+  clearZaadCustomer: (userId: string, reason: string) =>
+    call<{ userId: string; reason: string }, unknown>("adminClearZaadCustomer", { userId, reason }),
 };

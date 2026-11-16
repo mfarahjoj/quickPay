@@ -69,6 +69,31 @@ export { expireAgentRequests } from "./topup/expireAgentRequests";
 export { customerRequestAgentTopup } from "./topup/customerRequestAgentTopup";
 export { agentConfirmTopup, previewAgentTopup } from "./topup/agentConfirmTopup";
 
+// Zaad top-ups through agents: the customer pays an online agent's Zaad and
+// the agent's float credits the wallet (zaadAgent/types.ts).
+export {
+  customerRequestZaadAgentTopup,
+  customerCancelZaadTopup,
+  customerMarkZaadSent,
+  customerDisputeZaadTopup,
+} from "./zaadAgent/customer";
+export {
+  agentGetZaadStatus,
+  agentSetZaadOnline,
+  agentAnswerZaadOffer,
+  agentConfirmZaadTopup,
+  agentReportZaadReversal,
+} from "./zaadAgent/agent";
+export {
+  adminSetZaadAgent,
+  adminResolveZaadTopup,
+  adminDecideZaadReversal,
+  adminClearZaadCustomer,
+  adminListZaadTopups,
+  adminListZaadAgents,
+} from "./zaadAgent/admin";
+export { zaadAgentTopupSweep } from "./zaadAgent/sweep";
+
 // Mobile money top-up & cash-out (Zaad/eDahab)
 //
 // `topupFromMobileMoney` / `cashOutToMobileMoney` are NOT exported, and were

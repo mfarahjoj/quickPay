@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
-import { useZaadTopups } from '../../hooks/useZaadTopups';
+import { useZaadAgentTopups, useZaadTopups } from '../../hooks/useZaadTopups';
 import { triggerHaptic } from '../../services/haptics.service';
 import { makeStyles } from '../../theme';
 
@@ -27,6 +27,15 @@ const METHODS: Method[] = [
     glyph: '📲',
   },
   {
+    // Pay an online agent's Zaad from anywhere; their float tops you up
+    // (functions/src/zaadAgent/). Listed once the console switches it on.
+    key: 'zaadAgent',
+    route: 'ZaadAgentTopup',
+    titleKey: 'topup.method.zaadAgentTitle',
+    subtitleKey: 'topup.method.zaadAgentSubtitle',
+    glyph: '🤝',
+  },
+  {
     key: 'agent',
     route: 'AgentTopup',
     titleKey: 'topup.method.agentTitle',
@@ -40,7 +49,10 @@ export default function TopUpMethodScreen() {
   const navigation = useNavigation<any>();
   const { t } = useTranslation();
   const zaadOpen = useZaadTopups();
-  const methods = METHODS.filter((m) => m.key !== 'zaad' || zaadOpen);
+  const zaadAgentOpen = useZaadAgentTopups();
+  const methods = METHODS.filter(
+    (m) => (m.key !== 'zaad' || zaadOpen) && (m.key !== 'zaadAgent' || zaadAgentOpen)
+  );
 
   return (
     <View style={styles.container}>

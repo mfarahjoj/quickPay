@@ -299,7 +299,7 @@ export default function ZaadTopupScreen() {
   );
 }
 
-function Primary({ label, onPress, busy, disabled }: { label: string; onPress: () => void; busy?: boolean; disabled?: boolean }) {
+export function Primary({ label, onPress, busy, disabled }: { label: string; onPress: () => void; busy?: boolean; disabled?: boolean }) {
   const colors = useColors();
   const styles = useStyles();
   return (
@@ -315,7 +315,7 @@ function Primary({ label, onPress, busy, disabled }: { label: string; onPress: (
 }
 
 /** The Zaad code: dial it on Android, copy it on iOS (which can't dial USSD). */
-function DialPanel({ code }: { code: string | null }) {
+export function DialPanel({ code }: { code: string | null }) {
   const styles = useStyles();
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
@@ -343,7 +343,7 @@ function DialPanel({ code }: { code: string | null }) {
   );
 }
 
-function Waiting({ text }: { text: string }) {
+export function Waiting({ text }: { text: string }) {
   const colors = useColors();
   const styles = useStyles();
   return (
@@ -354,7 +354,7 @@ function Waiting({ text }: { text: string }) {
   );
 }
 
-const useStyles = makeStyles((colors) => StyleSheet.create({
+export const useStyles = makeStyles((colors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.ui.canvas },
   header: { flexDirection: 'row', alignItems: 'center', paddingTop: 60, paddingHorizontal: 20, paddingBottom: 12, gap: 12 },
   headerText: { flex: 1 },

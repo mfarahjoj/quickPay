@@ -508,7 +508,8 @@ export interface Notification {
     | "agent_flagged"
     | "pin_changed"
     | "new_device"
-    | "phone_changed";
+    | "phone_changed"
+    | "zaad_agent_topup";
   title: string;
   body: string;
   data?: Record<string, string>;

@@ -254,6 +254,9 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
                     <Text style={styles.floatButtonText}>{t('dashboard.float.buyZaad')}</Text>
                   </TouchableOpacity>
                 ) : null}
+                <TouchableOpacity style={styles.floatButton} onPress={() => navigation.navigate('ZaadTopups')} activeOpacity={0.8}>
+                  <Text style={styles.floatButtonText}>{t('dashboard.float.zaadTopups')}</Text>
+                </TouchableOpacity>
                 <TouchableOpacity style={styles.floatButton} onPress={() => navigation.navigate('MoveToFloat')} activeOpacity={0.8}>
                   <Text style={styles.floatButtonText}>{t('dashboard.float.move')}</Text>
                 </TouchableOpacity>

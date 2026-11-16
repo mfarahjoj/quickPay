@@ -8,6 +8,8 @@ export const PLATFORM_ACCOUNT_ID = "platform";
 
 /** When a referral bonus is paid (decision D3). */
 export type ReferralUnlock = "first_cash_in" | "kyc_verified" | "off";
+/** A feature switch kept in config/rates, so ops turn it on from the console. */
+export type OnOff = "on" | "off";
 
 /**
  * Prices and rules, stored in Firestore at config/rates so they can be tuned
@@ -55,6 +57,21 @@ export interface Rates {
   linkChangeCooldownHours: number;
   agentFloatTopupMaxCents: number;
   slsPerUsd: number;
+  zaadAgentTopups: OnOff;
+  zaadAgentTopupCommissionRate: number;
+  zaadAgentTopupMinCents: number;
+  zaadAgentTopupMaxCents: number;
+  zaadAgentDailyMaxCents: number;
+  zaadAgentDailyCount: number;
+  zaadAgentOfferSeconds: number;
+  zaadAgentOffersPerRequest: number;
+  zaadAgentSendMinutes: number;
+  zaadAgentConfirmMinutes: number;
+  zaadAgentDisputeMinutes: number;
+  zaadAgentFloatLowCents: number;
+  zaadAgentCustomerStrikes: number;
+  zaadAgentStrikeWindowDays: number;
+  zaadAgentNumberChangePauseHours: number;
 }
 
 export type RateGroup =
@@ -66,6 +83,7 @@ export type RateGroup =
   | "Refunds and disputes"
   | "Sign-in and devices"
   | "Zaad and eDahab top-ups"
+  | "Zaad top-ups through agents"
   | "Shillings";
 
 interface BaseField {
@@ -444,6 +462,154 @@ export const RATE_FIELDS: { [K in keyof Rates]: RateFieldSpec } = {
     default: 200000,
     min: 1000,
     max: 2000000,
+  },
+  // Zaad top-ups through agents (docs/ZAPP_AGENT_ZAAD_TOPUP_PLAN.md in the
+  // Ridy driver repo): the customer pays an online agent's Zaad and the
+  // agent's float tops up the wallet.
+  zaadAgentTopups: {
+    group: "Zaad top-ups through agents",
+    label: "Zaad top-ups through agents",
+    help: "Customers can ask an online agent to top them up: they pay the agent's Zaad and the agent's float credits their wallet. Off until agents are signed up and their numbers checked in person.",
+    kind: "enum",
+    default: "off",
+    options: [
+      { value: "off", label: "Off" },
+      { value: "on", label: "On" },
+    ],
+  },
+  zaadAgentTopupCommissionRate: {
+    group: "Zaad top-ups through agents",
+    label: "Agent commission",
+    help: "Paid by Zapp to the agent on each Zaad top-up they confirm. The customer pays no fee.",
+    kind: "rate",
+    default: 0.02,
+    max: 0.1,
+  },
+  zaadAgentTopupMinCents: {
+    group: "Zaad top-ups through agents",
+    label: "Smallest top-up",
+    help: "The least a customer can ask an agent for.",
+    kind: "cents",
+    default: 100,
+    min: 100,
+    max: 100000,
+  },
+  zaadAgentTopupMaxCents: {
+    group: "Zaad top-ups through agents",
+    label: "Largest top-up",
+    help: "The most a customer can ask an agent for in one top-up. KYC limits still apply.",
+    kind: "cents",
+    default: 10000,
+    min: 100,
+    max: 100000,
+  },
+  zaadAgentDailyMaxCents: {
+    group: "Zaad top-ups through agents",
+    label: "Most a customer can top up in a day",
+    help: "Across all of a customer's agent Zaad top-ups in the last 24 hours, counting ones still in progress.",
+    kind: "cents",
+    default: 30000,
+    min: 100,
+    max: 500000,
+  },
+  zaadAgentDailyCount: {
+    group: "Zaad top-ups through agents",
+    label: "Top-ups a customer can ask for in a day",
+    help: "Requests in the last 24 hours, whatever became of them.",
+    kind: "int",
+    default: 5,
+    min: 1,
+    max: 50,
+    unit: "requests",
+  },
+  zaadAgentOfferSeconds: {
+    group: "Zaad top-ups through agents",
+    label: "Time for an agent to accept",
+    help: "How long one agent's phone rings before the request goes to the next agent.",
+    kind: "int",
+    default: 45,
+    min: 15,
+    max: 300,
+    unit: "seconds",
+  },
+  zaadAgentOffersPerRequest: {
+    group: "Zaad top-ups through agents",
+    label: "Agents tried per request",
+    help: "After this many agents decline or don't answer, the customer is told no agent is free.",
+    kind: "int",
+    default: 5,
+    min: 1,
+    max: 20,
+    unit: "agents",
+  },
+  zaadAgentSendMinutes: {
+    group: "Zaad top-ups through agents",
+    label: "Time for the customer to send",
+    help: "After an agent accepts, how long the customer has to send the Zaad and enter its transaction ID. Then the agent's float is released.",
+    kind: "int",
+    default: 10,
+    min: 2,
+    max: 60,
+    unit: "minutes",
+  },
+  zaadAgentConfirmMinutes: {
+    group: "Zaad top-ups through agents",
+    label: "Time for the agent to confirm",
+    help: "After the customer says they sent it. An agent who doesn't answer in time turns the request into a dispute; the money stays held for ops.",
+    kind: "int",
+    default: 15,
+    min: 5,
+    max: 120,
+    unit: "minutes",
+  },
+  zaadAgentDisputeMinutes: {
+    group: "Zaad top-ups through agents",
+    label: "Time for the customer to dispute",
+    help: "After an agent says they didn't receive the payment, how long the customer can dispute it. The agent's float stays held until then.",
+    kind: "int",
+    default: 60,
+    min: 10,
+    max: 1440,
+    unit: "minutes",
+  },
+  zaadAgentFloatLowCents: {
+    group: "Zaad top-ups through agents",
+    label: "Warn agents when float is below",
+    help: "The merchant app asks the agent to refill their float at ops.",
+    kind: "cents",
+    default: 2000,
+    min: 0,
+    max: 100000,
+  },
+  zaadAgentCustomerStrikes: {
+    group: "Zaad top-ups through agents",
+    label: "Lost disputes before a customer is blocked",
+    help: "A customer who loses this many Zaad top-up disputes in the window below can't use agent top-ups until ops clear them.",
+    kind: "int",
+    default: 2,
+    min: 1,
+    max: 10,
+    unit: "disputes",
+  },
+  zaadAgentStrikeWindowDays: {
+    group: "Zaad top-ups through agents",
+    label: "Window for lost disputes",
+    help: "How far back lost disputes count towards a block.",
+    kind: "int",
+    default: 30,
+    min: 1,
+    max: 365,
+    unit: "days",
+  },
+  zaadAgentNumberChangePauseHours: {
+    group: "Zaad top-ups through agents",
+    label: "Pause after an agent's Zaad number changes",
+    help: "An agent whose receiving number changes gets no requests for this long.",
+    kind: "int",
+    default: 24,
+    min: 0,
+    max: 168,
+    unit: "hours",
   },
   slsPerUsd: {
     group: "Shillings",

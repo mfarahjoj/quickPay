@@ -15,6 +15,7 @@ import { useIdleSignOut } from '../hooks/useIdleSignOut';
 import { useDeviceIntegrity } from '../hooks/useDeviceIntegrity';
 import { ConsentGate } from '../components/legal/ConsentGate';
 import { ZaadGate } from '../screens/settings/ZaadAccountScreen';
+import { ZaadOfferWatcher } from '../components/ZaadOfferWatcher';
 import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import { colors } from '../theme';
 import {
@@ -26,6 +27,12 @@ import {
 import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
 
 export const navigationRef = createNavigationContainerRef<MerchantStackParamList>();
+
+// For ZaadOfferWatcher, which sits beside the navigator rather than in it.
+const zaadScreenShowing = () => navigationRef.isReady() && navigationRef.getCurrentRoute()?.name === 'ZaadTopups';
+const openZaadScreen = () => {
+  if (navigationRef.isReady()) navigationRef.navigate('ZaadTopups' as never);
+};
 
 type AuthStackParamList = {
   Welcome: undefined;
@@ -72,6 +79,7 @@ type MerchantStackParamList = {
   MoveToFloat: undefined;
   Send: undefined;
   BuyFloatZaad: undefined;
+  ZaadTopups: undefined;
   Security: undefined;
   Devices: undefined;
   ChangePhone: undefined;
@@ -313,6 +321,11 @@ function MainStackNavigator() {
         options={{ headerShown: false }}
       />
       <MainStack.Screen
+        name="ZaadTopups"
+        getComponent={() => require('../screens/agent/ZaadTopupsScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
         name="BuyFloatZaad"
         getComponent={() => require('../screens/agent/BuyFloatZaadScreen').default}
         options={{ headerShown: false }}
@@ -448,6 +461,9 @@ export default function AppNavigator() {
           <RootStack.Screen name="Auth" component={AuthStackNavigator} />
         )}
       </RootStack.Navigator>
+      {/* Agents taking Zaad top-ups: heartbeat, and opening offers as they
+          ring. For anyone else zaad_agents/{uid} doesn't exist and it idles. */}
+      {user ? <ZaadOfferWatcher isShowing={zaadScreenShowing} open={openZaadScreen} /> : null}
     </NavigationContainer>
   );
 

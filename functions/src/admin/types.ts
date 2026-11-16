@@ -35,6 +35,8 @@ export type AuditTargetType =
   | "adjustment"
   | "mobile_money_receipt"
   | "dispute"
+  | "zaad_agent"
+  | "zaad_agent_topup"
   | "rates"
   | "migration";
 

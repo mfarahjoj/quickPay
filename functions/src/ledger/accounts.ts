@@ -88,6 +88,23 @@ export const CASHOUT_HOLD = "platform:cashout_hold";
  */
 export const SETTLEMENT_HOLD = "platform:settlement_hold";
 
+/**
+ * An agent's float held for a Zaad top-up they accepted (zaadAgent/): taken
+ * from agent:{uid} when they accept, paid to the customer when they confirm,
+ * returned to the agent when the request ends unpaid. Must trend to zero: it
+ * equals the sum of accepted, sent, declined and disputed requests.
+ */
+export const ZAAD_AGENT_HOLD = "platform:zaad_agent_hold";
+
+/**
+ * What Zaad reversals cost Zapp. When Telesom reverses a customer's payment
+ * to an agent after the wallet was credited, Zapp repays the agent's float:
+ * from the customer's wallet as far as it goes, the rest from here. Like
+ * platform:promo it goes negative: its balance is minus what reversals
+ * have cost Zapp.
+ */
+export const ZAAD_REVERSAL_LOSSES = "platform:zaad_reversal_losses";
+
 /** Ledger account for a user/merchant/agent wallet. */
 export function userAccount(uid: string): string {
   return `user:${uid}`;
