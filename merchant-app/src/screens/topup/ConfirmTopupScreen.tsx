@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { triggerHaptic } from '../../services/haptics.service';
 import { useTranslation } from 'react-i18next';
 import { useFocusEffect } from '@react-navigation/native';
+import { getZaadStatus, startZaadInPerson, type ZaadAgentStatus } from '../../services/zaadAgent.service';
 import { CodeSheet, QrScannerView, ScannerButton } from '../../components/QrScannerView';
 import { functions } from '../../services/firebase.config';
 import {
@@ -102,6 +103,13 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
   const [result, setResult] = useState<Result | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const isProcessing = useRef(false);
+  /** Whether this agent can take Zaad (D20): switched on, number checked in person. */
+  const [zaad, setZaad] = useState<ZaadAgentStatus | null>(null);
+  const [zaadError, setZaadError] = useState('');
+
+  React.useEffect(() => {
+    getZaadStatus().then(setZaad).catch(() => setZaad(null));
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -267,8 +275,33 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
     );
   }
 
+  /** The customer pays by Zaad instead: the float is held, and the Zaad screen takes over (D19). */
+  const takeZaad = async () => {
+    if (isProcessing.current || !target || !preview) return;
+    isProcessing.current = true;
+    setZaadError('');
+    try {
+      const started = await startZaadInPerson({ ...target, expectedAmount: preview.amount });
+      triggerHaptic('medium');
+      navigation.replace('ZaadTopups', { requestId: started.requestId });
+    } catch (e: any) {
+      const reason = e?.details?.reason;
+      setZaadError(
+        reason === 'insufficient_float'
+          ? t('zaadTopups.errors.lowFloat', { float: formatAmount(e.details.floatCents ?? 0, 'USD') })
+          : reason === 'zaad_not_set_up'
+            ? t('zaadTopups.notSetUp')
+            : e?.message || t('qr.errors.generic'),
+      );
+    } finally {
+      isProcessing.current = false;
+    }
+  };
+
   // ── Review: who and how much, before the cash ──
   if (step === 'review' && preview) {
+    const zaadReady = !!zaad?.open && !!zaad.enabled && !zaad.pausedUntil;
+    const dollars = (preview.currency ?? 'USD') === 'USD';
     return (
       <DarkScreen edges={[]} contentStyle={styles.resultWrap}>
         <Text style={styles.reviewLabel}>{t('topup.confirm.reviewLabel')}</Text>
@@ -290,6 +323,18 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
               setStep('pin');
             }}
           />
+          {zaadReady && dollars ? (
+            <PillButton
+              label={t('zaadTopups.inPerson.payByZaad', { amount: formatAmount(preview.amount, preview.currency) })}
+              variant="glass"
+              onPress={takeZaad}
+              style={styles.secondBtn}
+            />
+          ) : null}
+          {zaadReady && !dollars ? (
+            <Text style={styles.zaadReason}>{t('zaadTopups.inPerson.dollarsOnly')}</Text>
+          ) : null}
+          {zaadError ? <Text style={styles.zaadError}>{zaadError}</Text> : null}
           <PillButton
             label={t('common.cancel')}
             variant="glass"
@@ -410,6 +455,8 @@ const styles = StyleSheet.create({
   resultBtn: { alignSelf: 'stretch', marginTop: 28 },
   secondBtn: { marginTop: 12 },
   pinInput: { marginTop: 28 },
+  zaadReason: { fontSize: 13, color: 'rgba(255,255,255,0.5)', textAlign: 'center', marginTop: 12 },
+  zaadError: { fontSize: 14, color: '#FF6961', textAlign: 'center', marginTop: 12 },
   pinError: { fontSize: 14, color: '#FF6961', textAlign: 'center', marginTop: 16 },
   processingText: { fontSize: 16, color: TEXT_DIM, marginTop: 20 },
 });

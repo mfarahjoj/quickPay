@@ -966,9 +966,9 @@
   "autoPayout.shillingsToggle": "Shilinka sidoo kale",
   "autoPayout.shillingsHint": "Shilinka ka badan inta aad haysato waxaa laguu bixiyaa shilin ahaan, weligood looma beddelo doolar.",
   "autoPayout.keepSlsLabel": "Shilinka la hayo",
-  "dashboard.float.zaadTopups": "Ku darid Zaad",
-  "zaadTopups.title": "Ku darid Zaad",
-  "zaadTopups.subtitle": "Macaamiishu waxay lacagta u soo diraan Zaad-kaaga; float-kaaga ayaa jeebkooda ku shuba.",
+  "dashboard.float.zaadTopups": "Ku-darid",
+  "zaadTopups.title": "Ku-darid",
+  "zaadTopups.subtitle": "Gacan-ka-gacan ama meel fog, lacag caddaan ah ama Zaad.",
   "zaadTopups.closed": "Ku darid Zaad oo wakiillo loo marayo weli lama furin.",
   "zaadTopups.notSetUp": "Zapp Pay waa inay si toos ah u hubiso lambarkaaga Zaad ka hor intaadan qaadan ku darid Zaad. Teleefankaaga la imow xafiiska Zapp Pay.",
   "zaadTopups.paused": "Lambarkaaga Zaad dhawaan ayuu isbeddelay. Waxaad mar kale qaadan kartaa ku darid kadib {{until}}.",
@@ -1010,5 +1010,10 @@
   "zaadTopups.ended.cancelled": "Macmiilku wuu joojiyay. Float-kaagii waa soo noqday.",
   "zaadTopups.ended.disputed": "Zapp Pay waxay eegaysaa ku daridan. Lacagta waa la hayaa ilaa markaas.",
   "zaadTopups.ended.declined": "Macmiilka waa loo sheegay. Muddo ayuu ka cabanayaa karaa; kadib float-kaagu wuu soo noqonayaa.",
-  "zaadTopups.ended.other": "Ku daridan way dhammaatay."
+  "zaadTopups.ended.other": "Ku daridan way dhammaatay.",
+  "zaadTopups.scanCustomer": "Iskaan koodka ku-darista macmiilka",
+  "zaadTopups.inPerson.payByZaad": "Macmiilku wuxuu {{amount}} ku bixinayaa Zaad",
+  "zaadTopups.inPerson.dollarsOnly": "Ku darista Zaad waa doollar. Shilin, qaado lacag caddaan ah.",
+  "zaadTopups.inPerson.byPhoneCashOnly": "Halkan lacag caddaan ah oo keliya. Zaad, iskaan koodka macmiilka.",
+  "zaadTopups.sent.noTxnId": "Lama bixin: hubi lacagta iyo cidda dirtay"
 }

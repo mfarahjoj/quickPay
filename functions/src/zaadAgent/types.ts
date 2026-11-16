@@ -85,6 +85,13 @@ export interface ZaadAgentTopup {
   customerFirstName: string;
   /** US cents. Dollars only at launch (D14). */
   amount: number;
+  /**
+   * "in_person": the agent scanned the customer's code and chose Zaad
+   * (inPerson.ts); created already accepted, never offered, and outside the
+   * agent's one-request-at-a-time slot (D26). Missing on requests made before
+   * it existed: remote.
+   */
+  meeting?: "in_person" | "remote";
   currency: "USD";
   status: ZaadTopupStatus;
   createdAt: Timestamp;

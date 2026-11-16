@@ -97,6 +97,8 @@ function Timeline({ row }: { row: ZaadTopupRow }) {
       <dd>
         {row.agentName ?? "—"} · receives on {row.agentReceiveNumber ?? "—"}
       </dd>
+      <dt>Where</dt>
+      <dd>{row.meeting === "in_person" ? "In person (the agent scanned the customer)" : "Remote (Zapp found the agent)"}</dd>
       <dt>Should pay from</dt>
       <dd>{row.allowedSenders.join(" or ") || "—"}</dd>
       <dt>Customer's Zaad ID</dt>
@@ -301,6 +303,7 @@ function DecisionsPanel({
 
 function RequestsPanel() {
   const [view, setView] = useState<"open" | "recent">("open");
+  const [meeting, setMeeting] = useState<"all" | "in_person" | "remote">("all");
   const [rows, setRows] = useState<ZaadTopupRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -334,6 +337,13 @@ function RequestsPanel() {
             Latest 100
           </button>
         </div>
+        <div className="segmented" role="group" aria-label="Where">
+          {(["all", "in_person", "remote"] as const).map((m) => (
+            <button key={m} aria-pressed={meeting === m} onClick={() => setMeeting(m)}>
+              {m === "all" ? "All" : m === "in_person" ? "In person" : "Remote"}
+            </button>
+          ))}
+        </div>
         <div className="spacer" />
         <button className="ghost" onClick={() => void load()}>
           <Icon name="refresh" size={16} />
@@ -351,6 +361,7 @@ function RequestsPanel() {
             <thead>
               <tr>
                 <th className="wide">Customer</th>
+                <th>Where</th>
                 <th className="wide">Agent</th>
                 <th className="num">Amount</th>
                 <th>Status</th>
@@ -359,12 +370,13 @@ function RequestsPanel() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
+              {rows.filter((r) => meeting === "all" || r.meeting === meeting).map((row) => (
                 <tr key={row.id}>
                   <td className="wide">
                     {row.customerName}
                     <div className="muted">{row.customerPhone ?? row.customerId}</div>
                   </td>
+                  <td className="nowrap">{row.meeting === "in_person" ? "In person" : "Remote"}</td>
                   <td className="wide">
                     {row.agentName ?? <span className="muted">{row.offers} offered</span>}
                     {row.agentReceiveNumber && <div className="muted">{row.agentReceiveNumber}</div>}

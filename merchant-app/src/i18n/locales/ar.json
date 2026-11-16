@@ -966,9 +966,9 @@
   "autoPayout.shillingsToggle": "الشلن أيضًا",
   "autoPayout.shillingsHint": "يُحوَّل الشلن الزائد عن الرصيد الذي تحتفظ به كشلن، ولا يُحوَّل أبدًا إلى دولار.",
   "autoPayout.keepSlsLabel": "الشلن المحتفظ به",
-  "dashboard.float.zaadTopups": "شحن زاد",
-  "zaadTopups.title": "شحن زاد",
-  "zaadTopups.subtitle": "يدفع العملاء إلى زاد الخاص بك، ويشحن رصيدك التشغيلي محافظهم.",
+  "dashboard.float.zaadTopups": "الشحن",
+  "zaadTopups.title": "الشحن",
+  "zaadTopups.subtitle": "حضوريًا أو عن بُعد، نقدًا أو عبر زاد.",
   "zaadTopups.closed": "شحن زاد عبر الوكلاء غير متاح بعد.",
   "zaadTopups.notSetUp": "يجب أن يتحقق Zapp Pay من رقم زاد الخاص بك شخصيًا قبل أن تستقبل طلبات شحن زاد. زر مكتب Zapp Pay مع هاتفك.",
   "zaadTopups.paused": "تغيّر رقم زاد الخاص بك مؤخرًا. يمكنك استقبال الطلبات مجددًا بعد {{until}}.",
@@ -1010,5 +1010,10 @@
   "zaadTopups.ended.cancelled": "ألغى العميل الطلب. عاد رصيدك التشغيلي.",
   "zaadTopups.ended.disputed": "يراجع Zapp Pay هذا الطلب. يبقى المبلغ محجوزًا حتى ذلك الحين.",
   "zaadTopups.ended.declined": "تم إبلاغ العميل. يمكنه الاعتراض لفترة، ثم يعود رصيدك التشغيلي.",
-  "zaadTopups.ended.other": "انتهى هذا الطلب."
+  "zaadTopups.ended.other": "انتهى هذا الطلب.",
+  "zaadTopups.scanCustomer": "امسح رمز شحن العميل",
+  "zaadTopups.inPerson.payByZaad": "العميل يدفع {{amount}} عبر زاد",
+  "zaadTopups.inPerson.dollarsOnly": "الشحن عبر زاد بالدولار فقط. خذ النقد للشلن.",
+  "zaadTopups.inPerson.byPhoneCashOnly": "نقدًا فقط هنا. لزاد، امسح رمز العميل.",
+  "zaadTopups.sent.noTxnId": "لم يُذكر: تحقق من المبلغ والمرسل"
 }

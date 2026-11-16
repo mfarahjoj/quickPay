@@ -26,6 +26,8 @@ export interface ZaadTopupDoc {
   /** US cents. */
   amount: number;
   status: ZaadTopupStatus;
+  /** "in_person": the agent scanned the customer and chose Zaad. Missing: remote. */
+  meeting?: 'in_person' | 'remote';
   offeredTo: string | null;
   offerExpiresAt: { toMillis(): number } | null;
   agentId: string | null;
@@ -63,6 +65,16 @@ async function call<T>(name: string, payload?: unknown): Promise<T> {
 export const getZaadStatus = () => call<ZaadAgentStatus>('agentGetZaadStatus');
 
 export const setZaadOnline = (online: boolean) => call<{ online: boolean }>('agentSetZaadOnline', { online });
+
+/**
+ * In person: the customer whose code was just scanned pays by Zaad. Holds the
+ * agent's float and returns the Zaad request to follow (D19).
+ */
+export const startZaadInPerson = (target: { otpCode: string; requestId?: string; customerPhone?: string; expectedAmount: number }) =>
+  call<{ requestId: string; amount: number; customerName: string; allowedSenders: string[]; sendBy: string }>(
+    'agentStartZaadInPerson',
+    target,
+  );
 
 export const answerZaadOffer = (requestId: string, accept: boolean) =>
   call<unknown>('agentAnswerZaadOffer', { requestId, accept });

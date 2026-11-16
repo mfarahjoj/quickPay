@@ -79,7 +79,7 @@ type MerchantStackParamList = {
   MoveToFloat: undefined;
   Send: undefined;
   BuyFloatZaad: undefined;
-  ZaadTopups: undefined;
+  ZaadTopups: { requestId?: string } | undefined;
   Security: undefined;
   Devices: undefined;
   ChangePhone: undefined;

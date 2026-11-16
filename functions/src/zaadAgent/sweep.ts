@@ -31,8 +31,11 @@ async function disputeForTimeout(id: string, nowMs: number): Promise<ZaadAgentTo
     const agent = (await tx.get(agentRef)).data() as ZaadAgentDoc | undefined;
     const now = admin.firestore.Timestamp.fromMillis(nowMs);
     tx.update(ref, { status: "disputed", disputedAt: now, disputedBy: "timeout", deadlineAt: null, updatedAt: now });
-    // An agent who didn't answer gets no more offers until they come back.
-    if (agent) tx.update(agentRef, { online: false, ...(agent.openRequestId === id ? { openRequestId: null } : {}) });
+    // An agent who didn't answer a remote request gets no more offers until
+    // they come back. In person there was no offer to miss (D26): leave them be.
+    if (agent && req.meeting !== "in_person") {
+      tx.update(agentRef, { online: false, ...(agent.openRequestId === id ? { openRequestId: null } : {}) });
+    }
     return req;
   });
 }

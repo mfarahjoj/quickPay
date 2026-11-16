@@ -184,8 +184,12 @@ export async function creditZaadTopup(
     prepared.write(tx);
 
     const now = admin.firestore.Timestamp.now();
-    const description = "Zaad top-up via agent";
+    const agentName = req.agentName ?? "Zapp Pay agent";
+    const description = `Top-up from ${agentName} (Zaad)`;
     const row: Transaction = {
+      agentName,
+      paidBy: "zaad",
+      meeting: req.meeting ?? "remote",
       type: "topup",
       kind: "cash_in",
       fromUserId: req.agentId,

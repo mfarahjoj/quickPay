@@ -29,6 +29,8 @@ export interface ZaadAgentTopupDoc {
   /** US cents. */
   amount: number;
   status: ZaadAgentTopupStatus;
+  /** "in_person": the agent scanned the customer's code. Missing: remote. */
+  meeting?: 'in_person' | 'remote';
   agentName?: string;
   agentReceiveMsisdn?: string;
   dialCode?: string | null;
@@ -50,8 +52,9 @@ export const requestZaadAgentTopup = (amountCents: number) =>
 
 export const cancelZaadAgentTopup = (requestId: string) => call<unknown>('customerCancelZaadTopup', { requestId });
 
-export const markZaadSent = (requestId: string, zaadTxnId: string) =>
-  call<{ confirmBy: string }>('customerMarkZaadSent', { requestId, zaadTxnId });
+/** The transaction ID is optional in person (D21), required remote. */
+export const markZaadSent = (requestId: string, zaadTxnId?: string) =>
+  call<{ confirmBy: string }>('customerMarkZaadSent', { requestId, ...(zaadTxnId ? { zaadTxnId } : {}) });
 
 export const disputeZaadAgentTopup = (requestId: string, reason: string) =>
   call<unknown>('customerDisputeZaadTopup', { requestId, reason });

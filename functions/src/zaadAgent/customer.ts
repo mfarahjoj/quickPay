@@ -6,31 +6,22 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { requireAuth } from "../utils/validation";
-import { assertAccountActive } from "../utils/accountStatus";
-import { enforcePerTransactionLimit } from "../utils/limits";
-import { isPrivilegedRole } from "../utils/roles";
 import { getRates } from "../config/rates";
 import { notifyUser } from "../utils/notifications";
-import { formatAmount, pushAmount } from "../utils/money";
-import { ApiResponse, User } from "../types";
-import { activeStrikes, firstName, normaliseTxnId } from "./core";
+import { pushAmount } from "../utils/money";
+import { ApiResponse } from "../types";
+import { firstName, normaliseTxnId } from "./core";
 import { offerNext } from "./dispatch";
+import { assertNoActiveZaad, assertZaadAgentOpen, assertZaadAmount, checkZaadCustomer } from "./limits";
 import { releaseZaadHold } from "./settle";
 import {
-  ACTIVE_STATUSES,
   ZAAD_AGENTS,
-  ZAAD_AGENT_CUSTOMERS,
   ZAAD_AGENT_TOPUPS,
   ZAAD_AGENT_TXN_IDS,
-  ZaadAgentCustomerDoc,
   ZaadAgentDoc,
   ZaadAgentTopup,
   ZaadTopupStatus,
 } from "./types";
-
-const DAY_MS = 24 * 3600 * 1000;
-/** Requests that never got as far as an agent's float don't count towards the daily amount. */
-const NOT_COUNTED: readonly ZaadTopupStatus[] = ["no_agent", "cancelled", "expired", "released"];
 
 function requestId(data: unknown): string {
   const id = (data as { requestId?: unknown } | undefined)?.requestId;
@@ -58,9 +49,7 @@ export const customerRequestZaadAgentTopup = https.onCall(
     requireAuth(request);
     const uid = request.auth!.uid;
     const rates = await getRates();
-    if (rates.zaadAgentTopups !== "on") {
-      throw new https.HttpsError("unavailable", "Zaad top-ups through agents aren't open yet", { reason: "off" });
-    }
+    assertZaadAgentOpen(rates);
     const currency = request.data?.currency ?? "USD";
     if (currency !== "USD") {
       throw new https.HttpsError("invalid-argument", "Zaad top-ups through agents are in dollars for now", {
@@ -68,84 +57,15 @@ export const customerRequestZaadAgentTopup = https.onCall(
       });
     }
     const amount = request.data?.amount;
-    const min = rates.zaadAgentTopupMinCents;
-    const max = rates.zaadAgentTopupMaxCents;
-    if (!Number.isInteger(amount) || amount < min || amount > max) {
-      throw new https.HttpsError(
-        "invalid-argument",
-        `Top up between ${formatAmount(min, "USD")} and ${formatAmount(max, "USD")}`,
-        { reason: "amount_out_of_range", minCents: min, maxCents: max }
-      );
-    }
+    assertZaadAmount(amount, rates);
 
     const db = admin.firestore();
-    const userSnap = await db.collection("users").doc(uid).get();
-    if (!userSnap.exists) throw new https.HttpsError("not-found", "User not found");
-    const user = userSnap.data() as User;
-    assertAccountActive(user);
-    // Agents and merchants hold float or takings; a cash-in to them moves
-    // value between businesses (agentGuards.ts).
-    if (isPrivilegedRole(user.accountType)) {
-      throw new https.HttpsError("permission-denied", "Zaad top-ups through agents are for customer accounts");
-    }
-    // D5: the payment must come from the customer's own number, which sign-up
-    // verified by SMS code.
-    if (!user.phoneNumber) {
-      throw new https.HttpsError("failed-precondition", "Your account has no phone number");
-    }
-    await enforcePerTransactionLimit(amount, user, "USD");
-
     const nowMs = Date.now();
-    const customerRef = db.collection(ZAAD_AGENT_CUSTOMERS).doc(uid);
-    const customer = (await customerRef.get()).data() as ZaadAgentCustomerDoc | undefined;
-    if (
-      customer?.blocked ||
-      activeStrikes(customer?.strikes, rates.zaadAgentStrikeWindowDays, nowMs) >= rates.zaadAgentCustomerStrikes
-    ) {
-      throw new https.HttpsError(
-        "permission-denied",
-        "Zaad top-ups through agents are paused on your account. Contact Zapp Pay support.",
-        { reason: "blocked" }
-      );
-    }
-
-    const recent = await db
-      .collection(ZAAD_AGENT_TOPUPS)
-      .where("customerId", "==", uid)
-      .where("createdAt", ">=", admin.firestore.Timestamp.fromMillis(nowMs - DAY_MS))
-      .limit(100)
-      .get();
-    if (recent.size >= rates.zaadAgentDailyCount) {
-      throw new https.HttpsError("resource-exhausted", "You've asked for as many top-ups as you can today", {
-        reason: "daily_count",
-      });
-    }
-    const todayCents = recent.docs
-      .map((d) => d.data() as ZaadAgentTopup)
-      .filter((r) => !NOT_COUNTED.includes(r.status))
-      .reduce((sum, r) => sum + r.amount, 0);
-    if (todayCents + amount > rates.zaadAgentDailyMaxCents) {
-      throw new https.HttpsError(
-        "resource-exhausted",
-        `You can top up ${formatAmount(Math.max(0, rates.zaadAgentDailyMaxCents - todayCents), "USD")} more today`,
-        { reason: "daily_amount" }
-      );
-    }
+    const { user, customerRef } = await checkZaadCustomer(uid, amount, rates, nowMs);
 
     const ref = db.collection(ZAAD_AGENT_TOPUPS).doc();
     await db.runTransaction(async (tx) => {
-      const lock = (await tx.get(customerRef)).data() as ZaadAgentCustomerDoc | undefined;
-      if (lock?.activeRequestId) {
-        const open = (await tx.get(db.collection(ZAAD_AGENT_TOPUPS).doc(lock.activeRequestId))).data() as
-          | ZaadAgentTopup
-          | undefined;
-        if (open && ACTIVE_STATUSES.includes(open.status)) {
-          throw new https.HttpsError("already-exists", "You already have a Zaad top-up in progress", {
-            reason: "in_progress",
-            requestId: lock.activeRequestId,
-          });
-        }
-      }
+      await assertNoActiveZaad(tx, customerRef);
       const now = admin.firestore.Timestamp.fromMillis(nowMs);
       const record: ZaadAgentTopup = {
         customerId: uid,
@@ -160,6 +80,7 @@ export const customerRequestZaadAgentTopup = https.onCall(
         offeredTo: null,
         offerExpiresAt: null,
         agentId: null,
+        meeting: "remote",
       };
       tx.set(ref, record);
       tx.set(customerRef, { activeRequestId: ref.id }, { merge: true });
@@ -221,24 +142,31 @@ export const customerMarkZaadSent = https.onCall(
     requireAuth(request);
     const uid = request.auth!.uid;
     const id = requestId(request.data);
-    const txnId = normaliseTxnId(request.data?.zaadTxnId);
-    if (!txnId) {
-      throw new https.HttpsError("invalid-argument", "Enter the transaction ID from your Zaad text", {
+    const typed = request.data?.zaadTxnId;
+    const txnId = typed === undefined || typed === null || typed === "" ? null : normaliseTxnId(typed);
+    if (typed !== undefined && typed !== null && typed !== "" && !txnId) {
+      throw new https.HttpsError("invalid-argument", "That doesn't look like a Zaad transaction ID", {
         reason: "txn_id",
       });
     }
     const rates = await getRates();
     const db = admin.firestore();
     const ref = db.collection(ZAAD_AGENT_TOPUPS).doc(id);
-    const txnRef = db.collection(ZAAD_AGENT_TXN_IDS).doc(txnId);
+    const txnRef = txnId ? db.collection(ZAAD_AGENT_TXN_IDS).doc(txnId) : null;
     let req: ZaadAgentTopup | null = null;
     let confirmBy!: FirebaseFirestore.Timestamp;
 
     await db.runTransaction(async (tx) => {
-      const [snap, txnSnap] = await Promise.all([tx.get(ref), tx.get(txnRef)]);
+      const [snap, txnSnap] = await Promise.all([tx.get(ref), txnRef ? tx.get(txnRef) : Promise.resolve(null)]);
       const fresh = snap.data() as ZaadAgentTopup | undefined;
       if (!fresh || fresh.customerId !== uid) throw new https.HttpsError("not-found", "Top-up not found");
-      if (fresh.status === "customer_sent" && fresh.customerZaadTxnId === txnId) {
+      // D9 / D21: remote needs the ID as evidence; in person it's optional.
+      if (!txnId && fresh.meeting !== "in_person") {
+        throw new https.HttpsError("invalid-argument", "Enter the transaction ID from your Zaad text", {
+          reason: "txn_id",
+        });
+      }
+      if (fresh.status === "customer_sent" && (fresh.customerZaadTxnId ?? null) === txnId) {
         confirmBy = fresh.confirmBy!;
         return; // a retry
       }
@@ -254,17 +182,17 @@ export const customerMarkZaadSent = https.onCall(
           reason: "too_late",
         });
       }
-      if (txnSnap.exists) {
+      if (txnSnap?.exists) {
         throw new https.HttpsError("already-exists", "That Zaad transaction ID has already been used", {
           reason: "txn_id_used",
         });
       }
       const now = admin.firestore.Timestamp.fromMillis(nowMs);
       confirmBy = admin.firestore.Timestamp.fromMillis(nowMs + rates.zaadAgentConfirmMinutes * 60_000);
-      tx.set(txnRef, { requestId: id, customerId: uid, at: now });
+      if (txnRef) tx.set(txnRef, { requestId: id, customerId: uid, at: now });
       tx.update(ref, {
         status: "customer_sent",
-        customerZaadTxnId: txnId,
+        ...(txnId ? { customerZaadTxnId: txnId } : {}),
         customerSentAt: now,
         confirmBy,
         deadlineAt: confirmBy,

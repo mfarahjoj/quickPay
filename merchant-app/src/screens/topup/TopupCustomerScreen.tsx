@@ -21,6 +21,7 @@ import { CurrencyToggle, type FloatCurrency } from '../../components/CurrencyTog
 import { formatAmount, sanitizeAmountFor, toAmount } from '../../utils/money';
 import { newIdempotencyKey } from '../../utils/idempotency';
 import { isWrongPin, pinActionErrorKey } from '../../utils/errors';
+import { getZaadStatus } from '../../services/zaadAgent.service';
 
 type Step = 'lookup' | 'amount' | 'pin' | 'result';
 type PaymentMethod = 'cash' | 'zaad' | 'edahab';
@@ -64,6 +65,19 @@ export default function TopupCustomerScreen({ navigation }: { navigation: any })
   // As the customer will see it: "$12.50" or "30,000 SLSH".
   const amountShown = formatAmount(toAmount(amount, currency), currency);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
+  // D24: an agent who can take Zaad through Zapp takes it by scanning the
+  // customer's code, where the float is held for the customer. Here: cash only.
+  const [cashOnly, setCashOnly] = useState(false);
+  React.useEffect(() => {
+    getZaadStatus()
+      .then((st) => {
+        if (st.open && st.enabled) {
+          setCashOnly(true);
+          setPaymentMethod('cash');
+        }
+      })
+      .catch(() => undefined);
+  }, []);
   const [reference, setReference] = useState('');
 
   const [pin, setPin] = useState('');
@@ -329,7 +343,7 @@ export default function TopupCustomerScreen({ navigation }: { navigation: any })
 
         <Text style={styles.label}>{t('topup.amount.paymentMethod')}</Text>
         <View style={styles.methodRow}>
-          {PAYMENT_METHODS.map((m) => {
+          {PAYMENT_METHODS.filter((m) => !cashOnly || m.key === 'cash').map((m) => {
             const selected = paymentMethod === m.key;
             return (
               <TouchableOpacity
@@ -344,6 +358,8 @@ export default function TopupCustomerScreen({ navigation }: { navigation: any })
             );
           })}
         </View>
+
+        {cashOnly ? <Text style={styles.zaadHint}>{t('zaadTopups.inPerson.byPhoneCashOnly')}</Text> : null}
 
         <Text style={styles.label}>{t('topup.amount.referenceLabel')}</Text>
         <GlassCard style={styles.referenceCard}>
@@ -562,6 +578,7 @@ const styles = StyleSheet.create({
   limitHint: { fontSize: 13, color: TEXT_FAINT, marginBottom: 24 },
 
   methodRow: { flexDirection: 'row', gap: 10, marginBottom: 24 },
+  zaadHint: { fontSize: 13, color: 'rgba(255,255,255,0.5)', marginTop: -12, marginBottom: 20 },
   methodCard: {
     flex: 1,
     backgroundColor: 'rgba(255,255,255,0.06)',

@@ -19,7 +19,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Switch, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { useAuth } from '../../hooks/useAuth';
 import { DarkScreen, GlassCard, PillButton, PinInput, ScreenHeader, TEXT_DIM, TEXT_FAINT } from '../../components';
 import { SuccessCheckIcon } from '../../components/icons/AuthIcons';
@@ -56,12 +56,15 @@ const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2,
 export default function ZaadTopupsScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
   const { user } = useAuth();
   const uid = user?.uid ?? '';
 
   const [status, setStatus] = useState<ZaadAgentStatus | null>(null);
   const [agent, setAgent] = useState<ZaadAgentDoc | null>(null);
-  const [requestId, setRequestId] = useState<string | null>(null);
+  // An in-person Zaad top-up (D19) is opened by id: it never takes the agent's
+  // offer slot (openRequestId), so the watcher below wouldn't find it.
+  const [requestId, setRequestId] = useState<string | null>(route.params?.requestId ?? null);
   const [req, setReq] = useState<ZaadTopupDoc | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -238,7 +241,7 @@ export default function ZaadTopupsScreen() {
           <Text style={styles.sub}>{t('zaadTopups.sent.body', { name: mine.customerFirstName })}</Text>
           <GlassCard style={styles.card}>
             <Text style={styles.label}>{t('zaadTopups.sent.txnId')}</Text>
-            <Text style={styles.code} selectable>{mine.customerZaadTxnId}</Text>
+            <Text style={styles.code} selectable>{mine.customerZaadTxnId ?? t('zaadTopups.sent.noTxnId')}</Text>
           </GlassCard>
           <Senders senders={mine.allowedSenders} />
           <Text style={styles.warn}>{t('zaadTopups.sent.ownZaadOnly')}</Text>
@@ -259,7 +262,7 @@ export default function ZaadTopupsScreen() {
   }
 
   // A request this agent was on has ended some other way.
-  if (mine && requestId && !agent?.openRequestId) {
+  if (mine && requestId && (mine.meeting === 'in_person' || !agent?.openRequestId)) {
     return (
       <DarkScreen edges={[]} contentStyle={styles.centered}>
         <Text style={styles.bigTitle}>{t(`zaadTopups.ended.${mine.status}`, { defaultValue: t('zaadTopups.ended.other') })}</Text>
@@ -311,6 +314,8 @@ export default function ZaadTopupsScreen() {
             <Text style={styles.hint}>{t('zaadTopups.howItWorks')}</Text>
           </>
         )}
+        {/* In person, cash or Zaad: scan the customer's top-up code. */}
+        <PillButton label={t('zaadTopups.scanCustomer')} onPress={() => navigation.navigate('ConfirmTopup')} />
         {errorLine}
       </View>
     </DarkScreen>

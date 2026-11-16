@@ -966,9 +966,9 @@
   "autoPayout.shillingsToggle": "Shillings too",
   "autoPayout.shillingsHint": "Shillings above the balance you keep are paid out as shillings, never changed into dollars.",
   "autoPayout.keepSlsLabel": "Shillings to keep",
-  "dashboard.float.zaadTopups": "Zaad top-ups",
-  "zaadTopups.title": "Zaad top-ups",
-  "zaadTopups.subtitle": "Customers pay your Zaad; your float tops them up.",
+  "dashboard.float.zaadTopups": "Top-ups",
+  "zaadTopups.title": "Top-ups",
+  "zaadTopups.subtitle": "In person or remote, cash or Zaad.",
   "zaadTopups.closed": "Zaad top-ups through agents aren't open yet.",
   "zaadTopups.notSetUp": "Zapp Pay needs to check your Zaad number in person before you can take Zaad top-ups. Visit the Zapp Pay office with your phone.",
   "zaadTopups.paused": "Your Zaad number changed recently. You can take top-ups again after {{until}}.",
@@ -1010,5 +1010,10 @@
   "zaadTopups.ended.cancelled": "The customer cancelled. Your float is back.",
   "zaadTopups.ended.disputed": "Zapp Pay is reviewing this top-up. The money stays held until then.",
   "zaadTopups.ended.declined": "The customer has been told. They can dispute it for a while; then your float comes back.",
-  "zaadTopups.ended.other": "This top-up has ended."
+  "zaadTopups.ended.other": "This top-up has ended.",
+  "zaadTopups.scanCustomer": "Scan a customer's top-up code",
+  "zaadTopups.inPerson.payByZaad": "Customer pays {{amount}} by Zaad",
+  "zaadTopups.inPerson.dollarsOnly": "Zaad top-ups are in dollars. Take cash for shillings.",
+  "zaadTopups.inPerson.byPhoneCashOnly": "Cash only here. For Zaad, scan the customer's code.",
+  "zaadTopups.sent.noTxnId": "None given: check the amount and sender"
 }
