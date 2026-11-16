@@ -67,6 +67,7 @@ export { cancelCashOut } from "./topup/cancelCashOut";
 // Returns unclaimed cash-out holds and closes stale top-up codes, every 5 minutes
 export { expireAgentRequests } from "./topup/expireAgentRequests";
 export { customerRequestAgentTopup } from "./topup/customerRequestAgentTopup";
+export { customerCancelAgentTopup } from "./topup/customerCancelAgentTopup";
 export { agentConfirmTopup, previewAgentTopup } from "./topup/agentConfirmTopup";
 
 // Zaad top-ups through agents: the customer pays an online agent's Zaad and

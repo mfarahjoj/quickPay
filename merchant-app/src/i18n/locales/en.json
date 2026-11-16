@@ -836,6 +836,7 @@
   "topup.confirm.oldQrPhone": "Type the customer's phone number too",
   "topup.confirm.check": "Check",
   "errors.topupAmountChanged": "The customer's amount changed. Scan their code again.",
+  "errors.topupCancelledByCustomer": "The customer cancelled this top-up. Don't take their cash.",
   "errors.updateApp": "Update Zapp Pay Merchant to do this.",
   "errors.cashOutCodeAttempts": "Too many wrong codes for this cash-out. Ask the customer to cancel it and make a new one.",
   "errors.startNewTopup": "Something changed. Start this top-up again.",

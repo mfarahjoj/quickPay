@@ -90,6 +90,11 @@ export const PUSH_TEMPLATES = {
     so: { title: "Ku dariddu waa guulaysatay", body: "{agent} ayaa jeebkaaga ku shubay {amount}." },
     ar: { title: "تم الشحن بنجاح", body: "قام {agent} بشحن محفظتك بمبلغ {amount}." },
   },
+  "topup.cancelled_by_customer": {
+    en: { title: "Top-up cancelled", body: "The customer cancelled their {amount} top-up. Don't take their cash." },
+    so: { title: "Ku daridda waa la joojiyay", body: "Macmiilku wuu joojiyay ku daridda {amount}. Ha qaadan lacagtiisa caddaanka ah." },
+    ar: { title: "تم إلغاء الشحن", body: "ألغى العميل شحن {amount}. لا تأخذ نقوده." },
+  },
   "referral.welcome_bonus": {
     en: { title: "Referral bonus", body: "You got a {amount} welcome bonus." },
     so: { title: "Abaalmarin casuumaad", body: "Waxaad heshay {amount} oo abaalmarin soo dhaweyn ah." },

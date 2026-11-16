@@ -836,6 +836,7 @@
   "topup.confirm.oldQrPhone": "Sidoo kale qor lambarka macmiilka",
   "topup.confirm.check": "Hubi",
   "errors.topupAmountChanged": "Qadarka macmiilku wuu isbeddelay. Mar kale sawir koodhkiisa.",
+  "errors.topupCancelledByCustomer": "Macmiilku wuu joojiyay ku daridda. Ha qaadan lacagtiisa caddaanka ah.",
   "errors.updateApp": "Cusbooneysii Zapp Pay Merchant si aad tan u samayso.",
   "errors.cashOutCodeAttempts": "Kood khaldan oo badan ayaa la geliyay lacag bixintan. Macmiilka ka codso inuu joojiyo oo sameeyo mid cusub.",
   "errors.startNewTopup": "Wax ayaa isbeddelay. Ku-shubistan mar kale bilow.",

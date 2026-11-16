@@ -514,7 +514,8 @@ export interface Notification {
     | "pin_changed"
     | "new_device"
     | "phone_changed"
-    | "zaad_agent_topup";
+    | "zaad_agent_topup"
+    | "topup_cancelled";
   title: string;
   body: string;
   data?: Record<string, string>;
@@ -715,4 +716,7 @@ export interface AgentTopupRequest {
   scannedByName?: string;
   /** Set with status `moved_to_zaad`: the Zaad request the top-up continues as. */
   zaadRequestId?: string;
+  /** Set when the customer cancelled it (customerCancelAgentTopup). */
+  cancelledBy?: "customer";
+  cancelledAt?: FirebaseFirestore.Timestamp;
 }

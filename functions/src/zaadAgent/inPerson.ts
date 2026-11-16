@@ -29,6 +29,7 @@ import { storedCurrency } from "../topup/agentCurrency";
 import {
   agentDisplayName,
   assertNamesOneRequest,
+  customerCancelled,
   assertTarget,
   requireActiveAgent,
   verifyTopupCode,
@@ -159,6 +160,7 @@ export const agentStartZaadInPerson = https.onCall(
         movedTo = fresh.zaadRequestId;
         return;
       }
+      if (fresh?.status === "cancelled" && fresh.cancelledBy === "customer") throw customerCancelled();
       if (!fresh || fresh.status !== "pending" || fresh.expiresAt.toMillis() < nowMs) {
         throw new https.HttpsError("failed-precondition", "This code was already used or has expired", {
           reason: "not_pending",

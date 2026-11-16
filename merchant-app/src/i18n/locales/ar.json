@@ -836,6 +836,7 @@
   "topup.confirm.oldQrPhone": "اكتب رقم هاتف العميل أيضًا",
   "topup.confirm.check": "تحقّق",
   "errors.topupAmountChanged": "تغيّر المبلغ لدى العميل. امسح رمزه مرة أخرى.",
+  "errors.topupCancelledByCustomer": "ألغى العميل هذا الشحن. لا تأخذ نقوده.",
   "errors.updateApp": "حدّث تطبيق Zapp Pay Merchant للقيام بذلك.",
   "errors.cashOutCodeAttempts": "أُدخلت رموز خاطئة كثيرة لهذا السحب. اطلب من العميل إلغاءه وإنشاء طلب جديد.",
   "errors.startNewTopup": "تغيّر شيء ما. ابدأ عملية الشحن من جديد.",
