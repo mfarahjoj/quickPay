@@ -18,8 +18,23 @@ import { AnimatedXMark } from '../../components/icons/StatusIcons';
 import { useWallet } from '../../hooks/useWallet';
 import { useHomeCurrency } from '../../hooks/useHomeCurrency';
 import { amountInputUnits, formatMoney, type Currency } from '../../utils/money';
+import { useAuth } from '../../hooks/useAuth';
+import { useZaadAgentTopups } from '../../hooks/useZaadTopups';
+import { requestZaadAgentTopup } from '../../services/zaadAgent.service';
+import ZaadRequestView, { AgentHeader } from './ZaadRequestView';
 
-type Step = 'amount' | 'processing' | 'code' | 'done' | 'error';
+/**
+ * "Top up with an agent" (ZAPP_AGENT_TOPUP_ONE_FLOW_PLAN.md, D18): one method,
+ * in person or remote, cash or Zaad.
+ *
+ *   amount → choose: "I'm with an agent" → code (the agent scans it)
+ *                       → cash: "Hand $10 to Ahmed" (T6) → done
+ *                       → Zaad: the agent chose it at the scan → zaad
+ *            "Find me an agent" (Zaad, dollars; only when the switch is on) → zaad
+ *   zaad: the shared Zaad request view (ZaadRequestView)
+ */
+type Step = 'amount' | 'choose' | 'processing' | 'code' | 'zaad' | 'done' | 'error';
+const ACTIVE_ZAAD = ['offered', 'accepted', 'customer_sent', 'declined', 'disputed'];
 
 const KEYPAD = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'];
 const TOPUP_REQUESTS = 'agentTopupRequests';
@@ -35,7 +50,7 @@ function shortConfirmation(id: string): string {
   return `ZP-${id.slice(-6).toUpperCase()}`;
 }
 
-export default function AgentTopupScreen() {
+export default function AgentTopupScreen({ initialWay }: { initialWay?: 'remote' } = {}) {
   const colors = useColors();
   const styles = useStyles();
   const navigation = useNavigation<any>();
@@ -51,6 +66,12 @@ export default function AgentTopupScreen() {
   const [expiresAt, setExpiresAt] = useState<Date | null>(null);
   const [timeLeft, setTimeLeft] = useState(0);
   const unsubRef = useRef<(() => void) | null>(null);
+  /** Set once an agent has scanned the code: who to hand the cash to (D23). */
+  const [scannedByName, setScannedByName] = useState<string | null>(null);
+  const [zaadRequestId, setZaadRequestId] = useState<string | null>(null);
+  const [cashAgent, setCashAgent] = useState<string | null>(null);
+  const { user } = useAuth();
+  const zaadOpen = useZaadAgentTopups();
 
   // Dollars or shillings: the agent's cash in that currency goes to that
   // balance. Starts on the currency Home shows.
@@ -101,8 +122,15 @@ export default function AgentTopupScreen() {
         if (!data) return;
         if (data.status === 'completed') {
           setConfirmationId(data.confirmationId || data.transactionId || '');
+          setCashAgent(data.scannedByName ?? null);
           triggerHaptic('success');
           setStep('done');
+        } else if (data.status === 'moved_to_zaad' && data.zaadRequestId) {
+          // The agent chose Zaad at the scan: carry on as a Zaad top-up.
+          setZaadRequestId(data.zaadRequestId);
+          setStep('zaad');
+        } else if (data.status === 'pending' && data.scannedByName) {
+          setScannedByName(data.scannedByName);
         } else if (data.status === 'expired' || data.status === 'cancelled') {
           setErrorMsg(t('topup.agent.expiredMessage'));
           setLapsed(true);
@@ -117,6 +145,71 @@ export default function AgentTopupScreen() {
   }, [requestId, t]);
 
   useEffect(() => () => unsubRef.current?.(), []);
+
+  // Opened again with a top-up under way: go straight to where it is.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const since = firestore.Timestamp.fromMillis(Date.now() - 2 * 3600 * 1000);
+        const zaad = await firestore()
+          .collection('zaadAgentTopups')
+          .where('customerId', '==', user.uid)
+          .where('createdAt', '>=', since)
+          .get();
+        const open = zaad.docs.find((d) => ACTIVE_ZAAD.includes(d.get('status')));
+        if (cancelled) return;
+        if (open) {
+          setZaadRequestId(open.id);
+          setStep('zaad');
+          return;
+        }
+        const cash = await firestore()
+          .collection(TOPUP_REQUESTS)
+          .where('customerId', '==', user.uid)
+          .where('status', '==', 'pending')
+          .limit(1)
+          .get();
+        const pending = cash.docs[0];
+        const doc = pending?.data() as
+          | { otpCode: string; amount: number; currency?: string; expiresAt?: { toDate(): Date } }
+          | undefined;
+        const exp = doc?.expiresAt?.toDate();
+        if (cancelled || !pending || !doc || !exp || exp.getTime() < Date.now()) return;
+        setOtpCode(doc.otpCode);
+        setRequestId(pending.id);
+        setPickedCurrency(doc.currency === 'SLS' ? 'SLS' : 'USD');
+        setAmountText(doc.currency === 'SLS' ? String(doc.amount) : (doc.amount / 100).toFixed(2));
+        setExpiresAt(exp);
+        setStep('code');
+      } catch {
+        // Nothing to resume, or offline: start from the amount.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  const findAgent = useCallback(async () => {
+    if (amountUnits <= 0 || currency !== 'USD') return;
+    triggerHaptic('medium');
+    setStep('processing');
+    try {
+      const res = await requestZaadAgentTopup(amountUnits);
+      setZaadRequestId(res.requestId);
+      setStep('zaad');
+    } catch (e: any) {
+      if (e?.details?.reason === 'in_progress' && e.details.requestId) {
+        setZaadRequestId(e.details.requestId);
+        setStep('zaad');
+        return;
+      }
+      setErrorMsg(e?.message || t('common.error'));
+      setStep('error');
+    }
+  }, [amountUnits, currency, t]);
 
   const appendDigit = (key: string) => {
     triggerHaptic('light');
@@ -167,7 +260,65 @@ export default function AgentTopupScreen() {
     setRequestId('');
     setConfirmationId('');
     setExpiresAt(null);
+    setScannedByName(null);
+    setZaadRequestId(null);
+    setCashAgent(null);
   };
+
+  const backHeader = (title: string) => (
+    <View style={styles.header}>
+      <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <Text style={styles.backArrow}>‹</Text>
+      </TouchableOpacity>
+      <Text style={styles.headerTitle}>{title}</Text>
+    </View>
+  );
+
+  // ── Zaad: in person after the agent chose it, or remote ──
+  if (step === 'zaad' && zaadRequestId) {
+    return (
+      <View style={styles.container}>
+        {backHeader(t('topup.agentFlow.title'))}
+        <ZaadRequestView requestId={zaadRequestId} onStartOver={reset} />
+      </View>
+    );
+  }
+
+  // ── With an agent, or find one ─────────────────────────
+  if (step === 'choose') {
+    const zaadDollars = currency === 'USD';
+    return (
+      <View style={styles.container}>
+        {backHeader(t('topup.agentFlow.title'))}
+        <View style={styles.chooseBody}>
+          <Text style={styles.chooseAmount}>{amountLabel}</Text>
+          <TouchableOpacity style={styles.chooseCard} onPress={handleGenerate} activeOpacity={0.85}>
+            <Text style={styles.chooseTitle}>{t('topup.agentFlow.withAgent')}</Text>
+            <Text style={styles.chooseSub}>
+              {t(zaadOpen && zaadDollars ? 'topup.agentFlow.withAgentSubZaad' : 'topup.agentFlow.withAgentSubCash')}
+            </Text>
+          </TouchableOpacity>
+          {zaadOpen ? (
+            <TouchableOpacity
+              style={[styles.chooseCard, !zaadDollars && styles.continueBtnDisabled]}
+              onPress={findAgent}
+              disabled={!zaadDollars}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.chooseTitle}>{t('topup.agentFlow.findAgent')}</Text>
+              <Text style={styles.chooseSub}>
+                {/* D30 */}
+                {t(zaadDollars ? 'topup.agentFlow.findAgentSub' : 'topup.agentFlow.zaadDollarsOnly')}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+          <TouchableOpacity onPress={() => setStep('amount')}>
+            <Text style={styles.changeAmount}>{t('topup.agentFlow.changeAmount')}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   // ── Done: topped up ────────────────────────────────────
   if (step === 'done') {
@@ -186,6 +337,10 @@ export default function AgentTopupScreen() {
             <View style={styles.confBox}>
               <Text style={styles.confLabel}>{t('topup.agent.confirmationId')}</Text>
               <Text style={styles.confValue}>{shortConfirmation(confirmationId)}</Text>
+              {cashAgent ? (
+                <Text style={styles.receiptLine}>{t('topup.agentFlow.receipt.agent', { agent: cashAgent })}</Text>
+              ) : null}
+              <Text style={styles.receiptLine}>{t('topup.agentFlow.receipt.paidByCash')}</Text>
             </View>
           ) : null}
           <TouchableOpacity
@@ -195,6 +350,14 @@ export default function AgentTopupScreen() {
           >
             <Text style={styles.continueBtnText}>{t('common.done')}</Text>
           </TouchableOpacity>
+          {confirmationId ? (
+            <TouchableOpacity
+              style={styles.cashClaim}
+              onPress={() => navigation.navigate('RaiseDispute', { transactionId: confirmationId })}
+            >
+              <Text style={styles.cashClaimText}>{t('topup.agentFlow.somethingWrong')}</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       </View>
     );
@@ -241,6 +404,26 @@ export default function AgentTopupScreen() {
   }
 
   // ── Show code + QR, waiting for agent ──────────────────
+  if (step === 'code' && scannedByName) {
+    // T6: shown only once an agent has scanned and their float covered it.
+    return (
+      <View style={styles.container}>
+        {backHeader(t('topup.agentFlow.title'))}
+        <View style={styles.chooseBody}>
+          <AgentHeader name={scannedByName} amount={amountLabel} />
+          <Text style={styles.handCash}>
+            {t('topup.agentFlow.handCash', { amount: amountLabel, agent: scannedByName })}
+          </Text>
+          <Text style={styles.chooseSub}>{t('topup.agentFlow.handCashHint', { agent: scannedByName })}</Text>
+          <View style={styles.waitingRow}>
+            <ActivityIndicator size="small" color={colors.ui.ink(0.5)} />
+            <Text style={styles.waitingText}>{t('topup.agentFlow.waitingConfirm', { agent: scannedByName })}</Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   if (step === 'code') {
     const warn = timeLeft < 120;
     return (
@@ -299,8 +482,10 @@ export default function AgentTopupScreen() {
           <Text style={styles.backArrow}>‹</Text>
         </TouchableOpacity>
         <View>
-          <Text style={styles.headerTitle}>{t('topup.agent.title')}</Text>
-          <Text style={styles.headerSub}>{t('topup.agent.subtitle')}</Text>
+          <Text style={styles.headerTitle}>{t('topup.agentFlow.title')}</Text>
+          <Text style={styles.headerSub}>
+            {t(initialWay === 'remote' ? 'topup.agentFlow.findAgentSub' : 'topup.agentFlow.subtitle')}
+          </Text>
         </View>
       </View>
 
@@ -357,7 +542,7 @@ export default function AgentTopupScreen() {
       <View style={styles.footer}>
         <TouchableOpacity
           style={[styles.continueBtn, amount <= 0 && styles.continueBtnDisabled]}
-          onPress={handleGenerate}
+          onPress={() => setStep('choose')}
           disabled={amount <= 0}
           activeOpacity={0.8}
         >
@@ -453,4 +638,17 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
   cashClaim: { marginTop: 18, padding: 8 },
   cashClaimText: { fontSize: 14, fontWeight: '600', color: colors.ui.accentText, textAlign: 'center' },
   processingText: { fontSize: 16, color: colors.ui.ink(0.5), marginTop: 20 },
+
+  // Choose: with an agent, or find one
+  chooseBody: { flex: 1, paddingHorizontal: 24, paddingTop: 12, gap: 14 },
+  chooseAmount: { fontSize: 40, fontWeight: '800', color: colors.ui.text, textAlign: 'center', letterSpacing: -1, marginBottom: 8 },
+  chooseCard: {
+    backgroundColor: colors.ui.ink(0.05), borderWidth: 1, borderColor: colors.ui.ink(0.1),
+    borderRadius: 18, padding: 18, gap: 4,
+  },
+  chooseTitle: { fontSize: 17, fontWeight: '700', color: colors.ui.text },
+  chooseSub: { fontSize: 14, color: colors.ui.ink(0.5), lineHeight: 20 },
+  changeAmount: { fontSize: 14, color: colors.ui.accentText, textAlign: 'center', paddingVertical: 8 },
+  handCash: { fontSize: 24, fontWeight: '800', color: colors.ui.text, lineHeight: 30, marginTop: 8 },
+  receiptLine: { fontSize: 13, color: colors.ui.ink(0.5), marginTop: 6 },
 }));

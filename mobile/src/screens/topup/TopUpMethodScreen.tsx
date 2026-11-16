@@ -27,19 +27,12 @@ const METHODS: Method[] = [
     glyph: '📲',
   },
   {
-    // Pay an online agent's Zaad from anywhere; their float tops you up
-    // (functions/src/zaadAgent/). Listed once the console switches it on.
-    key: 'zaadAgent',
-    route: 'ZaadAgentTopup',
-    titleKey: 'topup.method.zaadAgentTitle',
-    subtitleKey: 'topup.method.zaadAgentSubtitle',
-    glyph: '🤝',
-  },
-  {
+    // One method for agents (D18): in person or remote, cash or Zaad. The
+    // Zaad choices inside it appear once the console switch is on (D28).
     key: 'agent',
     route: 'AgentTopup',
-    titleKey: 'topup.method.agentTitle',
-    subtitleKey: 'topup.method.agentSubtitle',
+    titleKey: 'topup.agentFlow.title',
+    subtitleKey: 'topup.agentFlow.methodSubtitle',
     glyph: '🧑‍💼',
   },
 ];
@@ -50,9 +43,7 @@ export default function TopUpMethodScreen() {
   const { t } = useTranslation();
   const zaadOpen = useZaadTopups();
   const zaadAgentOpen = useZaadAgentTopups();
-  const methods = METHODS.filter(
-    (m) => (m.key !== 'zaad' || zaadOpen) && (m.key !== 'zaadAgent' || zaadAgentOpen)
-  );
+  const methods = METHODS.filter((m) => m.key !== 'zaad' || zaadOpen);
 
   return (
     <View style={styles.container}>
@@ -82,7 +73,9 @@ export default function TopUpMethodScreen() {
             </View>
             <View style={styles.cardText}>
               <Text style={styles.cardTitle}>{t(m.titleKey)}</Text>
-              <Text style={styles.cardSubtitle}>{t(m.subtitleKey)}</Text>
+              <Text style={styles.cardSubtitle}>
+                {t(m.key === 'agent' && !zaadAgentOpen ? 'topup.agentFlow.methodSubtitleCash' : m.subtitleKey)}
+              </Text>
             </View>
             <Text style={styles.cardArrow}>›</Text>
           </TouchableOpacity>
