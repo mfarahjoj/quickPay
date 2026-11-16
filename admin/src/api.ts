@@ -528,6 +528,7 @@ export type ZaadTopupStatus =
 export interface ZaadTopupRow {
   id: string;
   status: ZaadTopupStatus;
+  meeting: "in_person" | "remote";
   amountCents: number;
   customerId: string;
   customerName: string;

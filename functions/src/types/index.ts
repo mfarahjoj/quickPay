@@ -341,6 +341,11 @@ export interface Transaction {
   netCents?: number;
   /** Agent commission earned on a top-up, in cents. */
   commissionCents?: number;
+  /** Top-ups through an agent: who, and how the customer paid them. */
+  agentName?: string;
+  paidBy?: "cash" | "zaad";
+  /** Zaad top-ups: with the agent, or found by Zapp. */
+  meeting?: "in_person" | "remote";
   /** Set when an agent's commission was withheld, and why. */
   commissionWithheld?: "round_trip";
   currency: string;
@@ -679,7 +684,11 @@ export interface CashOutRequest {
 /** cancelled: by the customer · replaced: a newer request superseded it · expired: unclaimed in time · too_many_attempts: wrong codes */
 export type CashOutReleaseReason = "cancelled" | "replaced" | "expired" | "too_many_attempts";
 
-export type AgentTopupStatus = "pending" | "completed" | "expired" | "cancelled";
+/**
+ * `moved_to_zaad`: the agent chose Zaad at the scan (zaadAgent/inPerson.ts);
+ * the top-up carries on as `zaadAgentTopups/{zaadRequestId}`.
+ */
+export type AgentTopupStatus = "pending" | "completed" | "expired" | "cancelled" | "moved_to_zaad";
 
 // Customer-initiated agent cash-in: the customer generates this request, pays
 // the agent cash, and the agent confirms it (by QR/code) to credit the wallet.
@@ -702,4 +711,8 @@ export interface AgentTopupRequest {
    */
   scannedBy?: string;
   scannedAt?: FirebaseFirestore.Timestamp;
+  /** The scanning agent's display name, so the customer's phone can say who to pay. */
+  scannedByName?: string;
+  /** Set with status `moved_to_zaad`: the Zaad request the top-up continues as. */
+  zaadRequestId?: string;
 }

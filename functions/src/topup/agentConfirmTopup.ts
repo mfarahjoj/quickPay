@@ -23,7 +23,7 @@ import { assertAgentAppReads, storedCurrency } from "./agentCurrency";
 import { Currency, formatAmount, pushAmount, toLimitCents } from "../utils/money";
 
 /** Which request the code is for: from the customer's QR, or their phone typed with the code. */
-interface TopupTarget {
+export interface TopupTarget {
   otpCode: string;
   /** From the customer's QR. */
   requestId?: string;
@@ -71,13 +71,13 @@ interface PreviewAgentTopupResponse {
 
 const INVALID_CODE = "Invalid or expired code. Ask the customer to generate a new one.";
 
-function assertTarget(data: Partial<TopupTarget>): void {
+export function assertTarget(data: Partial<TopupTarget>): void {
   if (!isSixDigitCode(data.otpCode)) {
     throw new https.HttpsError("invalid-argument", "6-digit code required");
   }
 }
 
-function assertNamesOneRequest(data: Partial<TopupTarget>): void {
+export function assertNamesOneRequest(data: Partial<TopupTarget>): void {
   if (!data.requestId && !data.customerPhone) {
     // A code alone can belong to two waiting customers at once; older
     // merchant builds that send only the code must update.
@@ -90,7 +90,7 @@ function assertNamesOneRequest(data: Partial<TopupTarget>): void {
 }
 
 /** The caller, if they are an agent who may hand out float right now. */
-async function requireActiveAgent(
+export async function requireActiveAgent(
   db: FirebaseFirestore.Firestore,
   agentId: string,
   verb: string
@@ -111,7 +111,7 @@ async function requireActiveAgent(
   return agentData;
 }
 
-interface VerifiedTopup {
+export interface VerifiedTopup {
   ref: FirebaseFirestore.DocumentReference;
   topup: AgentTopupRequest;
   customerName: string;
@@ -125,7 +125,7 @@ interface VerifiedTopup {
  * the code is right. A request that doesn't exist, isn't pending, or has a
  * different code all read the same: the caller learns nothing about which.
  */
-async function verifyTopupCode(
+export async function verifyTopupCode(
   db: FirebaseFirestore.Firestore,
   agentId: string,
   target: TopupTarget
@@ -156,6 +156,12 @@ async function verifyTopupCode(
   const customerName = customerDoc.data()?.fullName || "Customer";
 
   return { ref, topup, customerName };
+}
+
+/** How an agent is named to customers: their business, else their name. */
+export function agentDisplayName(user: User | undefined): string {
+  const info = (user as unknown as { agentInfo?: { businessName?: string } } | undefined)?.agentInfo;
+  return info?.businessName || user?.fullName || "Zapp Pay agent";
 }
 
 function insufficientFloat(amount: number, currency: Currency, floatCents: number): https.HttpsError {
@@ -193,7 +199,7 @@ export const previewAgentTopup = https.onCall(
     assertNamesOneRequest(data);
 
     const db = admin.firestore();
-    await requireActiveAgent(db, agentId, "confirm");
+    const agent = await requireActiveAgent(db, agentId, "confirm");
     const { ref, topup, customerName } = await verifyTopupCode(db, agentId, data);
     const currency = storedCurrency(topup.currency);
     assertAgentAppReads(currency, data.currencies);
@@ -205,7 +211,12 @@ export const previewAgentTopup = https.onCall(
       throw insufficientFloat(topup.amount, currency, floatCents);
     }
 
-    await ref.update({ scannedBy: agentId, scannedAt: admin.firestore.Timestamp.now() });
+    await ref.update({
+      scannedBy: agentId,
+      scannedAt: admin.firestore.Timestamp.now(),
+      // The customer's phone says who to hand the cash to.
+      scannedByName: agentDisplayName(agent),
+    });
 
     return {
       success: true,
@@ -342,6 +353,8 @@ export const agentConfirmTopup = https.onCall(
 
       // Transaction record
       const txRecord: Transaction = {
+        agentName: agentDisplayName(agentData),
+        paidBy: "cash",
         type: "topup",
         kind: "cash_in",
         fromUserId: agentId,
@@ -351,7 +364,7 @@ export const agentConfirmTopup = https.onCall(
         commissionCents,
         currency,
         status: "completed",
-        description: "Zapp agent top-up",
+        description: `Top-up from ${agentDisplayName(agentData)} (cash)`,
         reference: confirmationId,
         journalEntryId: entryId,
         createdAt: now,

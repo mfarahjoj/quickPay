@@ -277,6 +277,8 @@ const ms = (t: FirebaseFirestore.Timestamp | null | undefined) => (t ? t.toMilli
 export interface ZaadTopupRow {
   id: string;
   status: ZaadAgentTopup["status"];
+  /** With the agent, or found by Zapp. Missing on older requests: remote. */
+  meeting: "in_person" | "remote";
   amountCents: number;
   customerId: string;
   customerName: string;
@@ -328,6 +330,7 @@ function toRow(id: string, r: ZaadAgentTopup, names: Map<string, { name: string;
   return {
     id,
     status: r.status,
+    meeting: r.meeting ?? "remote",
     amountCents: r.amount,
     customerId: r.customerId,
     customerName: customer?.name ?? r.customerFirstName,

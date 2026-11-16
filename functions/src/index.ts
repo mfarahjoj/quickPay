@@ -84,6 +84,7 @@ export {
   agentConfirmZaadTopup,
   agentReportZaadReversal,
 } from "./zaadAgent/agent";
+export { agentStartZaadInPerson } from "./zaadAgent/inPerson";
 export {
   adminSetZaadAgent,
   adminResolveZaadTopup,
