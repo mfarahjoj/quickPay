@@ -537,7 +537,11 @@ export interface ZaadTopupRow {
   agentName: string | null;
   agentReceiveNumber: string | null;
   allowedSenders: string[];
+  /** Zapp's reference, e.g. "ZP-4F7K2" (D31); null on requests made before it. */
+  reference: string | null;
   customerZaadTxnId: string | null;
+  /** Zaad's ID the agent gave on "Received". */
+  agentZaadTxnId: string | null;
   agentAnswer: "received" | "not_received" | "different_amount" | null;
   disputedBy: "customer" | "timeout" | null;
   disputeReason: string | null;

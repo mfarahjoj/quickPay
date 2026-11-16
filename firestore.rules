@@ -135,6 +135,9 @@ service cloud.firestore {
     match /zaad_agent_txn_ids/{txnId} {
       allow read, write: if false;
     }
+    match /zaad_agent_refs/{reference} {
+      allow read, write: if false;
+    }
 
     match /agentTopupRequests/{requestId} {
       allow read: if isAuthenticated() &&

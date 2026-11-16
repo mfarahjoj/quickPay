@@ -287,7 +287,11 @@ export interface ZaadTopupRow {
   agentName: string | null;
   agentReceiveNumber: string | null;
   allowedSenders: string[];
+  /** Zapp's reference (D31); null on requests made before it. */
+  reference: string | null;
   customerZaadTxnId: string | null;
+  /** Zaad's ID the agent gave on "Received". */
+  agentZaadTxnId: string | null;
   agentAnswer: ZaadAgentTopup["agentAnswer"] | null;
   disputedBy: ZaadAgentTopup["disputedBy"] | null;
   disputeReason: string | null;
@@ -339,7 +343,9 @@ function toRow(id: string, r: ZaadAgentTopup, names: Map<string, { name: string;
     agentName: r.agentId ? r.agentName ?? names.get(r.agentId)?.name ?? null : null,
     agentReceiveNumber: r.agentReceiveMsisdn ? displayMsisdn(r.agentReceiveMsisdn) : null,
     allowedSenders: (r.allowedSenders ?? []).map(displayMsisdn),
+    reference: r.reference ?? null,
     customerZaadTxnId: r.customerZaadTxnId ?? null,
+    agentZaadTxnId: r.agentZaadTxnId ?? null,
     agentAnswer: r.agentAnswer ?? null,
     disputedBy: r.disputedBy ?? null,
     disputeReason: r.disputeReason ?? null,

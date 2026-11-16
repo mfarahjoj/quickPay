@@ -132,6 +132,8 @@ export const agentSetZaadOnline = https.onCall(
 
 export interface AcceptedTopup {
   requestId: string;
+  /** Zapp's reference the customer will quote (D31). */
+  reference: string | null;
   amount: number;
   customerFirstName: string;
   /** Masked, for checking against the sender in the agent's Zaad text (D5). */
@@ -221,6 +223,7 @@ export const agentAnswerZaadOffer = https.onCall(
       tx.update(agentRef, { missedOffers: 0 });
       accepted = {
         requestId: id,
+        reference: req.reference ?? null,
         amount: req.amount,
         customerFirstName: req.customerFirstName,
         allowedSenders: allowedSenders.map(maskMsisdn),
@@ -261,8 +264,10 @@ const ANSWERS: readonly AgentAnswer[] = ["received", "not_received", "different_
 
 /**
  * The agent checked their own Zaad (D10). In: `{ requestId, answer,
- * expectedAmount, agentPin }`. "received" needs the PIN or Face ID and pays
- * the held float to the customer; the other two decline, and the customer
+ * expectedAmount, agentPin, zaadTxnId? }`. "received" needs the PIN or Face ID
+ * and pays the held float to the customer; `zaadTxnId`, from the agent's
+ * "you received" text, is optional and claims that Zaad payment for this
+ * top-up only (D31); the other two decline, and the customer
  * has `zaadAgentDisputeMinutes` to dispute while the float stays held.
  */
 export const agentConfirmZaadTopup = https.onCall(
@@ -283,12 +288,20 @@ export const agentConfirmZaadTopup = https.onCall(
     }
 
     if (answer === "received") {
+      const typed = request.data?.zaadTxnId;
+      const given = typed !== undefined && typed !== null && typed !== "";
+      const zaadTxnId = given ? normaliseTxnId(typed) : null;
+      if (given && !zaadTxnId) {
+        throw new https.HttpsError("invalid-argument", "That doesn't look like a Zaad transaction ID", {
+          reason: "txn_id",
+        });
+      }
       const pin = request.data?.agentPin;
       if (typeof pin !== "string" || !pin) throw new https.HttpsError("invalid-argument", "Agent PIN is required");
       if (!(await verifyUserPin(uid, pin))) throw new https.HttpsError("permission-denied", "Wrong PIN");
       // Allowed before the customer taps "I've sent it": the agent may see
       // the money first.
-      const res = await creditZaadTopup(id, { uid, kind: "agent" }, ["accepted", "customer_sent"]);
+      const res = await creditZaadTopup(id, { uid, kind: "agent", zaadTxnId }, ["accepted", "customer_sent"]);
       return { success: true, data: { status: "completed", commissionCents: res.commissionCents } };
     }
 

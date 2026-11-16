@@ -3,6 +3,7 @@
  * rule about money and matching can be tested on its own.
  */
 
+import { randomInt } from "crypto";
 import { JournalEntryInput, JournalLine } from "../ledger";
 import {
   agentAccount,
@@ -190,6 +191,25 @@ export function displayMsisdn(msisdn: string): string {
 export function firstName(fullName: unknown): string {
   if (typeof fullName !== "string") return "Customer";
   return fullName.trim().split(/\s+/)[0] || "Customer";
+}
+
+/**
+ * Characters for Zapp's own top-up reference: no 0/O, 1/I/L, 5/S, 8/B, 2/Z
+ * or U/V, so it reads aloud and copies by hand without mistakes.
+ */
+export const TOPUP_REFERENCE_ALPHABET = "34679ACDEFGHJKMNPQRTWXY";
+export const TOPUP_REFERENCE_LENGTH = 5;
+const REFERENCE_PATTERN = new RegExp(`^ZP-[${TOPUP_REFERENCE_ALPHABET}]{${TOPUP_REFERENCE_LENGTH}}$`);
+
+/** A fresh reference such as "ZP-4F7K2" (23^5 ≈ 6.4M of them). Unique only once claimed. */
+export function newTopupReference(pick: (n: number) => number = randomInt): string {
+  let out = "";
+  for (let i = 0; i < TOPUP_REFERENCE_LENGTH; i++) out += TOPUP_REFERENCE_ALPHABET[pick(TOPUP_REFERENCE_ALPHABET.length)];
+  return `ZP-${out}`;
+}
+
+export function isTopupReference(s: unknown): s is string {
+  return typeof s === "string" && REFERENCE_PATTERN.test(s);
 }
 
 /** A Zaad transaction ID as the customer typed it, cleaned; null if it can't be one. */

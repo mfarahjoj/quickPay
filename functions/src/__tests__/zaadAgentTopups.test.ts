@@ -16,7 +16,9 @@ import {
   activeStrikes,
   creditEntry,
   holdEntry,
+  isTopupReference,
   maskMsisdn,
+  newTopupReference,
   normaliseTxnId,
   rankCandidates,
   releaseEntry,
@@ -24,6 +26,7 @@ import {
   splitReversal,
 } from "../zaadAgent/core";
 import { runZaadAgentSweep } from "../zaadAgent/sweep";
+import * as core from "../zaadAgent/core";
 
 const mockedPin = verifyUserPin as jest.MockedFunction<typeof verifyUserPin>;
 const mockedNotify = notifyUser as jest.MockedFunction<typeof notifyUser>;
@@ -88,6 +91,17 @@ describe("Zaad top-ups through agents: pure rules", () => {
     expect(normaliseTxnId(" ab12 cd34 ")).toBe("AB12CD34");
     expect(normaliseTxnId("x")).toBeNull();
     expect(normaliseTxnId("bad/id")).toBeNull();
+  });
+
+  it("D31: references are short, read aloud cleanly, and have no look-alike characters", () => {
+    for (let i = 0; i < 500; i++) {
+      const r = newTopupReference();
+      expect(isTopupReference(r)).toBe(true);
+      expect(r).toMatch(/^ZP-[^01ILOSBZUV258]{5}$/);
+    }
+    expect(newTopupReference(() => 0)).toBe("ZP-33333");
+    expect(isTopupReference("ZP-0O1IL")).toBe(false);
+    expect(isTopupReference("zp-4f7k2")).toBe(false);
   });
 
   it("counts only strikes inside the window", () => {
@@ -174,6 +188,14 @@ describe("Zaad top-ups through agents: the flow", () => {
     return data.requestId as string;
   }
 
+  /** The same with today's apps: "I've sent it" with no ID. */
+  async function toSentNoId(amount = 1000) {
+    const { data } = await fns.customerRequestZaadAgentTopup(as(AMINA, { amount }));
+    await fns.agentAnswerZaadOffer(as(HODAN, { requestId: data.requestId, accept: true }));
+    await fns.customerMarkZaadSent(as(AMINA, { requestId: data.requestId }));
+    return data.requestId as string;
+  }
+
   it("is closed while the console switch is off", async () => {
     seed({ rates: { zaadAgentTopups: "off" } });
     await expect(fns.customerRequestZaadAgentTopup(as(AMINA, { amount: 1000 }))).rejects.toMatchObject({
@@ -246,6 +268,89 @@ describe("Zaad top-ups through agents: the flow", () => {
     await expect(
       fns.customerMarkZaadSent(as(AMINA, { requestId: data.requestId, zaadTxnId: "zt999" }))
     ).rejects.toMatchObject({ details: { reason: "txn_id_used" } });
+  });
+
+  describe("D31: Zapp's reference, and Zaad's ID from the agent", () => {
+    it("each request gets a claimed reference; the customer taps once and types nothing", async () => {
+      const db = seed();
+      const { data } = await fns.customerRequestZaadAgentTopup(as(AMINA, { amount: 1000 }));
+      expect(isTopupReference(data.reference)).toBe(true);
+      expect(req(db, data.requestId).reference).toBe(data.reference);
+      expect(db.get(`zaad_agent_refs/${data.reference}`)).toMatchObject({ requestId: data.requestId, customerId: AMINA });
+
+      const accepted = await fns.agentAnswerZaadOffer(as(HODAN, { requestId: data.requestId, accept: true }));
+      expect(accepted.data.reference).toBe(data.reference);
+
+      await fns.customerMarkZaadSent(as(AMINA, { requestId: data.requestId }));
+      expect(req(db, data.requestId)).toMatchObject({ status: "customer_sent" });
+      expect(req(db, data.requestId).customerZaadTxnId).toBeUndefined();
+      // The same tap again is a retry, not an error.
+      await fns.customerMarkZaadSent(as(AMINA, { requestId: data.requestId }));
+
+      await fns.agentConfirmZaadTopup(as(HODAN, { requestId: data.requestId, answer: "received", expectedAmount: 1000, agentPin: "1" }));
+      expect(db.get(`wallets/${AMINA}`)!.balance).toBe(1000);
+      expect(db.get(`transactions/zaadagent_${data.requestId}`)!.reference).toBe(data.reference);
+      expect(db.get(`manualTopups/zaadagent_${data.requestId}`)!.reference).toBe(data.reference);
+      const rows = await fns.adminListZaadTopups(asOps({ view: "recent" }));
+      expect(rows.data.topups).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: data.requestId, reference: data.reference })])
+      );
+    });
+
+    it("never reuses a reference that is already taken", async () => {
+      const db = seed({ extra: { "zaad_agent_refs/ZP-34679": { requestId: "older", customerId: "someone" } } });
+      const spy = jest.spyOn(core, "newTopupReference").mockReturnValueOnce("ZP-34679").mockReturnValueOnce("ZP-ACDEF");
+      try {
+        const { data } = await fns.customerRequestZaadAgentTopup(as(AMINA, { amount: 1000 }));
+        expect(data.reference).toBe("ZP-ACDEF");
+        expect(db.get("zaad_agent_refs/ZP-34679")!.requestId).toBe("older");
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    it("the agent may give Zaad's ID on Received; it claims that payment for one top-up only", async () => {
+      const db = seed();
+      const first = await toSentNoId();
+      await fns.agentConfirmZaadTopup(
+        as(HODAN, { requestId: first, answer: "received", expectedAmount: 1000, agentPin: "1", zaadTxnId: "zt 777" })
+      );
+      expect(req(db, first)).toMatchObject({ status: "completed", agentZaadTxnId: "ZT777" });
+      expect(db.get("zaad_agent_txn_ids/ZT777")).toMatchObject({ requestId: first, by: "agent" });
+      expect(db.get(`transactions/zaadagent_${first}`)!.zaadTxnId).toBe("ZT777");
+
+      const second = await toSentNoId(500);
+      await expect(
+        fns.agentConfirmZaadTopup(
+          as(HODAN, { requestId: second, answer: "received", expectedAmount: 500, agentPin: "1", zaadTxnId: "ZT777" })
+        )
+      ).rejects.toMatchObject({ details: { reason: "txn_id_used" } });
+      expect(req(db, second).status).toBe("customer_sent");
+      expect(db.get(`wallets/${AMINA}`)!.balance).toBe(1000);
+
+      await expect(
+        fns.agentConfirmZaadTopup(
+          as(HODAN, { requestId: second, answer: "received", expectedAmount: 500, agentPin: "1", zaadTxnId: "no/good" })
+        )
+      ).rejects.toMatchObject({ details: { reason: "txn_id" } });
+      // Without an ID it goes through.
+      await fns.agentConfirmZaadTopup(as(HODAN, { requestId: second, answer: "received", expectedAmount: 500, agentPin: "1" }));
+      expect(db.get(`wallets/${AMINA}`)!.balance).toBe(1500);
+    });
+
+    it("old builds (82–83) still send the customer's ID: accepted, claimed, and the agent may repeat it", async () => {
+      const db = seed();
+      const id = await toSent(db, 1000, "ZT4242");
+      expect(req(db, id).customerZaadTxnId).toBe("ZT4242");
+      expect(db.get("zaad_agent_txn_ids/ZT4242")).toMatchObject({ requestId: id, customerId: AMINA });
+      // Their retry with the same ID is still fine.
+      await fns.customerMarkZaadSent(as(AMINA, { requestId: id, zaadTxnId: "ZT4242" }));
+      await fns.agentConfirmZaadTopup(
+        as(HODAN, { requestId: id, answer: "received", expectedAmount: 1000, agentPin: "1", zaadTxnId: "ZT4242" })
+      );
+      expect(req(db, id).status).toBe("completed");
+      expect(db.get(`transactions/zaadagent_${id}`)).toMatchObject({ reference: req(db, id).reference, zaadTxnId: "ZT4242" });
+    });
   });
 
   it("one request at a time, and agents can't top themselves up", async () => {

@@ -1361,5 +1361,7 @@
   "topup.agentFlow.receipt.paidByCash": "طريقة الدفع: نقدًا",
   "topup.agentFlow.receipt.paidByZaad": "طريقة الدفع: زاد",
   "topup.agentFlow.receipt.txn": "رقم عملية زاد: {{id}}",
+  "topup.agentFlow.reference": "المرجع: {{ref}}",
+  "topup.agentFlow.referenceHint": "يرى {{agent}} المرجع نفسه. لا حاجة لكتابة أي شيء.",
   "topup.agentFlow.somethingWrong": "هل هناك مشكلة؟"
 }

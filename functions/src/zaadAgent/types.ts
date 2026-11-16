@@ -3,7 +3,7 @@
  *
  * The customer asks for $X. Zapp offers the request to one online agent at a
  * time. The agent who accepts has $X of float held; the customer pays the
- * agent's Zaad number and enters the Zaad transaction ID; the agent checks
+ * agent's Zaad number quoting Zapp's reference and taps "I've sent it"; the agent checks
  * their own Zaad and confirms; the held float is paid to the customer.
  *
  * No Telesom API is involved and Zapp never touches the Zaad money: it goes
@@ -13,7 +13,7 @@
  * Plan: docs/ZAPP_AGENT_ZAAD_TOPUP_PLAN.md in the Ridy driver repo
  * (~/ridyhargeisadriver), decisions D1–D17.
  *
- *   offered ─accept─▶ accepted ─customer: txn ID─▶ customer_sent ─agent: received─▶ completed
+ *   offered ─accept─▶ accepted ─customer: sent─▶ customer_sent ─agent: received─▶ completed
  *     │ (next agent,     │ send time passes            │ agent: not received
  *     │  up to N)        ▼                              ▼
  *     ▼               expired (float back)           declined ─customer disputes─▶ disputed ─ops─▶ completed | released
@@ -32,6 +32,8 @@ export const ZAAD_AGENT_TOPUPS = "zaadAgentTopups";
 export const ZAAD_AGENTS = "zaad_agents";
 /** zaad_agent_customers/{uid}: lost disputes and blocks. */
 export const ZAAD_AGENT_CUSTOMERS = "zaad_agent_customers";
+/** zaad_agent_refs/{reference}: Zapp's reference for each request, claimed once. */
+export const ZAAD_AGENT_REFS = "zaad_agent_refs";
 /** zaad_agent_txn_ids/{txnId}: each Zaad transaction ID claims one request. */
 export const ZAAD_AGENT_TXN_IDS = "zaad_agent_txn_ids";
 
@@ -83,6 +85,11 @@ export interface ZaadAgentTopup {
   customerId: string;
   /** First name only, for the agent's offer screen. */
   customerFirstName: string;
+  /**
+   * Zapp's reference, such as "ZP-4F7K2", made when the request is (D31).
+   * Shown to both sides and on the receipt. Missing on requests made before it.
+   */
+  reference?: string;
   /** US cents. Dollars only at launch (D14). */
   amount: number;
   /**
@@ -116,8 +123,11 @@ export interface ZaadAgentTopup {
   sendBy?: Timestamp;
   holdEntryId?: string;
 
+  /** Zaad's transaction ID, if the customer typed one (builds 82–83 did; optional since D31). */
   customerZaadTxnId?: string;
   customerSentAt?: Timestamp;
+  /** Zaad's transaction ID from the agent's "you received" text, if they gave it on "Received". */
+  agentZaadTxnId?: string;
   confirmBy?: Timestamp;
 
   agentAnswer?: AgentAnswer;

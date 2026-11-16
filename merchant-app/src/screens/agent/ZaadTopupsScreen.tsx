@@ -3,7 +3,8 @@
  *
  * Customers anywhere ask for a top-up; Zapp rings one online agent at a
  * time. The agent who accepts has the amount held from their float. The
- * customer pays the agent's Zaad number and enters the Zaad transaction ID.
+ * customer pays the agent's Zaad number and taps "I've sent it"; Zapp's
+ * reference (ZP-…, D31) names the top-up on both screens.
  * The agent checks their **own** Zaad (the text from Telesom, or the
  * balance, never a screenshot the customer shows) and confirms with their
  * PIN; the held float goes to the customer and the agent earns commission.
@@ -12,12 +13,12 @@
  *   offer     amount, customer, countdown: Accept / Decline
  *   accepted  waiting for the customer to send
  *   sent      check your Zaad: Received / Not received / A different amount
- *   pin       PIN for Received
+ *   pin       PIN for Received, with Zaad's transaction ID if the agent gives it
  *   done      credited
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { useAuth } from '../../hooks/useAuth';
@@ -32,6 +33,7 @@ import {
   getZaadStatus,
   isWrongZaadPin,
   maskMsisdn,
+  normaliseTxnId,
   setZaadOnline,
   watchZaadAgent,
   watchZaadTopup,
@@ -70,6 +72,7 @@ export default function ZaadTopupsScreen() {
   const [error, setError] = useState('');
   const [askingPin, setAskingPin] = useState(false);
   const [pin, setPin] = useState('');
+  const [zaadTxnText, setZaadTxnText] = useState('');
   const [done, setDone] = useState<{ amount: number; commission: number } | null>(null);
 
   const refresh = useCallback(() => {
@@ -113,6 +116,10 @@ export default function ZaadTopupsScreen() {
         setError(t('zaadTopups.errors.offerEnded'));
       } else if (e?.details?.reason === 'not_set_up') {
         setError(t('zaadTopups.notSetUp'));
+      } else if (e?.details?.reason === 'txn_id_used') {
+        setError(t('zaadTopups.errors.txnUsed'));
+      } else if (e?.details?.reason === 'txn_id') {
+        setError(t('zaadTopups.errors.txnBad'));
       } else if (e?.details?.reason === 'paused') {
         setError(t('zaadTopups.paused', { until: new Date(e.details.pausedUntil).toLocaleString() }));
       } else {
@@ -145,15 +152,25 @@ export default function ZaadTopupsScreen() {
       ],
     );
 
-  const received = (agentPin: string) =>
-    run(async () => {
-      const res = await confirmZaadTopup(requestId!, 'received', req!.amount, agentPin);
+  const received = (agentPin: string) => {
+    const typed = zaadTxnText.trim().length > 0;
+    const zaadTxnId = typed ? normaliseTxnId(zaadTxnText) : null;
+    if (typed && !zaadTxnId) {
+      setPin('');
+      setError(t('zaadTopups.errors.txnBad'));
+      return;
+    }
+    return run(async () => {
+      const res = await confirmZaadTopup(requestId!, 'received', req!.amount, agentPin, zaadTxnId ?? undefined);
       setDone({ amount: req!.amount, commission: res.commissionCents ?? 0 });
       setAskingPin(false);
       setPin('');
+      setZaadTxnText('');
     });
+  };
 
   const leave = () => {
+    setZaadTxnText('');
     setRequestId(null);
     setReq(null);
     setDone(null);
@@ -192,6 +209,7 @@ export default function ZaadTopupsScreen() {
         <View style={styles.body}>
           <Text style={styles.label}>{t('zaadTopups.offer.label')}</Text>
           <Text style={styles.bigAmountCentered}>{formatCents(mine.amount)}</Text>
+          <Reference value={mine.reference} />
           <Text style={styles.sub}>{t('zaadTopups.offer.body', { name: mine.customerFirstName })}</Text>
           <Text style={styles.countdown}>{clock(offerLeft)}</Text>
           {errorLine}
@@ -216,6 +234,7 @@ export default function ZaadTopupsScreen() {
               number: formatLocal(mine.agentReceiveMsisdn ?? ''),
             })}
           </Text>
+          <Reference value={mine.reference} hint />
           <Senders senders={mine.allowedSenders} />
           <View style={styles.waiting}>
             <ActivityIndicator color="#FFFFFF" />
@@ -224,7 +243,9 @@ export default function ZaadTopupsScreen() {
           {errorLine}
           {/* The money can land before the customer taps "I've sent it". */}
           <PillButton label={t('zaadTopups.sent.received')} variant="glass" onPress={() => setAskingPin(true)} disabled={busy} />
-          {askingPin ? <PinStep pin={pin} setPin={setPin} onComplete={received} busy={busy} amount={mine.amount} /> : null}
+          {askingPin ? (
+            <PinStep pin={pin} setPin={setPin} txn={zaadTxnText} setTxn={setZaadTxnText} onComplete={received} busy={busy} amount={mine.amount} />
+          ) : null}
         </View>
       </DarkScreen>
     );
@@ -239,16 +260,22 @@ export default function ZaadTopupsScreen() {
           <Text style={styles.label}>{t('zaadTopups.sent.label')}</Text>
           <Text style={styles.bigAmountCentered}>{formatCents(mine.amount)}</Text>
           <Text style={styles.sub}>{t('zaadTopups.sent.body', { name: mine.customerFirstName })}</Text>
-          <GlassCard style={styles.card}>
-            <Text style={styles.label}>{t('zaadTopups.sent.txnId')}</Text>
-            <Text style={styles.code} selectable>{mine.customerZaadTxnId ?? t('zaadTopups.sent.noTxnId')}</Text>
-          </GlassCard>
+          <Reference value={mine.reference} hint />
+          {/* Customer builds 82–83 may still send Zaad's ID. */}
+          {mine.customerZaadTxnId ? (
+            <GlassCard style={styles.card}>
+              <Text style={styles.label}>{t('zaadTopups.sent.txnId')}</Text>
+              <Text style={styles.code} selectable>{mine.customerZaadTxnId}</Text>
+            </GlassCard>
+          ) : (
+            <Text style={styles.hint}>{t('zaadTopups.sent.matchHint')}</Text>
+          )}
           <Senders senders={mine.allowedSenders} />
           <Text style={styles.warn}>{t('zaadTopups.sent.ownZaadOnly')}</Text>
           <Text style={styles.hint}>{t('zaadTopups.sent.timeLeft', { time: clock(confirmLeft) })}</Text>
           {errorLine}
           {askingPin ? (
-            <PinStep pin={pin} setPin={setPin} onComplete={received} busy={busy} amount={mine.amount} />
+            <PinStep pin={pin} setPin={setPin} txn={zaadTxnText} setTxn={setZaadTxnText} onComplete={received} busy={busy} amount={mine.amount} />
           ) : (
             <>
               <PillButton label={t('zaadTopups.sent.received')} onPress={() => setAskingPin(true)} disabled={busy} />
@@ -332,15 +359,32 @@ function Senders({ senders }: { senders?: string[] }) {
   );
 }
 
+/** Zapp's reference (D31), the one the customer sees. Nothing on requests made before it. */
+function Reference({ value, hint }: { value?: string; hint?: boolean }) {
+  const { t } = useTranslation();
+  if (!value) return null;
+  return (
+    <GlassCard style={styles.card}>
+      <Text style={styles.label}>{t('zaadTopups.reference')}</Text>
+      <Text style={styles.code} selectable>{value}</Text>
+      {hint ? <Text style={styles.hintLeft}>{t('zaadTopups.referenceHint')}</Text> : null}
+    </GlassCard>
+  );
+}
+
 function PinStep({
   pin,
   setPin,
+  txn,
+  setTxn,
   onComplete,
   busy,
   amount,
 }: {
   pin: string;
   setPin: (p: string) => void;
+  txn: string;
+  setTxn: (t: string) => void;
   onComplete: (p: string) => void;
   busy: boolean;
   amount: number;
@@ -348,6 +392,18 @@ function PinStep({
   const { t } = useTranslation();
   return (
     <View style={styles.pin}>
+      {/* D31: optional; claims this Zaad payment for one top-up only. */}
+      <Text style={styles.label}>{t('zaadTopups.received.txnLabel')}</Text>
+      <TextInput
+        value={txn}
+        onChangeText={setTxn}
+        placeholder="e.g. 12345678"
+        placeholderTextColor="rgba(255,255,255,0.3)"
+        autoCapitalize="characters"
+        autoCorrect={false}
+        style={styles.input}
+      />
+      <Text style={styles.hint}>{t('zaadTopups.received.txnHint')}</Text>
       <Text style={styles.sub}>{t('zaadTopups.pinFor', { amount: formatCents(amount) })}</Text>
       <PinInput value={pin} onChange={setPin} onComplete={onComplete} />
       {busy ? <ActivityIndicator color="#FFFFFF" /> : null}
@@ -366,6 +422,18 @@ const styles = StyleSheet.create({
   sub: { fontSize: 15, lineHeight: 22, color: TEXT_DIM, textAlign: 'center' },
   label: { fontSize: 12, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: TEXT_FAINT },
   hint: { fontSize: 13, lineHeight: 19, color: TEXT_FAINT, textAlign: 'center' },
+  hintLeft: { fontSize: 13, lineHeight: 19, color: TEXT_FAINT },
+  input: {
+    alignSelf: 'stretch',
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
   warn: { fontSize: 14, lineHeight: 20, color: '#FFB340', textAlign: 'center' },
   error: { fontSize: 14, color: '#FF6961', textAlign: 'center' },
   card: { padding: 18, gap: 8 },

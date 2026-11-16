@@ -1361,5 +1361,7 @@
   "topup.agentFlow.receipt.paidByCash": "Lagu bixiyay: lacag caddaan ah",
   "topup.agentFlow.receipt.paidByZaad": "Lagu bixiyay: Zaad",
   "topup.agentFlow.receipt.txn": "Lambarka dhaqdhaqaaqa Zaad: {{id}}",
+  "topup.agentFlow.reference": "Tixraac: {{ref}}",
+  "topup.agentFlow.referenceHint": "{{agent}} wuxuu arkayaa isla tixraacan. Waxba uma baahnid inaad qorto.",
   "topup.agentFlow.somethingWrong": "Wax khaldan ma jiraan?"
 }

@@ -2,7 +2,7 @@
  * Zaad top-ups through agents (functions/src/zaadAgent/agent.ts).
  *
  * The customer pays this agent's Zaad number and the agent's float credits
- * their wallet. Requests live in `zaadAgentTopups/{id}`, which the agent may
+ * their wallet. Zapp's reference (ZP-…, D31) names the top-up on both sides. Requests live in `zaadAgentTopups/{id}`, which the agent may
  * read while it rings on them and once they accept; `zaad_agents/{uid}` says
  * which request that is.
  */
@@ -23,6 +23,8 @@ export type ZaadTopupStatus =
 
 export interface ZaadTopupDoc {
   customerFirstName: string;
+  /** Zapp's reference, e.g. "ZP-4F7K2" (D31). Missing on requests made before it. */
+  reference?: string;
   /** US cents. */
   amount: number;
   status: ZaadTopupStatus;
@@ -71,7 +73,7 @@ export const setZaadOnline = (online: boolean) => call<{ online: boolean }>('age
  * agent's float and returns the Zaad request to follow (D19).
  */
 export const startZaadInPerson = (target: { otpCode: string; requestId?: string; customerPhone?: string; expectedAmount: number }) =>
-  call<{ requestId: string; amount: number; customerName: string; allowedSenders: string[]; sendBy: string }>(
+  call<{ requestId: string; reference: string | null; amount: number; customerName: string; allowedSenders: string[]; sendBy: string }>(
     'agentStartZaadInPerson',
     target,
   );
@@ -84,12 +86,21 @@ export const confirmZaadTopup = (
   answer: 'received' | 'not_received' | 'different_amount',
   expectedAmount: number,
   agentPin?: string,
+  /** Optional, on "received": Zaad's ID from the agent's own text (D31). */
+  zaadTxnId?: string,
 ) => call<{ status: ZaadTopupStatus; commissionCents?: number }>('agentConfirmZaadTopup', {
   requestId,
   answer,
   expectedAmount,
   ...(agentPin ? { agentPin } : {}),
+  ...(zaadTxnId ? { zaadTxnId } : {}),
 });
+
+/** A Zaad transaction ID as typed: spaces dropped, upper case; null if it can't be one. Mirrors the server. */
+export function normaliseTxnId(raw: string): string | null {
+  const t = raw.replace(/\s+/g, '').toUpperCase();
+  return /^[A-Z0-9_-]{4,64}$/.test(t) ? t : null;
+}
 
 export function watchZaadAgent(uid: string, onChange: (doc: ZaadAgentDoc | null) => void): () => void {
   return firestore()

@@ -1015,5 +1015,12 @@
   "zaadTopups.inPerson.payByZaad": "العميل يدفع {{amount}} عبر زاد",
   "zaadTopups.inPerson.dollarsOnly": "الشحن عبر زاد بالدولار فقط. خذ النقد للشلن.",
   "zaadTopups.inPerson.byPhoneCashOnly": "نقدًا فقط هنا. لزاد، امسح رمز العميل.",
-  "zaadTopups.sent.noTxnId": "لم يُذكر: تحقق من المبلغ والمرسل"
+  "zaadTopups.sent.noTxnId": "لم يُذكر: تحقق من المبلغ والمرسل",
+  "zaadTopups.reference": "مرجع Zapp",
+  "zaadTopups.referenceHint": "يرى العميل المرجع نفسه.",
+  "zaadTopups.sent.matchHint": "تحقق من المبلغ والمرسل في رسالة زاد.",
+  "zaadTopups.received.txnLabel": "رقم عملية زاد (اختياري)",
+  "zaadTopups.received.txnHint": "من رسالة زاد «استلمت». يمنع استخدام الدفعة نفسها لشحنتين.",
+  "zaadTopups.errors.txnUsed": "رقم عملية زاد هذا استُخدم من قبل لشحن آخر.",
+  "zaadTopups.errors.txnBad": "لا يبدو هذا رقم عملية زاد."
 }

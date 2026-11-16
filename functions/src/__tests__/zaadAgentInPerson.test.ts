@@ -121,6 +121,9 @@ describe("Zaad in person", () => {
     const res = await start();
     const id = res.data.requestId;
     expect(res.data.allowedSenders).toEqual(["063 ••• 0987"]);
+    // D31: Zapp's reference, claimed for this request.
+    expect(res.data.reference).toMatch(/^ZP-[34679ACDEFGHJKMNPQRTWXY]{5}$/);
+    expect(db.get(`zaad_agent_refs/${res.data.reference}`)).toMatchObject({ requestId: id, customerId: AMINA });
     expect(db.get("agentTopupRequests/cash-1")).toMatchObject({ status: "moved_to_zaad", zaadRequestId: id });
     expect(db.get(`zaadAgentTopups/${id}`)).toMatchObject({
       status: "accepted",
@@ -148,6 +151,7 @@ describe("Zaad in person", () => {
       paidBy: "zaad",
       meeting: "in_person",
       description: "Top-up from Hodan's Shop (Zaad)",
+      reference: res.data.reference,
     });
     // The cash request can't be confirmed as cash any more.
     await expect(
@@ -262,13 +266,13 @@ describe("Zaad in person", () => {
     expect(db.get("zaad_agent_txn_ids/ZT555")).toBeDefined();
   });
 
-  it("remote still requires the transaction ID", async () => {
-    seed();
+  it("D31: remote is one tap too, with no transaction ID", async () => {
+    const db = seed();
     const { data } = await fns.customerRequestZaadAgentTopup(as(AMINA, { amount: 1000 }));
     await fns.agentAnswerZaadOffer(as(HODAN, { requestId: data.requestId, accept: true }));
-    await expect(fns.customerMarkZaadSent(as(AMINA, { requestId: data.requestId }))).rejects.toMatchObject({
-      details: { reason: "txn_id" },
-    });
+    await fns.customerMarkZaadSent(as(AMINA, { requestId: data.requestId }));
+    expect(db.get(`zaadAgentTopups/${data.requestId}`)!.status).toBe("customer_sent");
+    expect(db.get(`zaadAgentTopups/${data.requestId}`)!.customerZaadTxnId).toBeUndefined();
   });
 
   it("cash confirm writes the agent's name and how the customer paid", async () => {

@@ -1015,5 +1015,12 @@
   "zaadTopups.inPerson.payByZaad": "Customer pays {{amount}} by Zaad",
   "zaadTopups.inPerson.dollarsOnly": "Zaad top-ups are in dollars. Take cash for shillings.",
   "zaadTopups.inPerson.byPhoneCashOnly": "Cash only here. For Zaad, scan the customer's code.",
-  "zaadTopups.sent.noTxnId": "None given: check the amount and sender"
+  "zaadTopups.sent.noTxnId": "None given: check the amount and sender",
+  "zaadTopups.reference": "Zapp reference",
+  "zaadTopups.referenceHint": "The customer sees the same reference.",
+  "zaadTopups.sent.matchHint": "Check the amount and the sender in your Zaad text.",
+  "zaadTopups.received.txnLabel": "Zaad transaction ID (optional)",
+  "zaadTopups.received.txnHint": "From your “you received” Zaad text. It stops one payment being used for two top-ups.",
+  "zaadTopups.errors.txnUsed": "That Zaad transaction ID was already used for another top-up.",
+  "zaadTopups.errors.txnBad": "That doesn't look like a Zaad transaction ID."
 }

@@ -21,6 +21,7 @@ import {
   ReleaseReason,
   ZAAD_AGENTS,
   ZAAD_AGENT_TOPUPS,
+  ZAAD_AGENT_TXN_IDS,
   ZaadAgentDoc,
   ZaadAgentTopup,
   ZaadTopupStatus,
@@ -138,10 +139,14 @@ export interface CreditResult {
  * [by.kind] "agent": the agent confirmed they received the Zaad, and earns
  * commission. "ops": ops decided a dispute for the customer; no commission,
  * since the agent didn't confirm.
+ *
+ * [by.zaadTxnId] Zaad's transaction ID the agent read off their "you received"
+ * text. Claimed in zaad_agent_txn_ids for this request, so one Zaad payment
+ * can't confirm two top-ups.
  */
 export async function creditZaadTopup(
   requestId: string,
-  by: { uid: string; kind: "agent" | "ops" },
+  by: { uid: string; kind: "agent" | "ops"; zaadTxnId?: string | null },
   from: readonly ZaadTopupStatus[],
   stage?: StageWrites
 ): Promise<CreditResult> {
@@ -167,11 +172,19 @@ export async function creditZaadTopup(
       throw new https.HttpsError("permission-denied", "This isn't your top-up");
     }
     const agentRef = db.collection(ZAAD_AGENTS).doc(req.agentId);
-    const [agentSnap, customerSnap, walletSnap] = await Promise.all([
+    const txnRef = by.zaadTxnId ? db.collection(ZAAD_AGENT_TXN_IDS).doc(by.zaadTxnId) : null;
+    const [agentSnap, customerSnap, walletSnap, txnSnap] = await Promise.all([
       tx.get(agentRef),
       tx.get(db.collection("users").doc(req.customerId)),
       tx.get(db.collection("wallets").doc(req.customerId)),
+      txnRef ? tx.get(txnRef) : Promise.resolve(null),
     ]);
+    // Already claimed by this request (an old build's customer typed the same ID) is fine.
+    if (txnSnap?.exists && txnSnap.get("requestId") !== requestId) {
+      throw new https.HttpsError("already-exists", "That Zaad transaction ID was already used for another top-up", {
+        reason: "txn_id_used",
+      });
+    }
     if (!walletSnap.exists) throw new https.HttpsError("not-found", "Customer wallet not found");
     assertCashInRecipient(req.agentId, req.customerId, customerSnap.data() as User | undefined);
 
@@ -184,6 +197,10 @@ export async function creditZaadTopup(
     prepared.write(tx);
 
     const now = admin.firestore.Timestamp.now();
+    if (txnRef && !txnSnap?.exists) {
+      tx.set(txnRef, { requestId, agentId: req.agentId, customerId: req.customerId, by: "agent", at: now });
+    }
+    const zaadTxnId = by.zaadTxnId ?? req.customerZaadTxnId;
     const agentName = req.agentName ?? "Zapp Pay agent";
     const description = `Top-up from ${agentName} (Zaad)`;
     const row: Transaction = {
@@ -200,7 +217,8 @@ export async function creditZaadTopup(
       currency: req.currency,
       status: "completed",
       description,
-      reference: req.customerZaadTxnId ?? requestId,
+      reference: req.reference ?? req.customerZaadTxnId ?? requestId,
+      ...(zaadTxnId ? { zaadTxnId } : {}),
       journalEntryId: creditEntryId(requestId),
       holdEntryId: req.holdEntryId,
       createdAt: now,
@@ -217,7 +235,8 @@ export async function creditZaadTopup(
       commissionDollars: commissionCents / 100,
       currency: req.currency,
       paymentMethod: "zaad",
-      reference: req.customerZaadTxnId ?? "",
+      reference: req.reference ?? req.customerZaadTxnId ?? "",
+      ...(zaadTxnId ? { zaadTxnId } : {}),
       notes: by.kind === "ops" ? "Credited by Zapp after a dispute" : "",
       status: "completed",
       transactionId,
@@ -230,6 +249,7 @@ export async function creditZaadTopup(
       transactionId,
       creditEntryId: creditEntryId(requestId),
       commissionCents,
+      ...(by.zaadTxnId ? { agentZaadTxnId: by.zaadTxnId } : {}),
       completedAt: now,
       deadlineAt: null,
       updatedAt: now,

@@ -10,6 +10,9 @@
  * countdown (T4), "Zapp reviews it" while the agent checks (T5), and a
  * receipt with a "Something wrong?" link (T7, T8). Each line says only
  * what is true at that moment.
+ *
+ * D31: Zapp's reference (e.g. ZP-4F7K2) identifies the top-up on both sides,
+ * so "I've sent it" is one tap; the customer never types Zaad's ID.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -22,7 +25,6 @@ import {
   cancelZaadAgentTopup,
   disputeZaadAgentTopup,
   markZaadSent,
-  normaliseTxnId,
   watchZaadAgentTopup,
   type ZaadAgentTopupDoc,
 } from '../../services/zaadAgent.service';
@@ -92,6 +94,18 @@ export function AgentHeader({ name, amount }: { name: string; amount: string }) 
   );
 }
 
+/** Zapp's reference (D31), the same one the agent sees. Nothing on requests made before it. */
+function Reference({ value }: { value?: string }) {
+  const styles = useStyles();
+  const { t } = useTranslation();
+  if (!value) return null;
+  return (
+    <Text selectable style={[styles.hint, { fontWeight: '800', letterSpacing: 1 }]}>
+      {t('topup.agentFlow.reference', { ref: value })}
+    </Text>
+  );
+}
+
 export default function ZaadRequestView({ requestId, onStartOver }: { requestId: string; onStartOver: () => void }) {
   const colors = useColors();
   const styles = useStyles();
@@ -99,7 +113,6 @@ export default function ZaadRequestView({ requestId, onStartOver }: { requestId:
   const { t } = useTranslation();
 
   const [req, setReq] = useState<ZaadAgentTopupDoc | null>(null);
-  const [txnText, setTxnText] = useState('');
   const [disputeText, setDisputeText] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -132,7 +145,6 @@ export default function ZaadRequestView({ requestId, onStartOver }: { requestId:
 
   if (!req) return <ActivityIndicator color={colors.ui.accentText} style={styles.loading} />;
 
-  const inPerson = req.meeting === 'in_person';
   const amount = formatMoney(req.amount, 'USD');
   const agent = req.agentName ?? '';
   const errorLine = error ? <Text style={styles.errorText}>{error}</Text> : null;
@@ -151,8 +163,6 @@ export default function ZaadRequestView({ requestId, onStartOver }: { requestId:
   }
 
   if (req.status === 'accepted') {
-    const txn = normaliseTxnId(txnText);
-    const typed = txnText.trim().length > 0;
     return (
       <View style={styles.body}>
         <AgentHeader name={agent} amount={amount} />
@@ -170,26 +180,16 @@ export default function ZaadRequestView({ requestId, onStartOver }: { requestId:
         </Text>
         <DialPanel code={req.dialCode ?? null} />
         <Text style={styles.hint}>{t('topup.agentFlow.onlyThisNumber')}</Text>
-        <Text style={styles.label}>
-          {t(inPerson ? 'topup.agentFlow.txnLabelOptional' : 'topup.zaadAgent.txnLabel')}
-        </Text>
-        <TextInput
-          value={txnText}
-          onChangeText={setTxnText}
-          placeholder="e.g. 12345678"
-          placeholderTextColor={colors.ui.ink(0.25)}
-          autoCapitalize="characters"
-          autoCorrect={false}
-          style={styles.input}
-        />
-        <Text style={styles.hint}>{t('topup.zaadAgent.txnHint')}</Text>
+        <View style={styles.dialBox}>
+          <Reference value={req.reference} />
+          {req.reference ? <Text style={styles.hint}>{t('topup.agentFlow.referenceHint', { agent })}</Text> : null}
+        </View>
         {errorLine}
+        {/* D31: one tap, remote and in person; nothing to type. */}
         <Primary
           label={t('topup.zaadAgent.sent')}
-          onPress={() => run(() => markZaadSent(requestId, txn ?? undefined))}
+          onPress={() => run(() => markZaadSent(requestId))}
           busy={busy}
-          // D21: optional in person; remote needs it as evidence (D9).
-          disabled={inPerson ? typed && !txn : !txn}
         />
         <TouchableOpacity onPress={() => run(() => cancelZaadAgentTopup(requestId))}>
           <Text style={styles.link}>{t('topup.zaadAgent.cancelNotSent')}</Text>
@@ -203,6 +203,7 @@ export default function ZaadRequestView({ requestId, onStartOver }: { requestId:
       <View style={styles.body}>
         <AgentHeader name={agent} amount={amount} />
         <Steps at={2} />
+        <Reference value={req.reference} />
         <Text style={styles.big}>{t('topup.zaadAgent.checkingTitle', { agent })}</Text>
         <Waiting text={t('topup.zaadAgent.checking', { amount })} />
         {/* T5 */}
@@ -217,6 +218,7 @@ export default function ZaadRequestView({ requestId, onStartOver }: { requestId:
     return (
       <View style={styles.body}>
         <AgentHeader name={agent} amount={amount} />
+        <Reference value={req.reference} />
         <Text style={styles.big}>
           {t(req.agentAnswer === 'different_amount' ? 'topup.zaadAgent.differentTitle' : 'topup.zaadAgent.notReceivedTitle', {
             agent,
@@ -257,6 +259,7 @@ export default function ZaadRequestView({ requestId, onStartOver }: { requestId:
         <View style={styles.dialBox}>
           <Text style={styles.hint}>{t('topup.agentFlow.receipt.agent', { agent })}</Text>
           <Text style={styles.hint}>{t('topup.agentFlow.receipt.paidByZaad')}</Text>
+          <Reference value={req.reference} />
           {req.customerZaadTxnId ? (
             <Text style={styles.hint}>{t('topup.agentFlow.receipt.txn', { id: req.customerZaadTxnId })}</Text>
           ) : null}

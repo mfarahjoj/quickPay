@@ -1015,5 +1015,12 @@
   "zaadTopups.inPerson.payByZaad": "Macmiilku wuxuu {{amount}} ku bixinayaa Zaad",
   "zaadTopups.inPerson.dollarsOnly": "Ku darista Zaad waa doollar. Shilin, qaado lacag caddaan ah.",
   "zaadTopups.inPerson.byPhoneCashOnly": "Halkan lacag caddaan ah oo keliya. Zaad, iskaan koodka macmiilka.",
-  "zaadTopups.sent.noTxnId": "Lama bixin: hubi lacagta iyo cidda dirtay"
+  "zaadTopups.sent.noTxnId": "Lama bixin: hubi lacagta iyo cidda dirtay",
+  "zaadTopups.reference": "Tixraaca Zapp",
+  "zaadTopups.referenceHint": "Macmiilku wuxuu arkayaa isla tixraacan.",
+  "zaadTopups.sent.matchHint": "Hubi lacagta iyo cidda dirtay ee fariinta Zaad.",
+  "zaadTopups.received.txnLabel": "Lambarka dhaqdhaqaaqa Zaad (ikhtiyaari)",
+  "zaadTopups.received.txnHint": "Ka qaado fariinta Zaad ee “waad heshay”. Waxay ka hortagtaa in hal lacag-bixin loo isticmaalo laba lacag-shubis.",
+  "zaadTopups.errors.txnUsed": "Lambarkan dhaqdhaqaaqa Zaad hore ayaa loogu isticmaalay lacag-shubis kale.",
+  "zaadTopups.errors.txnBad": "Taasi uma eka lambarka dhaqdhaqaaqa Zaad."
 }

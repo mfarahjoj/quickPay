@@ -346,6 +346,8 @@ export interface Transaction {
   paidBy?: "cash" | "zaad";
   /** Zaad top-ups: with the agent, or found by Zapp. */
   meeting?: "in_person" | "remote";
+  /** Zaad top-ups through agents: Zaad's own transaction ID, when the agent or an older customer build gave one. */
+  zaadTxnId?: string;
   /** Set when an agent's commission was withheld, and why. */
   commissionWithheld?: "round_trip";
   currency: string;

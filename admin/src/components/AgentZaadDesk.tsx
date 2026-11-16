@@ -86,6 +86,12 @@ export function AgentZaadDesk() {
 
 // -------------------------------------------------------------- decisions
 
+/** Zaad's own ID: from the agent on "Received" (D31), or typed by a customer on builds 82–83. */
+function zaadIds(row: ZaadTopupRow): string {
+  const ids = [row.agentZaadTxnId && `${row.agentZaadTxnId} (agent)`, row.customerZaadTxnId && `${row.customerZaadTxnId} (customer)`];
+  return ids.filter(Boolean).join(" · ");
+}
+
 function Timeline({ row }: { row: ZaadTopupRow }) {
   return (
     <dl className="kv">
@@ -101,8 +107,10 @@ function Timeline({ row }: { row: ZaadTopupRow }) {
       <dd>{row.meeting === "in_person" ? "In person (the agent scanned the customer)" : "Remote (Zapp found the agent)"}</dd>
       <dt>Should pay from</dt>
       <dd>{row.allowedSenders.join(" or ") || "—"}</dd>
-      <dt>Customer's Zaad ID</dt>
-      <dd>{row.customerZaadTxnId ?? "none given"}</dd>
+      <dt>Zapp reference</dt>
+      <dd>{row.reference ?? "— (made before references)"}</dd>
+      <dt>Zaad transaction ID</dt>
+      <dd>{zaadIds(row) || "none given"}</dd>
       <dt>Asked</dt>
       <dd>{when(row.createdAt)}</dd>
       <dt>Agent accepted</dt>
@@ -251,6 +259,7 @@ function DecisionsPanel({
                 <div className="row">
                   <span>
                     <strong>{money(row.amountCents)}</strong>{" "}
+                    {row.reference && <code>{row.reference}</code>}{" "}
                     <span className="muted">
                       {row.customerName} → {row.agentName ?? "—"}
                     </span>
@@ -365,6 +374,7 @@ function RequestsPanel() {
                 <th className="wide">Agent</th>
                 <th className="num">Amount</th>
                 <th>Status</th>
+                <th>Reference</th>
                 <th>Zaad ID</th>
                 <th>Asked</th>
               </tr>
@@ -386,7 +396,8 @@ function RequestsPanel() {
                     <StatusBadge status={row.status} />
                     {row.reversal && <div className="muted">reversal {row.reversal.status}</div>}
                   </td>
-                  <td className="nowrap">{row.customerZaadTxnId ?? "—"}</td>
+                  <td className="nowrap">{row.reference ?? "—"}</td>
+                  <td className="nowrap">{zaadIds(row) || "—"}</td>
                   <td className="nowrap">{ago(row.createdAt)}</td>
                 </tr>
               ))}
