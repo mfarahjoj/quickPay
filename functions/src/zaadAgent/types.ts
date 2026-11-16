@@ -126,6 +126,8 @@ export interface ZaadAgentTopup {
   /** Zaad's transaction ID, if the customer typed one (builds 82–83 did; optional since D31). */
   customerZaadTxnId?: string;
   customerSentAt?: Timestamp;
+  /** When the agent was told 5 minutes are left to answer (D32); set once. */
+  reminderSentAt?: Timestamp;
   /** Zaad's transaction ID from the agent's "you received" text, if they gave it on "Received". */
   agentZaadTxnId?: string;
   confirmBy?: Timestamp;
@@ -160,7 +162,13 @@ export interface ZaadAgentDoc {
   pausedUntil?: Timestamp | null;
   online: boolean;
   lastSeenAt?: Timestamp | null;
-  /** The request ringing on, or held for, this agent: one at a time (D6). */
+  /**
+   * Remote requests ringing on, or held for, this agent, oldest first: up to
+   * `zaadAgentMaxOpenRequests` at once (D32, replacing D6's one at a time).
+   * Missing on docs written before D32: read [openRequestId] instead.
+   */
+  openRequestIds?: string[];
+  /** The newest of [openRequestIds], or null. Kept for merchant builds ≤ 31, which show one request. */
   openRequestId: string | null;
   lastOfferedAt?: Timestamp | null;
   /** Offers in a row the agent let time out; two take them offline (D8). */

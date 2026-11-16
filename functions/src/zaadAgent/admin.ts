@@ -19,7 +19,7 @@ import { notifyUser } from "../utils/notifications";
 import { pushAmount } from "../utils/money";
 import { reviewAgentStanding } from "../agents/standing";
 import { ApiResponse, Wallet } from "../types";
-import { HEARTBEAT_STALE_MS, displayMsisdn, reversalEntry, reversalEntryId, splitReversal } from "./core";
+import { HEARTBEAT_STALE_MS, displayMsisdn, openIds, reversalEntry, reversalEntryId, splitReversal } from "./core";
 import { readFloatCents } from "../agents/float";
 import { creditZaadTopup, releaseZaadHold } from "./settle";
 import {
@@ -71,7 +71,7 @@ export const adminSetZaadAgent = https.onCall(
     await db.runTransaction(async (tx) => {
       const prev = (await tx.get(ref)).data() as ZaadAgentDoc | undefined;
       const changed = !!prev?.receiveMsisdn && prev.receiveMsisdn !== msisdn;
-      if (changed && prev?.openRequestId) {
+      if (changed && openIds(prev).length > 0) {
         throw new https.HttpsError("failed-precondition", "The agent has a top-up in progress. Try again when it's done.");
       }
       const now = admin.firestore.Timestamp.now();
@@ -86,6 +86,7 @@ export const adminSetZaadAgent = https.onCall(
         pausedUntil,
         online: enabled && !changed ? prev?.online ?? false : false,
         lastSeenAt: prev?.lastSeenAt ?? null,
+        openRequestIds: openIds(prev),
         openRequestId: prev?.openRequestId ?? null,
         lastOfferedAt: prev?.lastOfferedAt ?? null,
         missedOffers: prev?.missedOffers ?? 0,

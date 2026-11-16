@@ -144,10 +144,37 @@ export interface Candidate {
   doc: ZaadAgentDoc;
 }
 
-/** Whether this agent can be offered a request right now, on what their zaad_agents doc says. */
-export function isAvailable(doc: ZaadAgentDoc, nowMs: number): boolean {
+/** The remote requests open on this agent (D32), from either shape of the doc. */
+export function openIds(doc: Pick<ZaadAgentDoc, "openRequestIds" | "openRequestId"> | undefined): string[] {
+  if (!doc) return [];
+  return doc.openRequestIds ?? (doc.openRequestId ? [doc.openRequestId] : []);
+}
+
+/** The fields to write when [id] opens on the agent. */
+export function withOpen(doc: ZaadAgentDoc | undefined, id: string): Pick<ZaadAgentDoc, "openRequestIds" | "openRequestId"> {
+  const ids = [...openIds(doc).filter((x) => x !== id), id];
+  return { openRequestIds: ids, openRequestId: id };
+}
+
+/** The fields to write when [id] is done with the agent, or null if it wasn't open on them. */
+export function withoutOpen(
+  doc: ZaadAgentDoc | undefined,
+  id: string
+): Pick<ZaadAgentDoc, "openRequestIds" | "openRequestId"> | null {
+  const ids = openIds(doc);
+  if (!ids.includes(id)) return null;
+  const rest = ids.filter((x) => x !== id);
+  return { openRequestIds: rest, openRequestId: rest[rest.length - 1] ?? null };
+}
+
+/**
+ * Whether this agent can be offered a request right now, on what their
+ * zaad_agents doc says. [maxOpen]: `zaadAgentMaxOpenRequests` (D32). Free
+ * float is checked separately (dispatch.ts).
+ */
+export function isAvailable(doc: ZaadAgentDoc, nowMs: number, maxOpen = 1): boolean {
   if (!doc.enabled || !doc.online || !doc.receiveMsisdn) return false;
-  if (doc.openRequestId) return false;
+  if (openIds(doc).length >= maxOpen) return false;
   if (doc.pausedUntil && doc.pausedUntil.toMillis() > nowMs) return false;
   const seen = doc.lastSeenAt?.toMillis() ?? 0;
   return nowMs - seen <= HEARTBEAT_STALE_MS;
@@ -160,10 +187,13 @@ export function isAvailable(doc: ZaadAgentDoc, nowMs: number): boolean {
  */
 export function rankCandidates(
   candidates: Candidate[],
-  opts: { nowMs: number; customerId: string; alreadyOffered: Set<string> }
+  opts: { nowMs: number; customerId: string; alreadyOffered: Set<string>; maxOpen?: number }
 ): Candidate[] {
   return candidates
-    .filter((c) => c.id !== opts.customerId && !opts.alreadyOffered.has(c.id) && isAvailable(c.doc, opts.nowMs))
+    .filter(
+      (c) =>
+        c.id !== opts.customerId && !opts.alreadyOffered.has(c.id) && isAvailable(c.doc, opts.nowMs, opts.maxOpen ?? 1)
+    )
     .sort((a, b) => (a.doc.lastOfferedAt?.toMillis() ?? 0) - (b.doc.lastOfferedAt?.toMillis() ?? 0));
 }
 

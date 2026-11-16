@@ -9,7 +9,9 @@
  * balance, never a screenshot the customer shows) and confirms with their
  * PIN; the held float goes to the customer and the agent earns commission.
  *
- *   idle      online switch, float, setup or refill notes
+ *   idle      online switch, float, setup or refill notes, and the agent's
+ *             requests (D32): offers ringing now as a queue, then Check your
+ *             Zaad, Waiting for customer, In review, Done today, Earlier
  *   offer     amount, customer, countdown: Accept / Decline
  *   accepted  waiting for the customer to send
  *   sent      check your Zaad: Received / Not received / A different amount
@@ -18,12 +20,14 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { useAuth } from '../../hooks/useAuth';
 import { DarkScreen, GlassCard, PillButton, PinInput, ScreenHeader, TEXT_DIM, TEXT_FAINT } from '../../components';
 import { SuccessCheckIcon } from '../../components/icons/AuthIcons';
+import { ATTENTION, ZaadRequestList } from '../../components/ZaadRequestList';
+import { useZaadAgentRequests } from '../../hooks/useZaadAgentRequests';
 import { formatCents } from '../../utils/money';
 import { formatLocal } from '../../utils/zaad';
 import { callableErrorKey } from '../../utils/errors';
@@ -64,9 +68,11 @@ export default function ZaadTopupsScreen() {
 
   const [status, setStatus] = useState<ZaadAgentStatus | null>(null);
   const [agent, setAgent] = useState<ZaadAgentDoc | null>(null);
-  // An in-person Zaad top-up (D19) is opened by id: it never takes the agent's
-  // offer slot (openRequestId), so the watcher below wouldn't find it.
+  // The request open on screen: from a push or a scan (route), a tap in the
+  // list, or an offer just accepted. With several at once (D32) nothing
+  // switches it but the agent.
   const [requestId, setRequestId] = useState<string | null>(route.params?.requestId ?? null);
+  const requests = useZaadAgentRequests(uid || undefined);
   const [req, setReq] = useState<ZaadTopupDoc | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -85,12 +91,17 @@ export default function ZaadTopupsScreen() {
 
   useEffect(() => {
     if (!uid) return;
-    return watchZaadAgent(uid, (doc) => {
-      setAgent(doc);
-      // Keep showing a request after it's freed the agent, until they leave it.
-      if (doc?.openRequestId) setRequestId(doc.openRequestId);
-    });
+    return watchZaadAgent(uid, setAgent);
   }, [uid]);
+
+  // Opened again for a different request (a push tapped while here).
+  const routeRequestId = route.params?.requestId;
+  useEffect(() => {
+    if (routeRequestId) {
+      setDone(null);
+      setRequestId(routeRequestId);
+    }
+  }, [routeRequestId]);
 
   useEffect(() => {
     if (!requestId) return;
@@ -136,7 +147,12 @@ export default function ZaadTopupsScreen() {
       refresh();
     });
 
-  const answer = (accept: boolean) => run(() => answerZaadOffer(requestId!, accept));
+  const answerOffer = (id: string, accept: boolean) =>
+    run(async () => {
+      await answerZaadOffer(id, accept);
+      setRequestId(accept ? id : null);
+    });
+  const answer = (accept: boolean) => answerOffer(requestId!, accept);
 
   const decline = (kind: 'not_received' | 'different_amount') =>
     Alert.alert(
@@ -171,6 +187,9 @@ export default function ZaadTopupsScreen() {
 
   const leave = () => {
     setZaadTxnText('');
+    setAskingPin(false);
+    setPin('');
+    navigation.setParams({ requestId: undefined });
     setRequestId(null);
     setReq(null);
     setDone(null);
@@ -182,6 +201,15 @@ export default function ZaadTopupsScreen() {
     <ScreenHeader title={t('zaadTopups.title')} subtitle={t('zaadTopups.subtitle')} onBack={() => navigation.goBack()} />
   );
   const errorLine = error ? <Text style={styles.error}>{error}</Text> : null;
+  // While one request is open, others that need the agent are a tap away.
+  const othersWaiting =
+    requests.offers.filter((r) => r.id !== requestId).length + requests.toCheck.filter((r) => r.id !== requestId).length;
+  const others =
+    requestId && othersWaiting > 0 ? (
+      <TouchableOpacity onPress={leave} style={styles.others} accessibilityRole="button">
+        <Text style={styles.othersText}>{t('zaadTopups.list.othersWaiting', { count: othersWaiting })}</Text>
+      </TouchableOpacity>
+    ) : null;
 
   if (done) {
     return (
@@ -207,6 +235,7 @@ export default function ZaadTopupsScreen() {
       <DarkScreen edges={[]} scroll contentStyle={styles.content}>
         {header}
         <View style={styles.body}>
+          {others}
           <Text style={styles.label}>{t('zaadTopups.offer.label')}</Text>
           <Text style={styles.bigAmountCentered}>{formatCents(mine.amount)}</Text>
           <Reference value={mine.reference} />
@@ -226,6 +255,7 @@ export default function ZaadTopupsScreen() {
       <DarkScreen edges={[]} scroll contentStyle={styles.content}>
         {header}
         <View style={styles.body}>
+          {others}
           <Text style={styles.bigAmountCentered}>{formatCents(mine.amount)}</Text>
           <Text style={styles.sub}>
             {t('zaadTopups.accepted.body', {
@@ -257,6 +287,7 @@ export default function ZaadTopupsScreen() {
       <DarkScreen edges={[]} scroll keyboard contentStyle={styles.content}>
         {header}
         <View style={styles.body}>
+          {others}
           <Text style={styles.label}>{t('zaadTopups.sent.label')}</Text>
           <Text style={styles.bigAmountCentered}>{formatCents(mine.amount)}</Text>
           <Text style={styles.sub}>{t('zaadTopups.sent.body', { name: mine.customerFirstName })}</Text>
@@ -288,8 +319,8 @@ export default function ZaadTopupsScreen() {
     );
   }
 
-  // A request this agent was on has ended some other way.
-  if (mine && requestId && (mine.meeting === 'in_person' || !agent?.openRequestId)) {
+  // A request this agent was on has ended, or waits on the customer or Zapp.
+  if (mine && requestId) {
     return (
       <DarkScreen edges={[]} contentStyle={styles.centered}>
         <Text style={styles.bigTitle}>{t(`zaadTopups.ended.${mine.status}`, { defaultValue: t('zaadTopups.ended.other') })}</Text>
@@ -341,6 +372,9 @@ export default function ZaadTopupsScreen() {
             <Text style={styles.hint}>{t('zaadTopups.howItWorks')}</Text>
           </>
         )}
+        {status.enabled || requests.earlier.length + requests.doneToday.length > 0 ? (
+          <ZaadRequestList data={requests} onOpen={setRequestId} onAnswer={answerOffer} busy={busy} />
+        ) : null}
         {/* In person, cash or Zaad: scan the customer's top-up code. */}
         <PillButton label={t('zaadTopups.scanCustomer')} onPress={() => navigation.navigate('ConfirmTopup')} />
         {errorLine}
@@ -423,6 +457,15 @@ const styles = StyleSheet.create({
   label: { fontSize: 12, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: TEXT_FAINT },
   hint: { fontSize: 13, lineHeight: 19, color: TEXT_FAINT, textAlign: 'center' },
   hintLeft: { fontSize: 13, lineHeight: 19, color: TEXT_FAINT },
+  others: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,176,46,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,176,46,0.4)',
+  },
+  othersText: { fontSize: 14, fontWeight: '700', color: ATTENTION, textAlign: 'center' },
   input: {
     alignSelf: 'stretch',
     fontSize: 18,

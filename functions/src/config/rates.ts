@@ -65,6 +65,7 @@ export interface Rates {
   zaadAgentDailyCount: number;
   zaadAgentOfferSeconds: number;
   zaadAgentOffersPerRequest: number;
+  zaadAgentMaxOpenRequests: number;
   zaadAgentSendMinutes: number;
   zaadAgentConfirmMinutes: number;
   zaadAgentDisputeMinutes: number;
@@ -542,10 +543,20 @@ export const RATE_FIELDS: { [K in keyof Rates]: RateFieldSpec } = {
     max: 20,
     unit: "agents",
   },
+  zaadAgentMaxOpenRequests: {
+    group: "Zaad top-ups through agents",
+    label: "Requests an agent can have open at once",
+    help: "Remote requests ringing on, or held for, one agent. Each also needs free float. In-person top-ups don't count.",
+    kind: "int",
+    default: 3,
+    min: 1,
+    max: 10,
+    unit: "requests",
+  },
   zaadAgentSendMinutes: {
     group: "Zaad top-ups through agents",
     label: "Time for the customer to send",
-    help: "After an agent accepts, how long the customer has to send the Zaad and enter its transaction ID. Then the agent's float is released.",
+    help: "After an agent accepts, how long the customer has to send the Zaad and tap I've sent it. Then the agent's float is released.",
     kind: "int",
     default: 10,
     min: 2,

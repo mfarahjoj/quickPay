@@ -26,6 +26,8 @@ import {
   splitReversal,
 } from "../zaadAgent/core";
 import { runZaadAgentSweep } from "../zaadAgent/sweep";
+import * as fs from "fs";
+import * as path from "path";
 import * as core from "../zaadAgent/core";
 
 const mockedPin = verifyUserPin as jest.MockedFunction<typeof verifyUserPin>;
@@ -48,7 +50,8 @@ describe("Zaad top-ups through agents: pure rules", () => {
     expect(DEFAULT_RATES.zaadAgentTopupMaxCents).toBe(10_000);
     expect(DEFAULT_RATES.zaadAgentDailyMaxCents).toBe(30_000);
     const keys = Object.keys(RATE_FIELDS).filter((k) => k.startsWith("zaadAgent"));
-    expect(keys.length).toBe(15);
+    expect(keys.length).toBe(16);
+    expect(DEFAULT_RATES.zaadAgentMaxOpenRequests).toBe(3);
     for (const k of keys) expect(RATE_FIELDS[k as keyof typeof RATE_FIELDS].group).toBe("Zaad top-ups through agents");
   });
 
@@ -268,6 +271,149 @@ describe("Zaad top-ups through agents: the flow", () => {
     await expect(
       fns.customerMarkZaadSent(as(AMINA, { requestId: data.requestId, zaadTxnId: "zt999" }))
     ).rejects.toMatchObject({ details: { reason: "txn_id_used" } });
+  });
+
+  describe("D32: several requests per agent, stored, with a push for each", () => {
+    const CUSTOMERS = ["cust-2", "cust-3", "cust-4"];
+    const customers = Object.fromEntries(
+      CUSTOMERS.flatMap((uid, i) => [
+        [`users/${uid}`, { accountType: "customer", fullName: `Customer ${i + 2}`, kycStatus: "verified", phoneNumber: `+25263412000${i}` }],
+        [`wallets/${uid}`, wallet(0)],
+      ])
+    );
+    const ask = async (uid: string, amount = 1000) =>
+      (await fns.customerRequestZaadAgentTopup(as(uid, { amount }))).data as { requestId: string; status: string };
+    const pushes = (key: string, to?: string) =>
+      mockedNotify.mock.calls.filter(([uid, , msg]) => (msg as any).key === key && (!to || uid === to)).length;
+
+    it("one agent takes up to the cap (3 by default); the next request finds nobody", async () => {
+      const db = seed({ extra: customers });
+      const a = await ask(AMINA);
+      const b = await ask("cust-2");
+      const c = await ask("cust-3");
+      expect([a.status, b.status, c.status]).toEqual(["offered", "offered", "offered"]);
+      expect(db.get(`zaad_agents/${HODAN}`)).toMatchObject({
+        openRequestIds: [a.requestId, b.requestId, c.requestId],
+        openRequestId: c.requestId, // the newest, for merchant builds ≤ 31
+      });
+      expect((await ask("cust-4")).status).toBe("no_agent");
+      // Each offer pushed once, with the seconds to answer.
+      expect(pushes("zaadAgent.offer", HODAN)).toBe(3);
+      expect(mockedNotify).toHaveBeenCalledWith(
+        HODAN,
+        "zaad_agent_topup",
+        { key: "zaadAgent.offer", params: { amount: expect.any(String), seconds: "45" } },
+        expect.objectContaining({ type: "zaad_agent_offer", requestId: a.requestId, expiresAt: expect.any(String) })
+      );
+
+      // Finishing one frees a place.
+      await fns.agentAnswerZaadOffer(as(HODAN, { requestId: a.requestId, accept: true }));
+      await fns.customerMarkZaadSent(as(AMINA, { requestId: a.requestId }));
+      await fns.agentConfirmZaadTopup(as(HODAN, { requestId: a.requestId, answer: "received", expectedAmount: 1000, agentPin: "1" }));
+      expect(db.get(`zaad_agents/${HODAN}`)!.openRequestIds).toEqual([b.requestId, c.requestId]);
+      // cust-4's request ended no_agent, so they may ask again.
+      expect((await ask("cust-4")).status).toBe("offered");
+    });
+
+    it("the console's cap is obeyed", async () => {
+      seed({ extra: customers, rates: { zaadAgentMaxOpenRequests: 1 } });
+      expect((await ask(AMINA)).status).toBe("offered");
+      expect((await ask("cust-2")).status).toBe("no_agent");
+    });
+
+    it("free float counts what is ringing and what is held", async () => {
+      const db = seed({ extra: customers }); // $100 float
+      const a = await ask(AMINA, 6000);
+      // $60 is promised to the ringing offer: $50 more doesn't fit.
+      expect((await ask("cust-2", 5000)).status).toBe("no_agent");
+      await fns.agentAnswerZaadOffer(as(HODAN, { requestId: a.requestId, accept: true }));
+      expect(balance(db, `agent:${HODAN}`)).toBe(4000);
+      // Held now: still $40 free.
+      expect((await ask("cust-3", 5000)).status).toBe("no_agent");
+      expect((await ask("cust-4", 4000)).status).toBe("offered");
+    });
+
+    it("cancel, decline and timeout each free only their own place", async () => {
+      const db = seed({ extra: customers });
+      const a = await ask(AMINA);
+      const b = await ask("cust-2");
+      await fns.customerCancelZaadTopup(as(AMINA, { requestId: a.requestId }));
+      expect(db.get(`zaad_agents/${HODAN}`)).toMatchObject({ openRequestIds: [b.requestId], openRequestId: b.requestId });
+      await fns.agentAnswerZaadOffer(as(HODAN, { requestId: b.requestId, accept: false }));
+      expect(db.get(`zaad_agents/${HODAN}`)).toMatchObject({ openRequestIds: [], openRequestId: null });
+    });
+
+    it("reads an agent doc written before D32", async () => {
+      const db = seed({ extra: { ...customers, [`zaad_agents/${HODAN}`]: zaadAgent({ openRequestId: "older" }) } });
+      const a = await ask(AMINA);
+      expect(db.get(`zaad_agents/${HODAN}`)!.openRequestIds).toEqual(["older", a.requestId]);
+    });
+
+    it("5 minutes before review the agent is reminded once, then told once when it goes to review", async () => {
+      const db = seed();
+      const id = await toSentNoId();
+      const confirmBy = req(db, id).confirmBy.toMillis();
+      expect(req(db, id).deadlineAt.toMillis()).toBe(confirmBy - 5 * 60_000);
+
+      await runZaadAgentSweep(confirmBy - 6 * 60_000);
+      expect(pushes("zaadAgent.confirm_reminder")).toBe(0);
+      await runZaadAgentSweep(confirmBy - 4 * 60_000);
+      await runZaadAgentSweep(confirmBy - 3 * 60_000);
+      expect(pushes("zaadAgent.confirm_reminder", HODAN)).toBe(1);
+      expect(req(db, id).deadlineAt.toMillis()).toBe(confirmBy);
+
+      await runZaadAgentSweep(confirmBy + 1000);
+      await runZaadAgentSweep(confirmBy + 2000);
+      expect(req(db, id).status).toBe("disputed");
+      expect(pushes("zaadAgent.disputed", HODAN)).toBe(1);
+      expect(db.get(`zaad_agents/${HODAN}`)!.openRequestIds).toEqual([]);
+    });
+
+    it("the agent hears ops' ruling, either way", async () => {
+      seed({ extra: customers });
+      const a = await toSentNoId();
+      await fns.agentConfirmZaadTopup(as(HODAN, { requestId: a, answer: "not_received", expectedAmount: 1000 }));
+      await fns.customerDisputeZaadTopup(as(AMINA, { requestId: a }));
+      await fns.adminResolveZaadTopup(asOps({ requestId: a, outcome: "customer", reason: "Statement shows it" }));
+      expect(pushes("zaadAgent.ruling_for_customer", HODAN)).toBe(1);
+
+      const { requestId: b } = await ask("cust-2");
+      await fns.agentAnswerZaadOffer(as(HODAN, { requestId: b, accept: true }));
+      await fns.customerMarkZaadSent(as("cust-2", { requestId: b }));
+      await fns.agentConfirmZaadTopup(as(HODAN, { requestId: b, answer: "not_received", expectedAmount: 1000 }));
+      await fns.customerDisputeZaadTopup(as("cust-2", { requestId: b }));
+      await fns.adminResolveZaadTopup(asOps({ requestId: b, outcome: "agent", reason: "Nothing on the statement" }));
+      expect(pushes("zaadAgent.ruling_for_agent", HODAN)).toBe(1);
+      expect(pushes("zaadAgent.float_returned", HODAN)).toBe(0);
+    });
+
+    it("the status call reports open requests against the cap", async () => {
+      seed({ extra: customers });
+      await ask(AMINA);
+      const status = await fns.agentGetZaadStatus(as(HODAN));
+      expect(status.data).toMatchObject({ openCount: 1, maxOpen: 3 });
+    });
+
+    it("rules: only the request's customer, its agent, or the agent it rings on can read it; nobody writes", () => {
+      // No rules emulator in this suite: check the rule as written.
+      const rules = fs.readFileSync(path.join(__dirname, "../../../firestore.rules"), "utf8");
+      const block = rules.slice(rules.indexOf("match /zaadAgentTopups/{requestId}"));
+      const body = block.slice(0, block.indexOf("allow write") + "allow write: if false;".length).replace(/\s+/g, " ");
+      expect(body).toContain(
+        "allow read: if isAuthenticated() && (isOwner(resource.data.customerId) || isOwner(resource.data.agentId) || isOwner(resource.data.offeredTo));"
+      );
+      expect(body).toContain("allow write: if false;");
+      const indexes = JSON.parse(fs.readFileSync(path.join(__dirname, "../../../firestore.indexes.json"), "utf8"));
+      expect(indexes.indexes).toContainEqual(
+        expect.objectContaining({
+          collectionGroup: "zaadAgentTopups",
+          fields: [
+            { fieldPath: "agentId", order: "ASCENDING" },
+            { fieldPath: "createdAt", order: "DESCENDING" },
+          ],
+        })
+      );
+    });
   });
 
   describe("D31: Zapp's reference, and Zaad's ID from the agent", () => {

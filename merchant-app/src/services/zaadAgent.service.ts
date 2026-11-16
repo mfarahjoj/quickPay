@@ -38,11 +38,19 @@ export interface ZaadTopupDoc {
   sendBy?: { toMillis(): number };
   customerZaadTxnId?: string;
   confirmBy?: { toMillis(): number };
+  createdAt?: { toMillis(): number };
+  updatedAt?: { toMillis(): number };
 }
+
+/** A request with its id, for lists. */
+export type ZaadTopupRow = ZaadTopupDoc & { id: string };
 
 export interface ZaadAgentDoc {
   enabled: boolean;
   online: boolean;
+  /** Remote requests ringing or held, oldest first (D32). Missing on older docs. */
+  openRequestIds?: string[];
+  /** The newest of openRequestIds. */
   openRequestId: string | null;
   receiveMsisdn: string | null;
 }
@@ -53,6 +61,9 @@ export interface ZaadAgentStatus {
   receiveNumber: string | null;
   pausedUntil: string | null;
   openRequestId: string | null;
+  /** Remote requests open now, and the most allowed at once (D32). Missing from older servers. */
+  openCount?: number;
+  maxOpen?: number;
   floatCents: number;
   floatLowCents: number;
   open: boolean;
@@ -119,6 +130,39 @@ export function watchZaadTopup(id: string, onChange: (doc: ZaadTopupDoc | null) 
     .onSnapshot(
       (snap) => onChange((snap.data() as ZaadTopupDoc | undefined) ?? null),
       () => onChange(null),
+    );
+}
+
+const rows = (snap: { docs: { id: string; data(): unknown }[] }): ZaadTopupRow[] =>
+  snap.docs.map((d) => ({ ...(d.data() as ZaadTopupDoc), id: d.id }));
+
+/**
+ * The agent's own requests once taken, newest first (D32): what they must
+ * check, what's waiting, what's in review, and history. Rules let an agent
+ * read only requests where they are the agent or the one being offered.
+ */
+export function watchMyZaadTopups(uid: string, onChange: (list: ZaadTopupRow[]) => void, limit = 50): () => void {
+  return firestore()
+    .collection('zaadAgentTopups')
+    .where('agentId', '==', uid)
+    .orderBy('createdAt', 'desc')
+    .limit(limit)
+    .onSnapshot(
+      (snap) => onChange(rows(snap)),
+      () => onChange([]),
+    );
+}
+
+/** Offers ringing on this agent now, each with its own timer (D32). */
+export function watchMyZaadOffers(uid: string, onChange: (list: ZaadTopupRow[]) => void): () => void {
+  return firestore()
+    .collection('zaadAgentTopups')
+    .where('offeredTo', '==', uid)
+    .where('status', '==', 'offered')
+    .onSnapshot(
+      (snap) =>
+        onChange(rows(snap).sort((a, b) => (a.offerExpiresAt?.toMillis() ?? 0) - (b.offerExpiresAt?.toMillis() ?? 0))),
+      () => onChange([]),
     );
 }
 

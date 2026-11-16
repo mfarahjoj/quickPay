@@ -17,7 +17,7 @@ import { formatAmount, pushAmount } from "../utils/money";
 import { dialCode } from "../mobileMoney/linking";
 import { LINKED_NUMBERS } from "../mobileMoney/receipts";
 import { ApiResponse, User } from "../types";
-import { displayMsisdn, holdEntry, holdEntryId, maskMsisdn, normaliseTxnId } from "./core";
+import { displayMsisdn, holdEntry, holdEntryId, maskMsisdn, normaliseTxnId, openIds, withoutOpen } from "./core";
 import { endOffer, offerNext } from "./dispatch";
 import { creditZaadTopup } from "./settle";
 import {
@@ -61,6 +61,9 @@ export interface ZaadAgentStatus {
   receiveNumber: string | null;
   pausedUntil: string | null;
   openRequestId: string | null;
+  /** Remote requests open on the agent now, and the most allowed (D32). */
+  openCount: number;
+  maxOpen: number;
   floatCents: number;
   floatLowCents: number;
   /** Whether Zaad top-ups through agents are switched on at all. */
@@ -88,6 +91,8 @@ export const agentGetZaadStatus = https.onCall(
         pausedUntil:
           doc?.pausedUntil && doc.pausedUntil.toMillis() > Date.now() ? doc.pausedUntil.toDate().toISOString() : null,
         openRequestId: doc?.openRequestId ?? null,
+        openCount: openIds(doc).length,
+        maxOpen: rates.zaadAgentMaxOpenRequests,
         floatCents: await readFloatCents(uid),
         floatLowCents: rates.zaadAgentFloatLowCents,
         open: rates.zaadAgentTopups === "on",
@@ -330,9 +335,8 @@ export const agentConfirmZaadTopup = https.onCall(
         deadlineAt: disputeUntil,
         updatedAt: now,
       });
-      if ((agentSnap.data() as ZaadAgentDoc | undefined)?.openRequestId === id) {
-        tx.update(agentRef, { openRequestId: null });
-      }
+      const freed = withoutOpen(agentSnap.data() as ZaadAgentDoc | undefined, id);
+      if (freed) tx.update(agentRef, freed);
     });
     notifyUser(
       req.customerId,

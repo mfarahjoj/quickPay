@@ -34,6 +34,24 @@ const openZaadScreen = () => {
   if (navigationRef.isReady()) navigationRef.navigate('ZaadTopups' as never);
 };
 
+/**
+ * A Zaad top-up push was tapped (D32): open that request. On a cold start the
+ * navigator isn't there until sign-in and the app lock are through, so wait
+ * for it (up to 2 minutes).
+ */
+export function openZaadRequest(requestId: string): void {
+  const started = Date.now();
+  const tryOpen = () => {
+    const ready = navigationRef.isReady() && navigationRef.getRootState()?.routes?.[0]?.name === 'Main';
+    if (ready) {
+      (navigationRef.navigate as (name: string, params: object) => void)('ZaadTopups', { requestId });
+    } else if (Date.now() - started < 120_000) {
+      setTimeout(tryOpen, 500);
+    }
+  };
+  tryOpen();
+}
+
 type AuthStackParamList = {
   Welcome: undefined;
   Login: undefined;

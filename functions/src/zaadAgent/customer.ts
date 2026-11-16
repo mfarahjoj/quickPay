@@ -10,7 +10,7 @@ import { getRates } from "../config/rates";
 import { notifyUser } from "../utils/notifications";
 import { pushAmount } from "../utils/money";
 import { ApiResponse } from "../types";
-import { firstName, normaliseTxnId } from "./core";
+import { firstName, normaliseTxnId, withoutOpen } from "./core";
 import { offerNext } from "./dispatch";
 import { assertNoActiveZaad, assertZaadAgentOpen, assertZaadAmount, checkZaadCustomer } from "./limits";
 import { claimTopupReference, pickTopupReference } from "./reference";
@@ -23,6 +23,9 @@ import {
   ZaadAgentTopup,
   ZaadTopupStatus,
 } from "./types";
+
+/** How long before an unanswered request goes to review the agent is reminded (D32). */
+export const REMINDER_MS = 5 * 60_000;
 
 function requestId(data: unknown): string {
   const id = (data as { requestId?: unknown } | undefined)?.requestId;
@@ -120,7 +123,8 @@ export const customerCancelZaadTopup = https.onCall(
         const agent = agentRef ? ((await tx.get(agentRef)).data() as ZaadAgentDoc | undefined) : undefined;
         const now = admin.firestore.Timestamp.now();
         tx.update(ref, { status: "cancelled", offeredTo: null, offerExpiresAt: null, deadlineAt: null, updatedAt: now });
-        if (agentRef && agent?.openRequestId === id) tx.update(agentRef, { openRequestId: null });
+        const freed = agentRef ? withoutOpen(agent, id) : null;
+        if (agentRef && freed) tx.update(agentRef, freed);
       });
       return { success: true, data: { status: "cancelled" } };
     }
@@ -191,13 +195,16 @@ export const customerMarkZaadSent = https.onCall(
       }
       const now = admin.firestore.Timestamp.fromMillis(nowMs);
       confirmBy = admin.firestore.Timestamp.fromMillis(nowMs + rates.zaadAgentConfirmMinutes * 60_000);
+      // D32: the sweep first wakes 5 minutes before, to remind the agent.
+      const remindAt = confirmBy.toMillis() - REMINDER_MS;
+      const wakeAt = remindAt > nowMs ? admin.firestore.Timestamp.fromMillis(remindAt) : confirmBy;
       if (txnRef) tx.set(txnRef, { requestId: id, customerId: uid, at: now });
       tx.update(ref, {
         status: "customer_sent",
         ...(txnId ? { customerZaadTxnId: txnId } : {}),
         customerSentAt: now,
         confirmBy,
-        deadlineAt: confirmBy,
+        deadlineAt: wakeAt,
         updatedAt: now,
       });
       req = fresh;

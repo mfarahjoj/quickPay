@@ -15,7 +15,7 @@ import { assertCashInRecipient } from "../utils/agentGuards";
 import { notifyUser } from "../utils/notifications";
 import { pushAmount } from "../utils/money";
 import { maybeUnlockReferral } from "../referral/referralBonus";
-import { creditEntry, creditEntryId, releaseEntry, releaseEntryId } from "./core";
+import { creditEntry, creditEntryId, releaseEntry, releaseEntryId, withoutOpen } from "./core";
 import {
   HELD_STATUSES,
   ReleaseReason,
@@ -41,9 +41,8 @@ function freeAgent(
   agentSnap: FirebaseFirestore.DocumentSnapshot,
   requestId: string
 ): void {
-  if (agentSnap.exists && (agentSnap.data() as ZaadAgentDoc).openRequestId === requestId) {
-    tx.update(agentRef, { openRequestId: null });
-  }
+  const freed = agentSnap.exists ? withoutOpen(agentSnap.data() as ZaadAgentDoc, requestId) : null;
+  if (freed) tx.update(agentRef, freed);
 }
 
 /**
@@ -103,10 +102,12 @@ export async function releaseZaadHold(
   const amount = pushAmount(done.amount, done.currency);
   const quietly = (p: Promise<void>) => p.catch((err) => console.error("zaadAgent notify failed:", err));
   quietly(
-    notifyUser(done.agentId!, "zaad_agent_topup", { key: "zaadAgent.float_returned", params: { amount } }, {
-      type: "zaad_agent_topup",
-      requestId,
-    })
+    notifyUser(
+      done.agentId!,
+      "zaad_agent_topup",
+      { key: reason === "ops_for_agent" ? "zaadAgent.ruling_for_agent" : "zaadAgent.float_returned", params: { amount } },
+      { type: "zaad_agent_topup", requestId }
+    )
   );
   if (reason === "expired") {
     quietly(
@@ -272,6 +273,13 @@ export async function creditZaadTopup(
       currency: done.currency,
       confirmationId: transactionId,
     }).catch((err) => console.error("zaadAgent notify failed:", err));
+    if (by.kind === "ops" && done.agentId) {
+      // D32: the agent hears ops' ruling too.
+      notifyUser(done.agentId, "zaad_agent_topup", { key: "zaadAgent.ruling_for_customer", params: { amount } }, {
+        type: "zaad_agent_topup",
+        requestId,
+      }).catch((err) => console.error("zaadAgent notify failed:", err));
+    }
     await maybeUnlockReferral(done.customerId, { kind: "cash_in", amountCents: done.amount });
   }
   return { transactionId, commissionCents, credited: done !== null };

@@ -1,9 +1,10 @@
 /**
- * Offering a request to agents, one at a time (D7).
+ * Offering a request to agents, one agent at a time per request (D7).
  *
- * An agent who is offered a request is reserved for it (openRequestId) until
- * they answer or the offer times out, so nobody's phone rings for two
- * requests at once and no two agents can both accept one.
+ * A request rings on one agent until they answer or the offer times out, so
+ * no two agents can both accept it. An agent can have several remote
+ * requests open at once, ringing or held (D32): up to
+ * `zaadAgentMaxOpenRequests`, and only while their free float covers them.
  */
 
 import * as admin from "firebase-admin";
@@ -13,16 +14,31 @@ import { isAccountActive } from "../utils/accountStatus";
 import { isAgentRole } from "../utils/roles";
 import { notifyUser } from "../utils/notifications";
 import { pushAmount } from "../utils/money";
-import { MAX_MISSED_OFFERS, rankCandidates, isAvailable, Candidate } from "./core";
+import { MAX_MISSED_OFFERS, rankCandidates, isAvailable, Candidate, withOpen, withoutOpen } from "./core";
 import { ZAAD_AGENTS, ZAAD_AGENT_TOPUPS, ZaadAgentDoc, ZaadAgentTopup, ZaadOffer } from "./types";
 
 export type OfferOutcome = "offered" | "no_agent" | "skipped";
 
-/** Whether the person behind a zaad_agents doc may hand out float right now. */
+/**
+ * Float the agent hasn't promised yet: their float (held top-ups have
+ * already left it) less what is ringing on them now (D32).
+ */
+export async function freeFloatCents(agentId: string): Promise<number> {
+  const ringing = await admin
+    .firestore()
+    .collection(ZAAD_AGENT_TOPUPS)
+    .where("offeredTo", "==", agentId)
+    .where("status", "==", "offered")
+    .get();
+  const promised = ringing.docs.reduce((sum, d) => sum + ((d.get("amount") as number) ?? 0), 0);
+  return (await readFloatCents(agentId)) - promised;
+}
+
+/** Whether the person behind a zaad_agents doc may hand out this much float right now. */
 async function canServe(agentId: string, amount: number): Promise<boolean> {
   const user = (await admin.firestore().collection("users").doc(agentId).get()).data();
   if (!user || !isAgentRole(user.accountType) || !isAccountActive(user) || user.agentFlag) return false;
-  return (await readFloatCents(agentId)) >= amount;
+  return (await freeFloatCents(agentId)) >= amount;
 }
 
 /**
@@ -46,17 +62,27 @@ export async function offerNext(requestId: string, nowMs = Date.now()): Promise<
       nowMs,
       customerId: req.customerId,
       alreadyOffered: new Set(req.offers.map((o) => o.agentId)),
+      maxOpen: rates.zaadAgentMaxOpenRequests,
     });
 
     for (const candidate of ranked) {
       if (!(await canServe(candidate.id, req.amount))) continue;
-      const claimed = await claim(ref, candidate.id, rates.zaadAgentOfferSeconds, nowMs);
+      const claimed = await claim(ref, candidate.id, rates.zaadAgentOfferSeconds, rates.zaadAgentMaxOpenRequests, nowMs);
       if (claimed === "claimed") {
         notifyUser(
           candidate.id,
           "zaad_agent_topup",
-          { key: "zaadAgent.offer", params: { amount: pushAmount(req.amount, req.currency) } },
-          { type: "zaad_agent_offer", requestId, amount: String(req.amount), currency: req.currency }
+          {
+            key: "zaadAgent.offer",
+            params: { amount: pushAmount(req.amount, req.currency), seconds: String(rates.zaadAgentOfferSeconds) },
+          },
+          {
+            type: "zaad_agent_offer",
+            requestId,
+            amount: String(req.amount),
+            currency: req.currency,
+            expiresAt: String(nowMs + rates.zaadAgentOfferSeconds * 1000),
+          }
         ).catch((err) => console.error("zaadAgent offer push failed:", err));
         return "offered";
       }
@@ -91,6 +117,7 @@ async function claim(
   ref: FirebaseFirestore.DocumentReference,
   agentId: string,
   offerSeconds: number,
+  maxOpen: number,
   nowMs: number
 ): Promise<"claimed" | "agent_taken" | "request_moved"> {
   const db = admin.firestore();
@@ -100,7 +127,7 @@ async function claim(
     const req = reqSnap.data() as ZaadAgentTopup | undefined;
     if (!req || req.status !== "offered" || req.offeredTo) return "request_moved";
     const agent = agentSnap.data() as ZaadAgentDoc | undefined;
-    if (!agent || !isAvailable(agent, nowMs)) return "agent_taken";
+    if (!agent || !isAvailable(agent, nowMs, maxOpen)) return "agent_taken";
 
     const now = admin.firestore.Timestamp.fromMillis(nowMs);
     const expiresAt = admin.firestore.Timestamp.fromMillis(nowMs + offerSeconds * 1000);
@@ -112,7 +139,7 @@ async function claim(
       deadlineAt: expiresAt,
       updatedAt: now,
     });
-    tx.update(agentRef, { openRequestId: ref.id, lastOfferedAt: now });
+    tx.update(agentRef, { ...withOpen(agent, ref.id), lastOfferedAt: now });
     return "claimed";
   });
 }
@@ -153,7 +180,7 @@ export async function endOffer(
     if (agent) {
       const missed = answer === "timed_out" ? (agent.missedOffers ?? 0) + 1 : 0;
       tx.update(agentRef, {
-        ...(agent.openRequestId === requestId ? { openRequestId: null } : {}),
+        ...(withoutOpen(agent, requestId) ?? {}),
         missedOffers: missed,
         ...(missed >= MAX_MISSED_OFFERS ? { online: false } : {}),
       });
