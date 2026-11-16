@@ -1361,5 +1361,13 @@
   "topup.agentFlow.receipt.paidByCash": "Lagu bixiyay: lacag caddaan ah",
   "topup.agentFlow.receipt.paidByZaad": "Lagu bixiyay: Zaad",
   "topup.agentFlow.receipt.txn": "Lambarka dhaqdhaqaaqa Zaad: {{id}}",
-  "topup.agentFlow.somethingWrong": "Wax khaldan ma jiraan?"
+  "topup.agentFlow.reference": "Tixraac: {{ref}}",
+  "topup.agentFlow.referenceHint": "{{agent}} wuxuu arkayaa isla tixraacan. Waxba uma baahnid inaad qorto.",
+  "topup.agentFlow.somethingWrong": "Wax khaldan ma jiraan?",
+  "topup.agentFlow.cancel": "Jooji ku daridda",
+  "topup.agentFlow.cancelTitle": "Ma joojinaysaa ku daridan?",
+  "topup.agentFlow.cancelBody": "Koodhkaagu wuu shaqayn joogayaa. Waxba lagaama qaadin.",
+  "topup.agentFlow.cancelBodyScanned": "Jooji keliya haddii aadan {{agent}} siin wax lacag caddaan ah. Koodhkaagu wuu shaqayn joogayaa.",
+  "topup.agentFlow.cancelConfirm": "Jooji ku daridda",
+  "topup.agentFlow.keep": "Sii wad"
 }

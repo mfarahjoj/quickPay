@@ -2,7 +2,7 @@
  * Zaad top-ups through agents (functions/src/zaadAgent/agent.ts).
  *
  * The customer pays this agent's Zaad number and the agent's float credits
- * their wallet. Requests live in `zaadAgentTopups/{id}`, which the agent may
+ * their wallet. Zapp's reference (ZP-…, D31) names the top-up on both sides. Requests live in `zaadAgentTopups/{id}`, which the agent may
  * read while it rings on them and once they accept; `zaad_agents/{uid}` says
  * which request that is.
  */
@@ -23,6 +23,8 @@ export type ZaadTopupStatus =
 
 export interface ZaadTopupDoc {
   customerFirstName: string;
+  /** Zapp's reference, e.g. "ZP-4F7K2" (D31). Missing on requests made before it. */
+  reference?: string;
   /** US cents. */
   amount: number;
   status: ZaadTopupStatus;
@@ -36,11 +38,19 @@ export interface ZaadTopupDoc {
   sendBy?: { toMillis(): number };
   customerZaadTxnId?: string;
   confirmBy?: { toMillis(): number };
+  createdAt?: { toMillis(): number };
+  updatedAt?: { toMillis(): number };
 }
+
+/** A request with its id, for lists. */
+export type ZaadTopupRow = ZaadTopupDoc & { id: string };
 
 export interface ZaadAgentDoc {
   enabled: boolean;
   online: boolean;
+  /** Remote requests ringing or held, oldest first (D32). Missing on older docs. */
+  openRequestIds?: string[];
+  /** The newest of openRequestIds. */
   openRequestId: string | null;
   receiveMsisdn: string | null;
 }
@@ -51,6 +61,9 @@ export interface ZaadAgentStatus {
   receiveNumber: string | null;
   pausedUntil: string | null;
   openRequestId: string | null;
+  /** Remote requests open now, and the most allowed at once (D32). Missing from older servers. */
+  openCount?: number;
+  maxOpen?: number;
   floatCents: number;
   floatLowCents: number;
   open: boolean;
@@ -71,7 +84,7 @@ export const setZaadOnline = (online: boolean) => call<{ online: boolean }>('age
  * agent's float and returns the Zaad request to follow (D19).
  */
 export const startZaadInPerson = (target: { otpCode: string; requestId?: string; customerPhone?: string; expectedAmount: number }) =>
-  call<{ requestId: string; amount: number; customerName: string; allowedSenders: string[]; sendBy: string }>(
+  call<{ requestId: string; reference: string | null; amount: number; customerName: string; allowedSenders: string[]; sendBy: string }>(
     'agentStartZaadInPerson',
     target,
   );
@@ -84,12 +97,21 @@ export const confirmZaadTopup = (
   answer: 'received' | 'not_received' | 'different_amount',
   expectedAmount: number,
   agentPin?: string,
+  /** Optional, on "received": Zaad's ID from the agent's own text (D31). */
+  zaadTxnId?: string,
 ) => call<{ status: ZaadTopupStatus; commissionCents?: number }>('agentConfirmZaadTopup', {
   requestId,
   answer,
   expectedAmount,
   ...(agentPin ? { agentPin } : {}),
+  ...(zaadTxnId ? { zaadTxnId } : {}),
 });
+
+/** A Zaad transaction ID as typed: spaces dropped, upper case; null if it can't be one. Mirrors the server. */
+export function normaliseTxnId(raw: string): string | null {
+  const t = raw.replace(/\s+/g, '').toUpperCase();
+  return /^[A-Z0-9_-]{4,64}$/.test(t) ? t : null;
+}
 
 export function watchZaadAgent(uid: string, onChange: (doc: ZaadAgentDoc | null) => void): () => void {
   return firestore()
@@ -108,6 +130,39 @@ export function watchZaadTopup(id: string, onChange: (doc: ZaadTopupDoc | null) 
     .onSnapshot(
       (snap) => onChange((snap.data() as ZaadTopupDoc | undefined) ?? null),
       () => onChange(null),
+    );
+}
+
+const rows = (snap: { docs: { id: string; data(): unknown }[] }): ZaadTopupRow[] =>
+  snap.docs.map((d) => ({ ...(d.data() as ZaadTopupDoc), id: d.id }));
+
+/**
+ * The agent's own requests once taken, newest first (D32): what they must
+ * check, what's waiting, what's in review, and history. Rules let an agent
+ * read only requests where they are the agent or the one being offered.
+ */
+export function watchMyZaadTopups(uid: string, onChange: (list: ZaadTopupRow[]) => void, limit = 50): () => void {
+  return firestore()
+    .collection('zaadAgentTopups')
+    .where('agentId', '==', uid)
+    .orderBy('createdAt', 'desc')
+    .limit(limit)
+    .onSnapshot(
+      (snap) => onChange(rows(snap)),
+      () => onChange([]),
+    );
+}
+
+/** Offers ringing on this agent now, each with its own timer (D32). */
+export function watchMyZaadOffers(uid: string, onChange: (list: ZaadTopupRow[]) => void): () => void {
+  return firestore()
+    .collection('zaadAgentTopups')
+    .where('offeredTo', '==', uid)
+    .where('status', '==', 'offered')
+    .onSnapshot(
+      (snap) =>
+        onChange(rows(snap).sort((a, b) => (a.offerExpiresAt?.toMillis() ?? 0) - (b.offerExpiresAt?.toMillis() ?? 0))),
+      () => onChange([]),
     );
 }
 

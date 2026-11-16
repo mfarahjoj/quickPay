@@ -4,7 +4,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Alert, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { guardFreshInstall } from './services/installGuard';
-import AppNavigator, { navigationRef } from './navigation/AppNavigator';
+import AppNavigator, { openZaadRequest } from './navigation/AppNavigator';
 import { UpdateRequired } from './components/UpdateRequired';
 import { useUpdateGate } from './hooks/useUpdateGate';
 import { ToastProvider } from './components/auth';
@@ -58,15 +58,18 @@ function AppContent() {
       }
     });
 
-    const unsubOpened = messaging().onNotificationOpenedApp((_remoteMessage) => {
-      // Navigate to relevant screen if needed
-    });
+    // Zaad top-up pushes (offers, "check your Zaad", reminders, reviews,
+    // rulings) open that request (D32).
+    const openFromPush = (remoteMessage: { data?: Record<string, unknown> } | null) => {
+      const data = remoteMessage?.data as Record<string, string> | undefined;
+      if (data?.type?.startsWith('zaad_agent') && data.requestId) openZaadRequest(data.requestId);
+    };
+    const unsubOpened = messaging().onNotificationOpenedApp(openFromPush);
 
     messaging()
       .getInitialNotification()
-      .then((_remoteMessage) => {
-        // Handle cold-start from notification if needed
-      });
+      .then(openFromPush)
+      .catch(() => undefined);
 
     return () => {
       unsubForeground();

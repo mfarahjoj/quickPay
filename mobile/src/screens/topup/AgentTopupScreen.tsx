@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { useNavigation } from '@react-navigation/native';
@@ -66,6 +67,10 @@ export default function AgentTopupScreen({ initialWay }: { initialWay?: 'remote'
   const [expiresAt, setExpiresAt] = useState<Date | null>(null);
   const [timeLeft, setTimeLeft] = useState(0);
   const unsubRef = useRef<(() => void) | null>(null);
+  /** The customer is cancelling: the request closing is theirs, not a lapse. */
+  const cancellingRef = useRef(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState('');
   /** Set once an agent has scanned the code: who to hand the cash to (D23). */
   const [scannedByName, setScannedByName] = useState<string | null>(null);
   const [zaadRequestId, setZaadRequestId] = useState<string | null>(null);
@@ -131,6 +136,8 @@ export default function AgentTopupScreen({ initialWay }: { initialWay?: 'remote'
           setStep('zaad');
         } else if (data.status === 'pending' && data.scannedByName) {
           setScannedByName(data.scannedByName);
+        } else if (data.status === 'cancelled' && cancellingRef.current) {
+          // Closed by this phone's own cancel: cancelRequest takes it from here.
         } else if (data.status === 'expired' || data.status === 'cancelled') {
           setErrorMsg(t('topup.agent.expiredMessage'));
           setLapsed(true);
@@ -252,6 +259,9 @@ export default function AgentTopupScreen({ initialWay }: { initialWay?: 'remote'
   const reset = () => {
     unsubRef.current?.();
     unsubRef.current = null;
+    cancellingRef.current = false;
+    setCancelling(false);
+    setCancelError('');
     setStep('amount');
     setAmountText('');
     setErrorMsg('');
@@ -264,6 +274,62 @@ export default function AgentTopupScreen({ initialWay }: { initialWay?: 'remote'
     setZaadRequestId(null);
     setCashAgent(null);
   };
+
+  /** Close the code so no agent can confirm it (customerCancelAgentTopup). */
+  const cancelRequest = useCallback(async () => {
+    if (!requestId || cancellingRef.current) return;
+    cancellingRef.current = true;
+    setCancelling(true);
+    setCancelError('');
+    try {
+      const fn = functions().httpsCallable('customerCancelAgentTopup');
+      const res = (await fn({ requestId })).data as {
+        data: { status: string; zaadRequestId?: string };
+      };
+      if (res.data.status === 'moved_to_zaad' && res.data.zaadRequestId) {
+        // The agent switched it to Zaad first: that request has its own cancel.
+        cancellingRef.current = false;
+        setCancelling(false);
+        setZaadRequestId(res.data.zaadRequestId);
+        setStep('zaad');
+        return;
+      }
+      triggerHaptic('light');
+      reset();
+    } catch (e: any) {
+      cancellingRef.current = false;
+      setCancelling(false);
+      // Already completed: the listener shows the receipt.
+      if (e?.details?.reason !== 'completed') setCancelError(e?.message || t('common.error'));
+    }
+  }, [requestId, t]);
+
+  const askCancel = () => {
+    triggerHaptic('light');
+    Alert.alert(
+      t('topup.agentFlow.cancelTitle'),
+      scannedByName
+        ? t('topup.agentFlow.cancelBodyScanned', { agent: scannedByName })
+        : t('topup.agentFlow.cancelBody'),
+      [
+        { text: t('topup.agentFlow.keep'), style: 'cancel' },
+        { text: t('topup.agentFlow.cancelConfirm'), style: 'destructive', onPress: cancelRequest },
+      ],
+    );
+  };
+
+  const cancelLink = (
+    <View style={styles.cancelArea}>
+      {cancelError ? <Text style={styles.cancelError}>{cancelError}</Text> : null}
+      {cancelling ? (
+        <ActivityIndicator size="small" color={colors.ui.ink(0.5)} />
+      ) : (
+        <TouchableOpacity onPress={askCancel} accessibilityRole="button">
+          <Text style={styles.cancelText}>{t('topup.agentFlow.cancel')}</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
 
   const backHeader = (title: string) => (
     <View style={styles.header}>
@@ -419,6 +485,7 @@ export default function AgentTopupScreen({ initialWay }: { initialWay?: 'remote'
             <ActivityIndicator size="small" color={colors.ui.ink(0.5)} />
             <Text style={styles.waitingText}>{t('topup.agentFlow.waitingConfirm', { agent: scannedByName })}</Text>
           </View>
+          {cancelLink}
         </View>
       </View>
     );
@@ -469,6 +536,7 @@ export default function AgentTopupScreen({ initialWay }: { initialWay?: 'remote'
             <ActivityIndicator size="small" color={colors.ui.ink(0.5)} />
             <Text style={styles.waitingText}>{t('topup.agent.waiting')}</Text>
           </View>
+          {cancelLink}
         </View>
       </View>
     );
@@ -651,4 +719,9 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
   changeAmount: { fontSize: 14, color: colors.ui.accentText, textAlign: 'center', paddingVertical: 8 },
   handCash: { fontSize: 24, fontWeight: '800', color: colors.ui.text, lineHeight: 30, marginTop: 8 },
   receiptLine: { fontSize: 13, color: colors.ui.ink(0.5), marginTop: 6 },
+
+  // Cancel the code
+  cancelArea: { alignItems: 'center', gap: 8, minHeight: 36, justifyContent: 'center' },
+  cancelText: { fontSize: 15, fontWeight: '600', color: colors.ui.error, paddingVertical: 8, paddingHorizontal: 16 },
+  cancelError: { fontSize: 13, color: colors.ui.error, textAlign: 'center' },
 }));

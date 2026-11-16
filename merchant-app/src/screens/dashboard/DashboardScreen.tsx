@@ -31,6 +31,7 @@ import {
   SendIcon,
 } from '../../components/icons/AuthIcons';
 import { CurrencyToggle, type FloatCurrency } from '../../components/CurrencyToggle';
+import { ZaadHomeCard } from '../../components/ZaadHomeCard';
 import { Transaction } from '../../types';
 import { CURRENCY_SYMBOL } from '../../config/constants';
 
@@ -263,6 +264,11 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
               </View>
             </View>
           )}
+
+          {/* Zaad top-ups through agents (D32): shown only while they're on for this agent. */}
+          {isAgentRole && user?.uid ? (
+            <ZaadHomeCard uid={user.uid} onOpen={() => navigation.navigate('ZaadTopups')} />
+          ) : null}
 
           {/* Circular actions */}
           <View style={styles.actionsRow}>

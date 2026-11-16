@@ -90,6 +90,11 @@ export const PUSH_TEMPLATES = {
     so: { title: "Ku dariddu waa guulaysatay", body: "{agent} ayaa jeebkaaga ku shubay {amount}." },
     ar: { title: "تم الشحن بنجاح", body: "قام {agent} بشحن محفظتك بمبلغ {amount}." },
   },
+  "topup.cancelled_by_customer": {
+    en: { title: "Top-up cancelled", body: "The customer cancelled their {amount} top-up. Don't take their cash." },
+    so: { title: "Ku daridda waa la joojiyay", body: "Macmiilku wuu joojiyay ku daridda {amount}. Ha qaadan lacagtiisa caddaanka ah." },
+    ar: { title: "تم إلغاء الشحن", body: "ألغى العميل شحن {amount}. لا تأخذ نقوده." },
+  },
   "referral.welcome_bonus": {
     en: { title: "Referral bonus", body: "You got a {amount} welcome bonus." },
     so: { title: "Abaalmarin casuumaad", body: "Waxaad heshay {amount} oo abaalmarin soo dhaweyn ah." },
@@ -421,9 +426,24 @@ export const PUSH_TEMPLATES = {
 
   // Zaad top-ups through agents (zaadAgent/)
   "zaadAgent.offer": {
-    en: { title: "New Zaad top-up: {amount}", body: "A customer wants {amount}. Open Zapp Pay Merchant to accept." },
-    so: { title: "Ku darid Zaad cusub: {amount}", body: "Macmiil ayaa doonaya {amount}. Fur Zapp Pay Merchant si aad u aqbasho." },
-    ar: { title: "طلب شحن زاد جديد: {amount}", body: "عميل يريد شحن {amount}. افتح Zapp Pay Merchant للقبول." },
+    en: { title: "New Zaad top-up: {amount}", body: "A customer wants {amount}. Accept within {seconds} seconds in Zapp Pay Merchant." },
+    so: { title: "Ku darid Zaad cusub: {amount}", body: "Macmiil ayaa doonaya {amount}. Ku aqbal {seconds} ilbiriqsi gudahood Zapp Pay Merchant." },
+    ar: { title: "طلب شحن زاد جديد: {amount}", body: "عميل يريد شحن {amount}. اقبل خلال {seconds} ثانية في Zapp Pay Merchant." },
+  },
+  "zaadAgent.confirm_reminder": {
+    en: { title: "5 minutes left: {amount}", body: "{customer} says they sent {amount}. Check your Zaad and answer, or Zapp Pay will review it." },
+    so: { title: "5 daqiiqo ayaa haray: {amount}", body: "{customer} wuxuu sheegay inuu soo diray {amount}. Hubi Zaad-kaaga oo jawaab, haddii kale Zapp Pay ayaa eegi doonta." },
+    ar: { title: "بقيت 5 دقائق: {amount}", body: "يقول {customer} إنه أرسل {amount}. تحقق من زاد وأجب، وإلا سيراجعه Zapp Pay." },
+  },
+  "zaadAgent.ruling_for_customer": {
+    en: { title: "Review closed", body: "Zapp Pay reviewed the {amount} Zaad top-up and credited the customer from the float held for it." },
+    so: { title: "Eegiddii waa la xiray", body: "Zapp Pay waxay eegtay ku daridda Zaad ee {amount}, macmiilka waxaa loogu shubay float-kii loo hayay." },
+    ar: { title: "أُغلقت المراجعة", body: "راجع Zapp Pay شحن زاد بقيمة {amount} وأضافه للعميل من الرصيد المحجوز له." },
+  },
+  "zaadAgent.ruling_for_agent": {
+    en: { title: "Review closed in your favour", body: "Zapp Pay reviewed the {amount} Zaad top-up. The {amount} held is back in your float." },
+    so: { title: "Eegiddii adiga ayay kuu xukuntay", body: "Zapp Pay waxay eegtay ku daridda Zaad ee {amount}. {amount} oo la hayay ayaa ku soo noqday float-kaaga." },
+    ar: { title: "أُغلقت المراجعة لصالحك", body: "راجع Zapp Pay شحن زاد بقيمة {amount}. عاد المبلغ المحجوز {amount} إلى رصيدك التشغيلي." },
   },
   "zaadAgent.accepted": {
     en: { title: "{agent} is ready", body: "Send {amount} by Zaad to {number} within {minutes} minutes." },

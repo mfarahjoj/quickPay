@@ -1,8 +1,9 @@
 /**
  * For agents taking Zaad top-ups: while they're online, check in every
  * minute (an agent whose app stops checking in drops out of offers), and
- * open the Zaad top-ups screen the moment a request rings on them,
- * wherever they are in the app.
+ * open the Zaad top-ups screen the moment a new request rings on them,
+ * wherever they are in the app. Several can ring at once (D32): the screen
+ * shows them as a queue, so this opens it once, not once per offer.
  *
  * Renders nothing. Mounted once inside the signed-in navigator.
  */
@@ -10,7 +11,7 @@
 import { useEffect, useRef } from 'react';
 import { AppState } from 'react-native';
 import { useAuth } from '../hooks/useAuth';
-import { getZaadStatus, watchZaadAgent, watchZaadTopup, type ZaadAgentDoc } from '../services/zaadAgent.service';
+import { getZaadStatus, watchMyZaadOffers, watchZaadAgent, type ZaadAgentDoc } from '../services/zaadAgent.service';
 
 const HEARTBEAT_MS = 60_000;
 
@@ -25,28 +26,23 @@ export function ZaadOfferWatcher({ isShowing, open }: Props) {
   const { user } = useAuth();
   const uid = user?.uid;
   const agent = useRef<ZaadAgentDoc | null>(null);
-  const shown = useRef<string | null>(null);
+  const seen = useRef<Set<string>>(new Set());
 
-  // Which request, if any, is ringing on this agent.
   useEffect(() => {
     if (!uid) return;
-    let stopTopup: (() => void) | undefined;
-    const stopAgent = watchZaadAgent(uid, (doc) => {
+    return watchZaadAgent(uid, (doc) => {
       agent.current = doc;
-      stopTopup?.();
-      stopTopup = undefined;
-      const id = doc?.openRequestId;
-      if (!id) return;
-      stopTopup = watchZaadTopup(id, (req) => {
-        if (req?.status !== 'offered' || req.offeredTo !== uid || shown.current === id) return;
-        shown.current = id;
-        if (!isShowing()) open();
-      });
     });
-    return () => {
-      stopTopup?.();
-      stopAgent();
-    };
+  }, [uid]);
+
+  // Offers ringing on this agent: open the screen when one we haven't seen arrives.
+  useEffect(() => {
+    if (!uid) return;
+    return watchMyZaadOffers(uid, (offers) => {
+      const fresh = offers.filter((o) => !seen.current.has(o.id));
+      fresh.forEach((o) => seen.current.add(o.id));
+      if (fresh.length > 0 && !isShowing()) open();
+    });
   }, [uid, isShowing, open]);
 
   // The heartbeat, while online and the app is in front.

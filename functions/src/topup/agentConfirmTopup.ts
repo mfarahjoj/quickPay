@@ -71,6 +71,14 @@ interface PreviewAgentTopupResponse {
 
 const INVALID_CODE = "Invalid or expired code. Ask the customer to generate a new one.";
 
+export function customerCancelled(): https.HttpsError {
+  return new https.HttpsError(
+    "failed-precondition",
+    "The customer cancelled this top-up. Don't take their cash.",
+    { reason: "customer_cancelled" }
+  );
+}
+
 export function assertTarget(data: Partial<TopupTarget>): void {
   if (!isSixDigitCode(data.otpCode)) {
     throw new https.HttpsError("invalid-argument", "6-digit code required");
@@ -135,6 +143,18 @@ export async function verifyTopupCode(
   const ref = await findPendingRequest(db, "agentTopupRequests", target);
   const snap = ref ? await ref.get() : null;
   const topup = snap?.exists ? (snap.data() as AgentTopupRequest) : null;
+  // The agent who scanned it, with the right code, may be told the customer
+  // cancelled: they already know the request, and must not take the cash.
+  if (
+    ref &&
+    topup?.status === "cancelled" &&
+    topup.cancelledBy === "customer" &&
+    topup.scannedBy === agentId &&
+    codesMatch(target.otpCode, topup.otpCode)
+  ) {
+    await clearOtpFailures(agentId);
+    throw customerCancelled();
+  }
   if (!ref || !topup || topup.status !== "pending" || !codesMatch(target.otpCode, topup.otpCode)) {
     throw new https.HttpsError("not-found", INVALID_CODE);
   }
@@ -309,6 +329,9 @@ export const agentConfirmTopup = https.onCall(
 
     await db.runTransaction(async (tx) => {
       const freshTopup = (await tx.get(topupRef)).data() as AgentTopupRequest;
+      if (freshTopup.status === "cancelled" && freshTopup.cancelledBy === "customer") {
+        throw customerCancelled();
+      }
       if (freshTopup.status !== "pending") {
         throw new https.HttpsError("failed-precondition", "Code already used");
       }

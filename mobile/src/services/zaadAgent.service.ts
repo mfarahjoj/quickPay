@@ -1,8 +1,9 @@
 /**
  * Zaad top-ups through agents (functions/src/zaadAgent/customer.ts).
  *
- * The customer asks for an amount; Zapp finds an online agent; the customer
- * pays the agent's Zaad and enters the Zaad transaction ID; the agent
+ * The customer asks for an amount; Zapp finds an online agent and makes a
+ * reference (ZP-…); the customer pays the agent's Zaad and taps "I've sent
+ * it"; the agent
  * confirms and their float tops up the wallet. The request lives in
  * `zaadAgentTopups/{id}`, which the customer may read.
  */
@@ -29,6 +30,8 @@ export interface ZaadAgentTopupDoc {
   /** US cents. */
   amount: number;
   status: ZaadAgentTopupStatus;
+  /** Zapp's reference, e.g. "ZP-4F7K2" (D31). Missing on requests made before it. */
+  reference?: string;
   /** "in_person": the agent scanned the customer's code. Missing: remote. */
   meeting?: 'in_person' | 'remote';
   agentName?: string;
@@ -48,13 +51,12 @@ async function call<T>(name: string, payload: unknown): Promise<T> {
 }
 
 export const requestZaadAgentTopup = (amountCents: number) =>
-  call<{ requestId: string; status: ZaadAgentTopupStatus }>('customerRequestZaadAgentTopup', { amount: amountCents });
+  call<{ requestId: string; status: ZaadAgentTopupStatus; reference?: string }>('customerRequestZaadAgentTopup', { amount: amountCents });
 
 export const cancelZaadAgentTopup = (requestId: string) => call<unknown>('customerCancelZaadTopup', { requestId });
 
-/** The transaction ID is optional in person (D21), required remote. */
-export const markZaadSent = (requestId: string, zaadTxnId?: string) =>
-  call<{ confirmBy: string }>('customerMarkZaadSent', { requestId, ...(zaadTxnId ? { zaadTxnId } : {}) });
+/** One tap (D31): Zapp's reference identifies the top-up, so nothing is typed. */
+export const markZaadSent = (requestId: string) => call<{ confirmBy: string }>('customerMarkZaadSent', { requestId });
 
 export const disputeZaadAgentTopup = (requestId: string, reason: string) =>
   call<unknown>('customerDisputeZaadTopup', { requestId, reason });
@@ -67,10 +69,4 @@ export function watchZaadAgentTopup(id: string, onChange: (doc: ZaadAgentTopupDo
       (snap) => onChange((snap.data() as ZaadAgentTopupDoc | undefined) ?? null),
       () => onChange(null),
     );
-}
-
-/** A Zaad transaction ID as typed: spaces dropped, upper case; null if it can't be one. Mirrors the server. */
-export function normaliseTxnId(raw: string): string | null {
-  const t = raw.replace(/\s+/g, '').toUpperCase();
-  return /^[A-Z0-9_-]{4,64}$/.test(t) ? t : null;
 }

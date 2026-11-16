@@ -3,6 +3,7 @@
  * rule about money and matching can be tested on its own.
  */
 
+import { randomInt } from "crypto";
 import { JournalEntryInput, JournalLine } from "../ledger";
 import {
   agentAccount,
@@ -143,10 +144,37 @@ export interface Candidate {
   doc: ZaadAgentDoc;
 }
 
-/** Whether this agent can be offered a request right now, on what their zaad_agents doc says. */
-export function isAvailable(doc: ZaadAgentDoc, nowMs: number): boolean {
+/** The remote requests open on this agent (D32), from either shape of the doc. */
+export function openIds(doc: Pick<ZaadAgentDoc, "openRequestIds" | "openRequestId"> | undefined): string[] {
+  if (!doc) return [];
+  return doc.openRequestIds ?? (doc.openRequestId ? [doc.openRequestId] : []);
+}
+
+/** The fields to write when [id] opens on the agent. */
+export function withOpen(doc: ZaadAgentDoc | undefined, id: string): Pick<ZaadAgentDoc, "openRequestIds" | "openRequestId"> {
+  const ids = [...openIds(doc).filter((x) => x !== id), id];
+  return { openRequestIds: ids, openRequestId: id };
+}
+
+/** The fields to write when [id] is done with the agent, or null if it wasn't open on them. */
+export function withoutOpen(
+  doc: ZaadAgentDoc | undefined,
+  id: string
+): Pick<ZaadAgentDoc, "openRequestIds" | "openRequestId"> | null {
+  const ids = openIds(doc);
+  if (!ids.includes(id)) return null;
+  const rest = ids.filter((x) => x !== id);
+  return { openRequestIds: rest, openRequestId: rest[rest.length - 1] ?? null };
+}
+
+/**
+ * Whether this agent can be offered a request right now, on what their
+ * zaad_agents doc says. [maxOpen]: `zaadAgentMaxOpenRequests` (D32). Free
+ * float is checked separately (dispatch.ts).
+ */
+export function isAvailable(doc: ZaadAgentDoc, nowMs: number, maxOpen = 1): boolean {
   if (!doc.enabled || !doc.online || !doc.receiveMsisdn) return false;
-  if (doc.openRequestId) return false;
+  if (openIds(doc).length >= maxOpen) return false;
   if (doc.pausedUntil && doc.pausedUntil.toMillis() > nowMs) return false;
   const seen = doc.lastSeenAt?.toMillis() ?? 0;
   return nowMs - seen <= HEARTBEAT_STALE_MS;
@@ -159,10 +187,13 @@ export function isAvailable(doc: ZaadAgentDoc, nowMs: number): boolean {
  */
 export function rankCandidates(
   candidates: Candidate[],
-  opts: { nowMs: number; customerId: string; alreadyOffered: Set<string> }
+  opts: { nowMs: number; customerId: string; alreadyOffered: Set<string>; maxOpen?: number }
 ): Candidate[] {
   return candidates
-    .filter((c) => c.id !== opts.customerId && !opts.alreadyOffered.has(c.id) && isAvailable(c.doc, opts.nowMs))
+    .filter(
+      (c) =>
+        c.id !== opts.customerId && !opts.alreadyOffered.has(c.id) && isAvailable(c.doc, opts.nowMs, opts.maxOpen ?? 1)
+    )
     .sort((a, b) => (a.doc.lastOfferedAt?.toMillis() ?? 0) - (b.doc.lastOfferedAt?.toMillis() ?? 0));
 }
 
@@ -190,6 +221,25 @@ export function displayMsisdn(msisdn: string): string {
 export function firstName(fullName: unknown): string {
   if (typeof fullName !== "string") return "Customer";
   return fullName.trim().split(/\s+/)[0] || "Customer";
+}
+
+/**
+ * Characters for Zapp's own top-up reference: no 0/O, 1/I/L, 5/S, 8/B, 2/Z
+ * or U/V, so it reads aloud and copies by hand without mistakes.
+ */
+export const TOPUP_REFERENCE_ALPHABET = "34679ACDEFGHJKMNPQRTWXY";
+export const TOPUP_REFERENCE_LENGTH = 5;
+const REFERENCE_PATTERN = new RegExp(`^ZP-[${TOPUP_REFERENCE_ALPHABET}]{${TOPUP_REFERENCE_LENGTH}}$`);
+
+/** A fresh reference such as "ZP-4F7K2" (23^5 ≈ 6.4M of them). Unique only once claimed. */
+export function newTopupReference(pick: (n: number) => number = randomInt): string {
+  let out = "";
+  for (let i = 0; i < TOPUP_REFERENCE_LENGTH; i++) out += TOPUP_REFERENCE_ALPHABET[pick(TOPUP_REFERENCE_ALPHABET.length)];
+  return `ZP-${out}`;
+}
+
+export function isTopupReference(s: unknown): s is string {
+  return typeof s === "string" && REFERENCE_PATTERN.test(s);
 }
 
 /** A Zaad transaction ID as the customer typed it, cleaned; null if it can't be one. */

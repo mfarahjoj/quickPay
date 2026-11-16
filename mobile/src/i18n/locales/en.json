@@ -1361,5 +1361,13 @@
   "topup.agentFlow.receipt.paidByCash": "Paid by: cash",
   "topup.agentFlow.receipt.paidByZaad": "Paid by: Zaad",
   "topup.agentFlow.receipt.txn": "Zaad transaction ID: {{id}}",
-  "topup.agentFlow.somethingWrong": "Something wrong?"
+  "topup.agentFlow.reference": "Reference: {{ref}}",
+  "topup.agentFlow.referenceHint": "{{agent}} sees the same reference. You don't need to type anything.",
+  "topup.agentFlow.somethingWrong": "Something wrong?",
+  "topup.agentFlow.cancel": "Cancel top-up",
+  "topup.agentFlow.cancelTitle": "Cancel this top-up?",
+  "topup.agentFlow.cancelBody": "Your code stops working. Nothing has been taken from you.",
+  "topup.agentFlow.cancelBodyScanned": "Only cancel if you haven't given {{agent}} any cash. Your code stops working.",
+  "topup.agentFlow.cancelConfirm": "Cancel top-up",
+  "topup.agentFlow.keep": "Keep it"
 }

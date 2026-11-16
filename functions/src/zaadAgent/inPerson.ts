@@ -29,6 +29,7 @@ import { storedCurrency } from "../topup/agentCurrency";
 import {
   agentDisplayName,
   assertNamesOneRequest,
+  customerCancelled,
   assertTarget,
   requireActiveAgent,
   verifyTopupCode,
@@ -37,6 +38,7 @@ import {
 import { ApiResponse, AgentTopupRequest } from "../types";
 import { displayMsisdn, firstName, holdEntry, holdEntryId, maskMsisdn } from "./core";
 import { assertNoActiveZaad, assertZaadAgentOpen, assertZaadAmount, checkZaadCustomer } from "./limits";
+import { claimTopupReference, pickTopupReference } from "./reference";
 import { ZAAD_AGENTS, ZAAD_AGENT_TOPUPS, ZaadAgentDoc, ZaadAgentTopup } from "./types";
 
 interface StartRequest extends TopupTarget {
@@ -47,6 +49,8 @@ interface StartRequest extends TopupTarget {
 export interface InPersonStarted {
   /** The Zaad request the top-up continues as (zaadAgentTopups/{id}). */
   requestId: string;
+  /** Zapp's reference to show the customer (D31); null only on requests made before it. */
+  reference: string | null;
   amount: number;
   customerName: string;
   /** Masked, for checking against the sender in the agent's Zaad text (D5). */
@@ -105,6 +109,7 @@ export const agentStartZaadInPerson = https.onCall(
             success: true,
             data: {
               requestId: prior.zaadRequestId,
+              reference: z.reference ?? null,
               amount: z.amount,
               customerName: z.customerFirstName,
               allowedSenders: (z.allowedSenders ?? []).map(maskMsisdn),
@@ -159,6 +164,7 @@ export const agentStartZaadInPerson = https.onCall(
         movedTo = fresh.zaadRequestId;
         return;
       }
+      if (fresh?.status === "cancelled" && fresh.cancelledBy === "customer") throw customerCancelled();
       if (!fresh || fresh.status !== "pending" || fresh.expiresAt.toMillis() < nowMs) {
         throw new https.HttpsError("failed-precondition", "This code was already used or has expired", {
           reason: "not_pending",
@@ -171,12 +177,15 @@ export const agentStartZaadInPerson = https.onCall(
         lowFloat = float;
         return;
       }
+      const reference = await pickTopupReference(tx);
       const prepared = await prepareJournalEntry(tx, holdEntry(zaadReqRef.id, agentId, topup.amount));
       prepared.write(tx);
 
       const now = admin.firestore.Timestamp.fromMillis(nowMs);
+      claimTopupReference(tx, reference, zaadReqRef.id, topup.customerId, now);
       const record: ZaadAgentTopup = {
         customerId: topup.customerId,
+        reference,
         customerFirstName: firstName(customer.fullName),
         amount: topup.amount,
         currency: "USD",
@@ -233,6 +242,7 @@ export const agentStartZaadInPerson = https.onCall(
       success: true,
       data: {
         requestId: id,
+        reference: started.reference ?? null,
         amount: started.amount,
         customerName,
         allowedSenders: (started.allowedSenders ?? []).map(maskMsisdn),

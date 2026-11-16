@@ -10,9 +10,10 @@ import { getRates } from "../config/rates";
 import { notifyUser } from "../utils/notifications";
 import { pushAmount } from "../utils/money";
 import { ApiResponse } from "../types";
-import { firstName, normaliseTxnId } from "./core";
+import { firstName, normaliseTxnId, withoutOpen } from "./core";
 import { offerNext } from "./dispatch";
 import { assertNoActiveZaad, assertZaadAgentOpen, assertZaadAmount, checkZaadCustomer } from "./limits";
+import { claimTopupReference, pickTopupReference } from "./reference";
 import { releaseZaadHold } from "./settle";
 import {
   ZAAD_AGENTS,
@@ -22,6 +23,9 @@ import {
   ZaadAgentTopup,
   ZaadTopupStatus,
 } from "./types";
+
+/** How long before an unanswered request goes to review the agent is reminded (D32). */
+export const REMINDER_MS = 5 * 60_000;
 
 function requestId(data: unknown): string {
   const id = (data as { requestId?: unknown } | undefined)?.requestId;
@@ -41,11 +45,11 @@ async function ownRequest(uid: string, id: string): Promise<ZaadAgentTopup> {
 
 /**
  * Ask for a Zaad top-up through an agent. In: `{ amount }` in US cents.
- * Out: the request id; the app follows `zaadAgentTopups/{id}` from there.
+ * Out: the request id and Zapp's reference; the app follows `zaadAgentTopups/{id}` from there.
  */
 export const customerRequestZaadAgentTopup = https.onCall(
   { enforceAppCheck: true },
-  async (request): Promise<ApiResponse<{ requestId: string; status: ZaadTopupStatus }>> => {
+  async (request): Promise<ApiResponse<{ requestId: string; status: ZaadTopupStatus; reference: string }>> => {
     requireAuth(request);
     const uid = request.auth!.uid;
     const rates = await getRates();
@@ -64,11 +68,14 @@ export const customerRequestZaadAgentTopup = https.onCall(
     const { user, customerRef } = await checkZaadCustomer(uid, amount, rates, nowMs);
 
     const ref = db.collection(ZAAD_AGENT_TOPUPS).doc();
+    let reference = "";
     await db.runTransaction(async (tx) => {
       await assertNoActiveZaad(tx, customerRef);
+      reference = await pickTopupReference(tx);
       const now = admin.firestore.Timestamp.fromMillis(nowMs);
       const record: ZaadAgentTopup = {
         customerId: uid,
+        reference,
         customerFirstName: firstName(user.fullName),
         amount,
         currency: "USD",
@@ -82,13 +89,14 @@ export const customerRequestZaadAgentTopup = https.onCall(
         agentId: null,
         meeting: "remote",
       };
+      claimTopupReference(tx, reference, ref.id, uid, now);
       tx.set(ref, record);
       tx.set(customerRef, { activeRequestId: ref.id }, { merge: true });
     });
 
     await offerNext(ref.id, nowMs);
     const status = ((await ref.get()).data() as ZaadAgentTopup).status;
-    return { success: true, data: { requestId: ref.id, status } };
+    return { success: true, data: { requestId: ref.id, status, reference } };
   }
 );
 
@@ -115,7 +123,8 @@ export const customerCancelZaadTopup = https.onCall(
         const agent = agentRef ? ((await tx.get(agentRef)).data() as ZaadAgentDoc | undefined) : undefined;
         const now = admin.firestore.Timestamp.now();
         tx.update(ref, { status: "cancelled", offeredTo: null, offerExpiresAt: null, deadlineAt: null, updatedAt: now });
-        if (agentRef && agent?.openRequestId === id) tx.update(agentRef, { openRequestId: null });
+        const freed = agentRef ? withoutOpen(agent, id) : null;
+        if (agentRef && freed) tx.update(agentRef, freed);
       });
       return { success: true, data: { status: "cancelled" } };
     }
@@ -133,8 +142,10 @@ export const customerCancelZaadTopup = https.onCall(
 );
 
 /**
- * "I've sent it": the customer paid the agent's Zaad and gives the Zaad
- * transaction ID from their "you sent" text (D9). Each ID claims one request.
+ * "I've sent it": one tap. Zapp's reference identifies the top-up (D31), so
+ * the customer types nothing. Builds 82–83 may still send `zaadTxnId`; when
+ * one comes it is checked and claimed as before, so one Zaad payment can't
+ * back two top-ups.
  */
 export const customerMarkZaadSent = https.onCall(
   { enforceAppCheck: true },
@@ -160,13 +171,8 @@ export const customerMarkZaadSent = https.onCall(
       const [snap, txnSnap] = await Promise.all([tx.get(ref), txnRef ? tx.get(txnRef) : Promise.resolve(null)]);
       const fresh = snap.data() as ZaadAgentTopup | undefined;
       if (!fresh || fresh.customerId !== uid) throw new https.HttpsError("not-found", "Top-up not found");
-      // D9 / D21: remote needs the ID as evidence; in person it's optional.
-      if (!txnId && fresh.meeting !== "in_person") {
-        throw new https.HttpsError("invalid-argument", "Enter the transaction ID from your Zaad text", {
-          reason: "txn_id",
-        });
-      }
-      if (fresh.status === "customer_sent" && (fresh.customerZaadTxnId ?? null) === txnId) {
+      // A retry: the same tap again, or the same ID again.
+      if (fresh.status === "customer_sent" && (!txnId || fresh.customerZaadTxnId === txnId)) {
         confirmBy = fresh.confirmBy!;
         return; // a retry
       }
@@ -189,13 +195,16 @@ export const customerMarkZaadSent = https.onCall(
       }
       const now = admin.firestore.Timestamp.fromMillis(nowMs);
       confirmBy = admin.firestore.Timestamp.fromMillis(nowMs + rates.zaadAgentConfirmMinutes * 60_000);
+      // D32: the sweep first wakes 5 minutes before, to remind the agent.
+      const remindAt = confirmBy.toMillis() - REMINDER_MS;
+      const wakeAt = remindAt > nowMs ? admin.firestore.Timestamp.fromMillis(remindAt) : confirmBy;
       if (txnRef) tx.set(txnRef, { requestId: id, customerId: uid, at: now });
       tx.update(ref, {
         status: "customer_sent",
         ...(txnId ? { customerZaadTxnId: txnId } : {}),
         customerSentAt: now,
         confirmBy,
-        deadlineAt: confirmBy,
+        deadlineAt: wakeAt,
         updatedAt: now,
       });
       req = fresh;
