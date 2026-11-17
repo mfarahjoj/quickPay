@@ -23,7 +23,7 @@ import {
   type PlaceResult,
 } from '../../services/roleApplication.service';
 import { logger } from '../../utils/logger';
-import { auth } from '../../services/firebase.config';
+import { auth, firestore } from '../../services/firebase.config';
 
 /**
  * "Find your shop on Google" needs the GOOGLE_MAPS_API_KEY secret and the
@@ -108,6 +108,12 @@ export default function MerchantApplicationScreen({ role, kycVerified }: Props) 
   const [payoutProvider, setPayoutProvider] = useState<'zaad' | 'edahab'>('zaad');
   const [moneyNumber, setMoneyNumber] = useState(() => localNumber(auth().currentUser?.phoneNumber));
   const receivesOnZaad = agent && (!merchant || payoutProvider === 'zaad');
+  // The account's Zaad account (number + registered name), where payouts go.
+  // Saved with the application, so the app doesn't ask for it again later.
+  const [zaadOnFile, setZaadOnFile] = useState(false);
+  const [zaadName, setZaadName] = useState('');
+  const numberIsZaad = receivesOnZaad || (merchant && payoutProvider === 'zaad');
+  const askZaadName = numberIsZaad && !zaadOnFile;
 
   // ID: national ID by default; the number is read off the photo by Zapp.
   const [idType, setIdType] = useState<IdType>('national_id');
@@ -117,6 +123,31 @@ export default function MerchantApplicationScreen({ role, kycVerified }: Props) 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // Their name, and a Zaad account already on file (reused, not asked again).
+  useEffect(() => {
+    const uid = auth().currentUser?.uid;
+    if (!uid) return;
+    let live = true;
+    firestore()
+      .collection('users')
+      .doc(uid)
+      .get()
+      .then((snap) => {
+        const d = snap.data();
+        if (!live || !d) return;
+        if (d.zaad?.msisdn && d.zaad?.name) {
+          setZaadOnFile(true);
+          setMoneyNumber((cur) => cur || localNumber(d.zaad.msisdn));
+        } else if (typeof d.fullName === 'string') {
+          setZaadName((cur) => cur || d.fullName.trim());
+        }
+      })
+      .catch((err) => logger.warn('Application: user read failed', err));
+    return () => {
+      live = false;
+    };
+  }, []);
 
   // A re-application starts with what they sent last time.
   useEffect(() => {
@@ -208,6 +239,9 @@ export default function MerchantApplicationScreen({ role, kycVerified }: Props) 
       if (!location) e.location = t('application.business.locationNeeded');
       if (!photos.shop?.path) e.shop = t('application.photo.needed');
       if (!looksLikeMsisdn(moneyNumber)) e.moneyNumber = t('application.badNumber');
+      if (askZaadName && zaadName.trim().split(/\s+/).filter(Boolean).length < 2) {
+        e.zaadName = t('zaadAccount.invalidName');
+      }
     }
     if (s === 'id') {
       if (!photos.front?.path) e.front = t('application.photo.needed');
@@ -235,6 +269,7 @@ export default function MerchantApplicationScreen({ role, kycVerified }: Props) 
         area: area.trim(),
         location,
         shopPhotoPath: photos.shop!.path!,
+        ...(askZaadName ? { zaadName: zaadName.trim() } : {}),
         ...(merchant ? { payout: { provider: payoutProvider, number: moneyNumber } } : {}),
         // Customers can only pay an agent on Zaad.
         ...(agent ? { agent: receivesOnZaad ? { zaadReceiveNumber: moneyNumber } : {} } : {}),
@@ -426,6 +461,16 @@ export default function MerchantApplicationScreen({ role, kycVerified }: Props) 
               placeholder="063 412 3456"
               error={errors.moneyNumber}
             />
+            {askZaadName && (
+              <Input
+                label={t('zaadAccount.nameLabel')}
+                value={zaadName}
+                onChangeText={setZaadName}
+                autoCapitalize="words"
+                placeholder={t('zaadAccount.namePlaceholder')}
+                error={errors.zaadName}
+              />
+            )}
             <Text style={styles.sectionHint}>{t(moneyHint)}</Text>
 
             <View style={styles.photoRow}>{photoSlot('shop', t('application.photo.shop'))}</View>

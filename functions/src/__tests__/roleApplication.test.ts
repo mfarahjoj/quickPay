@@ -77,6 +77,7 @@ describe("role application", () => {
       backPath: "kyc/u1/back_1.jpg",
       selfiePath: "kyc/u1/selfie_1.jpg",
     },
+    zaadName: "Hodan Ali Warsame",
     ...extra,
   });
 
@@ -116,6 +117,26 @@ describe("role application", () => {
     expect(user.kycStatus).toBe("submitted");
     expect(user.roleApplicationSubmittedAt).toBeDefined();
     expect(user.accountType).toBe("customer");
+  });
+
+  it("saves the Zaad account with the application, so the app doesn't ask again", async () => {
+    const db = seed();
+    await submit({ data: form(), auth: { uid: "u1" } });
+    expect(db.get("users/u1")!.zaad).toMatchObject({ msisdn: "+252634123456", name: "Hodan Ali Warsame" });
+  });
+
+  it("leaves a Zaad account already on file alone (changing it takes the PIN)", async () => {
+    const onFile = { msisdn: "+252634777777", name: "Hodan Ali", updatedAt: Timestamp.now() };
+    const db = seed({
+      "users/u1": { fullName: "Hodan Ali", accountType: "customer", kycStatus: "pending", zaad: onFile },
+    });
+    await submit({ data: form({ zaadName: undefined }), auth: { uid: "u1" } });
+    expect(db.get("users/u1")!.zaad.msisdn).toBe("+252634777777");
+  });
+
+  it("needs the name on the Zaad account when none is on file", async () => {
+    seed();
+    await expect(submit({ data: form({ zaadName: "Hodan" }), auth: { uid: "u1" } })).rejects.toThrow(/full name/);
   });
 
   it("refuses photos outside the applicant's own folder", async () => {

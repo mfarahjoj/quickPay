@@ -23,6 +23,7 @@ export interface RoleApplicationInput {
   shopPhotoPath: string;
   payout?: { provider: 'zaad' | 'edahab'; number: string };
   agent?: { openHours?: string; services?: AgentService[]; zaadReceiveNumber?: string };
+  zaadName?: string;
   id?: { idType: IdType; idNumber?: string; frontPath: string; backPath?: string; selfiePath: string };
 }
 

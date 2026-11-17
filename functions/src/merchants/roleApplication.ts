@@ -16,9 +16,10 @@ import { https } from "firebase-functions/v2";
 import { requireAuth, sanitizeString } from "../utils/validation";
 import { isAgentRole, isMerchantRole, isPrivilegedRole } from "../utils/roles";
 import { normaliseSomaliMsisdn } from "../utils/msisdn";
+import { normaliseZaadName } from "../auth/zaadAccount";
 import { isKycPathFor, parseStorageRef } from "../utils/storagePaths";
 import { ROLE_REQUESTS_COLLECTION, roleRequestId } from "./requestRole";
-import { AgentService, ApiResponse, GeoPin, KycDocument, PrivilegedRole, RoleApplication, RoleRequest } from "../types";
+import { AgentService, ApiResponse, GeoPin, KycDocument, PrivilegedRole, RoleApplication, RoleRequest, User, ZaadAccount } from "../types";
 
 const ID_TYPES = ["national_id", "passport", "drivers_license"] as const;
 const SERVICES: AgentService[] = ["cash_in", "cash_out"];
@@ -33,6 +34,12 @@ export interface SubmitRoleApplicationRequest {
   shopPhotoPath: string;
   payout?: { provider: "zaad" | "edahab"; number: string };
   agent?: { openHours?: string; services?: AgentService[]; zaadReceiveNumber?: string };
+  /**
+   * The full name the Zaad number is registered to. Saves the account's Zaad
+   * account (users.zaad, where payouts go) when none is on file, so the app
+   * doesn't ask for it again after approval.
+   */
+  zaadName?: string;
   /** Required unless the account is already KYC-verified. */
   id?: {
     idType: (typeof ID_TYPES)[number];
@@ -222,6 +229,20 @@ export const submitRoleApplication = https.onCall(
         tx.set(userRef.collection("kyc").doc("latest"), kyc);
       }
 
+      // The Zaad account (payouts go only there). Saved here the first time,
+      // as setZaadAccount would without a PIN; one already on file is only
+      // changed from Settings, with the PIN.
+      const zaadNumber =
+        application.payout?.provider === "zaad" ? application.payout.number : application.agent?.zaadReceiveNumber;
+      let zaad: ZaadAccount | null = null;
+      if (zaadNumber && !(user as User).zaad) {
+        const zaadName = normaliseZaadName(request.data?.zaadName);
+        if (!zaadName) {
+          throw new https.HttpsError("invalid-argument", "Enter the full name your Zaad account is registered to");
+        }
+        zaad = { msisdn: zaadNumber, name: zaadName, updatedAt: now };
+      }
+
       // Mirrored for the app's live listener; clients cannot write these fields.
       tx.set(
         userRef,
@@ -231,6 +252,7 @@ export const submitRoleApplication = https.onCall(
           roleRequestReason: admin.firestore.FieldValue.delete(),
           roleApplicationSubmittedAt: now,
           ...(kyc ? { kycStatus: "submitted" } : {}),
+          ...(zaad ? { zaad } : {}),
           updatedAt: now,
         },
         { merge: true }
