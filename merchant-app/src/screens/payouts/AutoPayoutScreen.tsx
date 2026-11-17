@@ -97,6 +97,7 @@ export default function AutoPayoutScreen() {
         <Text style={styles.bigTitle}>{t('payout.pinTitle')}</Text>
         <Text style={styles.sub}>{enabled ? t('autoPayout.pinOn') : t('autoPayout.pinOff')}</Text>
         <PinInput
+          autoFocus
           value={pin}
           onChange={(v) => {
             setPin(v);

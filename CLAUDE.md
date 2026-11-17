@@ -53,6 +53,7 @@ Every user-facing string ships in **all three locales** — `en`, `so`, `ar` —
 | `LEDGER_ARCHITECTURE.md` | Chart of accounts, journal entry schema, per-flow templates, reconciliation |
 | `docs/MERCHANT_API.md` | Merchant Payments API (`functions/src/api/`): keys, charges, refunds, webhooks, hosted checkout |
 | `DESIGN_SYSTEM.md` | Colors, typography, component patterns |
+| `docs/DESIGN_FLOWS.md` | Every user story (customer, merchant, admin) as a flow: steps, taps, the flow rules (one decision per screen, Face ID as one deliberate tap, PIN keyboard open) |
 | `GTM_ROADMAP.md` | Hargeisa launch phases, KPIs, risks |
 | `SECURITY_REMEDIATION_PLAN.md` | Audit findings (2026-10-03), fix plan per finding, status, open decisions |
 | `CASH_IN_CASH_OUT.md` | Agent cash-in/cash-out: flow steps, ledger entries, guards, threat model |

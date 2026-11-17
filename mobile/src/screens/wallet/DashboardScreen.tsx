@@ -16,6 +16,7 @@ import { TransactionItem } from '../../components/TransactionItem';
 import { Transaction } from '../../types';
 import { triggerHaptic } from '../../services/haptics.service';
 import { usePaymentRequests } from '../../hooks/usePaymentRequests';
+import { useZaadTopups } from '../../hooks/useZaadTopups';
 import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import {
@@ -309,6 +310,12 @@ export default function DashboardScreen({ navigation }: Props) {
     return () => clearInterval(interval);
   }, [isLight]);
   const { requests: pendingRequests } = usePaymentRequests();
+  // With only the agent way open, Top up goes straight there: no one-card menu.
+  const zaadTopupsOpen = useZaadTopups();
+  const openTopUp = useCallback(() => {
+    triggerHaptic('light');
+    navigation.navigate(zaadTopupsOpen ? 'TopUpMethod' : 'AgentTopup');
+  }, [navigation, zaadTopupsOpen]);
   const { isConnected } = useNetworkStatus();
   const { profile, firstName } = useUserProfile();
 
@@ -535,7 +542,7 @@ export default function DashboardScreen({ navigation }: Props) {
     <TouchableOpacity
       style={styles.nudgeBanner}
       activeOpacity={0.85}
-      onPress={() => { triggerHaptic('light'); navigation.navigate('TopUpMethod'); }}
+      onPress={() => openTopUp}
     >
       <View style={styles.nudgeIcon}>
         <BoltGlyph size={20} color="#FFFFFF" />
@@ -630,7 +637,7 @@ export default function DashboardScreen({ navigation }: Props) {
               onProfile={() => { triggerHaptic('light'); navigation.navigate('Profile'); }}
               onNotifications={() => { triggerHaptic('light'); navigation.navigate('Notifications'); }}
               onShowQr={showQr}
-              onTopUp={() => { triggerHaptic('light'); navigation.navigate('TopUpMethod'); }}
+              onTopUp={() => openTopUp}
               onPay={() => { triggerHaptic('light'); navigation.navigate('ScanQR'); }}
               onGetCash={() => { triggerHaptic('light'); navigation.navigate('CashOut'); }}
             />
@@ -831,7 +838,7 @@ export default function DashboardScreen({ navigation }: Props) {
             personality="plus"
             index={1}
             idleTick={idleTick}
-            onPress={() => { triggerHaptic('light'); navigation.navigate('TopUpMethod'); }}
+            onPress={() => openTopUp}
           >
             <PlusGlyph size={20} />
           </ActionTile>

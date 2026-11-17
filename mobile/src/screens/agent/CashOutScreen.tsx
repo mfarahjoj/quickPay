@@ -26,6 +26,7 @@ import { makeStyles, useColors } from '../../theme';
 import { Springs } from '../../constants/springs';
 import { useWallet } from '../../hooks/useWallet';
 import { useHomeCurrency } from '../../hooks/useHomeCurrency';
+import { useBiometricApproval } from '../../hooks/useBiometricApproval';
 import { amountInputUnits, balanceIn, formatMoney, type Currency } from '../../utils/money';
 import { SuccessCheckIcon } from '../../components/icons/AuthIcons';
 import { AnimatedXMark } from '../../components/icons/StatusIcons';
@@ -161,20 +162,21 @@ export default function CashOutScreen() {
     );
   };
 
-  const handleContinue = () => {
-    if (amount <= 0) return;
-    triggerHaptic('medium');
-    setStep('pin');
-  };
+  // Face ID, when it's on, stands in for the PIN keypad; cancelled, the keypad.
+  const biometric = useBiometricApproval();
+  const { prepare: prepareBiometric } = biometric;
+  useEffect(() => {
+    prepareBiometric();
+  }, [prepareBiometric]);
 
-  const handleSubmit = useCallback(async () => {
-    if (pin.length < 6) return;
+  /** `credential` is the typed PIN, or Face ID's one-time token. */
+  const submitWith = useCallback(async (credential: string) => {
     triggerHaptic('medium');
     setStep('processing');
 
     try {
       const fn = functions().httpsCallable('customerCashOut');
-      const result = await fn({ amount, pin, currency });
+      const result = await fn({ amount, pin: credential, currency });
       const data = (result.data as any)?.data;
       if (!data?.otpCode || !data?.expiresAt) {
         throw new Error((result.data as any)?.error || 'Cash-out failed');
@@ -187,14 +189,27 @@ export default function CashOutScreen() {
       otpOpacity.value = withDelay(200, withTiming(1, { duration: 400 }));
       otpScale.value = withDelay(200, withSpring(1, Springs.celebration));
     } catch (e: any) {
-      setErrorMsg(cooldownMessage(e, t) ?? (e.message || 'Something went wrong'));
+      setErrorMsg(cooldownMessage(e, t) ?? (e.message || t('common.error')));
       setStep('error');
     }
-  }, [pin, amount, currency, otpOpacity, otpScale, t]);
+  }, [amount, currency, otpOpacity, otpScale, t]);
+
+  const handleContinue = async () => {
+    if (amount <= 0) return;
+    triggerHaptic('medium');
+    if (biometric.available) {
+      const token = await biometric.approve(t('common.confirmPaymentAmount', { amount: amountLabel }));
+      if (token) {
+        await submitWith(token);
+        return;
+      }
+    }
+    setStep('pin');
+  };
 
   useEffect(() => {
-    if (pin.length === 6) handleSubmit();
-  }, [pin, handleSubmit]);
+    if (step === 'pin' && pin.length === 6) submitWith(pin);
+  }, [step, pin, submitWith]);
 
   // The money is held, not gone: cancelling returns it to the wallet at once.
   const doCancel = useCallback(async () => {
@@ -459,7 +474,9 @@ export default function CashOutScreen() {
           disabled={amount <= 0}
           activeOpacity={0.8}
         >
-          <Text style={styles.continueBtnText}>Continue</Text>
+          <Text style={styles.continueBtnText}>
+            {biometric.available ? t('common.continueWith', { label: biometric.label }) : t('common.continue')}
+          </Text>
         </TouchableOpacity>
       </View>
     </View>

@@ -54,6 +54,8 @@ export default function PaymentConfirmScreen({ navigation, route }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometryType, setBiometryType] = useState<string | undefined>();
+  /** The phone has said whether Face ID is on: only then open the PIN pad. */
+  const [biometricChecked, setBiometricChecked] = useState(false);
 
   const biometricLabel = useMemo(
     () => t(getBiometricLabelKey(biometryType)),
@@ -65,6 +67,7 @@ export default function PaymentConfirmScreen({ navigation, route }: Props) {
       ([enabled, { available, biometryType: bt }]) => {
         setBiometricAvailable(enabled && available);
         setBiometryType(bt);
+        setBiometricChecked(true);
         if (enabled && available) prepareBiometricApproval();
       }
     );
@@ -158,6 +161,7 @@ export default function PaymentConfirmScreen({ navigation, route }: Props) {
         </Text>
         <PinInput
           value={pin}
+          autoFocus={biometricChecked && !biometricAvailable}
           onChange={setPin}
           onComplete={handleConfirm}
           secure={true}

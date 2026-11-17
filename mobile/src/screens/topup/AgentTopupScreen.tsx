@@ -253,6 +253,20 @@ export default function AgentTopupScreen({ initialWay }: { initialWay?: 'remote'
     }
   }, [amountUnits, currency, t]);
 
+  // A choice of one is no choice: with Zaad through agents off there is only
+  // "with an agent", so Continue makes the code. Opened as "find me an agent"
+  // with dollars, Continue finds one.
+  const onContinue = () => {
+    if (amountUnits <= 0) return;
+    if (!zaadOpen) {
+      handleGenerate();
+    } else if (initialWay === 'remote' && currency === 'USD') {
+      findAgent();
+    } else {
+      setStep('choose');
+    }
+  };
+
   const formatTime = (s: number) =>
     `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
 
@@ -610,7 +624,7 @@ export default function AgentTopupScreen({ initialWay }: { initialWay?: 'remote'
       <View style={styles.footer}>
         <TouchableOpacity
           style={[styles.continueBtn, amount <= 0 && styles.continueBtnDisabled]}
-          onPress={() => setStep('choose')}
+          onPress={onContinue}
           disabled={amount <= 0}
           activeOpacity={0.8}
         >

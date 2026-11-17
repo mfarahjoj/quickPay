@@ -97,6 +97,7 @@ export default function MoveToFloatScreen() {
         <Text style={styles.bigTitle}>{t('payout.pinTitle')}</Text>
         <Text style={styles.sub}>{t('moveToFloat.pinSubtitle', { amount: show(cents) })}</Text>
         <PinInput
+          autoFocus
           value={pin}
           onChange={(v) => {
             setPin(v);

@@ -136,6 +136,7 @@ export default function SendScreen() {
         <Text style={styles.bigTitle}>{t('payout.pinTitle')}</Text>
         <Text style={styles.sub}>{t('send.pinSubtitle', { amount: show(units), name: recipient.displayName })}</Text>
         <PinInput
+          autoFocus
           value={pin}
           onChange={(v) => {
             setPin(v);

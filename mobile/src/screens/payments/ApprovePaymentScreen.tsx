@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next';
 import { cooldownMessage } from '../../utils/cooldownMessage';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { PinInput } from '../../components/PinInput';
+import { useBiometricApproval } from '../../hooks/useBiometricApproval';
 import { approvePayment, rejectPayment } from '../../services/customerToken.service';
 import { approveApiCharge, getApiCharge } from '../../services/apiCharge.service';
 import { firestore } from '../../services/firebase.config';
@@ -81,6 +82,13 @@ export default function ApprovePaymentScreen() {
   const [step, setStep] = useState<Step>('review');
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
+  // Face ID is the PIN when it's on: Accept, look, paid. Cancel it for the PIN.
+  const biometric = useBiometricApproval();
+  const [askingBiometric, setAskingBiometric] = useState(false);
+  const { prepare: prepareBiometric } = biometric;
+  useEffect(() => {
+    prepareBiometric();
+  }, [prepareBiometric]);
   const [rejecting, setRejecting] = useState(false);
   const [resultKind, setResultKind] = useState<ResultKind>('approved');
   const [resultMessage, setResultMessage] = useState('');
@@ -286,9 +294,26 @@ export default function ApprovePaymentScreen() {
       ? `${chargeKey.slice(0, 6)}...${chargeKey.slice(-4)}`
       : chargeKey);
 
-  const handleAccept = () => {
+  const handleAccept = async () => {
+    if (loading || askingBiometric) return;
     triggerHaptic('medium');
-    setStep('pin');
+    if (!biometric.available) {
+      setStep('pin');
+      return;
+    }
+    setAskingBiometric(true);
+    try {
+      const token = await biometric.approve(
+        t('common.confirmPaymentAmount', { amount: amountFormatted })
+      );
+      if (token) {
+        await handleApprove(token);
+      } else {
+        setStep('pin');
+      }
+    } finally {
+      setAskingBiometric(false);
+    }
   };
 
   const handleApprove = async (submittedPin: string) => {
@@ -482,14 +507,18 @@ export default function ApprovePaymentScreen() {
         <TouchableOpacity
           style={[styles.acceptButton, lapsed && styles.acceptButtonDisabled]}
           onPress={handleAccept}
-          disabled={lapsed}
+          disabled={lapsed || askingBiometric || loading}
           activeOpacity={0.8}
           accessibilityLabel={`Accept and pay ${amountFormatted} ${currency} to ${merchantName}`}
           accessibilityRole="button"
         >
-          <Text style={styles.acceptButtonText}>
-            {t(isCashOut ? 'payments.approve.acceptCashOut' : 'payments.approve.acceptPay')}
-          </Text>
+          {askingBiometric || loading ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.acceptButtonText}>
+              {t(isCashOut ? 'payments.approve.acceptCashOut' : 'payments.approve.acceptPay')}
+            </Text>
+          )}
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -532,6 +561,7 @@ export default function ApprovePaymentScreen() {
           onChange={setPin}
           onComplete={handleApprove}
           secure
+          autoFocus
           style={styles.pinInput}
         />
 
