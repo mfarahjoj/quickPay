@@ -196,6 +196,7 @@ export { adminRenameMerchant } from "./admin/renameMerchant";
 export {
   adminListRoleRequests,
   adminReviewRoleRequest,
+  adminGetRoleApplication,
 } from "./admin/reviewRoleRequest";
 export {
   adminSearchUsers,
@@ -258,6 +259,10 @@ export {
 
 // Role applications (privileged roles are granted by admins, not chosen)
 export { requestRole, getMyRoleRequests } from "./merchants/requestRole";
+export { submitRoleApplication } from "./merchants/roleApplication";
+// Parked until the GOOGLE_MAPS_API_KEY secret exists (a deploy needs every
+// exported function's secrets): see merchants/places.ts.
+// export { placesSearch, placesReverseGeocode } from "./merchants/places";
 
 // Merchant Payments API (docs/MERCHANT_API.md). `api` serves /v1/... behind a
 // Hosting rewrite; money moves only in approveApiCharge, under the customer's

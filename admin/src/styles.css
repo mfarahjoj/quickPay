@@ -1267,3 +1267,40 @@ td.diff { color: var(--danger); font-weight: 600; }
 .thread-msg .muted { font-size: 12.5px; margin-bottom: 2px; }
 .thread-msg[data-role="counterparty"] { margin-left: 24px; }
 .thread-msg[data-role="ops"] { background: var(--accent-soft); }
+
+/* ───────────────────── Account page · waiting on Zapp ───────────────────── */
+.work-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+}
+.work-item[data-tone="warn"] { border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+.work-item[data-tone="bad"] { border-color: color-mix(in srgb, var(--danger) 55%, transparent); }
+.work-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.work-item[data-tone="bad"] .work-icon { color: var(--danger); }
+.work-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.work-title { font-weight: 600; }
+.work-actions { justify-content: flex-end; }
+.work-expand {
+  margin-top: 10px;
+  padding: 4px 0 4px 14px;
+  border-left: 3px solid var(--accent-soft-2);
+}
+@media (max-width: 640px) {
+  .work-item { grid-template-columns: auto minmax(0, 1fr); }
+  .work-actions { grid-column: 1 / -1; justify-content: flex-start; }
+  .work-expand { padding-left: 10px; }
+}

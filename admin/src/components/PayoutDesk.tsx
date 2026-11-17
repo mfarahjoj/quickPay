@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, formatFloat, type PayoutRow } from "../api";
 import { Icon } from "./Icon";
 import { ReasonPrompt } from "./ReasonPrompt";
+import { AccountLink } from "./AccountLink";
 import { EmptyState, Loading } from "./ui";
 
 /** "$12.50", or "30,000 SLSH": a payout is sent in the currency it was asked in. */
@@ -129,7 +130,7 @@ export function PayoutDesk() {
                 {rows.map((row) => (
                   <tr key={row.id}>
                     <td className="wide">
-                      {row.businessName || row.merchantName || row.merchantId}
+                      <AccountLink uid={row.merchantId}>{row.businessName || row.merchantName || row.merchantId}</AccountLink>
                       {row.auto && <div className="muted">automatic daily payout</div>}
                       {row.requiresSeniorApproval && view === "requested" && (
                         <div className="muted" style={{ color: "var(--warn)", fontWeight: 500 }}>

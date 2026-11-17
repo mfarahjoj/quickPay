@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, formatFloat, type FloatCurrency, type TopupRow, type TopupSource, type UserDetail } from "../api";
 import { UserSearch } from "./UserSearch";
 import { ReasonPrompt } from "./ReasonPrompt";
+import { AccountLink } from "./AccountLink";
 import { EmptyState, Loading } from "./ui";
 
 const SOURCES: Array<{ id: TopupSource; label: string; refHint: string }> = [
@@ -86,7 +87,7 @@ export function TopupDesk() {
                   <tr key={t.id}>
                     <td className="muted nowrap">{when(t.createdAtMs)}</td>
                     <td className="wide">
-                      {t.name || "(no name)"}
+                      <AccountLink uid={t.uid}>{t.name || "(no name)"}</AccountLink>
                       <div className="muted mono" style={{ fontSize: 12 }}>{t.uid}</div>
                     </td>
                     <td className="nowrap">{sourceLabel(t.source)}</td>
@@ -104,7 +105,16 @@ export function TopupDesk() {
   );
 }
 
-function TopupForm({ userId, onPosted }: { userId: string; onPosted: () => Promise<void> }) {
+/** `embedded`: on an account page, which already shows the name and balances. */
+export function TopupForm({
+  userId,
+  onPosted,
+  embedded = false,
+}: {
+  userId: string;
+  onPosted: () => Promise<void>;
+  embedded?: boolean;
+}) {
   const [detail, setDetail] = useState<UserDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -176,7 +186,9 @@ function TopupForm({ userId, onPosted }: { userId: string; onPosted: () => Promi
     <div className="stack-lg">
       {notice && <div className="banner ok">{notice}</div>}
 
-      <div className="panel">
+      <div className={embedded ? undefined : "panel"}>
+        {!embedded && (
+        <>
         <div className="panel-head">
           <h2>{name}</h2>
           {detail.accountStatus !== "active" && (
@@ -197,13 +209,15 @@ function TopupForm({ userId, onPosted }: { userId: string; onPosted: () => Promi
             <span className="stat-value">{formatFloat(detail.wallet?.sls?.balance ?? 0, "SLS")}</span>
           </div>
         </div>
+        </>
+        )}
 
         {!detail.wallet ? (
           <div className="banner error" style={{ marginTop: 14 }}>This account has no wallet.</div>
         ) : frozen ? (
           <div className="banner error" style={{ marginTop: 14 }}>
-            This account is {detail.accountStatus === "active" ? "frozen" : detail.accountStatus}. Unfreeze it on
-            the Customers page before topping it up.
+            This account is {detail.accountStatus === "active" ? "frozen" : detail.accountStatus}. Reactivate it
+            on its account page before topping it up.
           </div>
         ) : (
           <div className="stack" style={{ marginTop: 16, gap: 12 }}>

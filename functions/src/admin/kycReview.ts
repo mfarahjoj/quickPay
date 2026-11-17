@@ -75,11 +75,14 @@ export const adminListKycQueue = https.onCall(
       userSnaps.filter((u) => u.exists).map((u) => [u.id, u.data()!])
     );
 
-    const rows: KycQueueRow[] = snap.docs.map((doc, i) => {
+    const rows: KycQueueRow[] = snap.docs.flatMap((doc, i) => {
       const kyc = doc.data() as KycDocument;
+      // An ID sent with a merchant/agent application waiting in the role
+      // queue is decided there, with the rest of the application.
+      if (kyc.source === "role_application" && kyc.status === "submitted") return [];
       const userId = userIds[i];
       const user = usersById.get(userId);
-      return {
+      return [{
         userId,
         idType: kyc.idType,
         status: kyc.status,
@@ -87,7 +90,7 @@ export const adminListKycQueue = https.onCall(
         applicantName: user?.fullName,
         applicantPhone: user?.phoneNumber,
         accountType: user?.accountType,
-      };
+      }];
     });
 
     return { success: true, data: rows };
@@ -98,8 +101,8 @@ interface GetKycRequest {
   userId: string;
 }
 
-interface SignedImage {
-  label: "front" | "back" | "selfie";
+export interface SignedImage {
+  label: "front" | "back" | "selfie" | "shop";
   url?: string;
   /** Why the image could not be shown, when it could not. */
   error?: string;
@@ -111,7 +114,7 @@ interface SignedImage {
  * Returns an error string rather than the raw stored URL on any failure:
  * handing back the permanent download link is exactly what this avoids.
  */
-async function signImage(
+export async function signImage(
   label: SignedImage["label"],
   storedRef: unknown,
   pathHint: unknown,

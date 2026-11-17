@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, formatFloat, type DisputeDetail, type DisputeRow, type DisputeStatus, type FloatCurrency } from "../api";
 import { Icon } from "./Icon";
 import { ReasonPrompt } from "./ReasonPrompt";
+import { AccountLink } from "./AccountLink";
 import { EmptyState, Loading } from "./ui";
 
 /** In the dispute's own currency: "$12.50" or "30,000 SLSH". */
@@ -18,7 +19,7 @@ const VIEWS: { status: DisputeStatus; label: string }[] = [
   { status: "withdrawn", label: "Withdrawn" },
 ];
 
-const KIND_LABEL: Record<string, string> = {
+export const KIND_LABEL: Record<string, string> = {
   not_received: "Paid, didn't receive",
   wrong_amount: "Wrong amount",
   unauthorised: "Didn't make this payment",
@@ -157,7 +158,7 @@ export function DisputeDesk() {
   );
 }
 
-function DisputeDetailPanel({
+export function DisputeDetailPanel({
   disputeId,
   onDecided,
 }: {
@@ -227,7 +228,7 @@ function DisputeDetailPanel({
       <dd>
         {p ? (
           <>
-            {p.fullName || "(no name)"} · {p.accountType || "customer"}
+            <AccountLink uid={p.uid}>{p.fullName || "(no name)"}</AccountLink> · {p.accountType || "customer"}
             <div className="muted">
               {p.phoneNumber || p.uid} · balance {money(p.balanceCents)}
               {p.reservedCents > 0 && ` · ${money(p.reservedCents)} reserved`}

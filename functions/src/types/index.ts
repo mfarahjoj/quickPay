@@ -130,6 +130,44 @@ export interface RoleRequest {
    * held a privileged role before the approval gate existed.
    */
   backfilled?: boolean;
+  /**
+   * The full application from the merchant app (builds that collect it).
+   * Approval applies it: merchant profile, agent set-up, KYC. Absent on
+   * requests from older builds, which are approved the old way.
+   */
+  application?: RoleApplication;
+  /** The rejected application, kept on re-applying so the app can prefill. */
+  previousApplication?: RoleApplication;
+}
+
+/** Where a shop or agent is, as the phone reported it. */
+export interface GeoPin {
+  lat: number;
+  lng: number;
+  /** Metres, as reported by the phone. */
+  accuracyM?: number;
+}
+
+export interface RoleApplication {
+  businessName: string;
+  businessType: string;
+  businessAddress: string;
+  area: string;
+  location: GeoPin | null;
+  /** Bucket-relative path under kyc/{uid}/. */
+  shopPhotoPath: string;
+  /** Where takings are paid out (merchant roles). E.164. */
+  payout?: { provider: "zaad" | "edahab"; number: string };
+  /** Agent roles. */
+  agent?: {
+    openHours: string;
+    services: AgentService[];
+    /** E.164 Zaad number the agent receives customers' payments on. */
+    zaadReceiveNumber?: string;
+  };
+  /** False when the account was already KYC-verified and sent no ID. */
+  includesId: boolean;
+  submittedAt: FirebaseFirestore.Timestamp;
 }
 
 // Float desk types — see ADMIN_CONSOLE_PLAN.md §4.3.
@@ -242,6 +280,8 @@ export interface KycDocument {
   reviewedAt?: FirebaseFirestore.Timestamp;
   reviewedBy?: string;
   rejectionReason?: string;
+  /** "role_application" when it came in with a merchant/agent application. */
+  source?: "role_application";
 }
 
 // Wallet types

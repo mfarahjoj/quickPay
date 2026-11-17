@@ -188,6 +188,37 @@ export interface RoleRequestRow {
   applicantName?: string;
   applicantPhone?: string;
   currentAccountType?: string;
+  /** Sent the full application from the merchant app (business, payout, ID). */
+  applicationSubmitted?: boolean;
+  createdAt?: { _seconds?: number; seconds?: number };
+}
+
+export interface RoleApplicationDetail {
+  requestId: string;
+  userId: string;
+  requestedRole: string;
+  status: string;
+  createdAt: number | null;
+  applicant: {
+    fullName: string | null;
+    phoneNumber: string | null;
+    accountType: string;
+    accountStatus: string;
+    kycStatus: string | null;
+  };
+  application: {
+    businessName: string;
+    businessType: string;
+    businessAddress: string;
+    area: string;
+    location: { lat: number; lng: number; accuracyM?: number } | null;
+    payout?: { provider: "zaad" | "edahab"; number: string };
+    agent?: { openHours: string; services: string[]; zaadReceiveNumber?: string };
+    includesId: boolean;
+    submittedAt: number | null;
+  } | null;
+  kyc: { idType: string; idNumber: string; status: string; fromApplication: boolean } | null;
+  images: { label: "shop" | "front" | "back" | "selfie"; url?: string; error?: string }[];
 }
 
 export interface KycQueueRow {
@@ -692,6 +723,9 @@ export const api = {
     ),
 
   ledgerHealth: () => call<void, LedgerHealth>("adminGetLedgerHealth"),
+
+  getRoleApplication: (requestId: string) =>
+    call<{ requestId: string }, RoleApplicationDetail>("adminGetRoleApplication", { requestId }),
 
   listKycQueue: (status = "submitted") =>
     call<{ status: string }, KycQueueRow[]>("adminListKycQueue", { status }),

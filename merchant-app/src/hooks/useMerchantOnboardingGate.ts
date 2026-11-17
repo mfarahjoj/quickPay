@@ -19,6 +19,7 @@ function isAgentAccountType(t: unknown): boolean {
  *
  * - `onboarding` — no PIN yet, or never applied for a role (also where a
  *   rejected applicant goes if they choose to re-apply).
+ * - `application` — picked a role; now filling in the full application.
  * - `pending`    — applied, waiting on an admin. Privileged roles are granted
  *                  by review, not self-selected (ADMIN_CONSOLE_PLAN.md §4.1).
  * - `rejected`   — the application was declined; the reason is shown.
@@ -28,6 +29,7 @@ function isAgentAccountType(t: unknown): boolean {
  */
 export type MerchantGateState =
   | 'onboarding'
+  | 'application'
   | 'pending'
   | 'rejected'
   | 'agentProfile'
@@ -40,6 +42,8 @@ export interface MerchantOnboardingGate {
   state: MerchantGateState;
   requestedRole?: MerchantRole;
   rejectionReason?: string;
+  /** Already KYC-verified: the application skips the ID step. */
+  kycVerified: boolean;
 }
 
 export function useMerchantOnboardingGate(): MerchantOnboardingGate {
@@ -48,6 +52,7 @@ export function useMerchantOnboardingGate(): MerchantOnboardingGate {
   const [state, setState] = useState<MerchantGateState>('onboarding');
   const [requestedRole, setRequestedRole] = useState<MerchantRole | undefined>();
   const [rejectionReason, setRejectionReason] = useState<string | undefined>();
+  const [kycVerified, setKycVerified] = useState(false);
 
   useEffect(() => {
     if (authLoading) {
@@ -76,6 +81,7 @@ export function useMerchantOnboardingGate(): MerchantOnboardingGate {
         setRejectionReason(
           typeof data?.roleRequestReason === 'string' ? data.roleRequestReason : undefined
         );
+        setKycVerified(data?.kycStatus === 'verified');
 
         if (!hasPin) {
           setState('onboarding');
@@ -90,7 +96,9 @@ export function useMerchantOnboardingGate(): MerchantOnboardingGate {
             !data?.agentInfo;
           setState(owesAgentProfile ? 'agentProfile' : 'ready');
         } else if (roleRequestStatus === 'pending') {
-          setState('pending');
+          // Applied, but the full application (business, payout, ID) isn't
+          // in yet: the reviewer can't decide without it.
+          setState(data?.roleApplicationSubmittedAt ? 'pending' : 'application');
         } else if (roleRequestStatus === 'rejected') {
           setState('rejected');
         } else {
@@ -115,5 +123,6 @@ export function useMerchantOnboardingGate(): MerchantOnboardingGate {
     state,
     requestedRole,
     rejectionReason,
+    kycVerified,
   };
 }

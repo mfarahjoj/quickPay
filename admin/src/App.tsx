@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { User } from "firebase/auth";
 import {
   auth,
@@ -11,6 +11,7 @@ import {
 } from "./firebase";
 import { UserSearch } from "./components/UserSearch";
 import { UserDetail } from "./components/UserDetail";
+import { OpenAccountContext } from "./components/AccountLink";
 import { RoleQueue } from "./components/RoleQueue";
 import { FloatDesk } from "./components/FloatDesk";
 import { KycQueue } from "./components/KycQueue";
@@ -55,10 +56,11 @@ const TABS: Record<
     subtitle: "Everything waiting on you, across every desk. Open a card to work it.",
   },
   users: {
-    label: "Customers",
-    short: "Customers",
+    label: "Accounts",
+    short: "Accounts",
     icon: "user",
-    subtitle: "Look up a customer to review their account, wallet and recent activity.",
+    subtitle:
+      "Everything about one customer, shop or agent in one place: what's waiting on Zapp for them, their money, and their history. Decide it all here.",
   },
   topups: {
     label: "Top up a wallet",
@@ -177,6 +179,13 @@ export default function App() {
     window.scrollTo({ top: 0 });
   };
 
+  /** From any desk: straight to that account's page. */
+  const openAccount = useCallback((uid: string) => {
+    setSelectedId(uid);
+    setTab("users");
+    window.scrollTo({ top: 0 });
+  }, []);
+
   const quickFind = (e: React.FormEvent) => {
     e.preventDefault();
     const text = find.trim();
@@ -281,7 +290,7 @@ export default function App() {
   };
 
   const shortcuts: ShortcutLink[] = [
-    { tab: "users", label: "Find a customer", hint: "Account, wallet, devices and activity", icon: "user" },
+    { tab: "users", label: "Find an account", hint: "Open items, money, devices and history", icon: "user" },
     ...(canRunFloatDesk
       ? ([
           { tab: "topups", label: "Top up a wallet", hint: "Credit money Zapp received", icon: "banknote" },
@@ -292,6 +301,7 @@ export default function App() {
   ];
 
   return (
+    <OpenAccountContext.Provider value={openAccount}>
     <div className="app">
       <a className="skip-link" href="#main">
         Skip to content
@@ -310,8 +320,8 @@ export default function App() {
             ref={findRef}
             value={find}
             onChange={(e) => setFind(e.target.value)}
-            placeholder="Find a customer"
-            aria-label="Find a customer by phone, name, uid or receipt"
+            placeholder="Find an account"
+            aria-label="Find an account by phone, name, uid or receipt"
             aria-keyshortcuts="/"
           />
           <kbd aria-hidden="true">/</kbd>
@@ -405,11 +415,17 @@ export default function App() {
               <div className="split">
                 <UserSearch selectedId={selectedId} onSelect={setSelectedId} autoQuery={findQuery} />
                 {selectedId ? (
-                  <UserDetail key={selectedId} userId={selectedId} canAdjust={canRunFloatDesk} />
+                  <UserDetail
+                    key={selectedId}
+                    userId={selectedId}
+                    adminUid={user.uid}
+                    canRunFloat={canRunFloatDesk}
+                    canReview={canReviewRoles}
+                  />
                 ) : (
                   <div className="panel">
-                    <EmptyState icon="search" title="No customer selected">
-                      Search for a customer to see their account.
+                    <EmptyState icon="search" title="No account selected">
+                      Search by phone, name, uid or receipt, or click a name on any desk.
                     </EmptyState>
                   </div>
                 )}
@@ -440,5 +456,6 @@ export default function App() {
         </div>
       </main>
     </div>
+    </OpenAccountContext.Provider>
   );
 }
