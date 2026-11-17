@@ -1,25 +1,36 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, ActivityIndicator, ScrollView } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { DarkScreen, GlassCard, PillButton, ScreenHeader, ACCENT, GLASS, GLASS_BORDER, TEXT_DIM } from '../../components/DarkScreen';
 import { Input } from '../../components/Input';
 import { PhotoCapture } from '../../components/PhotoCapture';
+import { MapPinPicker } from '../../components/MapPinPicker';
 import { CheckIcon } from '../../components/icons/AuthIcons';
 import { confirmSignOut } from '../../utils/confirmSignOut';
 import {
+  addressAt,
   currentPosition,
   getPreviousApplication,
+  searchPlaces,
   isAgentRole,
   isMerchantRole,
   submitRoleApplication,
   uploadApplicationPhoto,
-  type AgentService,
   type ApplicantRole,
   type GeoPin,
   type IdType,
   type PhotoKind,
+  type PlaceResult,
 } from '../../services/roleApplication.service';
 import { logger } from '../../utils/logger';
+import { auth } from '../../services/firebase.config';
+
+/**
+ * "Find your shop on Google" needs the GOOGLE_MAPS_API_KEY secret and the
+ * placesSearch function deployed. Off until then; the map pin works without
+ * it (Apple Maps on iPhone), it just won't fill in the address.
+ */
+const GOOGLE_SEARCH_ENABLED = false;
 
 interface Props {
   role: ApplicantRole;
@@ -27,10 +38,7 @@ interface Props {
   kycVerified: boolean;
 }
 
-type Step = 'business' | 'money' | 'id' | 'review';
-
-const BUSINESS_TYPES = ['shop', 'restaurant', 'pharmacy', 'electronics', 'clothing', 'services', 'other'] as const;
-const ID_TYPES: IdType[] = ['national_id', 'passport', 'drivers_license'];
+type Step = 'shop' | 'id';
 
 interface Photo {
   /** Local file, for the thumbnail. */
@@ -39,6 +47,23 @@ interface Photo {
   path?: string;
   uploading: boolean;
   failed?: boolean;
+}
+
+/** Google's category ("Pharmacy", "Clothing store") as a business type. */
+function typeFromCategory(category: string | null): string {
+  const c = (category ?? '').toLowerCase();
+  if (/pharmac|drug|chemist/.test(c)) return 'Pharmacy';
+  if (/restaurant|caf|coffee|food|bakery|juice|tea/.test(c)) return 'Restaurant / café';
+  if (/electronic|phone|mobile|computer/.test(c)) return 'Electronics';
+  if (/cloth|fashion|shoe|tailor|boutique/.test(c)) return 'Clothing';
+  if (/store|shop|market|grocery|supermarket/.test(c)) return 'Shop';
+  return c ? category! : 'Shop';
+}
+
+/** "+252634123456" → "0634123456"; other numbers as they are. */
+function localNumber(e164?: string | null): string {
+  if (!e164) return '';
+  return e164.startsWith('+252') ? `0${e164.slice(4)}` : '';
 }
 
 /** Somali mobile number, as the server reads it: 9 digits after +252 / 0. */
@@ -51,40 +76,41 @@ function looksLikeMsisdn(raw: string): boolean {
 }
 
 /**
- * The merchant / agent application, all in one place: business, payout (or,
- * for agents, hours and the Zaad number customers pay into), ID and a review.
- * Zapp approves it once in the console, and approval sets everything up.
+ * The merchant / agent application, in two short steps: the shop (name, pin,
+ * photo, the number money goes to) and the ID (three photos). Zapp approves
+ * it once in the console, and approval sets everything up.
  */
 export default function MerchantApplicationScreen({ role, kycVerified }: Props) {
   const { t } = useTranslation();
   const merchant = isMerchantRole(role);
   const agent = isAgentRole(role);
-  const steps: Step[] = useMemo(
-    () => (kycVerified ? ['business', 'money', 'review'] : ['business', 'money', 'id', 'review']),
-    [kycVerified]
-  );
-  const [step, setStep] = useState<Step>('business');
+  const steps: Step[] = kycVerified ? ['shop'] : ['shop', 'id'];
+  const [step, setStep] = useState<Step>('shop');
   const index = steps.indexOf(step);
+  const last = index === steps.length - 1;
 
-  // Business
+  // Shop
   const [businessName, setBusinessName] = useState('');
-  const [businessType, setBusinessType] = useState<string>('');
+  const [businessType, setBusinessType] = useState('Shop');
   const [address, setAddress] = useState('');
   const [area, setArea] = useState('');
   const [location, setLocation] = useState<GeoPin | null>(null);
   const [locating, setLocating] = useState(false);
-  const [locationError, setLocationError] = useState<string | null>(null);
+  const [mapOpen, setMapOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [results, setResults] = useState<PlaceResult[]>([]);
+  const [foundOnGoogle, setFoundOnGoogle] = useState(false);
 
-  // Money
+  // One number. A shop's takings are paid to it; an agent's customers pay
+  // into it (Zaad only). Starts as the number they signed up with.
   const [payoutProvider, setPayoutProvider] = useState<'zaad' | 'edahab'>('zaad');
-  const [payoutNumber, setPayoutNumber] = useState('');
-  const [openHours, setOpenHours] = useState('');
-  const [services, setServices] = useState<AgentService[]>(['cash_in', 'cash_out']);
-  const [zaadReceive, setZaadReceive] = useState('');
+  const [moneyNumber, setMoneyNumber] = useState(() => localNumber(auth().currentUser?.phoneNumber));
+  const receivesOnZaad = agent && (!merchant || payoutProvider === 'zaad');
 
-  // ID
+  // ID: national ID by default; the number is read off the photo by Zapp.
   const [idType, setIdType] = useState<IdType>('national_id');
-  const [idNumber, setIdNumber] = useState('');
 
   const [photos, setPhotos] = useState<Partial<Record<PhotoKind, Photo>>>({});
   const [camera, setCamera] = useState<PhotoKind | null>(null);
@@ -98,19 +124,13 @@ export default function MerchantApplicationScreen({ role, kycVerified }: Props) 
     getPreviousApplication(role).then((prev) => {
       if (!live || !prev) return;
       setBusinessName(prev.businessName ?? '');
-      setBusinessType(prev.businessType ?? '');
+      if (prev.businessType) setBusinessType(prev.businessType);
       setAddress(prev.businessAddress ?? '');
       setArea(prev.area ?? '');
       setLocation(prev.location ?? null);
-      if (prev.payout) {
-        setPayoutProvider(prev.payout.provider);
-        setPayoutNumber(prev.payout.number.replace(/^\+252/, '0'));
-      }
-      if (prev.agent) {
-        setOpenHours(prev.agent.openHours ?? '');
-        if (prev.agent.services?.length) setServices(prev.agent.services);
-        setZaadReceive(prev.agent.zaadReceiveNumber?.replace(/^\+252/, '0') ?? '');
-      }
+      const prevNumber = prev.payout?.number ?? prev.agent?.zaadReceiveNumber;
+      if (prev.payout) setPayoutProvider(prev.payout.provider);
+      if (prevNumber) setMoneyNumber(localNumber(prevNumber));
     });
     return () => {
       live = false;
@@ -131,14 +151,51 @@ export default function MerchantApplicationScreen({ role, kycVerified }: Props) 
     }
   };
 
-  const pinLocation = async () => {
-    setLocating(true);
-    setLocationError(null);
+  // Find the shop on Google: one tap fills name, address, area and pin.
+  const runSearch = async () => {
+    const q = search.trim();
+    if (q.length < 2) return;
+    setSearching(true);
+    setSearchError(null);
     try {
-      setLocation(await currentPosition());
+      const near = location ?? (await currentPosition().catch(() => null));
+      const found = await searchPlaces(q, near);
+      setResults(found);
+      if (found.length === 0) setSearchError(t('application.find.none'));
+    } catch (err: any) {
+      logger.warn('Place search failed:', err);
+      setResults([]);
+      setSearchError(err?.message || t('application.find.failed'));
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const pickPlace = (p: PlaceResult) => {
+    setBusinessName(p.name);
+    if (p.address) setAddress(p.address);
+    if (p.area) setArea(p.area);
+    if (p.location) setLocation(p.location);
+    setBusinessType(typeFromCategory(p.category));
+    setResults([]);
+    setSearch('');
+    setFoundOnGoogle(true);
+    setErrors({});
+  };
+
+  // The map pin. With Google on, the address and area come from it.
+  const confirmPin = async (pin: GeoPin) => {
+    setMapOpen(false);
+    setLocation(pin);
+    setErrors((e) => ({ ...e, location: '' }));
+    if (!GOOGLE_SEARCH_ENABLED || (address.trim() && area.trim())) return;
+    setLocating(true);
+    try {
+      const at = await addressAt(pin);
+      if (!address.trim() && at.address) setAddress(at.address);
+      if (!area.trim() && at.area) setArea(at.area);
     } catch (err) {
-      logger.warn('Location failed:', err);
-      setLocationError(t('application.business.locationFailed'));
+      logger.warn('Address lookup failed:', err);
     } finally {
       setLocating(false);
     }
@@ -146,36 +203,19 @@ export default function MerchantApplicationScreen({ role, kycVerified }: Props) 
 
   const validate = (s: Step): boolean => {
     const e: Record<string, string> = {};
-    const req = t('application.required');
-    if (s === 'business') {
-      if (businessName.trim().length < 2) e.businessName = req;
-      if (!businessType) e.businessType = req;
-      if (address.trim().length < 3) e.address = req;
-      if (area.trim().length < 2) e.area = req;
-      if (!photos.shop?.path) e.shop = t('application.photo.needed');
+    if (s === 'shop') {
+      if (businessName.trim().length < 2) e.businessName = t('application.required');
       if (!location) e.location = t('application.business.locationNeeded');
-    }
-    if (s === 'money') {
-      if (merchant && !looksLikeMsisdn(payoutNumber)) e.payoutNumber = t('application.badNumber');
-      if (agent) {
-        if (openHours.trim().length < 2) e.openHours = req;
-        if (services.length === 0) e.services = req;
-        if (zaadReceive.trim() && !looksLikeMsisdn(zaadReceive)) e.zaadReceive = t('application.badNumber');
-      }
+      if (!photos.shop?.path) e.shop = t('application.photo.needed');
+      if (!looksLikeMsisdn(moneyNumber)) e.moneyNumber = t('application.badNumber');
     }
     if (s === 'id') {
-      if (idNumber.trim().length < 3) e.idNumber = req;
       if (!photos.front?.path) e.front = t('application.photo.needed');
       if (idType !== 'passport' && !photos.back?.path) e.back = t('application.photo.needed');
       if (!photos.selfie?.path) e.selfie = t('application.photo.needed');
     }
     setErrors(e);
     return Object.keys(e).length === 0;
-  };
-
-  const next = () => {
-    if (!validate(step)) return;
-    setStep(steps[index + 1]);
   };
 
   const back = () => {
@@ -190,21 +230,19 @@ export default function MerchantApplicationScreen({ role, kycVerified }: Props) 
       await submitRoleApplication({
         requestedRole: role,
         businessName: businessName.trim(),
-        businessType: t(`application.business.types.${businessType}`, { lng: 'en' }),
+        businessType,
         businessAddress: address.trim(),
         area: area.trim(),
         location,
         shopPhotoPath: photos.shop!.path!,
-        ...(merchant ? { payout: { provider: payoutProvider, number: payoutNumber } } : {}),
-        ...(agent
-          ? { agent: { openHours: openHours.trim(), services, ...(zaadReceive.trim() ? { zaadReceiveNumber: zaadReceive } : {}) } }
-          : {}),
+        ...(merchant ? { payout: { provider: payoutProvider, number: moneyNumber } } : {}),
+        // Customers can only pay an agent on Zaad.
+        ...(agent ? { agent: receivesOnZaad ? { zaadReceiveNumber: moneyNumber } : {} } : {}),
         ...(kycVerified
           ? {}
           : {
               id: {
                 idType,
-                idNumber: idNumber.trim(),
                 frontPath: photos.front!.path!,
                 ...(idType !== 'passport' && photos.back?.path ? { backPath: photos.back.path } : {}),
                 selfiePath: photos.selfie!.path!,
@@ -217,6 +255,12 @@ export default function MerchantApplicationScreen({ role, kycVerified }: Props) 
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const onPrimary = () => {
+    if (!validate(step)) return;
+    if (last) void submit();
+    else setStep(steps[index + 1]);
   };
 
   const photoSlot = (kind: PhotoKind, label: string) => {
@@ -249,9 +293,9 @@ export default function MerchantApplicationScreen({ role, kycVerified }: Props) 
     );
   };
 
-  const chip = (selected: boolean, label: string, onPress: () => void, key?: string) => (
+  const chip = (selected: boolean, label: string, onPress: () => void) => (
     <TouchableOpacity
-      key={key ?? label}
+      key={label}
       style={[styles.chip, selected && styles.chipOn]}
       onPress={onPress}
       accessibilityRole="button"
@@ -268,12 +312,14 @@ export default function MerchantApplicationScreen({ role, kycVerified }: Props) 
     selfie: { title: t('application.photo.selfieTitle'), hint: t('application.photo.selfieHint'), facing: 'front' },
   };
 
-  const reviewRow = (label: string, value: string) => (
-    <View style={styles.reviewRow} key={label}>
-      <Text style={styles.reviewLabel}>{label}</Text>
-      <Text style={styles.reviewValue}>{value || '—'}</Text>
-    </View>
-  );
+  const moneyHint =
+    role === 'merchant'
+      ? 'application.money.hintShop'
+      : role === 'topup_agent'
+        ? 'application.money.hintAgent'
+        : receivesOnZaad
+          ? 'application.money.hintBoth'
+          : 'application.money.hintBothEdahab';
 
   return (
     <DarkScreen edges={['top', 'bottom']} keyboard>
@@ -284,14 +330,53 @@ export default function MerchantApplicationScreen({ role, kycVerified }: Props) 
           subtitle={t(`application.${step}.subtitle`, { role: t(`application.role.${role}`) })}
         />
 
-        <View style={styles.progress}>
-          {steps.map((s, i) => (
-            <View key={s} style={[styles.progressDot, i <= index && styles.progressDotOn]} />
-          ))}
-        </View>
+        {steps.length > 1 && (
+          <View style={styles.progress}>
+            {steps.map((s, i) => (
+              <View key={s} style={[styles.progressDot, i <= index && styles.progressDotOn]} />
+            ))}
+          </View>
+        )}
 
-        {step === 'business' && (
+        {step === 'shop' && (
           <View style={styles.section}>
+            {GOOGLE_SEARCH_ENABLED && (
+              <GlassCard style={styles.findCard}>
+                <Text style={styles.sectionTitle}>{t('application.find.title')}</Text>
+                <View style={styles.findRow}>
+                  <View style={styles.findInput}>
+                    <Input
+                      value={search}
+                      onChangeText={setSearch}
+                      placeholder={t('application.find.placeholder')}
+                      returnKeyType="search"
+                      onSubmitEditing={() => void runSearch()}
+                      autoCorrect={false}
+                    />
+                  </View>
+                  <TouchableOpacity
+                    style={styles.findBtn}
+                    onPress={() => void runSearch()}
+                    disabled={searching || search.trim().length < 2}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('application.find.button')}
+                  >
+                    {searching ? <ActivityIndicator color="#000" /> : <Text style={styles.findBtnText}>{t('application.find.button')}</Text>}
+                  </TouchableOpacity>
+                </View>
+                {results.map((r) => (
+                  <TouchableOpacity key={r.placeId} style={styles.result} onPress={() => pickPlace(r)} accessibilityRole="button">
+                    <Text style={styles.resultName}>{r.name}</Text>
+                    <Text style={styles.resultAddr} numberOfLines={2}>
+                      {[r.category, r.address].filter(Boolean).join(' · ')}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+                {!!searchError && <Text style={styles.sectionHint}>{searchError}</Text>}
+                {foundOnGoogle && <Text style={styles.foundNote}>{t('application.find.filled')}</Text>}
+              </GlassCard>
+            )}
+
             <Input
               label={t('application.business.name')}
               value={businessName}
@@ -299,143 +384,85 @@ export default function MerchantApplicationScreen({ role, kycVerified }: Props) 
               autoCapitalize="words"
               error={errors.businessName}
             />
-            <Text style={styles.label}>{t('application.business.type')}</Text>
-            <View style={styles.chips}>
-              {BUSINESS_TYPES.map((b) => chip(businessType === b, t(`application.business.types.${b}`), () => setBusinessType(b), b))}
-            </View>
-            {!!errors.businessType && <Text style={styles.err}>{errors.businessType}</Text>}
-            <Input label={t('application.business.address')} value={address} onChangeText={setAddress} error={errors.address} />
-            <Input label={t('application.business.area')} value={area} onChangeText={setArea} autoCapitalize="words" error={errors.area} />
 
-            <Text style={styles.label}>{t('application.business.location')}</Text>
-            <GlassCard style={styles.locationCard}>
-              <Text style={styles.locationText}>
-                {location
-                  ? t('application.business.locationSet', {
-                      coords: `${location.lat.toFixed(5)}, ${location.lng.toFixed(5)}`,
-                    })
-                  : t('application.business.locationHint')}
-              </Text>
-              <PillButton
-                label={location ? t('application.business.locationAgain') : t('application.business.locationButton')}
-                onPress={pinLocation}
-                loading={locating}
-                variant="glass"
-              />
-            </GlassCard>
-            {!!(locationError || errors.location) && <Text style={styles.err}>{locationError || errors.location}</Text>}
+            <TouchableOpacity
+              style={[styles.pinRow, !!errors.location && styles.pinRowError]}
+              onPress={() => setMapOpen(true)}
+              accessibilityRole="button"
+            >
+              <View style={styles.pinDot} />
+              <View style={styles.pinText}>
+                <Text style={styles.pinTitle}>
+                  {location ? t('application.business.locationAgain') : t('application.business.locationButton')}
+                </Text>
+                <Text style={styles.pinSub} numberOfLines={2}>
+                  {location
+                    ? address || area || `${location.lat.toFixed(5)}, ${location.lng.toFixed(5)}`
+                    : t('application.business.locationHint')}
+                </Text>
+              </View>
+              {locating ? <ActivityIndicator color="#FFF" /> : location ? <CheckIcon size={18} color="#5DCAA5" /> : null}
+            </TouchableOpacity>
+            {!!errors.location && <Text style={styles.err}>{errors.location}</Text>}
+
+            <Input
+              label={t('application.business.landmark')}
+              value={address}
+              onChangeText={setAddress}
+              placeholder={t('application.business.landmarkPlaceholder')}
+            />
+
+            {merchant && (
+              <View style={styles.chips}>
+                {chip(payoutProvider === 'zaad', 'Zaad', () => setPayoutProvider('zaad'))}
+                {chip(payoutProvider === 'edahab', 'eDahab', () => setPayoutProvider('edahab'))}
+              </View>
+            )}
+            <Input
+              label={t(payoutProvider === 'edahab' && merchant ? 'application.money.edahabNumber' : 'application.money.zaadNumber')}
+              value={moneyNumber}
+              onChangeText={setMoneyNumber}
+              keyboardType="phone-pad"
+              placeholder="063 412 3456"
+              error={errors.moneyNumber}
+            />
+            <Text style={styles.sectionHint}>{t(moneyHint)}</Text>
 
             <View style={styles.photoRow}>{photoSlot('shop', t('application.photo.shop'))}</View>
           </View>
         )}
 
-        {step === 'money' && (
-          <View style={styles.section}>
-            {merchant && (
-              <>
-                <Text style={styles.sectionTitle}>{t('application.money.payoutTitle')}</Text>
-                <Text style={styles.sectionHint}>{t('application.money.payoutHint')}</Text>
-                <View style={styles.chips}>
-                  {chip(payoutProvider === 'zaad', 'Zaad', () => setPayoutProvider('zaad'))}
-                  {chip(payoutProvider === 'edahab', 'eDahab', () => setPayoutProvider('edahab'))}
-                </View>
-                <Input
-                  label={t('application.money.payoutNumber')}
-                  value={payoutNumber}
-                  onChangeText={setPayoutNumber}
-                  keyboardType="phone-pad"
-                  placeholder="063 412 3456"
-                  error={errors.payoutNumber}
-                />
-              </>
-            )}
-            {agent && (
-              <>
-                <Text style={styles.sectionTitle}>{t('application.money.agentTitle')}</Text>
-                <Input
-                  label={t('application.money.openHours')}
-                  value={openHours}
-                  onChangeText={setOpenHours}
-                  placeholder={t('application.money.openHoursPlaceholder')}
-                  error={errors.openHours}
-                />
-                <Text style={styles.label}>{t('application.money.services')}</Text>
-                <View style={styles.chips}>
-                  {(['cash_in', 'cash_out'] as AgentService[]).map((s) =>
-                    chip(
-                      services.includes(s),
-                      t(`application.money.${s}`),
-                      () => setServices((cur) => (cur.includes(s) ? cur.filter((x) => x !== s) : [...cur, s])),
-                      s
-                    )
-                  )}
-                </View>
-                {!!errors.services && <Text style={styles.err}>{errors.services}</Text>}
-                <Input
-                  label={t('application.money.zaadReceive')}
-                  value={zaadReceive}
-                  onChangeText={setZaadReceive}
-                  keyboardType="phone-pad"
-                  placeholder="063 412 3456"
-                  error={errors.zaadReceive}
-                />
-                <Text style={styles.sectionHint}>{t('application.money.zaadReceiveHint')}</Text>
-              </>
-            )}
-          </View>
-        )}
-
         {step === 'id' && (
           <View style={styles.section}>
-            <Text style={styles.label}>{t('application.id.type')}</Text>
-            <View style={styles.chips}>
-              {ID_TYPES.map((it) => chip(idType === it, t(`application.id.types.${it}`), () => setIdType(it), it))}
-            </View>
-            <Input
-              label={t('application.id.number')}
-              value={idNumber}
-              onChangeText={setIdNumber}
-              autoCapitalize="characters"
-              error={errors.idNumber}
-            />
             <View style={styles.photoRow}>
-              {photoSlot('front', t('application.photo.front'))}
+              {photoSlot('front', t(idType === 'passport' ? 'application.photo.passport' : 'application.photo.front'))}
               {idType !== 'passport' && photoSlot('back', t('application.photo.back'))}
               {photoSlot('selfie', t('application.photo.selfie'))}
             </View>
-          </View>
-        )}
-
-        {step === 'review' && (
-          <View style={styles.section}>
-            <GlassCard>
-              {reviewRow(t('application.review.applyingAs'), t(`application.role.${role}`))}
-              {reviewRow(t('application.business.name'), businessName)}
-              {reviewRow(t('application.business.type'), businessType ? t(`application.business.types.${businessType}`) : '')}
-              {reviewRow(t('application.business.address'), `${address}, ${area}`)}
-              {merchant && reviewRow(t('application.money.payoutNumber'), `${payoutProvider === 'zaad' ? 'Zaad' : 'eDahab'} · ${payoutNumber}`)}
-              {agent && reviewRow(t('application.money.openHours'), openHours)}
-              {agent && reviewRow(t('application.money.services'), services.map((s) => t(`application.money.${s}`)).join(', '))}
-              {agent && !!zaadReceive && reviewRow(t('application.money.zaadReceive'), zaadReceive)}
-              {!kycVerified && reviewRow(t('application.id.number'), `${t(`application.id.types.${idType}`)} · ${idNumber}`)}
-            </GlassCard>
-            <Text style={styles.sectionHint}>{t('application.review.whatNext')}</Text>
-            {!!submitError && <Text style={styles.err}>{submitError}</Text>}
+            <TouchableOpacity
+              onPress={() => setIdType(idType === 'passport' ? 'national_id' : 'passport')}
+              accessibilityRole="button"
+            >
+              <Text style={styles.link}>
+                {t(idType === 'passport' ? 'application.id.useNationalId' : 'application.id.usePassport')}
+              </Text>
+            </TouchableOpacity>
           </View>
         )}
 
         <View style={styles.footer}>
-          {step === 'review' ? (
-            <PillButton label={t('application.review.submit')} onPress={submit} loading={submitting} />
-          ) : (
-            <PillButton
-              label={t('application.next')}
-              onPress={next}
-              disabled={Object.values(photos).some((p) => p?.uploading)}
-            />
-          )}
+          {last && <Text style={styles.sectionHint}>{t('application.review.whatNext')}</Text>}
+          {!!submitError && <Text style={styles.err}>{submitError}</Text>}
+          <PillButton
+            label={last ? t('application.review.submit') : t('application.next')}
+            onPress={onPrimary}
+            loading={submitting}
+            disabled={Object.values(photos).some((p) => p?.uploading)}
+          />
         </View>
       </ScrollView>
+
+      <MapPinPicker visible={mapOpen} initial={location} onClose={() => setMapOpen(false)} onConfirm={(p) => void confirmPin(p)} />
 
       {camera && (
         <PhotoCapture
@@ -457,9 +484,8 @@ const styles = StyleSheet.create({
   progressDot: { flex: 1, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.12)' },
   progressDotOn: { backgroundColor: ACCENT },
   section: { gap: 14 },
-  sectionTitle: { color: '#FFF', fontSize: 17, fontWeight: '700', marginTop: 4 },
+  sectionTitle: { color: '#FFF', fontSize: 17, fontWeight: '700' },
   sectionHint: { color: TEXT_DIM, fontSize: 14, lineHeight: 20 },
-  label: { color: TEXT_DIM, fontSize: 13, fontWeight: '600', marginBottom: -6 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     paddingHorizontal: 14,
@@ -472,8 +498,37 @@ const styles = StyleSheet.create({
   chipOn: { backgroundColor: '#FFF', borderColor: '#FFF' },
   chipText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
   chipTextOn: { color: '#000' },
-  locationCard: { gap: 12 },
-  locationText: { color: '#FFF', fontSize: 14, lineHeight: 20 },
+  pinRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: GLASS,
+    borderWidth: 1,
+    borderColor: GLASS_BORDER,
+  },
+  pinRowError: { borderColor: '#FF8A80' },
+  pinDot: { width: 18, height: 18, borderRadius: 9, backgroundColor: ACCENT, borderWidth: 3, borderColor: '#FFF' },
+  pinText: { flex: 1 },
+  pinTitle: { color: '#FFF', fontSize: 15, fontWeight: '600' },
+  pinSub: { color: TEXT_DIM, fontSize: 13, marginTop: 2 },
+  findCard: { gap: 10 },
+  findRow: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
+  findInput: { flex: 1 },
+  findBtn: {
+    height: 52,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    backgroundColor: '#FFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  findBtnText: { color: '#000', fontWeight: '700', fontSize: 15 },
+  result: { paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: GLASS_BORDER },
+  resultName: { color: '#FFF', fontSize: 15, fontWeight: '600' },
+  resultAddr: { color: TEXT_DIM, fontSize: 13, marginTop: 2 },
+  foundNote: { color: '#5DCAA5', fontSize: 13 },
   photoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
   photoSlot: { width: 100, alignItems: 'center', gap: 6 },
   photoBox: {
@@ -489,7 +544,16 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   photoImg: { width: '100%', height: '100%' },
-  photoOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center' },
+  photoOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   photoDone: {
     position: 'absolute',
     right: 6,
@@ -503,9 +567,7 @@ const styles = StyleSheet.create({
   },
   photoPlus: { color: '#FFF', fontSize: 28 },
   photoLabel: { color: '#FFF', fontSize: 13, textAlign: 'center' },
+  link: { color: '#FFF', fontSize: 14, fontWeight: '600', textDecorationLine: 'underline' },
   err: { color: '#FF8A80', fontSize: 13 },
-  reviewRow: { paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: GLASS_BORDER },
-  reviewLabel: { color: TEXT_DIM, fontSize: 12 },
-  reviewValue: { color: '#FFF', fontSize: 15, marginTop: 2 },
-  footer: { marginTop: 'auto', paddingTop: 24 },
+  footer: { marginTop: 'auto', paddingTop: 24, gap: 10 },
 });

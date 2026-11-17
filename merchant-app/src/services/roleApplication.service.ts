@@ -22,8 +22,8 @@ export interface RoleApplicationInput {
   location: GeoPin | null;
   shopPhotoPath: string;
   payout?: { provider: 'zaad' | 'edahab'; number: string };
-  agent?: { openHours: string; services: AgentService[]; zaadReceiveNumber?: string };
-  id?: { idType: IdType; idNumber: string; frontPath: string; backPath?: string; selfiePath: string };
+  agent?: { openHours?: string; services?: AgentService[]; zaadReceiveNumber?: string };
+  id?: { idType: IdType; idNumber?: string; frontPath: string; backPath?: string; selfiePath: string };
 }
 
 /** What a previous (rejected) application held, to prefill the form. */
@@ -100,4 +100,25 @@ export function currentPosition(): Promise<GeoPin> {
       (err) => reject(new Error(err.message))
     );
   });
+}
+
+export interface PlaceResult {
+  placeId: string;
+  name: string;
+  address: string;
+  area: string;
+  location: GeoPin | null;
+  category: string | null;
+}
+
+/** Shops on Google matching a name, near `near` (through Zapp's server). */
+export async function searchPlaces(query: string, near: GeoPin | null): Promise<PlaceResult[]> {
+  const res = await functions().httpsCallable('placesSearch')({ query, ...(near ? { near } : {}) });
+  return ((res.data as { data?: PlaceResult[] })?.data ?? []) as PlaceResult[];
+}
+
+/** The address and area at a map pin. Empty strings when Google has none. */
+export async function addressAt(pin: GeoPin): Promise<{ address: string; area: string }> {
+  const res = await functions().httpsCallable('placesReverseGeocode')({ lat: pin.lat, lng: pin.lng });
+  return ((res.data as { data?: { address: string; area: string } })?.data ?? { address: '', area: '' });
 }

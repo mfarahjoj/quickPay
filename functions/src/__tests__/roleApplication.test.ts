@@ -132,6 +132,38 @@ describe("role application", () => {
     ).rejects.toThrow(/Payout number/);
   });
 
+  it("doesn't need agent hours or services: both services, hours left for later", async () => {
+    const db = seed();
+    await submit({ data: form({ agent: { zaadReceiveNumber: "0634999888" } }), auth: { uid: "u1" } });
+    expect(db.get("roleRequests/u1_agent_merchant")!.application.agent).toEqual({
+      openHours: "",
+      services: ["cash_in", "cash_out"],
+      zaadReceiveNumber: "+252634999888",
+    });
+  });
+
+  it("takes the short form: name, pin, photo, number and ID photos only", async () => {
+    const db = seed();
+    await submit({
+      data: form({
+        businessType: undefined,
+        businessAddress: undefined,
+        area: undefined,
+        agent: { zaadReceiveNumber: "0634999888" },
+        id: { idType: "national_id", frontPath: "kyc/u1/front_1.jpg", backPath: "kyc/u1/back_1.jpg", selfiePath: "kyc/u1/selfie_1.jpg" },
+      }),
+      auth: { uid: "u1" },
+    });
+    const app = db.get("roleRequests/u1_agent_merchant")!.application;
+    expect(app).toMatchObject({ businessType: "Shop", businessAddress: "", area: "", includesId: true });
+    expect(db.get("users/u1/kyc/latest")!.idNumber).toBe("");
+
+    // Approval works without the number; the reviewer types it from the photo.
+    await decide("approve", { idNumber: "SL-1234567" });
+    expect(db.get("users/u1")!.kycStatus).toBe("verified");
+    expect(db.get("users/u1/private/identity")!.idNumber).toBe("SL1234567");
+  });
+
   it("skips the ID for an account that is already verified", async () => {
     const db = seed({ "users/u1": { fullName: "Hodan Ali", accountType: "customer", kycStatus: "verified" } });
     await submit({ data: form({ id: undefined }), auth: { uid: "u1" } });

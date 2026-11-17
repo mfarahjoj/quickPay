@@ -97,6 +97,11 @@ android {
 
     namespace "com.quickpay.merchant"
     defaultConfig {
+        // The Android map on the application's location step needs a Maps SDK
+        // key restricted to this app (package + signing cert). Set
+        // MAPS_ANDROID_API_KEY in ~/.gradle/gradle.properties; without it the
+        // map is blank and the app falls back to "Use my current location".
+        manifestPlaceholders = [mapsApiKey: (project.findProperty("MAPS_ANDROID_API_KEY") ?: "")]
         applicationId "com.quickpay.merchant"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion

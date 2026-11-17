@@ -32,15 +32,20 @@ export interface SubmitRoleApplicationRequest {
   location?: GeoPin | null;
   shopPhotoPath: string;
   payout?: { provider: "zaad" | "edahab"; number: string };
-  agent?: { openHours: string; services: AgentService[]; zaadReceiveNumber?: string };
+  agent?: { openHours?: string; services?: AgentService[]; zaadReceiveNumber?: string };
   /** Required unless the account is already KYC-verified. */
   id?: {
     idType: (typeof ID_TYPES)[number];
-    idNumber: string;
+    idNumber?: string;
     frontPath: string;
     backPath?: string;
     selfiePath: string;
   };
+}
+
+/** Optional text: trimmed and capped, "" when absent. */
+function optional(value: unknown, max: number): string {
+  return typeof value === "string" ? sanitizeString(value).slice(0, max) : "";
 }
 
 function text(value: unknown, what: string, min = 2, max = 120): string {
@@ -96,9 +101,11 @@ export function parseApplication(
 
   const application: RoleApplication = {
     businessName: text(data.businessName, "Business name"),
-    businessType: text(data.businessType, "Business type", 2, 60),
-    businessAddress: text(data.businessAddress, "Address", 3, 200),
-    area: text(data.area, "Area", 2, 80),
+    // Asked short: only the name, the pin and the photo are required. The
+    // rest comes from Google when they pick their shop there, or stays blank.
+    businessType: optional(data.businessType, 60) || "Shop",
+    businessAddress: optional(data.businessAddress, 200),
+    area: optional(data.area, 80),
     location: pin(data.location),
     shopPhotoPath: photoPath(data.shopPhotoPath, userId, "Shop photo"),
     includesId: false,
@@ -114,13 +121,15 @@ export function parseApplication(
   }
 
   if (isAgentRole(role)) {
-    const services = Array.isArray(data.agent?.services)
-      ? SERVICES.filter((s) => data.agent!.services.includes(s))
+    // Hours and services aren't asked at sign-up any more (it was too long):
+    // an agent offers both until they change it, and adds hours in settings.
+    const picked = Array.isArray(data.agent?.services)
+      ? SERVICES.filter((s) => data.agent!.services!.includes(s))
       : [];
-    if (services.length === 0) throw new https.HttpsError("invalid-argument", "Choose cash-in, cash-out or both");
+    const hours = typeof data.agent?.openHours === "string" ? sanitizeString(data.agent.openHours).slice(0, 80) : "";
     application.agent = {
-      openHours: text(data.agent?.openHours, "Opening hours", 2, 80),
-      services,
+      openHours: hours,
+      services: picked.length > 0 ? picked : [...SERVICES],
       ...(data.agent?.zaadReceiveNumber
         ? { zaadReceiveNumber: msisdn(data.agent.zaadReceiveNumber, "Zaad receiving number") }
         : {}),
@@ -133,7 +142,8 @@ export function parseApplication(
     if (!id || !ID_TYPES.includes(id.idType)) {
       throw new https.HttpsError("invalid-argument", "Add your ID: type, number and photos");
     }
-    const idNumber = text(id.idNumber, "ID number", 3, 40);
+    // The reviewer reads the number off the photo (and types it on approval).
+    const idNumber = optional(id.idNumber, 40);
     const front = photoPath(id.frontPath, userId, "Front of ID");
     const back = id.backPath ? photoPath(id.backPath, userId, "Back of ID") : undefined;
     const selfie = photoPath(id.selfiePath, userId, "Selfie");

@@ -79,7 +79,7 @@ export function RoleApplicationView({
 
   const willDo: string[] = [`Make ${name} a ${role.toLowerCase()}`];
   if (app?.payout) willDo.push(`Create the shop profile, paying out to ${app.payout.provider === "zaad" ? "Zaad" : "eDahab"} ${local(app.payout.number)}`);
-  if (app?.agent) willDo.push(`Save agent hours (${app.agent.openHours}) and services`);
+  if (app?.agent) willDo.push("Set them up as an agent for cash in and cash out");
   if (app?.agent?.zaadReceiveNumber) willDo.push(`Switch on Zaad top-ups, receiving on ${local(app.agent.zaadReceiveNumber)}`);
   if (detail.kyc?.fromApplication && detail.kyc.status === "submitted") willDo.push("Verify their ID (no separate KYC review)");
   willDo.push("Tell them in the app, in their language");
@@ -138,8 +138,8 @@ export function RoleApplicationView({
             <dd>{app.businessType}</dd>
             <dt>Address</dt>
             <dd>
-              {app.businessAddress}
-              <div className="muted">{app.area}</div>
+              {app.businessAddress || <span className="muted">No landmark given; use the map pin</span>}
+              {app.area && <div className="muted">{app.area}</div>}
             </dd>
             <dt>Location</dt>
             <dd>
@@ -182,7 +182,7 @@ export function RoleApplicationView({
               <h3>Agent</h3>
               <dl className="kv">
                 <dt>Hours</dt>
-                <dd>{app.agent.openHours}</dd>
+                <dd>{app.agent.openHours || <span className="muted">Not given (they can add them in the app)</span>}</dd>
                 <dt>Services</dt>
                 <dd>{app.agent.services.map((s) => SERVICE_LABEL[s] ?? s).join(", ")}</dd>
                 <dt>Zaad receiving number</dt>
@@ -199,7 +199,15 @@ export function RoleApplicationView({
               <>
                 <dt>ID</dt>
                 <dd>
-                  {ID_LABEL[detail.kyc.idType] ?? detail.kyc.idType} · <span className="mono">{detail.kyc.idNumber}</span>
+                  {ID_LABEL[detail.kyc.idType] ?? detail.kyc.idType}
+                  {detail.kyc.idNumber ? (
+                    <>
+                      {" "}
+                      · <span className="mono">{detail.kyc.idNumber}</span>
+                    </>
+                  ) : (
+                    <span className="muted"> · number not typed in: read it off the photo</span>
+                  )}
                 </dd>
                 <dt>KYC</dt>
                 <dd>{detail.kyc.status}</dd>
@@ -257,7 +265,7 @@ export function RoleApplicationView({
         >
           {decision === "approve" && (
             <label className="stack" style={{ marginBottom: 12 }}>
-              <span className="muted">ID number you checked</span>
+              <span className="muted">ID number, from the photo</span>
               <input value={idNumber} onChange={(e) => setIdNumber(e.target.value)} autoComplete="off" />
               <span className="muted">Lets them reset a forgotten PIN in the app with its last 4 characters.</span>
             </label>
