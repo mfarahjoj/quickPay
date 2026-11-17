@@ -1,28 +1,35 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type RoleRequestRow } from "../api";
 import { Icon } from "./Icon";
-import { ReasonPrompt } from "./ReasonPrompt";
-import { AccountLink } from "./AccountLink";
-import { EmptyState, Loading } from "./ui";
+import { RoleApplicationView } from "./RoleApplicationView";
+import { Avatar, EmptyState, Loading } from "./ui";
 
-interface Pending {
-  request: RoleRequestRow;
-  decision: "approve" | "reject";
-}
+const ROLE_LABEL: Record<string, string> = {
+  merchant: "Merchant",
+  topup_agent: "Agent",
+  agent_merchant: "Shop + agent",
+};
 
+/**
+ * Merchant and agent applications. Pick one to see the whole application
+ * (photos, business, payout, agent details, ID) and decide it once: approval
+ * sets everything up.
+ */
 export function RoleQueue() {
   const [rows, setRows] = useState<RoleRequestRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState<Pending | null>(null);
-  const [idNumber, setIdNumber] = useState("");
+  const [selected, setSelected] = useState<string | undefined>();
   const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      setRows(await api.listRoleRequests("pending"));
+      const list = await api.listRoleRequests("pending");
+      // Ready to decide first, then those still filling in the form.
+      list.sort((a, b) => Number(!!b.applicationSubmitted) - Number(!!a.applicationSubmitted));
+      setRows(list);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load the queue");
       setRows([]);
@@ -35,139 +42,82 @@ export function RoleQueue() {
     void load();
   }, [load]);
 
-  const decide = async (reason: string) => {
-    if (!pending) return;
-    await api.reviewRoleRequest(
-      pending.request.requestId,
-      pending.decision,
-      reason,
-      pending.decision === "approve" ? idNumber.trim() : undefined
-    );
-    setIdNumber("");
-    setNotice(
-      `${pending.request.applicantName || pending.request.userId} — ${
-        pending.decision === "approve" ? "approved" : "rejected"
-      }.`
-    );
-    setPending(null);
-    await load();
-  };
-
   return (
-    <div className="panel">
-      <div className="panel-head">
-        <h2>Pending applications</h2>
-        {!loading && !error && <span className="badge">{rows.length}</span>}
-        <div className="spacer" />
-        <button className="ghost" onClick={() => void load()}>
-          <Icon name="refresh" size={16} />
-          Refresh
-        </button>
-      </div>
-
-      <p className="hint">
-        Approving grants the role and creates the merchant profile. Rejecting an
-        account that already holds the role demotes it to customer.
-      </p>
-
+    <div className="stack-lg">
       {notice && <div className="banner ok">{notice}</div>}
-      {error && <div className="banner error">{error}</div>}
 
-      {loading ? (
-        <Loading />
-      ) : error ? null : rows.length === 0 ? (
-        // Only claim the queue is empty when we actually know it is — an
-        // errored load must not read as "nothing to do".
-        <EmptyState icon="briefcase" title="Nothing waiting for review" />
-      ) : (
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Applicant</th>
-                <th>Phone</th>
-                <th>Requested</th>
-                <th>Currently</th>
-                <th className="wide">Business</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
+      <div className="split">
+        <div className="panel">
+          <div className="panel-head">
+            <h2>Pending applications</h2>
+            {!loading && !error && <span className="badge">{rows.length}</span>}
+            <div className="spacer" />
+            <button className="ghost" onClick={() => void load()}>
+              <Icon name="refresh" size={16} />
+              Refresh
+            </button>
+          </div>
+
+          {error && <div className="banner error">{error}</div>}
+
+          {loading ? (
+            <Loading />
+          ) : error ? null : rows.length === 0 ? (
+            // Only claim the queue is empty when we actually know it is.
+            <EmptyState icon="briefcase" title="Nothing waiting for review" />
+          ) : (
+            <div className="list">
               {rows.map((r) => (
-                <tr key={r.requestId}>
-                  <td>
-                    <AccountLink uid={r.userId}>{r.applicantName || "(no name)"}</AccountLink>
-                    {r.backfilled && (
-                      <span className="badge frozen" style={{ marginLeft: 8 }}>
-                        existing
-                      </span>
-                    )}
-                  </td>
-                  <td className="muted nowrap">{r.applicantPhone || "—"}</td>
-                  <td>{r.requestedRole}</td>
-                  <td className="muted">{r.currentAccountType || "customer"}</td>
-                  <td className="muted wide">{r.businessName || r.area || "—"}</td>
-                  <td className="actions">
+                <button
+                  key={r.requestId}
+                  className={`item${r.requestId === selected ? " selected" : ""}`}
+                  onClick={() => setSelected(r.requestId)}
+                >
+                  <Avatar name={r.applicantName} />
+                  <div className="item-text">
                     <div className="row">
-                      <button
-                        className="primary"
-                        onClick={() => setPending({ request: r, decision: "approve" })}
-                      >
-                        Approve
-                      </button>
-                      <button
-                        className="danger"
-                        onClick={() => setPending({ request: r, decision: "reject" })}
-                      >
-                        Reject
-                      </button>
+                      <span className="name">{r.businessName || r.applicantName || "(no name)"}</span>
+                      <div className="spacer" />
+                      {r.applicationSubmitted ? (
+                        <span className="badge ok">ready</span>
+                      ) : r.backfilled ? (
+                        <span className="badge frozen">existing</span>
+                      ) : (
+                        <span className="badge">filling in</span>
+                      )}
                     </div>
-                  </td>
-                </tr>
+                    <div className="sub">
+                      {ROLE_LABEL[r.requestedRole] ?? r.requestedRole} · {r.applicantName || "—"} ·{" "}
+                      {r.applicantPhone || "(no phone)"}
+                    </div>
+                  </div>
+                </button>
               ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {pending && (
-        <ReasonPrompt
-          title={
-            pending.decision === "approve"
-              ? `Approve ${pending.request.requestedRole}`
-              : `Reject ${pending.request.requestedRole}`
-          }
-          description={
-            pending.decision === "approve"
-              ? `${
-                  pending.request.applicantName || pending.request.userId
-                } will be able to accept payments or issue float straight away.`
-              : pending.request.currentAccountType === pending.request.requestedRole
-                ? "This account already holds the role — rejecting will demote it to customer. The reason is shown to the applicant."
-                : "The reason is shown to the applicant."
-          }
-          confirmLabel={pending.decision === "approve" ? "Approve" : "Reject"}
-          danger={pending.decision === "reject"}
-          onConfirm={decide}
-          onCancel={() => setPending(null)}
-        >
-          {pending.decision === "approve" && (
-            <label className="stack" style={{ marginBottom: 12 }}>
-              <span className="muted">ID number you checked (optional)</span>
-              <input
-                value={idNumber}
-                onChange={(e) => setIdNumber(e.target.value)}
-                autoComplete="off"
-                placeholder="e.g. SL-99AB1234"
-              />
-              <span className="muted">
-                Lets them reset a forgotten PIN in the app with its last 4 characters. Without it, a forgotten PIN means
-                a visit to support.
-              </span>
-            </label>
+            </div>
           )}
-        </ReasonPrompt>
-      )}
+          <p className="hint" style={{ marginTop: 10 }}>
+            "Filling in" means they picked a role but haven't sent the full application from the app yet.
+          </p>
+        </div>
+
+        <div className="panel">
+          {selected ? (
+            <RoleApplicationView
+              key={selected}
+              requestId={selected}
+              onDecided={async (message) => {
+                setNotice(message);
+                setSelected(undefined);
+                await load();
+              }}
+            />
+          ) : (
+            <EmptyState icon="briefcase" title="No application selected">
+              Pick an application to see the photos, business, payout and ID, and decide it.
+            </EmptyState>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

@@ -410,7 +410,7 @@ function MainStackNavigator() {
 export default function AppNavigator() {
   const { t } = useTranslation();
   const { user } = useAuth();
-  const { loading, state, requestedRole, rejectionReason } = useMerchantOnboardingGate();
+  const { loading, state, requestedRole, rejectionReason, kycVerified } = useMerchantOnboardingGate();
   useIdleSignOut(!!user);
   useDeviceIntegrity(!!user);
   const deletionDueAt = useDeletionPending(user?.uid);
@@ -444,12 +444,19 @@ export default function AppNavigator() {
     );
   }
 
+  // Picked a role: now the full application (business, payout, ID). Its own
+  // steps, no navigator; submitting flips the gate to "pending" by itself.
+  if (user && state === 'application' && requestedRole) {
+    const MerchantApplicationScreen = require('../screens/auth/MerchantApplicationScreen').default;
+    return <MerchantApplicationScreen role={requestedRole} kycVerified={kycVerified} />;
+  }
+
   // Waiting on (or refused by) admin review. No navigator: the gate listens to
   // the user document, so an approval swaps this for the app by itself.
-  if (user && (state === 'pending' || state === 'rejected')) {
+  if (user && (state === 'pending' || state === 'rejected' || state === 'application')) {
     return (
       <RoleReviewPendingScreen
-        variant={state}
+        variant={state === 'rejected' ? 'rejected' : 'pending'}
         requestedRole={requestedRole}
         rejectionReason={rejectionReason}
         onApplyAgain={() => setReapplying(true)}

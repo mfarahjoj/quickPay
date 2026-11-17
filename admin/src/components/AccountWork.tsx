@@ -15,6 +15,7 @@ import { DisputeDetailPanel, KIND_LABEL } from "./DisputeDesk";
 import { Icon, type IconName } from "./Icon";
 import { SubmissionView } from "./KycQueue";
 import { ReasonPrompt } from "./ReasonPrompt";
+import { RoleApplicationView } from "./RoleApplicationView";
 import { Loading } from "./ui";
 
 /**
@@ -39,7 +40,6 @@ const EMPTY: Found = { roles: [], kyc: [], float: [], payouts: [], disputes: [],
 const OPEN_DISPUTES = ["under_review", "open", "awaiting_funds"] as const;
 
 type Prompt =
-  | { kind: "role"; row: RoleRequestRow; decision: "approve" | "reject" }
   | { kind: "float"; row: FloatIssuanceRow; decision: "approve" | "reject" }
   | { kind: "payoutSent"; row: PayoutRow }
   | { kind: "payoutDecline"; row: PayoutRow }
@@ -101,7 +101,6 @@ export function AccountWork({
   const [errors, setErrors] = useState<string[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [prompt, setPrompt] = useState<Prompt | null>(null);
-  const [idNumber, setIdNumber] = useState("");
   const [reference, setReference] = useState("");
 
   const load = useCallback(async () => {
@@ -140,7 +139,6 @@ export function AccountWork({
   const done = async (message: string) => {
     setPrompt(null);
     setExpanded(null);
-    setIdNumber("");
     setReference("");
     await Promise.all([load(), onChanged(message)]);
   };
@@ -148,14 +146,6 @@ export function AccountWork({
   const confirm = async (reason: string) => {
     if (!prompt) return;
     switch (prompt.kind) {
-      case "role":
-        await api.reviewRoleRequest(
-          prompt.row.requestId,
-          prompt.decision,
-          reason,
-          prompt.decision === "approve" ? idNumber.trim() : undefined
-        );
-        return done(`${prompt.row.requestedRole} application ${prompt.decision === "approve" ? "approved" : "rejected"}.`);
       case "float":
         if (prompt.decision === "approve") {
           await api.approveFloat(prompt.row.issuanceId, reason);
@@ -216,7 +206,8 @@ export function AccountWork({
         )
       ) : (
         <div className="stack" style={{ marginTop: 10 }}>
-          {found.kyc.map((k) => (
+          {/* An ID sent with a role application is decided with the application. */}
+          {(found.roles.some((r) => r.applicationSubmitted) ? [] : found.kyc).map((k) => (
             <div key={`kyc-${k.userId}`}>
               <Item
                 icon="idcard"
@@ -238,21 +229,33 @@ export function AccountWork({
             </div>
           ))}
 
-          {found.roles.map((r) => (
-            <Item
-              key={r.requestId}
-              icon="briefcase"
-              title={`Wants to be ${r.requestedRole.replace(/_/g, " ")}`}
-              sub={[r.businessName, r.area, r.note].filter(Boolean).join(" · ") || `Currently ${r.currentAccountType || "customer"}`}
-            >
-              <button className="primary" onClick={() => setPrompt({ kind: "role", row: r, decision: "approve" })}>
-                Approve
-              </button>
-              <button className="danger" onClick={() => setPrompt({ kind: "role", row: r, decision: "reject" })}>
-                Reject
-              </button>
-            </Item>
-          ))}
+          {found.roles.map((r) => {
+            const key = `role-${r.requestId}`;
+            return (
+              <div key={key}>
+                <Item
+                  icon="briefcase"
+                  title={`Wants to be ${r.requestedRole.replace(/_/g, " ")}`}
+                  sub={
+                    (r.applicationSubmitted ? "Full application sent · " : "Still filling in the application · ") +
+                    ([r.businessName, r.area].filter(Boolean).join(" · ") || `Currently ${r.currentAccountType || "customer"}`)
+                  }
+                >
+                  <button
+                    className={expanded === key ? "ghost" : "primary"}
+                    onClick={() => setExpanded(expanded === key ? null : key)}
+                  >
+                    {expanded === key ? "Hide" : "Review application"}
+                  </button>
+                </Item>
+                {expanded === key && (
+                  <div className="work-expand">
+                    <RoleApplicationView requestId={r.requestId} showApplicant={false} onDecided={done} />
+                  </div>
+                )}
+              </div>
+            );
+          })}
 
           {found.float.map((f) => {
             const blocked = f.requiresSecondApprover && f.requestedBy === adminUid;
@@ -354,34 +357,6 @@ export function AccountWork({
             </div>
           )}
         </div>
-      )}
-
-      {prompt?.kind === "role" && (
-        <ReasonPrompt
-          title={`${prompt.decision === "approve" ? "Approve" : "Reject"} ${prompt.row.requestedRole}`}
-          description={
-            prompt.decision === "approve"
-              ? `${name} will be able to accept payments or issue float straight away.`
-              : prompt.row.currentAccountType === prompt.row.requestedRole
-                ? "This account already holds the role — rejecting will demote it to customer. The reason is shown to the applicant."
-                : "The reason is shown to the applicant."
-          }
-          confirmLabel={prompt.decision === "approve" ? "Approve" : "Reject"}
-          danger={prompt.decision === "reject"}
-          onConfirm={confirm}
-          onCancel={() => setPrompt(null)}
-        >
-          {prompt.decision === "approve" && (
-            <label className="stack" style={{ marginBottom: 12 }}>
-              <span className="muted">ID number you checked (optional)</span>
-              <input value={idNumber} onChange={(e) => setIdNumber(e.target.value)} autoComplete="off" placeholder="e.g. SL-99AB1234" />
-              <span className="muted">
-                Lets them reset a forgotten PIN in the app with its last 4 characters. Without it, a forgotten PIN means a
-                visit to support.
-              </span>
-            </label>
-          )}
-        </ReasonPrompt>
       )}
 
       {prompt?.kind === "float" && (
