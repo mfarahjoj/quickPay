@@ -3,6 +3,7 @@ import { api, formatFloat, type AgentPosition, type FloatIssuanceRow } from "../
 import { FloatRequestModal } from "./FloatRequestModal";
 import { Icon } from "./Icon";
 import { ReasonPrompt } from "./ReasonPrompt";
+import { AccountLink } from "./AccountLink";
 import { FloatMigrationPanel } from "./FloatMigrationPanel";
 import { EmptyState, Loading } from "./ui";
 
@@ -108,7 +109,7 @@ export function FloatDesk({ adminUid, isSuper = false }: { adminUid: string; isS
                   const blocked = r.requiresSecondApprover && r.requestedBy === adminUid;
                   return (
                     <tr key={r.issuanceId}>
-                      <td className="wide">{r.agentName || r.agentId}</td>
+                      <td className="wide"><AccountLink uid={r.agentId}>{r.agentName || r.agentId}</AccountLink></td>
                       <td>{r.direction}</td>
                       <td>{r.route}</td>
                       <td className="muted">{r.externalReference || "—"}</td>
@@ -182,7 +183,7 @@ export function FloatDesk({ adminUid, isSuper = false }: { adminUid: string; isS
                   return (
                     <tr key={a.agentId}>
                       <td className="wide">
-                        {a.fullName || "(no name)"}
+                        <AccountLink uid={a.agentId}>{a.fullName || "(no name)"}</AccountLink>
                         {a.accountStatus !== "active" && (
                           <span className="badge frozen" style={{ marginLeft: 8 }}>
                             {a.accountStatus}

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, type RoleRequestRow } from "../api";
 import { Icon } from "./Icon";
 import { ReasonPrompt } from "./ReasonPrompt";
+import { AccountLink } from "./AccountLink";
 import { EmptyState, Loading } from "./ui";
 
 interface Pending {
@@ -95,7 +96,7 @@ export function RoleQueue() {
               {rows.map((r) => (
                 <tr key={r.requestId}>
                   <td>
-                    {r.applicantName || "(no name)"}
+                    <AccountLink uid={r.userId}>{r.applicantName || "(no name)"}</AccountLink>
                     {r.backfilled && (
                       <span className="badge frozen" style={{ marginLeft: 8 }}>
                         existing

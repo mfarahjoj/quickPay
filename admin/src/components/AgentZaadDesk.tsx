@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, type UserSummary, type ZaadAgentRow, type ZaadTopupRow, type ZaadTopupStatus } from "../api";
 import { Icon } from "./Icon";
 import { ReasonPrompt } from "./ReasonPrompt";
+import { AccountLink } from "./AccountLink";
 import { EmptyState, Loading } from "./ui";
 
 function money(cents: number | null | undefined) {
@@ -97,11 +98,11 @@ function Timeline({ row }: { row: ZaadTopupRow }) {
     <dl className="kv">
       <dt>Customer</dt>
       <dd>
-        {row.customerName} · {row.customerPhone ?? row.customerId}
+        <AccountLink uid={row.customerId}>{row.customerName}</AccountLink> · {row.customerPhone ?? row.customerId}
       </dd>
       <dt>Agent</dt>
       <dd>
-        {row.agentName ?? "—"} · receives on {row.agentReceiveNumber ?? "—"}
+        <AccountLink uid={row.agentId}>{row.agentName ?? "—"}</AccountLink> · receives on {row.agentReceiveNumber ?? "—"}
       </dd>
       <dt>Where</dt>
       <dd>{row.meeting === "in_person" ? "In person (the agent scanned the customer)" : "Remote (Zapp found the agent)"}</dd>
@@ -148,12 +149,15 @@ type Decision =
   | { row: ZaadTopupRow; kind: "customer" | "agent" }
   | { row: ZaadTopupRow; kind: "repay" | "reject" };
 
-function DecisionsPanel({
+/** `forUid`: only this account's requests, as customer or agent (the account page). */
+export function DecisionsPanel({
   onNotice,
   onSummary,
+  forUid,
 }: {
   onNotice: (s: string) => void;
-  onSummary: (s: { heldCents: number; reversalLossCents: number }) => void;
+  onSummary?: (s: { heldCents: number; reversalLossCents: number }) => void;
+  forUid?: string;
 }) {
   const [rows, setRows] = useState<ZaadTopupRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -166,15 +170,15 @@ function DecisionsPanel({
     setError(null);
     try {
       const res = await api.listZaadTopups("attention");
-      setRows(res.topups);
-      onSummary({ heldCents: res.heldCents, reversalLossCents: res.reversalLossCents });
+      setRows(forUid ? res.topups.filter((r) => r.customerId === forUid || r.agentId === forUid) : res.topups);
+      onSummary?.({ heldCents: res.heldCents, reversalLossCents: res.reversalLossCents });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load");
       setRows([]);
     } finally {
       setLoading(false);
     }
-  }, [onSummary]);
+  }, [onSummary, forUid]);
 
   useEffect(() => {
     void load();
@@ -383,12 +387,16 @@ function RequestsPanel() {
               {rows.filter((r) => meeting === "all" || r.meeting === meeting).map((row) => (
                 <tr key={row.id}>
                   <td className="wide">
-                    {row.customerName}
+                    <AccountLink uid={row.customerId}>{row.customerName}</AccountLink>
                     <div className="muted">{row.customerPhone ?? row.customerId}</div>
                   </td>
                   <td className="nowrap">{row.meeting === "in_person" ? "In person" : "Remote"}</td>
                   <td className="wide">
-                    {row.agentName ?? <span className="muted">{row.offers} offered</span>}
+                    {row.agentName ? (
+                      <AccountLink uid={row.agentId}>{row.agentName}</AccountLink>
+                    ) : (
+                      <span className="muted">{row.offers} offered</span>
+                    )}
                     {row.agentReceiveNumber && <div className="muted">{row.agentReceiveNumber}</div>}
                   </td>
                   <td className="num">{money(row.amountCents)}</td>
