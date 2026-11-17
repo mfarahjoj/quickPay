@@ -538,11 +538,13 @@ export default function DashboardScreen({ navigation }: Props) {
       ))}
     </View>
   );
-  const nudge = (wallet?.balance ?? 0) === 0 && (wallet?.slsBalance ?? 0) === 0 && (
+  const walletEmpty = (wallet?.balance ?? 0) === 0 && (wallet?.slsBalance ?? 0) === 0;
+  const nudge = walletEmpty && (
     <TouchableOpacity
       style={styles.nudgeBanner}
       activeOpacity={0.85}
-      onPress={() => openTopUp}
+      onPress={openTopUp}
+      accessibilityRole="button"
     >
       <View style={styles.nudgeIcon}>
         <BoltGlyph size={20} color="#FFFFFF" />
@@ -552,6 +554,25 @@ export default function DashboardScreen({ navigation }: Props) {
         <Text style={styles.nudgeSubtitle}>{t('dashboard.firstTopUpSubtitle')}</Text>
       </View>
       <Text style={styles.nudgeArrow}>→</Text>
+    </TouchableOpacity>
+  );
+  // Light Home: the coral wallpaper runs under the top of the body, where a
+  // see-through coral banner disappears. A solid card, like the others.
+  const lightNudge = walletEmpty && (
+    <TouchableOpacity
+      style={lightStyles.nudge}
+      activeOpacity={0.85}
+      onPress={openTopUp}
+      accessibilityRole="button"
+    >
+      <View style={lightStyles.nudgeIcon}>
+        <BoltGlyph size={20} color="#FFFFFF" />
+      </View>
+      <View style={lightStyles.linkText}>
+        <Text style={lightStyles.linkTitle}>{t('dashboard.firstTopUpTitle')}</Text>
+        <Text style={lightStyles.linkSub}>{t('dashboard.firstTopUpSubtitle')}</Text>
+      </View>
+      <Text style={lightStyles.nudgeArrow}>→</Text>
     </TouchableOpacity>
   );
   const qrCard = qrVisible && qrValue ? (
@@ -637,7 +658,7 @@ export default function DashboardScreen({ navigation }: Props) {
               onProfile={() => { triggerHaptic('light'); navigation.navigate('Profile'); }}
               onNotifications={() => { triggerHaptic('light'); navigation.navigate('Notifications'); }}
               onShowQr={showQr}
-              onTopUp={() => openTopUp}
+              onTopUp={openTopUp}
               onPay={() => { triggerHaptic('light'); navigation.navigate('ScanQR'); }}
               onGetCash={() => { triggerHaptic('light'); navigation.navigate('CashOut'); }}
             />
@@ -647,7 +668,7 @@ export default function DashboardScreen({ navigation }: Props) {
               {errorBanner}
               {businessBanner}
               {pendingSection}
-              {nudge}
+              {lightNudge}
               {qrCard}
 
               <View style={lightStyles.card}>
@@ -838,7 +859,7 @@ export default function DashboardScreen({ navigation }: Props) {
             personality="plus"
             index={1}
             idleTick={idleTick}
-            onPress={() => openTopUp}
+            onPress={openTopUp}
           >
             <PlusGlyph size={20} />
           </ActionTile>
@@ -1567,6 +1588,34 @@ const useLightStyles = makeStyles((colors) => StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     minHeight: 64,
+  },
+  nudge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: colors.ui.surface,
+    borderRadius: 24,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  nudgeIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: CORAL,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nudgeArrow: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: CORAL,
   },
   linkIcon: {
     width: 40,
