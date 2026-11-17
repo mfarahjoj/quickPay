@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cooldownMessage } from '../../utils/cooldownMessage';
 import {
@@ -43,6 +43,10 @@ import {
 import type { PaymentLink } from '../../services/paymentLink.service';
 import { useWallet } from '../../hooks/useWallet';
 import { useHomeCurrency } from '../../hooks/useHomeCurrency';
+import { useTransactions } from '../../hooks/useTransactions';
+import { useAuth } from '../../hooks/useAuth';
+import { useBiometricApproval } from '../../hooks/useBiometricApproval';
+import { isCompleteLocalNumber, personInitials, recentPeople } from '../../utils/recentPeople';
 import { pressAmountKey, type AmountKey } from '../../utils/amountKeypad';
 import {
   amountInputLabel,
@@ -54,7 +58,8 @@ import {
 } from '../../utils/money';
 
 type PaymentTab = 'send' | 'receive';
-type SendStep = 'phone' | 'amount' | 'review' | 'pin' | 'success';
+// Review and PIN are one step: the summary sits above the PIN (or Face ID).
+type SendStep = 'phone' | 'amount' | 'confirm' | 'success';
 
 /** Max automatic generateCustomerToken calls per Receive visit (initial load + expiry renewals). Manual actions are unlimited. */
 const MAX_RECEIVE_AUTO_FETCHES = 4;
@@ -99,6 +104,19 @@ export default function PaymentsScreen({ route }: Props) {
   const [sending, setSending] = useState(false);
   const [lookingUp, setLookingUp] = useState(false);
   const [transactionId, setTransactionId] = useState<string | null>(null);
+  /** Face ID is on, but the person chose to type the PIN this time. */
+  const [usePin, setUsePin] = useState(false);
+  const biometric = useBiometricApproval();
+
+  // People already paid or paid by, for one-tap picks above the number field.
+  const { user } = useAuth();
+  const { transactions: history } = useTransactions(undefined, 30);
+  const recents = useMemo(
+    () => recentPeople(history, 8, user?.phoneNumber),
+    [history, user?.phoneNumber]
+  );
+  /** The last number looked up on its own, so an edit can't loop the lookup. */
+  const autoLookedUp = useRef<string | null>(null);
 
   // Amount input pulse
   const amountScale = useSharedValue(1);
@@ -317,6 +335,8 @@ export default function PaymentsScreen({ route }: Props) {
     setSending(false);
     setTransactionId(null);
     setFromLink(false);
+    setUsePin(false);
+    autoLookedUp.current = null;
   };
 
   const fullPhone = phoneInput.startsWith('+') ? phoneInput : `${PHONE_PREFIX}${phoneInput}`;
@@ -378,6 +398,8 @@ export default function PaymentsScreen({ route }: Props) {
     // The link's own currency; links from before shillings are dollars.
     setPickedCurrency(prefill.currency ?? 'USD');
     const local = prefill.to.startsWith(PHONE_PREFIX) ? prefill.to.slice(PHONE_PREFIX.length) : prefill.to;
+    // Looked up just below; the typed-number lookup mustn't run it again.
+    autoLookedUp.current = local;
     setPhoneInput(local);
     setAmountText(prefill.amount ?? '');
     setNote(prefill.note ?? '');
@@ -385,8 +407,35 @@ export default function PaymentsScreen({ route }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill]);
 
-  const handleConfirmSend = async () => {
-    if (pin.length < 6) return;
+  // The ninth digit of a local number looks the person up: no Continue tap.
+  useEffect(() => {
+    if (tab !== 'send' || step !== 'phone' || lookingUp) return;
+    const typed = phoneInput.replace(/\s+/g, '');
+    if (!isCompleteLocalNumber(typed) || autoLookedUp.current === typed) return;
+    autoLookedUp.current = typed;
+    lookupRef.current(typed);
+  }, [tab, step, phoneInput, lookingUp]);
+
+  const pickRecent = (phoneNumber: string) => {
+    if (lookingUp) return;
+    triggerHaptic('light');
+    const local = phoneNumber.startsWith(PHONE_PREFIX) ? phoneNumber.slice(PHONE_PREFIX.length) : phoneNumber;
+    autoLookedUp.current = local;
+    setPhoneInput(local);
+    handleLookup(phoneNumber);
+  };
+
+  const goToConfirm = () => {
+    triggerHaptic('medium');
+    setPin('');
+    setUsePin(false);
+    biometric.prepare();
+    setStep('confirm');
+  };
+
+  /** `credential` is the typed PIN, or the one-time token Face ID returns. */
+  const handleConfirmSend = async (credential: string) => {
+    if (sending || !credential) return;
     try {
       setSending(true);
       triggerHaptic('medium');
@@ -395,7 +444,7 @@ export default function PaymentsScreen({ route }: Props) {
         recipientPhone: recipient!.phoneNumber,
         amount: amountUnits,
         currency,
-        pin,
+        pin: credential,
         note: note || undefined,
       });
       const data = result.data as { success: boolean; data?: { transactionId: string }; error?: string };
@@ -418,6 +467,19 @@ export default function PaymentsScreen({ route }: Props) {
       setPin('');
     } finally {
       setSending(false);
+    }
+  };
+
+  // One tap on a screen that shows who and how much; cancelled means the PIN.
+  const sendWithBiometric = async () => {
+    if (sending || !recipient) return;
+    const approval = await biometric.approve(
+      t('payments.sendingTo', { amount: amountLabel, name: recipient.fullName })
+    );
+    if (approval) {
+      await handleConfirmSend(approval);
+    } else {
+      setUsePin(true);
     }
   };
 
@@ -457,6 +519,37 @@ export default function PaymentsScreen({ route }: Props) {
           {step === 'phone' && (
             <Card>
               <Text style={styles.stepTitle}>{t('payments.enterRecipient')}</Text>
+              {recents.length > 0 && (
+                <>
+                  <Text style={styles.groupTitle}>{t('payments.recentPeople')}</Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.recentScroll}
+                    contentContainerStyle={styles.recentRow}
+                    keyboardShouldPersistTaps="handled"
+                  >
+                    {recents.map((person) => (
+                      <TouchableOpacity
+                        key={person.phoneNumber}
+                        style={styles.recentPerson}
+                        onPress={() => pickRecent(person.phoneNumber)}
+                        disabled={lookingUp}
+                        activeOpacity={0.7}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('payments.sendToPerson', { name: person.name })}
+                      >
+                        <View style={styles.recentAvatar}>
+                          <Text style={styles.recentAvatarText}>{personInitials(person.name)}</Text>
+                        </View>
+                        <Text style={styles.recentName} numberOfLines={1}>
+                          {person.name.startsWith('+') ? `…${person.name.slice(-4)}` : person.name.split(' ')[0]}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </>
+              )}
               <Text style={styles.groupTitle}>{t('payments.phoneNumber')}</Text>
               <View style={styles.phoneRow}>
                 <View style={styles.prefixBox}>
@@ -551,7 +644,7 @@ export default function PaymentsScreen({ route }: Props) {
               </View>
               <Button
                 title={t('common.continue')}
-                onPress={() => { triggerHaptic('medium'); setStep('review'); }}
+                onPress={goToConfirm}
                 disabled={amountUnits <= 0}
                 fullWidth
                 style={styles.primaryCta}
@@ -566,25 +659,26 @@ export default function PaymentsScreen({ route }: Props) {
             </Card>
           )}
 
-          {step === 'review' && recipient && (
+          {step === 'confirm' && recipient && (
             <Card>
-              <Text style={styles.stepTitle}>{t('payments.review')}</Text>
+              <Text style={styles.stepTitle}>{t('payments.checkAndSend')}</Text>
               {fromLink && (
                 <View style={styles.linkNotice}>
                   <Text style={styles.linkNoticeText}>{t('payments.linkNotice')}</Text>
                 </View>
               )}
-              <View style={styles.reviewRow}>
-                <Text style={styles.reviewKey}>{t('common.recipient')}</Text>
-                <Text style={styles.reviewValue}>{recipient.fullName}</Text>
-              </View>
-              <View style={styles.reviewRow}>
-                <Text style={styles.reviewKey}>{t('common.phone')}</Text>
-                <Text style={styles.reviewValue}>{recipient.phoneNumber}</Text>
-              </View>
-              <View style={styles.reviewRow}>
-                <Text style={styles.reviewKey}>{t('common.amount')}</Text>
-                <Text style={styles.reviewValue}>{amountLabel}</Text>
+              <View style={styles.confirmHero}>
+                <View style={styles.confirmAvatar}>
+                  <Text style={styles.confirmAvatarText}>{personInitials(recipient.fullName)}</Text>
+                </View>
+                <Text
+                  style={[styles.confirmAmount, amountLabel.length > 10 && styles.amountLargeLong]}
+                  numberOfLines={1}
+                >
+                  {amountLabel}
+                </Text>
+                <Text style={styles.confirmTo}>{t('common.toRecipient', { name: recipient.fullName })}</Text>
+                <Text style={styles.confirmPhone}>{recipient.phoneNumber}</Text>
               </View>
               <View style={styles.reviewRow}>
                 <Text style={styles.reviewKey}>{t('common.fee')}</Text>
@@ -600,55 +694,45 @@ export default function PaymentsScreen({ route }: Props) {
                   <Text style={styles.reviewValue}>{note}</Text>
                 </View>
               ) : null}
-              <Button
-                title={t('payments.confirmEnterPin')}
-                onPress={() => { triggerHaptic('medium'); setStep('pin'); }}
-                fullWidth
-                style={styles.primaryCta}
-              />
-              <Button
-                title={t('common.back')}
-                onPress={() => { triggerHaptic('light'); setStep('amount'); }}
-                variant="secondary"
-                fullWidth
-                style={styles.secondaryCta}
-              />
-            </Card>
-          )}
 
-          {step === 'pin' && (
-            <Card>
-              <Text style={styles.stepTitle}>{t('payments.enterPin')}</Text>
-              <Text style={styles.pinSubtitle}>
-                {t('payments.sendingTo', {
-                  amount: amountLabel,
-                  name: recipient?.fullName ?? '',
-                })}
-              </Text>
-              <PinInput
-                value={pin}
-                onChange={setPin}
-                secure
-              />
               {sending ? (
                 <ActivityIndicator style={{ marginTop: spacing.lg }} size="large" color={colors.action.primary} />
-              ) : (
+              ) : biometric.available && !usePin ? (
                 <>
                   <Button
-                    title={t('common.send')}
-                    onPress={handleConfirmSend}
-                    disabled={pin.length < 6}
+                    title={t('payments.sendWithBiometric', { amount: amountLabel, label: biometric.label })}
+                    onPress={sendWithBiometric}
                     fullWidth
                     style={styles.primaryCta}
                   />
-                  <Button
-                    title={t('common.back')}
-                    onPress={() => { setPin(''); setStep('review'); }}
-                    variant="secondary"
-                    fullWidth
-                    style={styles.secondaryCta}
+                  <TouchableOpacity
+                    onPress={() => setUsePin(true)}
+                    style={styles.textLink}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.textLinkText}>{t('payments.usePinInstead')}</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.pinPrompt}>{t('payments.enterPinToSend')}</Text>
+                  <PinInput
+                    value={pin}
+                    onChange={setPin}
+                    onComplete={handleConfirmSend}
+                    secure
+                    autoFocus={biometric.checked}
                   />
                 </>
+              )}
+              {!sending && (
+                <Button
+                  title={t('common.back')}
+                  onPress={() => { triggerHaptic('light'); setPin(''); setStep('amount'); }}
+                  variant="secondary"
+                  fullWidth
+                  style={styles.secondaryCta}
+                />
               )}
             </Card>
           )}
@@ -952,6 +1036,90 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
     ...typography.bodyLarge,
     color: colors.text.primary,
     fontWeight: '600',
+  },
+  recentScroll: {
+    marginHorizontal: -spacing.md,
+    marginBottom: spacing.sm,
+  },
+  recentRow: {
+    paddingHorizontal: spacing.md,
+    gap: spacing.md,
+  },
+  recentPerson: {
+    width: 60,
+    alignItems: 'center',
+  },
+  recentAvatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: colors.ui.accentSoft,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  recentAvatarText: {
+    ...typography.body,
+    color: colors.ui.accentText,
+    fontWeight: '700',
+  },
+  recentName: {
+    ...typography.caption,
+    fontSize: 12,
+    color: colors.text.secondary,
+    textAlign: 'center',
+  },
+  confirmHero: {
+    alignItems: 'center',
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
+  },
+  confirmAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.ui.accentSoft,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.smPlus,
+  },
+  confirmAvatarText: {
+    ...typography.bodyLarge,
+    color: colors.ui.accentText,
+    fontWeight: '700',
+  },
+  confirmAmount: {
+    ...typography.balanceNumber,
+    color: colors.text.primary,
+    fontVariant: ['tabular-nums'],
+  },
+  confirmTo: {
+    ...typography.body,
+    color: colors.text.primary,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  confirmPhone: {
+    ...typography.caption,
+    color: colors.text.muted,
+    marginTop: 2,
+  },
+  pinPrompt: {
+    ...typography.captionBold,
+    color: colors.text.secondary,
+    textAlign: 'center',
+    marginTop: spacing.lg,
+    marginBottom: spacing.smPlus,
+  },
+  textLink: {
+    alignSelf: 'center',
+    paddingVertical: spacing.smPlus,
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.xs,
+  },
+  textLinkText: {
+    ...typography.captionBold,
+    color: colors.ui.accentText,
   },
   reviewRow: {
     flexDirection: 'row',

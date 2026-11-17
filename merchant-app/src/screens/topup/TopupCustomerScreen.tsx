@@ -283,6 +283,7 @@ export default function TopupCustomerScreen({ navigation }: { navigation: any })
         </GlassCard>
 
         <PinInput
+          autoFocus
           value={pin}
           onChange={(v) => {
             setPin(v);

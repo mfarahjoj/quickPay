@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { User } from "firebase/auth";
 import {
   auth,
@@ -23,16 +23,37 @@ import { DisputeDesk } from "./components/DisputeDesk";
 import { AuthMigrationPanel } from "./components/AuthMigrationPanel";
 import { PricingPanel } from "./components/PricingPanel";
 import { TopupDesk } from "./components/TopupDesk";
+import { TodoDesk, type ShortcutLink } from "./components/TodoDesk";
 import { Icon, type IconName } from "./components/Icon";
 import { Avatar, BrandMark, EmptyState, Loading } from "./components/ui";
+import { ledgerNeedsAttention, queuesFor, useWork, waitingTotal, type QueueKey } from "./work";
 
-type Tab = "users" | "topups" | "roles" | "kyc" | "float" | "payouts" | "zaad" | "agentzaad" | "disputes" | "ledger" | "pricing";
+type Tab = "todo" | "users" | "topups" | "roles" | "kyc" | "float" | "payouts" | "zaad" | "agentzaad" | "disputes" | "ledger" | "pricing";
+
+/**
+ * The sidebar, in sections. "To do" comes first and the console opens on it.
+ * On a phone the tab bar keeps only `phone` tabs; the queues are one tap away
+ * on the To do page.
+ */
+const SECTIONS: { title?: string; tabs: Tab[] }[] = [
+  { tabs: ["todo", "users"] },
+  { title: "Queues", tabs: ["disputes", "payouts", "float", "zaad", "agentzaad", "roles", "kyc"] },
+  { title: "Money", tabs: ["topups", "ledger"] },
+  { title: "Settings", tabs: ["pricing"] },
+];
+const PHONE_TABS: Tab[] = ["todo", "users", "topups", "ledger", "pricing"];
 
 /** `short` is what the phone tab bar shows; the sidebar uses `label`. */
 const TABS: Record<
   Tab,
   { label: string; short: string; icon: IconName; subtitle: string }
 > = {
+  todo: {
+    label: "To do",
+    short: "To do",
+    icon: "todo",
+    subtitle: "Everything waiting on you, across every desk. Open a card to work it.",
+  },
   users: {
     label: "Customers",
     short: "Customers",
@@ -114,8 +135,58 @@ export default function App() {
   const [claims, setClaims] = useState<AdminClaims | null>(null);
   const [booting, setBooting] = useState(true);
   const [signInError, setSignInError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("users");
+  const [tab, setTab] = useState<Tab>("todo");
   const [selectedId, setSelectedId] = useState<string | undefined>();
+  const [find, setFind] = useState("");
+  const [findQuery, setFindQuery] = useState<{ text: string; nonce: number } | undefined>();
+  const findRef = useRef<HTMLInputElement>(null);
+
+  const roles = claims?.adminRoles ?? [];
+  const canReviewRoles = roles.includes("compliance") || roles.includes("super");
+  const canRunFloatDesk = roles.includes("ops") || roles.includes("super");
+  const queueKeys = useMemo(() => queuesFor(canReviewRoles, canRunFloatDesk), [canReviewRoles, canRunFloatDesk]);
+  const work = useWork(user?.uid ?? "", claims?.admin ? queueKeys : [], !!claims?.admin && canRunFloatDesk);
+
+  // Coming back to a desk after deciding something elsewhere: fresh counts.
+  const { refresh } = work;
+  useEffect(() => {
+    refresh(20 * 1000);
+  }, [tab, refresh]);
+
+  const waiting = waitingTotal(work);
+  useEffect(() => {
+    document.title = waiting > 0 ? `(${waiting}) Zapp Pay — Admin` : "Zapp Pay — Admin";
+  }, [waiting]);
+
+  // "/" jumps to the quick find from anywhere that isn't a text field.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      const typing = el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable);
+      if (e.key === "/" && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        findRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const open = (next: string) => {
+    setTab(next as Tab);
+    window.scrollTo({ top: 0 });
+  };
+
+  const quickFind = (e: React.FormEvent) => {
+    e.preventDefault();
+    const text = find.trim();
+    if (!text) return;
+    setSelectedId(undefined);
+    setFindQuery({ text, nonce: Date.now() });
+    setTab("users");
+    setFind("");
+    findRef.current?.blur();
+  };
 
   useEffect(() => {
     return auth.onAuthStateChanged(async (next) => {
@@ -192,16 +263,33 @@ export default function App() {
     );
   }
 
-  const canReviewRoles =
-    claims.adminRoles.includes("compliance") || claims.adminRoles.includes("super");
-  const canRunFloatDesk =
-    claims.adminRoles.includes("ops") || claims.adminRoles.includes("super");
+  const allowed = (t: Tab): boolean => {
+    if (t === "roles" || t === "kyc") return canReviewRoles;
+    if (t === "todo" || t === "users" || t === "pricing") return true;
+    return canRunFloatDesk;
+  };
+  const sections = SECTIONS.map((sec) => ({ ...sec, tabs: sec.tabs.filter(allowed) })).filter(
+    (sec) => sec.tabs.length > 0
+  );
 
-  const visibleTabs: Tab[] = ["users"];
-  if (canRunFloatDesk) visibleTabs.push("topups");
-  if (canReviewRoles) visibleTabs.push("roles", "kyc");
-  if (canRunFloatDesk) visibleTabs.push("float", "payouts", "zaad", "agentzaad", "disputes", "ledger");
-  visibleTabs.push("pricing");
+  /** The number on a nav item: what is waiting in that desk. */
+  const countFor = (t: Tab): number | null => {
+    if (t === "todo") return waiting > 0 ? waiting : null;
+    if (t === "ledger") return ledgerNeedsAttention(work.ledger) ? Math.max(1, work.ledger?.openAlertCount ?? 0) : null;
+    const q = work.queues[t as QueueKey];
+    return q?.count ? q.count : null;
+  };
+
+  const shortcuts: ShortcutLink[] = [
+    { tab: "users", label: "Find a customer", hint: "Account, wallet, devices and activity", icon: "user" },
+    ...(canRunFloatDesk
+      ? ([
+          { tab: "topups", label: "Top up a wallet", hint: "Credit money Zapp received", icon: "banknote" },
+          { tab: "ledger", label: "Ledger", hint: "Nightly check and traces", icon: "ledger" },
+        ] as ShortcutLink[])
+      : []),
+    { tab: "pricing", label: "Pricing & rules", hint: "Fees, limits and commissions", icon: "scale" },
+  ];
 
   return (
     <div className="app">
@@ -217,19 +305,48 @@ export default function App() {
           </div>
         </div>
 
+        <form className="quick-find" onSubmit={quickFind} role="search">
+          <input
+            ref={findRef}
+            value={find}
+            onChange={(e) => setFind(e.target.value)}
+            placeholder="Find a customer"
+            aria-label="Find a customer by phone, name, uid or receipt"
+            aria-keyshortcuts="/"
+          />
+          <kbd aria-hidden="true">/</kbd>
+        </form>
+
         <nav className="nav" aria-label="Sections">
-          {visibleTabs.map((id) => (
-            <button
-              key={id}
-              aria-current={tab === id ? "page" : undefined}
-              onClick={() => setTab(id)}
-            >
-              <Icon name={TABS[id].icon} size={20} />
-              <span className="nav-label">
-                <span className="long">{TABS[id].label}</span>
-                <span className="short">{TABS[id].short}</span>
-              </span>
-            </button>
+          {sections.map((sec, i) => (
+            <div className="nav-section" key={sec.title ?? i}>
+              {sec.title && <div className="nav-heading">{sec.title}</div>}
+              {sec.tabs.map((id) => {
+                const count = countFor(id);
+                return (
+                  <button
+                    key={id}
+                    aria-current={tab === id ? "page" : undefined}
+                    onClick={() => open(id)}
+                    data-phone={PHONE_TABS.includes(id) ? "" : undefined}
+                  >
+                    <Icon name={TABS[id].icon} size={20} />
+                    <span className="nav-label">
+                      <span className="long">{TABS[id].label}</span>
+                      <span className="short">{TABS[id].short}</span>
+                    </span>
+                    {count != null && (
+                      <span
+                        className={`nav-count${id === "ledger" || (id !== "todo" && work.queues[id as QueueKey]?.urgent) ? " bad" : ""}`}
+                        aria-label={`${count} waiting`}
+                      >
+                        {count > 99 ? "99+" : count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           ))}
         </nav>
 
@@ -267,14 +384,26 @@ export default function App() {
             <p>{TABS[tab].subtitle}</p>
           </header>
 
-          <LedgerBanner
-            onOpen={canRunFloatDesk && tab !== "ledger" ? () => setTab("ledger") : undefined}
-          />
+          {tab !== "todo" && (
+            <LedgerBanner
+              onOpen={canRunFloatDesk && tab !== "ledger" ? () => setTab("ledger") : undefined}
+            />
+          )}
 
           <div className="view" key={tab}>
+            {tab === "todo" && (
+              <TodoDesk
+                work={work}
+                keys={queueKeys}
+                onOpen={open}
+                shortcuts={shortcuts}
+                showLedger={canRunFloatDesk}
+              />
+            )}
+
             {tab === "users" && (
               <div className="split">
-                <UserSearch selectedId={selectedId} onSelect={setSelectedId} />
+                <UserSearch selectedId={selectedId} onSelect={setSelectedId} autoQuery={findQuery} />
                 {selectedId ? (
                   <UserDetail key={selectedId} userId={selectedId} canAdjust={canRunFloatDesk} />
                 ) : (

@@ -147,6 +147,7 @@ export default function PayoutScreen() {
           {t('payout.pinSubtitle', { amount: show(amountCents) })}
         </Text>
         <PinInput
+          autoFocus
           value={pin}
           onChange={(value) => {
             setPin(value);

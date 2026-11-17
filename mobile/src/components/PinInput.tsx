@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View, TextInput, StyleSheet, StyleProp, ViewStyle } from 'react-native';
 import { typography, spacing, borderRadius, makeStyles } from '../theme';
 
@@ -10,6 +10,12 @@ interface PinInputProps {
   onComplete?: (pin: string) => void;
   style?: StyleProp<ViewStyle>;
   secure?: boolean;
+  /**
+   * Open the number pad without a tap: on mount (after the screen's
+   * transition), when this turns true, and again after the PIN is cleared
+   * for a retry. Only for a screen whose job is the PIN.
+   */
+  autoFocus?: boolean;
 }
 
 export function PinInput({
@@ -18,10 +24,19 @@ export function PinInput({
   onComplete,
   style,
   secure = true,
+  autoFocus = false,
 }: PinInputProps) {
   const styles = useStyles();
   const inputRefs = useRef<Array<TextInput | null>>([]);
   const digits = value.split('').concat(Array(PIN_LENGTH - value.length).fill(''));
+
+  // Cleared after a wrong PIN, or shown for the first time: back to box one.
+  const cleared = value.length === 0;
+  useEffect(() => {
+    if (!autoFocus || !cleared) return;
+    const timer = setTimeout(() => inputRefs.current[0]?.focus(), 350);
+    return () => clearTimeout(timer);
+  }, [autoFocus, cleared]);
 
   const handleChange = (text: string, index: number) => {
     const digit = text.replace(/[^0-9]/g, '').slice(-1);

@@ -227,7 +227,7 @@ export default function TransactionDetailScreen({ route, navigation }: Props) {
           <ActivityIndicator size="large" color={ACCENT} style={{ marginTop: 32 }} />
         ) : (
           <>
-            <PinInput value={pin} onChange={setPin} onComplete={handleRefund} style={styles.pinInput} />
+            <PinInput value={pin} onChange={setPin} onComplete={handleRefund} style={styles.pinInput} autoFocus />
             <TouchableOpacity
               style={styles.backLink}
               onPress={() => { setPin(''); setRefundStep('idle'); }}

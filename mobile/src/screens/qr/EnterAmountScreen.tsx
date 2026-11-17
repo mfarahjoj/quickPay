@@ -85,6 +85,8 @@ export default function EnterAmountScreen({ navigation, route }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometryType, setBiometryType] = useState<string | undefined>();
+  /** The phone has said whether Face ID is on: only then open the PIN pad. */
+  const [biometricChecked, setBiometricChecked] = useState(false);
 
   // One key per payment attempt, held across retries so the server can tell a
   // retry from a second payment. It is minted when the customer commits to an
@@ -102,6 +104,7 @@ export default function EnterAmountScreen({ navigation, route }: Props) {
       ([enabled, { available, biometryType: bt }]) => {
         setBiometricAvailable(enabled && available);
         setBiometryType(bt);
+        setBiometricChecked(true);
       }
     );
   }, []);
@@ -371,6 +374,7 @@ export default function EnterAmountScreen({ navigation, route }: Props) {
         </Text>
         <PinInput
           value={pin}
+          autoFocus={biometricChecked && !biometricAvailable}
           onChange={setPin}
           onComplete={handleConfirm}
           secure={true}

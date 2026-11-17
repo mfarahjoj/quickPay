@@ -357,6 +357,7 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
           {t('topup.confirm.pinFor', { amount: formatAmount(preview.amount, preview.currency), name: preview.customerName })}
         </Text>
         <PinInput
+          autoFocus
           value={pin}
           onChange={(value) => {
             setPin(value);

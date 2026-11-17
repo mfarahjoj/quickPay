@@ -24,7 +24,8 @@ export type IconName =
   | "check"
   | "close"
   | "flag"
-  | "scale";
+  | "scale"
+  | "todo";
 
 const PATHS: Record<IconName, ReactNode> = {
   user: (
@@ -124,6 +125,12 @@ const PATHS: Record<IconName, ReactNode> = {
     <>
       <path d="M12 4v16M8 20h8M5 7.5h14" />
       <path d="M5 7.5 2.8 13a2.6 2.6 0 0 0 4.4 0L5 7.5ZM19 7.5 16.8 13a2.6 2.6 0 0 0 4.4 0L19 7.5Z" />
+    </>
+  ),
+  todo: (
+    <>
+      <rect x="3.5" y="4" width="17" height="16" rx="3.2" />
+      <path d="m7.2 9.4 1.6 1.6 2.8-2.8M13.6 9.6h3.4M7.2 15h.1M10.4 15H17" />
     </>
   ),
 };

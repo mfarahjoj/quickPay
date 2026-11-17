@@ -224,6 +224,7 @@ export default function ConfirmCashOutScreen({ navigation }: Props) {
         <Text style={styles.resultTitle}>{t('cashout.confirm.pinTitle')}</Text>
         <Text style={styles.resultSub}>{t('cashout.confirm.pinSubtitle')}</Text>
         <PinInput
+          autoFocus
           value={pin}
           onChange={(value) => {
             setPin(value);
