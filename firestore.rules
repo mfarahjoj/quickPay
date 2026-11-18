@@ -3,8 +3,11 @@ service cloud.firestore {
   match /databases/{database}/documents {
     
     // Helper functions
+    // A signed-in app user. Zapp Business web sessions (portal/) are signed in
+    // too, but read-only: they are not "authenticated" for any rule here, only
+    // for isPortalFor below.
     function isAuthenticated() {
-      return request.auth != null;
+      return request.auth != null && request.auth.token.get('portal', false) != true;
     }
     
     function isOwner(userId) {
@@ -173,12 +176,13 @@ service cloud.firestore {
     // unexpired. Such a user's uid never equals a real user's, so every
     // isOwner() rule above already refuses it.
     function isPortalFor(storeUid) {
-      return isAuthenticated()
+      return request.auth != null
         && request.auth.token.get('portal', false) == true
         && request.auth.token.get('portalFor', '') == storeUid
         && request.auth.uid == 'portal_' + request.auth.token.get('portalSid', '')
         && get(/databases/$(database)/documents/portalSessions/$(request.auth.token.portalSid)).data.active == true
-        && get(/databases/$(database)/documents/portalSessions/$(request.auth.token.portalSid)).data.expiresAt > request.time;
+        && get(/databases/$(database)/documents/portalSessions/$(request.auth.token.portalSid)).data.expiresAt > request.time
+        && get(/databases/$(database)/documents/portalSessions/$(request.auth.token.portalSid)).data.merchantUid == storeUid;
     }
     function canViewStore(storeUid) {
       return (isAuthenticated() && isOwner(storeUid)) || isPortalFor(storeUid);

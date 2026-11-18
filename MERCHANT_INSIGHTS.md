@@ -1,14 +1,14 @@
 # Merchant insights (Zapp Business)
 
 Live data on a merchant's store, or stores, with every number leading to something
-to do. Built for the web first (`portal/`, planned), on a read model that the merchant
-app can use too.
+to do. Built for the web first (`portal/`), on a read model that the merchant app can
+use too.
 
 | Phase | What | Status |
 |---|---|---|
-| 0 | Read model: rollups per shop, nightly catch-up and check, backfill | **Built** (this branch) |
-| 1 | `portal/` web app, sign-in by scanning a QR with the merchant app, one-shop dashboard | Planned |
-| 2 | Insights engine: rules over the rollups, each card with one action | Planned |
+| 0 | Read model: rollups per shop, nightly catch-up and check, backfill | **Live** in prod since 2026-11-18 (backfilled) |
+| 1 | `portal/` web app, sign-in by scanning a QR with the merchant app, one-shop dashboard with insight cards | Built, not deployed |
+| 2 | Server-side insights: hourly checks that push the urgent cards to the phone | Planned (the cards themselves run in the dashboard: `portal/src/lib/insights.ts`) |
 | 3 | Linked stores: an owner links several merchant accounts into a group (read-only view) | Planned |
 
 ## Principles
@@ -93,9 +93,106 @@ safe while shops trade, because the markers stop double counting.
 
 ## Access
 
-`firestore.rules`: the shop itself may read its root, `days`, `months`, `customers` and
-`live` docs. Markers, runs and config are server-only. Phase 1 adds a portal session (a
-separate, read-only Firebase identity) and Phase 3 adds a linked group owner.
+`firestore.rules`: the shop itself, or a live Zapp Business session for that shop, may
+read its root, `days`, `months`, `customers` and `live` docs. Markers, runs, config,
+`portalLogins` and `portalSessions` are server-only. Phase 3 adds a linked group owner.
+
+## Web sign-in (`functions/src/portal/`)
+
+```
+browser  startPortalLogin     → loginId, code (in the QR), pollSecret (kept by the page)
+phone    describePortalLogin  → "Chrome on macOS": the shop checks it's their computer
+phone    approvePortalLogin   → PIN (or decline); creates portalSessions/{ps_…}
+browser  pollPortalLogin      → custom token for uid portal_{sid}, claims {portal, portalFor, portalSid}
+```
+
+- **A separate, read-only identity.** The browser never signs in as the shop. Its user,
+  `portal_{sid}`, matches no real uid, so every `isOwner()` rule already refuses it.
+  `requireAuth` and `requireAdmin` refuse any token with `portal: true`, so it reaches no
+  app or console callable. A test sweeps every `onCall` for a guard (`portal.test.ts`).
+  It reaches only what calls `requirePortalViewer` (`portal/viewer.ts`) and the rules'
+  `isPortalFor`, and both also check that `portalSessions/{sid}` is active and unexpired.
+- **The QR approves; only the page collects.** The code in the QR is what the phone sends;
+  the token goes only to whoever holds the poll secret, which never leaves the page. A
+  photo of the QR is useless.
+- **Sessions:** `portalSessionHours` (config, default 12), at most 5 per shop (the oldest
+  is signed out). Listed and signed out in the app (Settings → Zapp Business on a
+  computer), or from the page. All end on a PIN change or reset, a device revoke, a
+  freeze or a deletion (`endSessions` → `endAllPortalSessions`). Ending one marks it
+  inactive (refused at once) and deletes its Firebase user (no more refresh). The browser
+  keeps it in `sessionStorage`, so closing the tab signs a shared computer out.
+- **Threat model.**
+  - *QR-login phishing:* an attacker relays a real QR to the shop and gets it approved.
+    The phone names the browser and says to approve only a computer in front of you. At
+    worst the attacker gets read-only figures until the session ends or is signed out.
+  - *Stolen session:* read-only, ends within 12 hours, and can be signed out from the phone.
+  - *Guessing:* login ids and codes are 96 and 128 random bits; `startPortalLogin` is
+    rate-limited per IP and polling per login.
+- **Privacy:** names only, never phone numbers, in every portal reply. Receipts in
+  Storage are closed to portal sessions.
+
+## The dashboard (`portal/`)
+
+Vite + React, App Check (reCAPTCHA Enterprise), English, Somali and Arabic (right to left),
+light and dark. It reads the day docs (180 days), `live/recent` and the customer count
+with listeners, and calls `portalGetStore`, `portalGetCustomers`, `portalGetCustomer`,
+`portalListTransactions` and `portalExportStatement` for the rest.
+
+- **Needs your attention** (`portal/src/lib/insights.ts`, pure, tested). Each card gives a
+  severity (icon and word), the evidence, and one action: a checklist, a jump to the
+  right view, or where to do it in the app. A card only speaks once there's history to
+  back it (3 weeks for "typical day" cards):
+  - till quiet in usually busy hours
+  - counter display offline while trading
+  - refund spike against the usual
+  - today ahead of or behind a typical same weekday, by this hour
+  - regulars gone quiet, with what they're worth a month
+  - money waiting with auto payout off
+  - peak hours and the quietest open hour
+- **Figures.** Net takings (gross and fees), sales, average sale, distinct customers (an
+  exact count), returning share, refunds, and agent commission for agents. Each is
+  compared like for like: today against last week's same weekday up to this hour; a
+  period against the one before, with its matching day cut at the same hour.
+- **Charts** (dataviz method: validated palette, one axis, a table view for every chart):
+  - today by the hour against a typical weekday, or day by day against the period before
+  - weekday × hour heatmap (the last 4 weeks when "Today" is picked)
+  - how customers pay
+  - new and returning customers
+- **Lists:** live feed; customers (top, gone quiet, new this week, recent), each with
+  their history; transactions with the monthly CSV.
+
+## Running it locally
+
+```
+firebase emulators:start --only auth,firestore,functions --project demo-zapp
+cd portal && npm run dev -- --mode emulator          # http://127.0.0.1:5176
+```
+
+Seed a shop by writing `transactions` rows into the emulator: the trigger builds the
+read model as in production. Sign in by approving the page's login (its id is on the QR
+box as `data-login`) with `approvePortalLogin`, or by writing the session as it does.
+
+## Deploying Zapp Business
+
+1. Firebase console: add a web app "Zapp Business" and register it for App Check with a
+   reCAPTCHA Enterprise key limited to the site's domain. Put the config in
+   `portal/.env.local`. Set `PORTAL_WEB_APP_ID` in `functions/.env.quickpay-485417`.
+2. `firebase hosting:sites:create zapp-business` (the `portal` target maps to it).
+3. **Order matters.** A portal token gets past the old `requireAuth` (it only checked
+   for a signed-in user), so no portal token may exist while any callable from before
+   this change is live. A portal uid owns nothing, but an old `setupPin` could still be
+   asked to open an account for it. So:
+   1. First redeploy **every** callable from this code (they all share `requireAuth`). This
+      is a deploy of money functions with unchanged money logic. It needs the owner's
+      go-ahead, and the checkout must hold everything live in prod (compare with the
+      deployed source first, as for any full deploy).
+   2. Then deploy the rules and indexes, and the portal functions by name:
+      `describePortalLogin,approvePortalLogin,listPortalSessions,revokePortalSession,
+      expirePortalSessions,portalGetStore,portalGetCustomers,portalGetCustomer,
+      portalListTransactions,portalExportStatement`.
+   3. Last, the two that let a browser in: `startPortalLogin,pollPortalLogin`.
+4. `cd portal && npm run build`, then `firebase deploy --only hosting:portal`.
+5. The merchant app's Settings → Zapp Business on a computer ships with the next build.
 
 ## Cost
 

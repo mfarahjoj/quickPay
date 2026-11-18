@@ -3,8 +3,10 @@ service firebase.storage {
   match /b/{bucket}/o {
     
     // Helper functions
+    // Zapp Business web sessions (portal/) are signed in but read-only, for a
+    // shop's figures only: nothing in Storage.
     function isAuthenticated() {
-      return request.auth != null;
+      return request.auth != null && request.auth.token.get('portal', false) != true;
     }
     
     function isOwner(userId) {
@@ -22,10 +24,8 @@ service firebase.storage {
     // Transaction receipts — receipt paths contain random IDs;
     // true per-participant scoping requires reading Firestore inside rules,
     // which Storage rules don't support. Accept-the-risk: paths are unguessable.
-    // Zapp Business web sessions (portal/) are signed in too, but read-only
-    // and for a shop's figures only: not receipts.
     match /receipts/{transactionId}/{document} {
-      allow read: if isAuthenticated() && request.auth.token.get('portal', false) != true;
+      allow read: if isAuthenticated();
       allow write: if false;
     }
     
