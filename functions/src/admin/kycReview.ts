@@ -23,6 +23,9 @@ import { maybeUnlockReferral } from "../referral/referralBonus";
 /** Long enough to review a submission, short enough that a leak expires. */
 const SIGNED_URL_TTL_MS = 15 * 60 * 1000;
 
+/** Photos up to this size travel inside the response. */
+const INLINE_IMAGE_MAX_BYTES = 8 * 1024 * 1024;
+
 interface ListKycRequest {
   status?: KycStatus;
   limit?: number;
@@ -137,7 +140,21 @@ export async function signImage(
     const bucket = parsed.bucket
       ? admin.storage().bucket(parsed.bucket)
       : admin.storage().bucket();
-    const [url] = await bucket.file(parsed.path).getSignedUrl({
+    const file = bucket.file(parsed.path);
+    // Send the bytes themselves. A signed link depends on the service account
+    // being allowed to sign and on the browser reaching storage directly, and
+    // in practice the photos stayed broken. Nothing durable leaves here.
+    try {
+      const [meta] = await file.getMetadata();
+      if (Number(meta.size) <= INLINE_IMAGE_MAX_BYTES) {
+        const [bytes] = await file.download();
+        const type = typeof meta.contentType === "string" ? meta.contentType : "image/jpeg";
+        return { label, url: `data:${type};base64,${bytes.toString("base64")}` };
+      }
+    } catch (err) {
+      console.warn(`Could not inline KYC image ${parsed.path}, trying a signed link:`, err);
+    }
+    const [url] = await file.getSignedUrl({
       action: "read",
       expires: Date.now() + SIGNED_URL_TTL_MS,
     });

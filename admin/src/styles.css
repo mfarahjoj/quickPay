@@ -1304,3 +1304,5 @@ td.diff { color: var(--danger); font-weight: 600; }
   .work-actions { grid-column: 1 / -1; justify-content: flex-start; }
   .work-expand { padding-left: 10px; }
 }
+
+.map-embed { display: block; width: 100%; max-width: 520px; height: 220px; margin-top: 10px; border: 0; border-radius: 10px; }

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { ReviewPhoto } from "./ReviewPhoto";
 import { api, type KycQueueRow, type KycSubmission } from "../api";
 import { Icon } from "./Icon";
 import { ReasonPrompt } from "./ReasonPrompt";
@@ -140,9 +141,7 @@ export function SubmissionView({
           {submission.images.map((img) => (
             <figure key={img.label} className="photo">
               {img.url ? (
-                <a href={img.url} target="_blank" rel="noreferrer noopener">
-                  <img src={img.url} alt={`${img.label} of ID document`} />
-                </a>
+                <ReviewPhoto url={img.url} alt={`${img.label} of ID document`} />
               ) : (
                 <div className="photo-missing">{img.error || "Not provided"}</div>
               )}
