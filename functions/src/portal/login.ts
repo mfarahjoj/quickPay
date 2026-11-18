@@ -21,6 +21,7 @@
  */
 
 import * as admin from "firebase-admin";
+import { Timestamp } from "firebase-admin/firestore";
 import { https } from "firebase-functions/v2";
 import { defineString } from "firebase-functions/params";
 import { verifyUserPin } from "../auth/validatePin";
@@ -139,9 +140,9 @@ export const startPortalLogin = https.onCall({ enforceAppCheck: true }, async (r
     codeSha256: sha256(code),
     status: "waiting",
     browser: describeBrowser(request.rawRequest?.headers?.["user-agent"]),
-    createdAt: admin.firestore.Timestamp.fromMillis(now),
-    expiresAt: admin.firestore.Timestamp.fromMillis(now + LOGIN_TTL_MS),
-    expireAt: admin.firestore.Timestamp.fromMillis(now + LOGIN_CLEANUP_MS),
+    createdAt: Timestamp.fromMillis(now),
+    expiresAt: Timestamp.fromMillis(now + LOGIN_TTL_MS),
+    expireAt: Timestamp.fromMillis(now + LOGIN_CLEANUP_MS),
   };
   await admin.firestore().collection(PORTAL_LOGINS).doc(loginId).create(login);
   return { success: true, data: { loginId, code, pollSecret, expiresAtMs: now + LOGIN_TTL_MS, serverNowMs: now } };
@@ -218,8 +219,8 @@ export const approvePortalLogin = https.onCall(
         active: true,
         browser: login.browser,
         loginId,
-        createdAt: admin.firestore.Timestamp.fromMillis(now),
-        expiresAt: admin.firestore.Timestamp.fromMillis(ends),
+        createdAt: Timestamp.fromMillis(now),
+        expiresAt: Timestamp.fromMillis(ends),
       };
       tx.create(db.collection(PORTAL_SESSIONS).doc(sessionId), session);
       tx.update(ref, {
@@ -227,7 +228,7 @@ export const approvePortalLogin = https.onCall(
         merchantUid: uid,
         merchantName,
         sessionId,
-        approvedAt: admin.firestore.Timestamp.fromMillis(now),
+        approvedAt: Timestamp.fromMillis(now),
       });
       return ends;
     });

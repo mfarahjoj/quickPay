@@ -9,6 +9,7 @@
  */
 
 import * as admin from "firebase-admin";
+import { Timestamp } from "firebase-admin/firestore";
 import { https } from "firebase-functions/v2";
 import { isPortalToken } from "../utils/validation";
 import { PORTAL_SESSIONS, PortalSession, portalUid, SESSION_ID } from "./types";
@@ -57,7 +58,7 @@ export async function requirePortalViewer(request: https.CallableRequest, storeU
   }
 
   if (now - (session.lastSeenAt?.toMillis() ?? 0) >= SEEN_EVERY_MS) {
-    ref.update({ lastSeenAt: admin.firestore.Timestamp.fromMillis(now) }).catch(() => undefined);
+    ref.update({ lastSeenAt: Timestamp.fromMillis(now) }).catch(() => undefined);
   }
   return { sessionId, merchantUid, storeUids, session };
 }

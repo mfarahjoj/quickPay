@@ -15,6 +15,7 @@
  */
 
 import * as admin from "firebase-admin";
+import { Timestamp } from "firebase-admin/firestore";
 import { https } from "firebase-functions/v2";
 import { ONLINE_WITHIN_MS } from "../counterDisplay/manage";
 import { shopName } from "../counterDisplay/state";
@@ -234,7 +235,7 @@ export const portalListTransactions = https.onCall(
       .where("participants", "array-contains", storeUid)
       .orderBy("createdAt", "desc");
     const cursor = request.data?.cursor;
-    if (typeof cursor === "number" && Number.isFinite(cursor)) q = q.startAfter(admin.firestore.Timestamp.fromMillis(cursor));
+    if (typeof cursor === "number" && Number.isFinite(cursor)) q = q.startAfter(Timestamp.fromMillis(cursor));
     const snap = await q.limit(limit).get();
 
     const rows = snap.docs.map((d) => ({ id: d.id, t: d.data() as Transaction }));
@@ -286,8 +287,8 @@ export const portalExportStatement = https.onCall(
       .firestore()
       .collection("transactions")
       .where("participants", "array-contains", storeUid)
-      .where("createdAt", ">=", admin.firestore.Timestamp.fromMillis(fromMs))
-      .where("createdAt", "<", admin.firestore.Timestamp.fromMillis(toMs))
+      .where("createdAt", ">=", Timestamp.fromMillis(fromMs))
+      .where("createdAt", "<", Timestamp.fromMillis(toMs))
       .orderBy("createdAt", "asc")
       .limit(MAX_ROWS + 1)
       .get();

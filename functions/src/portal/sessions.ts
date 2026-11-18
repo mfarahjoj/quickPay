@@ -8,6 +8,7 @@
  */
 
 import * as admin from "firebase-admin";
+import { Timestamp } from "firebase-admin/firestore";
 import { https } from "firebase-functions/v2";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { isPortalToken, requireAuth } from "../utils/validation";
@@ -31,7 +32,7 @@ export async function endPortalSession(sessionId: string, reason: SessionEndReas
     .firestore()
     .collection(PORTAL_SESSIONS)
     .doc(sessionId)
-    .update({ active: false, endedAt: admin.firestore.Timestamp.now(), endReason: reason });
+    .update({ active: false, endedAt: Timestamp.now(), endReason: reason });
   try {
     await admin.auth().deleteUser(portalUid(sessionId));
   } catch (err: any) {
@@ -120,7 +121,7 @@ export async function expirePortalSessionsNow(nowMs = Date.now()): Promise<numbe
     .firestore()
     .collection(PORTAL_SESSIONS)
     .where("active", "==", true)
-    .where("expiresAt", "<=", admin.firestore.Timestamp.fromMillis(nowMs))
+    .where("expiresAt", "<=", Timestamp.fromMillis(nowMs))
     .limit(500)
     .get();
   for (const doc of snap.docs) await endPortalSession(doc.id, "expired");
