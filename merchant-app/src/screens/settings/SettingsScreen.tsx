@@ -118,6 +118,16 @@ export default function SettingsScreen() {
             />
           </>
         ) : null}
+        {/* The shop's live figures and insights on a computer (read-only). */}
+        {takesPayments ? (
+          <>
+            <View style={styles.divider} />
+            <TappableRow
+              label={t('settings.zappBusiness')}
+              onPress={() => navigation.navigate('ZappBusiness')}
+            />
+          </>
+        ) : null}
       </GlassCard>
 
       {/* Security */}

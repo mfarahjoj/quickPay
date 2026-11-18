@@ -106,6 +106,8 @@ type MerchantStackParamList = {
   ZaadAccount: undefined;
   CounterDisplays: undefined;
   LinkDisplay: undefined;
+  ZappBusiness: undefined;
+  PortalSignIn: undefined;
 };
 
 type TabParamList = {
@@ -401,6 +403,16 @@ function MainStackNavigator() {
       <MainStack.Screen
         name="LinkDisplay"
         getComponent={() => require('../screens/settings/LinkDisplayScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="ZappBusiness"
+        getComponent={() => require('../screens/settings/ZappBusinessScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="PortalSignIn"
+        getComponent={() => require('../screens/settings/PortalSignInScreen').default}
         options={{ headerShown: false }}
       />
     </MainStack.Navigator>
