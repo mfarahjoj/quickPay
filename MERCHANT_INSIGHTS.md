@@ -7,7 +7,7 @@ use too.
 | Phase | What | Status |
 |---|---|---|
 | 0 | Read model: rollups per shop, nightly catch-up and check, backfill | **Live** in prod since 2026-11-18 (backfilled) |
-| 1 | `portal/` web app, sign-in by scanning a QR with the merchant app, one-shop dashboard with insight cards | Built, not deployed |
+| 1 | `portal/` web app, sign-in by scanning a QR with the merchant app, one-shop dashboard with insight cards | **Live** at zapp-business.web.app since 2026-11-18. The merchant app screen ships with the next build |
 | 2 | Server-side insights: hourly checks that push the urgent cards to the phone | Planned (the cards themselves run in the dashboard: `portal/src/lib/insights.ts`) |
 | 3 | Linked stores: an owner links several merchant accounts into a group (read-only view) | Planned |
 
@@ -173,6 +173,9 @@ read model as in production. Sign in by approving the page's login (its id is on
 box as `data-login`) with `approvePortalLogin`, or by writing the session as it does.
 
 ## Deploying Zapp Business
+
+Done 2026-11-18 in this order: 95 `requireAuth` callables, then the Firestore rules, indexes and portal functions, then `startPortalLogin`/`pollPortalLogin`, then hosting. **Storage rules were not deployed**: the live Storage rules are older than main (main limits profile pictures to their owner, never deployed), so this branch's `isAuthenticated()` change there waits for whoever ships main's Storage rules.
+
 
 1. **Done 2026-11-18.** Firebase web app "Zapp Business" (`1:76440907220:web:6a12018730432a1483fa41`),
    registered for App Check with reCAPTCHA Enterprise key `6LfLliYuAAAAAFVjf-W7EwhsLw_Xm9Dr2G2wWyrI`
