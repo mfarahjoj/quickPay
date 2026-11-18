@@ -24,9 +24,9 @@ import { ActivityIndicator, Alert, StyleSheet, Switch, Text, TextInput, Touchabl
 import { useTranslation } from 'react-i18next';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { useAuth } from '../../hooks/useAuth';
-import { DarkScreen, GlassCard, PillButton, PinInput, ScreenHeader, TEXT_DIM, TEXT_FAINT } from '../../components';
+import { DarkScreen, GlassCard, PillButton, PinInput, ScreenHeader } from '../../components';
 import { SuccessCheckIcon } from '../../components/icons/AuthIcons';
-import { ATTENTION, ZaadRequestList } from '../../components/ZaadRequestList';
+import { ZaadRequestList } from '../../components/ZaadRequestList';
 import { useZaadAgentRequests } from '../../hooks/useZaadAgentRequests';
 import { formatCents } from '../../utils/money';
 import { formatLocal } from '../../utils/zaad';
@@ -45,6 +45,7 @@ import {
   type ZaadAgentStatus,
   type ZaadTopupDoc,
 } from '../../services/zaadAgent.service';
+import { makeStyles, useColors } from '../../theme';
 
 /** Seconds left until [at], ticking. */
 function useCountdown(at: { toMillis(): number } | null | undefined): number {
@@ -60,6 +61,8 @@ function useCountdown(at: { toMillis(): number } | null | undefined): number {
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
 export default function ZaadTopupsScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
@@ -267,7 +270,7 @@ export default function ZaadTopupsScreen() {
           <Reference value={mine.reference} hint />
           <Senders senders={mine.allowedSenders} />
           <View style={styles.waiting}>
-            <ActivityIndicator color="#FFFFFF" />
+            <ActivityIndicator color={colors.ui.text} />
             <Text style={styles.hint}>{t('zaadTopups.accepted.waiting', { time: clock(sendLeft) })}</Text>
           </View>
           {errorLine}
@@ -334,7 +337,7 @@ export default function ZaadTopupsScreen() {
   if (!status) {
     return (
       <DarkScreen edges={[]} contentStyle={styles.centered}>
-        <ActivityIndicator color="#FFFFFF" />
+        <ActivityIndicator color={colors.ui.text} />
         {errorLine}
       </DarkScreen>
     );
@@ -384,6 +387,7 @@ export default function ZaadTopupsScreen() {
 }
 
 function Senders({ senders }: { senders?: string[] }) {
+  const styles = useStyles();
   const { t } = useTranslation();
   if (!senders?.length) return null;
   return (
@@ -395,6 +399,7 @@ function Senders({ senders }: { senders?: string[] }) {
 
 /** Zapp's reference (D31), the one the customer sees. Nothing on requests made before it. */
 function Reference({ value, hint }: { value?: string; hint?: boolean }) {
+  const styles = useStyles();
   const { t } = useTranslation();
   if (!value) return null;
   return (
@@ -423,6 +428,8 @@ function PinStep({
   busy: boolean;
   amount: number;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   return (
     <View style={styles.pin}>
@@ -432,7 +439,7 @@ function PinStep({
         value={txn}
         onChangeText={setTxn}
         placeholder="e.g. 12345678"
-        placeholderTextColor="rgba(255,255,255,0.3)"
+        placeholderTextColor={colors.ui.ink(0.3)}
         autoCapitalize="characters"
         autoCorrect={false}
         style={styles.input}
@@ -440,52 +447,52 @@ function PinStep({
       <Text style={styles.hint}>{t('zaadTopups.received.txnHint')}</Text>
       <Text style={styles.sub}>{t('zaadTopups.pinFor', { amount: formatCents(amount) })}</Text>
       <PinInput value={pin} onChange={setPin} onComplete={onComplete} />
-      {busy ? <ActivityIndicator color="#FFFFFF" /> : null}
+      {busy ? <ActivityIndicator color={colors.ui.text} /> : null}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   content: { flexGrow: 1, paddingBottom: 32 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
   body: { paddingHorizontal: 24, gap: 16 },
-  bigTitle: { fontSize: 24, fontWeight: '800', color: '#FFFFFF', textAlign: 'center', marginTop: 20 },
-  bigAmount: { fontSize: 44, fontWeight: '800', color: '#34C77B', letterSpacing: -2, marginTop: 8 },
-  bigAmountCentered: { fontSize: 52, fontWeight: '800', color: '#FFFFFF', letterSpacing: -2, textAlign: 'center' },
-  countdown: { fontSize: 28, fontWeight: '800', color: '#FFFFFF', textAlign: 'center' },
-  sub: { fontSize: 15, lineHeight: 22, color: TEXT_DIM, textAlign: 'center' },
-  label: { fontSize: 12, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: TEXT_FAINT },
-  hint: { fontSize: 13, lineHeight: 19, color: TEXT_FAINT, textAlign: 'center' },
-  hintLeft: { fontSize: 13, lineHeight: 19, color: TEXT_FAINT },
+  bigTitle: { fontSize: 24, fontWeight: '800', color: colors.ui.text, textAlign: 'center', marginTop: 20 },
+  bigAmount: { fontSize: 44, fontWeight: '800', color: colors.ui.incoming, letterSpacing: -2, marginTop: 8 },
+  bigAmountCentered: { fontSize: 52, fontWeight: '800', color: colors.ui.text, letterSpacing: -2, textAlign: 'center' },
+  countdown: { fontSize: 28, fontWeight: '800', color: colors.ui.text, textAlign: 'center' },
+  sub: { fontSize: 15, lineHeight: 22, color: colors.ui.textDim, textAlign: 'center' },
+  label: { fontSize: 12, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: colors.ui.textFaint },
+  hint: { fontSize: 13, lineHeight: 19, color: colors.ui.textFaint, textAlign: 'center' },
+  hintLeft: { fontSize: 13, lineHeight: 19, color: colors.ui.textFaint },
   others: {
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,176,46,0.12)',
+    backgroundColor: colors.ui.warningSoft,
     borderWidth: 1,
-    borderColor: 'rgba(255,176,46,0.4)',
+    borderColor: colors.ui.warningSoft,
   },
-  othersText: { fontSize: 14, fontWeight: '700', color: ATTENTION, textAlign: 'center' },
+  othersText: { fontSize: 14, fontWeight: '700', color: colors.ui.warning, textAlign: 'center' },
   input: {
     alignSelf: 'stretch',
     fontSize: 18,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     letterSpacing: 1,
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: colors.ui.divider,
   },
-  warn: { fontSize: 14, lineHeight: 20, color: '#FFB340', textAlign: 'center' },
-  error: { fontSize: 14, color: '#FF6961', textAlign: 'center' },
+  warn: { fontSize: 14, lineHeight: 20, color: colors.ui.warning, textAlign: 'center' },
+  error: { fontSize: 14, color: colors.ui.error, textAlign: 'center' },
   card: { padding: 18, gap: 8 },
-  code: { fontSize: 22, fontWeight: '800', color: '#FFFFFF', letterSpacing: 1 },
-  lowFloat: { color: '#FFB340' },
+  code: { fontSize: 22, fontWeight: '800', color: colors.ui.text, letterSpacing: 1 },
+  lowFloat: { color: colors.ui.warning },
   switchCard: { padding: 18, flexDirection: 'row', alignItems: 'center', gap: 12 },
   switchText: { flex: 1, gap: 4 },
-  switchTitle: { fontSize: 17, fontWeight: '700', color: '#FFFFFF' },
+  switchTitle: { fontSize: 17, fontWeight: '700', color: colors.ui.text },
   waiting: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   pin: { gap: 16, marginTop: 8 },
   block: { alignSelf: 'stretch', marginTop: 28 },
-});
+}));

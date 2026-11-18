@@ -2,12 +2,13 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
-import { DarkScreen, ScreenHeader, GlassCard, PillButton, PinInput, ACCENT, TEXT_DIM } from '../../components';
+import { DarkScreen, ScreenHeader, GlassCard, PillButton, PinInput } from '../../components';
 import { CodeSheet, QrScannerView, ScannerButton } from '../../components/QrScannerView';
 import { SuccessCheckIcon, CloseIcon } from '../../components/icons/AuthIcons';
 import { triggerHaptic } from '../../services/haptics.service';
 import { linkDisplay, listMyDisplays, parsePairingCode, PairingCode } from '../../services/counterDisplay.service';
 import { isWrongPin, pinActionErrorKey } from '../../utils/errors';
+import { makeStyles, useColors } from '../../theme';
 
 const POLL_MS = 2000;
 const CONFIRM_WAIT_MS = 2 * 60 * 1000;
@@ -48,6 +49,8 @@ function linkError(err: any): { key: string; backTo: 'scan' | 'pin' } {
  * someone else's shop being linked to it.
  */
 export default function LinkDisplayScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
   const [step, setStep] = useState<Step>({ kind: 'scan' });
@@ -183,7 +186,7 @@ export default function LinkDisplayScreen() {
               autoFocus
               selectTextOnFocus
               returnKeyType="next"
-              placeholderTextColor="rgba(255,255,255,0.25)"
+              placeholderTextColor={colors.ui.ink(0.25)}
               onSubmitEditing={() => name.trim() && setStep({ kind: 'pin', pairing: step.pairing, name: name.trim() })}
             />
           </GlassCard>
@@ -212,7 +215,7 @@ export default function LinkDisplayScreen() {
           style={styles.pinInput}
         />
         {pinError ? <Text style={styles.error}>{pinError}</Text> : null}
-        {sending ? <ActivityIndicator color="#FFFFFF" style={styles.spinner} /> : null}
+        {sending ? <ActivityIndicator color={colors.ui.text} style={styles.spinner} /> : null}
         <View style={styles.block}>
           <PillButton label={t('common.cancel')} variant="glass" disabled={sending} onPress={() => navigation.goBack()} />
         </View>
@@ -223,7 +226,7 @@ export default function LinkDisplayScreen() {
   if (step.kind === 'confirm') {
     return (
       <DarkScreen edges={[]} contentStyle={styles.centered}>
-        <ActivityIndicator size="large" color={ACCENT} style={styles.spinner} />
+        <ActivityIndicator size="large" color={colors.ui.accent} style={styles.spinner} />
         <Text style={styles.bigTitle}>{t('counterDisplay.confirmTitle')}</Text>
         <Text style={styles.sub}>{t('counterDisplay.confirmMessage', { shop: step.shop })}</Text>
         <View style={styles.block}>
@@ -245,7 +248,7 @@ export default function LinkDisplayScreen() {
         <SuccessCheckIcon size={72} />
       ) : (
         <View style={styles.failIcon}>
-          <CloseIcon size={32} color="#FF6961" />
+          <CloseIcon size={32} color={colors.ui.error} />
         </View>
       )}
       <Text style={styles.bigTitle}>{outcome.title}</Text>
@@ -257,23 +260,23 @@ export default function LinkDisplayScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   body: { paddingHorizontal: 20, gap: 20, marginTop: 8 },
   card: { paddingHorizontal: 16, paddingVertical: 4 },
-  input: { fontSize: 18, fontWeight: '600', color: '#FFFFFF', paddingVertical: 14 },
+  input: { fontSize: 18, fontWeight: '600', color: colors.ui.text, paddingVertical: 14 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
-  bigTitle: { fontSize: 24, fontWeight: '700', color: '#FFFFFF', textAlign: 'center', marginTop: 16 },
-  sub: { fontSize: 15, color: TEXT_DIM, textAlign: 'center', lineHeight: 21, marginTop: 8 },
+  bigTitle: { fontSize: 24, fontWeight: '700', color: colors.ui.text, textAlign: 'center', marginTop: 16 },
+  sub: { fontSize: 15, color: colors.ui.textDim, textAlign: 'center', lineHeight: 21, marginTop: 8 },
   pinInput: { marginTop: 32 },
-  error: { fontSize: 14, color: '#FF6961', marginTop: 16, textAlign: 'center' },
+  error: { fontSize: 14, color: colors.ui.error, marginTop: 16, textAlign: 'center' },
   spinner: { marginTop: 16 },
   block: { alignSelf: 'stretch', marginTop: 32 },
   failIcon: {
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: 'rgba(255,105,97,0.15)',
+    backgroundColor: colors.ui.errorSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
-});
+}));

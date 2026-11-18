@@ -14,22 +14,13 @@ import React, { useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
-import {
-  CurrencyToggle,
-  DarkScreen,
-  ScreenHeader,
-  GlassCard,
-  PillButton,
-  PinInput,
-  TEXT_DIM,
-  TEXT_FAINT,
-  type FloatCurrency,
-} from '../../components';
+import { CurrencyToggle, DarkScreen, ScreenHeader, GlassCard, PillButton, PinInput, type FloatCurrency } from '../../components';
 import { functions } from '../../services/firebase.config';
 import { useWallet } from '../../hooks/useWallet';
 import { formatAmount, sanitizeAmountFor, toAmount } from '../../utils/money';
 import { normaliseSomaliMsisdn } from '../../utils/zaad';
 import { callableErrorKey, isWrongPin, pinActionErrorKey } from '../../utils/errors';
+import { makeStyles, useColors } from '../../theme';
 
 type Step = 'recipient' | 'amount' | 'pin';
 
@@ -46,6 +37,8 @@ function toE164(raw: string): string | null {
 }
 
 export default function SendScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
   const { wallet } = useWallet();
@@ -146,7 +139,7 @@ export default function SendScreen() {
           style={styles.pinInput}
         />
         {pinError ? <Text style={styles.pinError}>{pinError}</Text> : null}
-        {busy ? <ActivityIndicator color="#FFFFFF" style={styles.spinner} /> : null}
+        {busy ? <ActivityIndicator color={colors.ui.text} style={styles.spinner} /> : null}
         <View style={styles.block}>
           <PillButton label={t('common.cancel')} variant="glass" onPress={() => setStep('amount')} disabled={busy} />
         </View>
@@ -182,7 +175,7 @@ export default function SendScreen() {
               onChangeText={(v) => setAmount(sanitizeAmountFor(v, currency))}
               keyboardType={currency === 'SLS' ? 'number-pad' : 'decimal-pad'}
               placeholder={currency === 'SLS' ? '0,000' : '0.00'}
-              placeholderTextColor={TEXT_FAINT}
+              placeholderTextColor={colors.ui.textFaint}
               autoFocus
             />
           </GlassCard>
@@ -210,7 +203,7 @@ export default function SendScreen() {
             }}
             keyboardType="phone-pad"
             placeholder="063 412 3456"
-            placeholderTextColor={TEXT_FAINT}
+            placeholderTextColor={colors.ui.textFaint}
             autoFocus
           />
         </GlassCard>
@@ -228,21 +221,21 @@ export default function SendScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   body: { paddingHorizontal: 24, paddingBottom: 48 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
-  bigTitle: { fontSize: 24, fontWeight: '800', color: '#FFFFFF', textAlign: 'center' },
-  sub: { fontSize: 15, color: TEXT_DIM, textAlign: 'center', marginTop: 6 },
+  bigTitle: { fontSize: 24, fontWeight: '800', color: colors.ui.text, textAlign: 'center' },
+  sub: { fontSize: 15, color: colors.ui.textDim, textAlign: 'center', marginTop: 6 },
   pinInput: { marginTop: 28 },
-  pinError: { fontSize: 14, color: '#FF6961', textAlign: 'center', marginTop: 16 },
+  pinError: { fontSize: 14, color: colors.ui.error, textAlign: 'center', marginTop: 16 },
   spinner: { marginTop: 20 },
   block: { alignSelf: 'stretch', marginTop: 28 },
   recipientCard: { padding: 16, marginTop: 8 },
-  recipientName: { fontSize: 20, fontWeight: '800', color: '#FFFFFF', marginTop: 4 },
+  recipientName: { fontSize: 20, fontWeight: '800', color: colors.ui.text, marginTop: 4 },
   toggle: { marginTop: 20 },
-  label: { fontSize: 12, fontWeight: '700', color: TEXT_FAINT, letterSpacing: 1, textTransform: 'uppercase', marginTop: 20, marginBottom: 8 },
-  input: { fontSize: 22, fontWeight: '700', color: '#FFFFFF', padding: 16 },
-  hint: { fontSize: 12, color: TEXT_FAINT, marginTop: 8, lineHeight: 17 },
-  error: { fontSize: 14, color: '#FF6961', marginTop: 12 },
+  label: { fontSize: 12, fontWeight: '700', color: colors.ui.textFaint, letterSpacing: 1, textTransform: 'uppercase', marginTop: 20, marginBottom: 8 },
+  input: { fontSize: 22, fontWeight: '700', color: colors.ui.text, padding: 16 },
+  hint: { fontSize: 12, color: colors.ui.textFaint, marginTop: 8, lineHeight: 17 },
+  error: { fontSize: 14, color: colors.ui.error, marginTop: 12 },
   next: { marginTop: 24 },
-});
+}));

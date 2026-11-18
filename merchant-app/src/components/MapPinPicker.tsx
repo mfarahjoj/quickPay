@@ -3,10 +3,11 @@ import { View, Text, Modal, StyleSheet, TouchableOpacity, ActivityIndicator } fr
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import MapView, { type Region } from 'react-native-maps';
-import { PillButton, ACCENT, TEXT_DIM } from './DarkScreen';
+import { PillButton } from './DarkScreen';
 import { CloseIcon } from './icons/AuthIcons';
 import { currentPosition, type GeoPin } from '../services/roleApplication.service';
 import { logger } from '../utils/logger';
+import { makeStyles, useColors } from '../theme';
 
 /** Hargeisa, when there's no pin yet and the phone won't say where it is. */
 const HARGEISA: GeoPin = { lat: 9.5624, lng: 44.077 };
@@ -25,6 +26,8 @@ interface Props {
  * the shop's door, then confirm. Apple Maps on iPhone, Google Maps on Android.
  */
 export function MapPinPicker({ visible, initial, onClose, onConfirm }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const mapRef = useRef<MapView>(null);
   const [region, setRegion] = useState<Region | null>(null);
@@ -67,7 +70,7 @@ export function MapPinPicker({ visible, initial, onClose, onConfirm }: Props) {
             toolbarEnabled={false}
           />
         ) : (
-          <ActivityIndicator style={styles.loading} color="#FFF" />
+          <ActivityIndicator style={styles.loading} color={colors.ui.text} />
         )}
 
         {/* The pin is fixed to the centre; the map moves under it. */}
@@ -106,7 +109,7 @@ export function MapPinPicker({ visible, initial, onClose, onConfirm }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   root: { flex: 1, backgroundColor: '#111' },
   loading: { flex: 1 },
   overlay: { ...StyleSheet.absoluteFill, justifyContent: 'space-between' },
@@ -120,10 +123,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   banner: { backgroundColor: 'rgba(0,0,0,0.75)', borderRadius: 16, padding: 14 },
-  title: { color: '#FFF', fontSize: 17, fontWeight: '700' },
-  hint: { color: TEXT_DIM, fontSize: 14, marginTop: 4 },
+  title: { color: colors.ui.text, fontSize: 17, fontWeight: '700' },
+  hint: { color: colors.ui.textDim, fontSize: 14, marginTop: 4 },
   pinWrap: { position: 'absolute', top: '50%', left: '50%', marginLeft: -14, marginTop: -44, alignItems: 'center' },
-  pinHead: { width: 28, height: 28, borderRadius: 14, backgroundColor: ACCENT, borderWidth: 4, borderColor: '#FFF' },
-  pinStem: { width: 3, height: 16, backgroundColor: '#FFF' },
+  pinHead: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.ui.accent, borderWidth: 4, borderColor: '#FFFFFF' },
+  pinStem: { width: 3, height: 16, backgroundColor: '#FFFFFF' },
   bottom: { paddingHorizontal: 16, paddingBottom: 16, gap: 10 },
-});
+}));

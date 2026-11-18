@@ -12,16 +12,19 @@ import { BottomSheet } from './BottomSheet';
 import { SUPPORTED_LANGUAGES } from '../i18n/languages';
 import { applyLanguage } from '../i18n';
 import { functions } from '../services/firebase.config';
-import { colors, typography, spacing, borderRadius } from '../theme';
+import { typography, spacing, borderRadius, makeStyles, useColors, wallpaper } from '../theme';
 import type { PreferredLanguage } from '../types';
 
 interface LanguageSelectorProps {
   currentLanguage?: PreferredLanguage;
   compact?: boolean;
-  dark?: boolean;
+  /** 'onColor': smoked glass with white marks, for the coral wallpaper. */
+  tone?: 'default' | 'onColor';
 }
 
-export function LanguageSelector({ currentLanguage = 'en', compact = false, dark = false }: LanguageSelectorProps) {
+export function LanguageSelector({ currentLanguage = 'en', compact = false, tone = 'default' }: LanguageSelectorProps) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t, i18n } = useTranslation();
   const [visible, setVisible] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -59,14 +62,14 @@ export function LanguageSelector({ currentLanguage = 'en', compact = false, dark
   return (
     <>
       <TouchableOpacity
-        style={[styles.trigger, compact && styles.triggerCompact, dark && styles.triggerDark]}
+        style={[styles.trigger, compact && styles.triggerCompact, tone === 'onColor' && styles.triggerOnColor]}
         onPress={() => setVisible(true)}
         accessibilityLabel={t('language.selectLanguage')}
         activeOpacity={0.7}
       >
         <Text style={styles.triggerFlag}>{current.flag}</Text>
-        {!compact && <Text style={[styles.triggerLabel, dark && styles.triggerLabelDark]}>{current.nativeName}</Text>}
-        <Text style={[styles.triggerChevron, dark && styles.triggerChevronDark]}>▾</Text>
+        {!compact && <Text style={[styles.triggerLabel]}>{current.nativeName}</Text>}
+        <Text style={[styles.triggerChevron, tone === 'onColor' && styles.triggerChevronOnColor]}>▾</Text>
       </TouchableOpacity>
 
       <BottomSheet visible={visible} onClose={() => setVisible(false)} height="45%">
@@ -100,7 +103,7 @@ export function LanguageSelector({ currentLanguage = 'en', compact = false, dark
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   trigger: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -115,15 +118,15 @@ const styles = StyleSheet.create({
   triggerCompact: {
     paddingHorizontal: spacing.sm,
   },
-  triggerDark: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderColor: 'rgba(255,255,255,0.12)',
+  triggerOnColor: {
+    height: 40,
+    paddingVertical: 0,
+    paddingHorizontal: 12,
+    backgroundColor: wallpaper.glass,
+    borderColor: wallpaper.glassBorder,
   },
-  triggerLabelDark: {
+  triggerChevronOnColor: {
     color: '#FFFFFF',
-  },
-  triggerChevronDark: {
-    color: 'rgba(255,255,255,0.5)',
   },
   triggerFlag: {
     fontSize: 18,
@@ -182,4 +185,4 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '700',
   },
-});
+}));

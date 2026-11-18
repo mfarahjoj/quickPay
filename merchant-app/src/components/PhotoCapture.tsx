@@ -4,10 +4,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Camera, useCameraDevice, usePhotoOutput, type CameraPhotoOutput } from 'react-native-vision-camera';
 import { CAMERA_NATIVE_AVAILABLE, requestCameraPermission } from '../hooks/useQrScannerOutputs';
-import { PillButton, TEXT_DIM } from './DarkScreen';
+import { PillButton } from './DarkScreen';
 import { CloseIcon } from './icons/AuthIcons';
 import { triggerHaptic } from '../services/haptics.service';
 import { logger } from '../utils/logger';
+import { makeStyles, useColors } from '../theme';
 
 interface Props {
   visible: boolean;
@@ -58,6 +59,8 @@ function CameraLayer({
 
 /** Full-screen camera for one application photo: ID side, selfie or shop. */
 export function PhotoCapture({ visible, facing, title, hint, onClose, onCaptured }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const photoRef = useRef<CameraPhotoOutput | null>(null);
   const [permission, setPermission] = useState<boolean | null>(null);
@@ -121,7 +124,7 @@ export function PhotoCapture({ visible, facing, title, hint, onClose, onCaptured
                   accessibilityRole="button"
                   accessibilityLabel={t('application.photo.take')}
                 >
-                  {busy ? <ActivityIndicator color="#000" /> : <View style={styles.shutterInner} />}
+                  {busy ? <ActivityIndicator color={colors.ui.onSolid} /> : <View style={styles.shutterInner} />}
                 </TouchableOpacity>
               </>
             )}
@@ -132,8 +135,8 @@ export function PhotoCapture({ visible, facing, title, hint, onClose, onCaptured
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#000' },
+const useStyles = makeStyles((colors) => StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.ui.canvas },
   overlay: { flex: 1, justifyContent: 'space-between' },
   top: { paddingHorizontal: 20, paddingTop: 8 },
   close: {
@@ -145,15 +148,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 12,
   },
-  title: { color: '#FFF', fontSize: 22, fontWeight: '700' },
-  hint: { color: TEXT_DIM, fontSize: 15, marginTop: 6 },
+  title: { color: colors.ui.text, fontSize: 22, fontWeight: '700' },
+  hint: { color: colors.ui.textDim, fontSize: 15, marginTop: 6 },
   cardFrame: {
     alignSelf: 'center',
     width: '86%',
     aspectRatio: 1.58,
     borderRadius: 16,
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.8)',
+    borderColor: colors.ui.ink(0.8),
   },
   faceFrame: {
     alignSelf: 'center',
@@ -161,18 +164,18 @@ const styles = StyleSheet.create({
     height: 300,
     borderRadius: 150,
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.8)',
+    borderColor: colors.ui.ink(0.8),
   },
   bottom: { alignItems: 'center', paddingBottom: 24, paddingHorizontal: 20, gap: 12 },
-  error: { color: '#FF8A80', textAlign: 'center', fontSize: 14 },
+  error: { color: colors.ui.error, textAlign: 'center', fontSize: 14 },
   shutter: {
     width: 76,
     height: 76,
     borderRadius: 38,
     borderWidth: 4,
-    borderColor: '#FFF',
+    borderColor: '#FFFFFF', // camera overlay: white in both themes
     alignItems: 'center',
     justifyContent: 'center',
   },
-  shutterInner: { width: 58, height: 58, borderRadius: 29, backgroundColor: '#FFF' },
-});
+  shutterInner: { width: 58, height: 58, borderRadius: 29, backgroundColor: '#FFFFFF' },
+}));

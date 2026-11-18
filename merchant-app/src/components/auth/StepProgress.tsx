@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
-import { colors, spacing, borderRadius } from '../../theme';
+import { spacing, borderRadius, makeStyles } from '../../theme';
 
 interface StepProgressProps {
   currentStep: number;
@@ -8,6 +8,7 @@ interface StepProgressProps {
 }
 
 export function StepProgress({ currentStep, totalSteps }: StepProgressProps) {
+  const styles = useStyles();
   const widthAnim = useRef(new Animated.Value(0)).current;
   const progress = currentStep / totalSteps;
 
@@ -33,13 +34,13 @@ export function StepProgress({ currentStep, totalSteps }: StepProgressProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     marginBottom: spacing.xl,
   },
   track: {
     height: 3,
-    backgroundColor: '#E5E5EA',
+    backgroundColor: colors.ui.glassBorder,
     borderRadius: borderRadius.full,
     overflow: 'hidden',
   },
@@ -48,4 +49,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     borderRadius: borderRadius.full,
   },
-});
+}));

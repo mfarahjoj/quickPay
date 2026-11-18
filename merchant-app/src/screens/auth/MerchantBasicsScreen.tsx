@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   Animated,
-  StatusBar,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
@@ -18,6 +17,7 @@ import { CodeInput, isWeakPin } from '../../components/auth';
 import { Input } from '../../components/Input';
 import { confirmSignOut } from '../../utils/confirmSignOut';
 import type { MerchantOnboardingParamList } from '../../navigation/MerchantOnboardingNavigator';
+import { makeStyles } from '../../theme';
 
 type Nav = StackNavigationProp<MerchantOnboardingParamList, 'MerchantBasics'>;
 type R = RouteProp<MerchantOnboardingParamList, 'MerchantBasics'>;
@@ -29,6 +29,7 @@ export default function MerchantBasicsScreen({
   navigation: Nav;
   route: R;
 }) {
+  const styles = useStyles();
   const { t } = useTranslation();
   const prefilled = route.params?.prefilledName ?? '';
   const [fullName, setFullName] = useState(prefilled);
@@ -95,7 +96,6 @@ export default function MerchantBasicsScreen({
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <StatusBar barStyle="light-content" backgroundColor="#000000" />
 
       {/* Ambient glow */}
       <View style={styles.glowContainer} pointerEvents="none">
@@ -207,10 +207,10 @@ export default function MerchantBasicsScreen({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: colors.ui.canvas,
   },
   flex: { flex: 1 },
 
@@ -226,7 +226,7 @@ const styles = StyleSheet.create({
     width: 180,
     height: 180,
     borderRadius: 90,
-    backgroundColor: '#FF5043',
+    backgroundColor: colors.ui.accent,
     opacity: 0.1,
   },
   glowOuter: {
@@ -234,7 +234,7 @@ const styles = StyleSheet.create({
     width: 320,
     height: 320,
     borderRadius: 160,
-    backgroundColor: '#FF5043',
+    backgroundColor: colors.ui.accent,
     opacity: 0.04,
   },
 
@@ -260,7 +260,7 @@ const styles = StyleSheet.create({
   },
   backChevron: {
     fontSize: 38,
-    color: '#FFFFFF',
+    color: colors.ui.text,
     lineHeight: 42,
     fontWeight: '300',
   },
@@ -273,10 +273,10 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: colors.ui.ink(0.2),
   },
   stepDotActive: {
-    backgroundColor: '#FF5043',
+    backgroundColor: colors.ui.accent,
     width: 24,
     borderRadius: 4,
   },
@@ -289,7 +289,7 @@ const styles = StyleSheet.create({
     fontSize: 36,
     fontWeight: '800',
     letterSpacing: -1.4,
-    color: '#FFFFFF',
+    color: colors.ui.text,
     lineHeight: 44,
     marginBottom: 10,
   },
@@ -297,7 +297,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '400',
     lineHeight: 22,
-    color: 'rgba(255,255,255,0.4)',
+    color: colors.ui.textFaint,
   },
 
   // Form
@@ -310,7 +310,7 @@ const styles = StyleSheet.create({
   pinLabel: {
     fontSize: 13,
     fontWeight: '500',
-    color: 'rgba(255,255,255,0.45)',
+    color: colors.ui.textDim,
     marginBottom: 10,
     letterSpacing: 0.1,
   },
@@ -319,7 +319,7 @@ const styles = StyleSheet.create({
   },
   hint: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.25)',
+    color: colors.ui.ink(0.25),
     marginTop: 16,
     textAlign: 'center',
     lineHeight: 18,
@@ -329,22 +329,22 @@ const styles = StyleSheet.create({
 
   // CTA
   ctaBtn: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.ui.solid,
     borderRadius: 9999,
     height: 58,
     justifyContent: 'center',
     alignItems: 'center',
   },
   ctaBtnDisabled: {
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: colors.ui.ink(0.12),
   },
   ctaText: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#000000',
+    color: colors.ui.onSolid,
     letterSpacing: -0.3,
   },
   ctaTextDisabled: {
-    color: 'rgba(255,255,255,0.25)',
+    color: colors.ui.ink(0.25),
   },
-});
+}));

@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  TextInput,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
@@ -22,7 +21,7 @@ import {
   prepareBiometricApproval,
 } from '../../services/biometric.service';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { typography, spacing, borderRadius, makeStyles, useColors, useTheme, tints } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
 import { CURRENCY_SYMBOL } from '../../config/constants';
 import { PinInput } from '../../components/PinInput';
 import { Header } from '../../components/Header';
@@ -66,13 +65,8 @@ export default function EnterAmountScreen({ navigation, route }: Props) {
   const lightStyles = useLightStyles();
   const { t } = useTranslation();
   const { merchantId, merchantName } = route.params;
-  // Light mode types the amount on its own keypad, under an amount card.
-  const { scheme } = useTheme();
-  const isLight = scheme === 'light';
   const insets = useSafeAreaInsets();
   const { wallet } = useWallet();
-
-  // Shillings or dollars: the customer pays from that balance, never
   // converted. Starts on the currency Home shows.
   const { currency: homeCurrency } = useHomeCurrency(wallet?.balanceCents ?? 0, wallet?.slsBalance ?? 0);
   const [pickedCurrency, setPickedCurrency] = useState<Currency | null>(null);
@@ -87,10 +81,6 @@ export default function EnterAmountScreen({ navigation, route }: Props) {
   const [biometryType, setBiometryType] = useState<string | undefined>();
   /** The phone has said whether Face ID is on: only then open the PIN pad. */
   const [biometricChecked, setBiometricChecked] = useState(false);
-
-  // One key per payment attempt, held across retries so the server can tell a
-  // retry from a second payment. It is minted when the customer commits to an
-  // amount and cleared when they go back to change it, which is the only point
   // where they mean to start a different payment.
   const idempotencyKey = useRef<string | null>(null);
 
@@ -170,8 +160,6 @@ export default function EnterAmountScreen({ navigation, route }: Props) {
       setProcessing(false);
     }
   };
-
-  // `submittedPin` comes from PinInput's onComplete — the `pin` state is still
   // one digit behind in that same event, so it must not be read there.
   const handleConfirm = async (submittedPin?: string) => {
     if (processing) return;
@@ -195,7 +183,7 @@ export default function EnterAmountScreen({ navigation, route }: Props) {
     }
   };
 
-  if (step === 'amount' && isLight) {
+  if (step === 'amount') {
     const payLabel = amountLabel;
     return (
       <View style={[lightStyles.container, { paddingTop: insets.top + 6, paddingBottom: insets.bottom + 16 }]}>
@@ -211,7 +199,7 @@ export default function EnterAmountScreen({ navigation, route }: Props) {
 
         <View style={lightStyles.merchant}>
           <View style={lightStyles.merchantAvatar}>
-            <StoreIcon size={26} color={tints.amber.mark} strokeWidth={1.8} />
+            <StoreIcon size={26} color={colors.tints.amber.mark} strokeWidth={1.8} />
           </View>
           <Text style={lightStyles.merchantName} numberOfLines={2}>
             {merchantName}
@@ -272,62 +260,6 @@ export default function EnterAmountScreen({ navigation, route }: Props) {
           <Text style={lightStyles.payText}>{t('qr.enterAmount.payAmount', { amount: payLabel })}</Text>
         </TouchableOpacity>
       </View>
-    );
-  }
-
-  if (step === 'amount') {
-    return (
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <Header title={t('qr.enterAmount.title')} onBack={() => navigation.goBack()} />
-
-        <View style={styles.content}>
-          <View style={styles.merchantCard}>
-            <View style={styles.merchantInitial}>
-              <Text style={styles.merchantInitialText}>
-                {merchantName.charAt(0).toUpperCase()}
-              </Text>
-            </View>
-            <Text style={styles.merchantNameLarge}>{merchantName}</Text>
-          </View>
-
-          <CurrencySegment value={currency} onChange={pickCurrency} />
-          <Text style={styles.amountLabel}>{t('qr.enterAmount.enterAmount')}</Text>
-          <View style={styles.amountInputRow}>
-            {currency === 'USD' ? <Text style={styles.currencyPrefix}>{CURRENCY_SYMBOL}</Text> : null}
-            <TextInput
-              style={styles.amountInput}
-              value={amount}
-              onChangeText={(v) =>
-                setAmount(currency === 'SLS' ? v.split('.')[0].replace(/[^0-9]/g, '') : v)
-              }
-              placeholder={currency === 'SLS' ? '0,000' : '0.00'}
-              placeholderTextColor={colors.text.tertiary}
-              keyboardType={currency === 'SLS' ? 'number-pad' : 'decimal-pad'}
-              autoFocus
-              maxLength={10}
-            />
-          </View>
-
-          {error && <Text style={styles.errorText}>{error}</Text>}
-
-          <TouchableOpacity
-            style={[styles.continueButton, !isValidAmount && styles.buttonDisabled]}
-            onPress={handleContinue}
-            disabled={!isValidAmount}
-            activeOpacity={0.8}
-          >
-            <LinearGradient
-              colors={[colors.primary, colors.primaryGradientEnd]}
-              style={styles.gradientButton}
-            >
-              <Text style={styles.continueText}>{t('qr.enterAmount.continue')}</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
     );
   }
 
@@ -420,73 +352,11 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
     flex: 1,
     padding: spacing.lg,
   },
-  merchantCard: {
-    alignItems: 'center',
-    marginBottom: spacing.xl,
-    marginTop: spacing.md,
-  },
-  merchantInitial: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: colors.ui.accentSoft,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: spacing.smPlus,
-  },
-  merchantInitialText: {
-    ...typography.display,
-    color: colors.ui.accentText,
-  },
-  merchantNameLarge: {
-    ...typography.h1,
-    color: colors.ui.text,
-    textAlign: 'center',
-  },
-  amountLabel: {
-    ...typography.captionBold,
-    color: colors.ui.textFaint,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: spacing.sm,
-  },
-  amountInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.ui.glass,
-    borderWidth: 1,
-    borderColor: colors.ui.glassBorder,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  currencyPrefix: {
-    ...typography.display,
-    color: colors.ui.textFaint,
-    marginRight: spacing.sm,
-  },
-  amountInput: {
-    flex: 1,
-    ...typography.display,
-    color: colors.ui.text,
-    padding: 0,
-  },
-  continueButton: {
-    borderRadius: borderRadius.lg,
-    overflow: 'hidden',
-    marginTop: spacing.md,
-  },
   // A gradient doesn't grow to fit its label, so it gets a fixed height.
   gradientButton: {
     height: 56,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  continueText: {
-    ...typography.h3,
-    color: '#FFFFFF',
-    fontWeight: '600',
   },
   buttonDisabled: {
     opacity: 0.5,
@@ -590,7 +460,7 @@ const useLightStyles = makeStyles((colors) => StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: tints.amber.fill,
+    backgroundColor: colors.tints.amber.fill,
     alignItems: 'center',
     justifyContent: 'center',
   },

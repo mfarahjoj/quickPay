@@ -16,5 +16,5 @@ export { ReceiptScanner } from './ReceiptScanner';
 export { PaidReferenceSheet } from './PaidReferenceSheet';
 export { CurrencyToggle } from './CurrencyToggle';
 export type { FloatCurrency } from './CurrencyToggle';
-export { DarkScreen, ScreenHeader, GlassCard, PillButton, ACCENT, GLASS, GLASS_BORDER, TEXT_DIM, TEXT_FAINT } from './DarkScreen';
+export { DarkScreen, ScreenHeader, GlassCard, PillButton } from './DarkScreen';
 export * from './auth';

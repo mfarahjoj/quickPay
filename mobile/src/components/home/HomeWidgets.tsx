@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { makeStyles, tints } from '../../theme';
+import { makeStyles, useColors } from '../../theme';
 import { CURRENCY_SYMBOL } from '../../config/constants';
 import { GiftIcon } from '../icons/LineIcons';
 import { lastSevenDaysSpend } from '../../utils/spending';
@@ -16,11 +16,12 @@ interface Props {
 }
 
 /**
- * Two small cards under the activity on the light Home: the last seven days'
+ * Two small cards under the activity on Home: the last seven days'
  * spending as bars (today in coral), opening Insights, and Invite & Earn.
  */
 export function HomeWidgets({ transactions, onSpending, onInvite }: Props) {
   const styles = useStyles();
+  const colors = useColors();
   const { t } = useTranslation();
   const days = useMemo(() => lastSevenDaysSpend(transactions), [transactions]);
   const total = days.reduce((sum, day) => sum + day.value, 0);
@@ -57,7 +58,7 @@ export function HomeWidgets({ transactions, onSpending, onInvite }: Props) {
         accessibilityRole="button"
       >
         <View style={styles.giftCircle}>
-          <GiftIcon size={19} color={tints.coral.mark} strokeWidth={1.9} />
+          <GiftIcon size={19} color={colors.tints.coral.mark} strokeWidth={1.9} />
         </View>
         <View>
           <Text style={styles.inviteTitle}>{t('profile.invite')}</Text>
@@ -124,7 +125,7 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: tints.coral.fill,
+    backgroundColor: colors.tints.coral.fill,
     alignItems: 'center',
     justifyContent: 'center',
   },

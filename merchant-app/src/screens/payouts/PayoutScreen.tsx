@@ -2,15 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
-import {
-  DarkScreen,
-  ScreenHeader,
-  GlassCard,
-  PillButton,
-  PinInput,
-  TEXT_DIM,
-  TEXT_FAINT,
-} from '../../components';
+import { DarkScreen, ScreenHeader, GlassCard, PillButton, PinInput } from '../../components';
 import { SuccessCheckIcon } from '../../components/icons/AuthIcons';
 import { requestPayout, watchMyPayouts, PayoutRecord } from '../../services/payout.service';
 import { useWallet } from '../../hooks/useWallet';
@@ -23,6 +15,7 @@ import { CurrencyToggle, type FloatCurrency } from '../../components/CurrencyTog
 import { isWrongPin, pinActionErrorKey } from '../../utils/errors';
 import { functions } from '../../services/firebase.config';
 import { AmountInput } from '../../components/AmountInput';
+import { makeStyles, useColors } from '../../theme';
 
 type Step = 'form' | 'pin' | 'sent';
 
@@ -47,6 +40,8 @@ function payoutErrorKey(error: any): string {
 }
 
 export default function PayoutScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
   const { wallet } = useWallet();
@@ -215,7 +210,7 @@ export default function PayoutScreen() {
               onChangeText={(v) => setAmount(sanitizeAmountFor(v, currency))}
               keyboardType={currency === 'SLS' ? 'number-pad' : 'decimal-pad'}
               placeholder={currency === 'SLS' ? '0,000' : '0.00'}
-              placeholderTextColor="rgba(255,255,255,0.2)"
+              placeholderTextColor={colors.ui.ink(0.2)}
             />
             {currency === 'SLS' ? <Text style={styles.currency}>SLSH</Text> : null}
           </View>
@@ -308,27 +303,27 @@ export default function PayoutScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   currencyToggle: { marginBottom: 16 },
   body: { paddingHorizontal: 24, paddingBottom: 48, gap: 6 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
   bigTitle: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     letterSpacing: -0.5,
     textAlign: 'center',
     marginTop: 20,
   },
-  sub: { fontSize: 15, color: TEXT_DIM, textAlign: 'center', marginTop: 6 },
+  sub: { fontSize: 15, color: colors.ui.textDim, textAlign: 'center', marginTop: 6 },
   pinInput: { marginTop: 28 },
-  pinError: { fontSize: 14, color: '#FF6961', textAlign: 'center', marginTop: 16 },
+  pinError: { fontSize: 14, color: colors.ui.error, textAlign: 'center', marginTop: 16 },
   block: { alignSelf: 'stretch', marginTop: 28 },
   label: {
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.6,
-    color: TEXT_FAINT,
+    color: colors.ui.textFaint,
     textTransform: 'uppercase',
     marginTop: 18,
     marginBottom: 8,
@@ -338,30 +333,30 @@ const styles = StyleSheet.create({
   // A fixed height: on its own (no "$" beside it) a single-line input sizes
   // to its padding and iOS clips the top of a 32pt number.
   amountRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, height: 72 },
-  currency: { fontSize: 28, fontWeight: '700', color: TEXT_DIM },
+  currency: { fontSize: 28, fontWeight: '700', color: colors.ui.textDim },
   amountInput: {
     flex: 1,
     height: 72,
     fontSize: 32,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     paddingVertical: 0,
     paddingHorizontal: 8,
   },
-  available: { fontSize: 12, color: TEXT_FAINT, marginTop: 4 },
-  amountError: { fontSize: 12, color: '#FF6961', marginTop: 4 },
-  hint: { fontSize: 12, color: TEXT_FAINT, marginVertical: 12, lineHeight: 17 },
+  available: { fontSize: 12, color: colors.ui.textFaint, marginTop: 4 },
+  amountError: { fontSize: 12, color: colors.ui.error, marginTop: 4 },
+  hint: { fontSize: 12, color: colors.ui.textFaint, marginVertical: 12, lineHeight: 17 },
   linkCard: { marginTop: 20, paddingHorizontal: 16 },
   linkRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 16 },
-  linkText: { fontSize: 15, color: '#FFFFFF', fontWeight: '600' },
-  linkArrow: { fontSize: 20, color: TEXT_DIM },
-  linkDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.08)' },
-  error: { fontSize: 13, color: '#FF6961', marginTop: 12 },
+  linkText: { fontSize: 15, color: colors.ui.text, fontWeight: '600' },
+  linkArrow: { fontSize: 20, color: colors.ui.textDim },
+  linkDivider: { height: 1, backgroundColor: colors.ui.divider },
+  error: { fontSize: 13, color: colors.ui.error, marginTop: 12 },
   historyCard: { padding: 14, marginBottom: 8, gap: 4 },
   historyRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  historyAmount: { fontSize: 17, fontWeight: '700', color: '#FFFFFF' },
-  historyMeta: { fontSize: 12, color: TEXT_FAINT },
-  status: { fontSize: 11, fontWeight: '700', letterSpacing: 0.4, color: TEXT_DIM, textTransform: 'uppercase' },
-  statusPaid: { color: '#34C77B' },
-  statusRejected: { color: '#FF6961' },
-});
+  historyAmount: { fontSize: 17, fontWeight: '700', color: colors.ui.text },
+  historyMeta: { fontSize: 12, color: colors.ui.textFaint },
+  status: { fontSize: 11, fontWeight: '700', letterSpacing: 0.4, color: colors.ui.textDim, textTransform: 'uppercase' },
+  statusPaid: { color: colors.ui.incoming },
+  statusRejected: { color: colors.ui.error },
+}));

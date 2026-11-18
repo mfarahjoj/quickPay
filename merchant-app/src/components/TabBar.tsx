@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { colors } from '../theme';
+import { useColors, makeStyles } from '../theme';
 
 export const TAB_ICONS = {
   dashboard: '\u2302',
@@ -16,6 +16,8 @@ interface TabIconProps {
 }
 
 export function TabIcon({ name, focused, color }: TabIconProps) {
+  const styles = useStyles();
+  const colors = useColors();
   const iconColor = color ?? (focused ? colors.primary : colors.border.dark);
   return (
     <View style={styles.container}>
@@ -26,7 +28,7 @@ export function TabIcon({ name, focused, color }: TabIconProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     justifyContent: 'center',
     alignItems: 'center',
@@ -35,4 +37,4 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '600',
   },
-});
+}));

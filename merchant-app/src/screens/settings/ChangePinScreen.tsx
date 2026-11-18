@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
-import { DarkScreen, ScreenHeader, PillButton, PinInput, TEXT_DIM } from '../../components';
+import { DarkScreen, ScreenHeader, PillButton, PinInput } from '../../components';
 import { isWeakPin } from '../../components/auth';
 import { changePin, PinLockoutError } from '../../services/auth.service';
 import { pinLockoutText } from '../../components/security/AppLockGate';
 import { useExitGuard } from '../../hooks/useExitGuard';
 import { logger } from '../../utils/logger';
+import { makeStyles, useColors } from '../../theme';
 
 type Step = 'current' | 'new' | 'confirm';
 
@@ -17,6 +18,8 @@ type Step = 'current' | 'new' | 'confirm';
  * refuses weak PINs, ends other sessions and tells the owner.
  */
 export default function ChangePinScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
   const [step, setStep] = useState<Step>('current');
@@ -117,7 +120,7 @@ export default function ChangePinScreen() {
           style={styles.pin}
         />
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        {submitting ? <ActivityIndicator color="#FFFFFF" style={styles.spinner} /> : null}
+        {submitting ? <ActivityIndicator color={colors.ui.text} style={styles.spinner} /> : null}
         {step === 'current' && (
           <PillButton
             style={styles.forgot}
@@ -131,19 +134,19 @@ export default function ChangePinScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   body: { paddingHorizontal: 24, paddingBottom: 48, alignItems: 'center' },
   title: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     letterSpacing: -0.5,
     textAlign: 'center',
     marginTop: 20,
   },
-  sub: { fontSize: 15, color: TEXT_DIM, textAlign: 'center', marginTop: 6 },
+  sub: { fontSize: 15, color: colors.ui.textDim, textAlign: 'center', marginTop: 6 },
   pin: { marginTop: 28 },
-  error: { fontSize: 14, color: '#FF6961', textAlign: 'center', marginTop: 16 },
+  error: { fontSize: 14, color: colors.ui.error, textAlign: 'center', marginTop: 16 },
   spinner: { marginTop: 20 },
   forgot: { alignSelf: 'stretch', marginTop: 36 },
-});
+}));

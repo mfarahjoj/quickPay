@@ -2,13 +2,14 @@ import React, { useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
-import { DarkScreen, ScreenHeader, GlassCard, PillButton, PinInput, TEXT_DIM, TEXT_FAINT } from '../../components';
+import { DarkScreen, ScreenHeader, GlassCard, PillButton, PinInput } from '../../components';
 import { useToast } from '../../components/auth';
 import { useMerchantProfile } from '../../hooks/useMerchantProfile';
 import { saveZaadAccount } from '../../services/zaadAccount.service';
 import { confirmSignOut } from '../../utils/confirmSignOut';
 import { isWrongPin } from '../../utils/errors';
 import { formatLocal, normaliseSomaliMsisdn, normaliseZaadName } from '../../utils/zaad';
+import { makeStyles, useColors } from '../../theme';
 
 interface FormProps {
   /** Shown before the app by ZaadGate: no way back, only out. */
@@ -27,6 +28,8 @@ interface FormProps {
  * payouts wait a day after a new number.
  */
 export function ZaadAccountForm({ gate = false, current, phoneNumber, onBack, onSaved }: FormProps) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const { showToast } = useToast();
   // Most people's Zaad is the Telesom number they signed up with.
@@ -93,7 +96,7 @@ export function ZaadAccountForm({ gate = false, current, phoneNumber, onBack, on
           style={styles.pinInput}
         />
         {pinError ? <Text style={styles.error}>{pinError}</Text> : null}
-        {saving ? <ActivityIndicator color="#FFFFFF" style={styles.spinner} /> : null}
+        {saving ? <ActivityIndicator color={colors.ui.text} style={styles.spinner} /> : null}
         <View style={styles.block}>
           <PillButton
             label={t('common.cancel')}
@@ -130,7 +133,7 @@ export function ZaadAccountForm({ gate = false, current, phoneNumber, onBack, on
             keyboardType="phone-pad"
             textContentType="telephoneNumber"
             placeholder="063 412 3456"
-            placeholderTextColor="rgba(255,255,255,0.25)"
+            placeholderTextColor={colors.ui.ink(0.25)}
           />
         </GlassCard>
         {numberError ? <Text style={styles.fieldError}>{numberError}</Text> : null}
@@ -147,7 +150,7 @@ export function ZaadAccountForm({ gate = false, current, phoneNumber, onBack, on
             autoCapitalize="words"
             autoCorrect={false}
             placeholder={t('zaadAccount.namePlaceholder')}
-            placeholderTextColor="rgba(255,255,255,0.25)"
+            placeholderTextColor={colors.ui.ink(0.25)}
           />
         </GlassCard>
         {nameError ? <Text style={styles.fieldError}>{nameError}</Text> : null}
@@ -184,12 +187,14 @@ export function ZaadGate({ children }: { children: React.ReactNode }) {
 
 /** Settings → Zaad account, and Withdraw → Change. */
 export default function ZaadAccountScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const navigation = useNavigation<any>();
   const { profile } = useMerchantProfile();
   if (!profile) {
     return (
       <DarkScreen contentStyle={styles.centered}>
-        <ActivityIndicator color="#FFFFFF" />
+        <ActivityIndicator color={colors.ui.text} />
       </DarkScreen>
     );
   }
@@ -203,11 +208,11 @@ export default function ZaadAccountScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   body: { paddingHorizontal: 24, paddingBottom: 48, gap: 6 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
-  bigTitle: { fontSize: 24, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.5, textAlign: 'center' },
-  sub: { fontSize: 15, color: TEXT_DIM, textAlign: 'center', marginTop: 6, lineHeight: 21 },
+  bigTitle: { fontSize: 24, fontWeight: '800', color: colors.ui.text, letterSpacing: -0.5, textAlign: 'center' },
+  sub: { fontSize: 15, color: colors.ui.textDim, textAlign: 'center', marginTop: 6, lineHeight: 21 },
   pinInput: { marginTop: 28 },
   spinner: { marginTop: 20 },
   block: { alignSelf: 'stretch', marginTop: 28 },
@@ -215,16 +220,16 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.6,
-    color: TEXT_FAINT,
+    color: colors.ui.textFaint,
     textTransform: 'uppercase',
     marginTop: 18,
     marginBottom: 8,
   },
   card: { padding: 0, marginBottom: 4 },
-  input: { fontSize: 17, color: '#FFFFFF', padding: 16 },
-  fieldError: { fontSize: 12, color: '#FF6961', marginTop: 2 },
-  error: { fontSize: 14, color: '#FF6961', textAlign: 'center', marginTop: 16 },
-  hint: { fontSize: 12, color: TEXT_FAINT, marginVertical: 12, lineHeight: 17 },
+  input: { fontSize: 17, color: colors.ui.text, padding: 16 },
+  fieldError: { fontSize: 12, color: colors.ui.error, marginTop: 2 },
+  error: { fontSize: 14, color: colors.ui.error, textAlign: 'center', marginTop: 16 },
+  hint: { fontSize: 12, color: colors.ui.textFaint, marginVertical: 12, lineHeight: 17 },
   signOut: { alignItems: 'center', paddingVertical: 20 },
-  signOutText: { fontSize: 15, fontWeight: '600', color: TEXT_DIM },
-});
+  signOutText: { fontSize: 15, fontWeight: '600', color: colors.ui.textDim },
+}));

@@ -1098,5 +1098,9 @@
   "application.business.landmarkPlaceholder": "tusaale ag masjidka weyn",
   "application.photo.passport": "Bogga sawirka baasaboorka",
   "application.id.usePassport": "Waxaan haystaa baasaboor",
-  "application.id.useNationalId": "Isticmaal kaarka aqoonsiga"
+  "application.id.useNationalId": "Isticmaal kaarka aqoonsiga",
+  "settings.section.appearance": "MUUQAALKA",
+  "settings.appearanceAuto": "Toos",
+  "settings.appearanceLight": "Iftiin",
+  "settings.appearanceDark": "Mugdi"
 }

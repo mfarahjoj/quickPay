@@ -12,25 +12,18 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, ActivityIndicator, Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
-import {
-  CurrencyToggle,
-  DarkScreen,
-  ScreenHeader,
-  GlassCard,
-  PillButton,
-  PinInput,
-  TEXT_DIM,
-  TEXT_FAINT,
-  type FloatCurrency,
-} from '../../components';
+import { CurrencyToggle, DarkScreen, ScreenHeader, GlassCard, PillButton, PinInput, type FloatCurrency } from '../../components';
 import { functions } from '../../services/firebase.config';
 import { useWallet } from '../../hooks/useWallet';
 import { useFloat } from '../../hooks/useFloat';
 import { formatAmount, sanitizeAmountFor, toAmount } from '../../utils/money';
 import { isWrongPin, pinActionErrorKey } from '../../utils/errors';
 import { newIdempotencyKey } from '../../utils/idempotency';
+import { makeStyles, useColors } from '../../theme';
 
 export default function MoveToFloatScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
   const { wallet } = useWallet();
@@ -107,7 +100,7 @@ export default function MoveToFloatScreen() {
           style={styles.pinInput}
         />
         {pinError ? <Text style={styles.pinError}>{pinError}</Text> : null}
-        {busy ? <ActivityIndicator color="#FFFFFF" style={styles.spinner} /> : null}
+        {busy ? <ActivityIndicator color={colors.ui.text} style={styles.spinner} /> : null}
         <View style={styles.block}>
           <PillButton label={t('common.cancel')} variant="glass" onPress={() => setStep('amount')} disabled={busy} />
         </View>
@@ -139,7 +132,7 @@ export default function MoveToFloatScreen() {
             onChangeText={(v) => setAmount(sanitizeAmountFor(v, currency))}
             keyboardType={currency === 'SLS' ? 'number-pad' : 'decimal-pad'}
             placeholder={currency === 'SLS' ? '0,000' : '0.00'}
-            placeholderTextColor={TEXT_FAINT}
+            placeholderTextColor={colors.ui.textFaint}
           />
         </GlassCard>
         <Text style={styles.hint}>{t('moveToFloat.hint')}</Text>
@@ -150,21 +143,21 @@ export default function MoveToFloatScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   body: { paddingHorizontal: 24, paddingBottom: 48 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
-  bigTitle: { fontSize: 24, fontWeight: '800', color: '#FFFFFF', textAlign: 'center' },
-  sub: { fontSize: 15, color: TEXT_DIM, textAlign: 'center', marginTop: 6 },
+  bigTitle: { fontSize: 24, fontWeight: '800', color: colors.ui.text, textAlign: 'center' },
+  sub: { fontSize: 15, color: colors.ui.textDim, textAlign: 'center', marginTop: 6 },
   pinInput: { marginTop: 28 },
-  pinError: { fontSize: 14, color: '#FF6961', textAlign: 'center', marginTop: 16 },
+  pinError: { fontSize: 14, color: colors.ui.error, textAlign: 'center', marginTop: 16 },
   spinner: { marginTop: 20 },
   block: { alignSelf: 'stretch', marginTop: 28 },
   balances: { flexDirection: 'row', gap: 10, marginTop: 16 },
   balanceCard: { flex: 1, padding: 14 },
-  balanceLabel: { fontSize: 11, fontWeight: '700', color: TEXT_FAINT, letterSpacing: 1, textTransform: 'uppercase' },
-  balanceValue: { fontSize: 20, fontWeight: '800', color: '#FFFFFF', marginTop: 6 },
-  label: { fontSize: 12, fontWeight: '700', color: TEXT_FAINT, letterSpacing: 1, textTransform: 'uppercase', marginTop: 24, marginBottom: 8 },
-  input: { fontSize: 22, fontWeight: '700', color: '#FFFFFF', padding: 16 },
-  hint: { fontSize: 12, color: TEXT_FAINT, marginTop: 10, lineHeight: 17 },
+  balanceLabel: { fontSize: 11, fontWeight: '700', color: colors.ui.textFaint, letterSpacing: 1, textTransform: 'uppercase' },
+  balanceValue: { fontSize: 20, fontWeight: '800', color: colors.ui.text, marginTop: 6 },
+  label: { fontSize: 12, fontWeight: '700', color: colors.ui.textFaint, letterSpacing: 1, textTransform: 'uppercase', marginTop: 24, marginBottom: 8 },
+  input: { fontSize: 22, fontWeight: '700', color: colors.ui.text, padding: 16 },
+  hint: { fontSize: 12, color: colors.ui.textFaint, marginTop: 10, lineHeight: 17 },
   next: { marginTop: 24 },
-});
+}));

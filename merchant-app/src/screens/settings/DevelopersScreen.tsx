@@ -11,16 +11,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
-import {
-  DarkScreen,
-  ScreenHeader,
-  GlassCard,
-  PillButton,
-  PinInput,
-  ACCENT,
-  TEXT_DIM,
-  TEXT_FAINT,
-} from '../../components';
+import { DarkScreen, ScreenHeader, GlassCard, PillButton, PinInput } from '../../components';
 import { SuccessCheckIcon } from '../../components/icons/AuthIcons';
 import {
   ApiKeyMode,
@@ -33,6 +24,7 @@ import {
 } from '../../services/apiKeys.service';
 import { useExitGuard } from '../../hooks/useExitGuard';
 import { callableErrorKey, isWrongPin, pinActionErrorKey } from '../../utils/errors';
+import { makeStyles, useColors } from '../../theme';
 
 type Step = 'list' | 'label' | 'pin' | 'created';
 
@@ -51,6 +43,8 @@ function shortDate(iso: string): string {
  * its hash — so leaving that step asks first.
  */
 export default function DevelopersScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
 
@@ -192,7 +186,7 @@ export default function DevelopersScreen() {
           style={styles.pinInput}
         />
         {pinError ? <Text style={styles.pinError}>{pinError}</Text> : null}
-        {submitting ? <ActivityIndicator color="#FFFFFF" style={styles.spinner} /> : null}
+        {submitting ? <ActivityIndicator color={colors.ui.text} style={styles.spinner} /> : null}
         <View style={styles.block}>
           <PillButton label={t('common.cancel')} variant="glass" onPress={backToList} disabled={submitting} />
         </View>
@@ -246,7 +240,7 @@ export default function DevelopersScreen() {
               value={label}
               onChangeText={setLabel}
               placeholder={t('developers.labelPlaceholder')}
-              placeholderTextColor="rgba(255,255,255,0.25)"
+              placeholderTextColor={colors.ui.ink(0.25)}
               maxLength={60}
               autoFocus
               returnKeyType="done"
@@ -309,7 +303,7 @@ export default function DevelopersScreen() {
             </TouchableOpacity>
           </GlassCard>
         ) : keys === null ? (
-          <ActivityIndicator color="#FFFFFF" style={styles.spinner} />
+          <ActivityIndicator color={colors.ui.text} style={styles.spinner} />
         ) : active.length === 0 ? (
           <GlassCard style={styles.emptyCard}>
             <Text style={styles.emptyText}>{t(`developers.empty.${mode}`)}</Text>
@@ -327,7 +321,7 @@ export default function DevelopersScreen() {
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   {revoking === key.keyId ? (
-                    <ActivityIndicator color="#FF6961" size="small" />
+                    <ActivityIndicator color={colors.ui.error} size="small" />
                   ) : (
                     <Text style={styles.revokeText}>{t('developers.revoke')}</Text>
                   )}
@@ -370,7 +364,7 @@ export default function DevelopersScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   body: { paddingHorizontal: 24, paddingBottom: 48, gap: 6 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
   createdContent: { paddingHorizontal: 24, paddingTop: 48, paddingBottom: 48 },
@@ -378,14 +372,14 @@ const styles = StyleSheet.create({
   bigTitle: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     letterSpacing: -0.5,
     textAlign: 'center',
     marginTop: 20,
   },
-  sub: { fontSize: 15, color: TEXT_DIM, textAlign: 'center', marginTop: 6 },
+  sub: { fontSize: 15, color: colors.ui.textDim, textAlign: 'center', marginTop: 6 },
   pinInput: { marginTop: 28 },
-  pinError: { fontSize: 14, color: '#FF6961', textAlign: 'center', marginTop: 16 },
+  pinError: { fontSize: 14, color: colors.ui.error, textAlign: 'center', marginTop: 16 },
   spinner: { marginTop: 20 },
   block: { alignSelf: 'stretch', marginTop: 28 },
   modeRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
@@ -395,47 +389,47 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     borderRadius: 999,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.18)',
+    borderColor: colors.ui.glassBorderStrong,
   },
-  modeChipActive: { backgroundColor: ACCENT, borderColor: ACCENT },
-  modeText: { fontSize: 14, fontWeight: '700', color: TEXT_DIM },
+  modeChipActive: { backgroundColor: colors.ui.accent, borderColor: colors.ui.accent },
+  modeText: { fontSize: 14, fontWeight: '700', color: colors.ui.textDim },
   modeTextActive: { color: '#FFFFFF' },
-  explainer: { fontSize: 13, color: TEXT_DIM, lineHeight: 19, marginTop: 12 },
+  explainer: { fontSize: 13, color: colors.ui.textDim, lineHeight: 19, marginTop: 12 },
   label: {
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.6,
-    color: TEXT_FAINT,
+    color: colors.ui.textFaint,
     textTransform: 'uppercase',
     marginTop: 24,
     marginBottom: 8,
   },
   emptyCard: { padding: 18, alignItems: 'center', gap: 8 },
-  emptyText: { fontSize: 14, color: TEXT_DIM, textAlign: 'center' },
+  emptyText: { fontSize: 14, color: colors.ui.textDim, textAlign: 'center' },
   keyCard: { padding: 16, marginBottom: 8, gap: 6 },
   keyTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
-  keyLabel: { fontSize: 16, fontWeight: '700', color: '#FFFFFF', flexShrink: 1 },
-  revokeText: { fontSize: 14, fontWeight: '700', color: '#FF6961' },
-  hint: { fontSize: 13, color: 'rgba(255,255,255,0.7)', fontFamily: 'Menlo', writingDirection: 'ltr' },
-  meta: { fontSize: 12, color: TEXT_FAINT },
+  keyLabel: { fontSize: 16, fontWeight: '700', color: colors.ui.text, flexShrink: 1 },
+  revokeText: { fontSize: 14, fontWeight: '700', color: colors.ui.error },
+  hint: { fontSize: 13, color: colors.ui.ink(0.7), fontFamily: 'Menlo', writingDirection: 'ltr' },
+  meta: { fontSize: 12, color: colors.ui.textFaint },
   createButton: { marginTop: 16 },
-  hintText: { fontSize: 12, color: TEXT_FAINT, marginTop: 12, lineHeight: 17 },
-  baseUrl: { fontSize: 13, color: 'rgba(255,255,255,0.7)', fontFamily: 'Menlo', writingDirection: 'ltr' },
+  hintText: { fontSize: 12, color: colors.ui.textFaint, marginTop: 12, lineHeight: 17 },
+  baseUrl: { fontSize: 13, color: colors.ui.ink(0.7), fontFamily: 'Menlo', writingDirection: 'ltr' },
   card: { padding: 0, marginTop: 8 },
-  input: { fontSize: 16, color: '#FFFFFF', padding: 16 },
+  input: { fontSize: 16, color: colors.ui.text, padding: 16 },
   labelButton: { marginTop: 20 },
-  error: { fontSize: 13, color: '#FF6961', marginTop: 12 },
+  error: { fontSize: 13, color: colors.ui.error, marginTop: 12 },
   retry: { paddingVertical: 4 },
-  retryText: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
+  retryText: { fontSize: 14, fontWeight: '700', color: colors.ui.text },
   secretCard: { padding: 18 },
   secret: {
     fontSize: 15,
     lineHeight: 22,
-    color: '#FFFFFF',
+    color: colors.ui.text,
     fontFamily: 'Menlo',
     writingDirection: 'ltr',
     textAlign: 'left',
   },
-  warning: { fontSize: 13, color: '#F5B84B', lineHeight: 19, marginTop: 12 },
+  warning: { fontSize: 13, color: colors.ui.warning, lineHeight: 19, marginTop: 12 },
   actions: { gap: 12, marginTop: 28 },
-});
+}));

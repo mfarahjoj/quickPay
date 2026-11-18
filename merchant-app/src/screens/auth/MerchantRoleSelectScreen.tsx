@@ -5,8 +5,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Animated,
-  StatusBar,
-} from 'react-native';
+  } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -17,6 +16,7 @@ import { HandshakeIcon, StoreIcon } from '../../components/icons/AuthIcons';
 import { completeMerchantSetup } from '../../services/auth.service';
 import { confirmSignOut } from '../../utils/confirmSignOut';
 import type { MerchantOnboardingParamList } from '../../navigation/MerchantOnboardingNavigator';
+import { makeStyles } from '../../theme';
 
 type Nav = StackNavigationProp<MerchantOnboardingParamList, 'MerchantRoleSelect'>;
 type R = RouteProp<MerchantOnboardingParamList, 'MerchantRoleSelect'>;
@@ -55,6 +55,7 @@ export default function MerchantRoleSelectScreen({
   navigation: Nav;
   route: R;
 }) {
+  const styles = useStyles();
   const { t } = useTranslation();
   const { showToast } = useToast();
   const initialName = route.params.fullName ?? '';
@@ -179,7 +180,6 @@ export default function MerchantRoleSelectScreen({
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <StatusBar barStyle="light-content" backgroundColor="#000000" />
 
       <View style={styles.glowContainer} pointerEvents="none">
         <View style={styles.glowCore} />
@@ -323,8 +323,8 @@ export default function MerchantRoleSelectScreen({
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#000000' },
+const useStyles = makeStyles((colors) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.ui.canvas },
 
   glowContainer: {
     position: 'absolute',
@@ -333,30 +333,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  glowCore: { width: 200, height: 200, borderRadius: 100, backgroundColor: '#FF5043', opacity: 0.1 },
-  glowOuter: { position: 'absolute', width: 340, height: 340, borderRadius: 170, backgroundColor: '#FF5043', opacity: 0.04 },
+  glowCore: { width: 200, height: 200, borderRadius: 100, backgroundColor: colors.ui.accent, opacity: 0.1 },
+  glowOuter: { position: 'absolute', width: 340, height: 340, borderRadius: 170, backgroundColor: colors.ui.accent, opacity: 0.04 },
 
   content: { flex: 1, paddingHorizontal: 24, paddingTop: 12, paddingBottom: 16 },
 
   backBtn: { width: 40, height: 40, justifyContent: 'center', marginBottom: 20, marginLeft: -6 },
-  backChevron: { fontSize: 38, color: '#FFFFFF', lineHeight: 42, fontWeight: '300' },
+  backChevron: { fontSize: 38, color: colors.ui.text, lineHeight: 42, fontWeight: '300' },
 
   header: { marginBottom: 24 },
-  title: { fontSize: 36, fontWeight: '800', letterSpacing: -1.4, color: '#FFFFFF', lineHeight: 44, marginBottom: 10 },
-  subtitle: { fontSize: 15, fontWeight: '400', lineHeight: 22, color: 'rgba(255,255,255,0.4)' },
+  title: { fontSize: 36, fontWeight: '800', letterSpacing: -1.4, color: colors.ui.text, lineHeight: 44, marginBottom: 10 },
+  subtitle: { fontSize: 15, fontWeight: '400', lineHeight: 22, color: colors.ui.textFaint },
 
   nameInput: { marginBottom: 20 },
   namePill: {
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: colors.ui.ink(0.07),
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: colors.ui.glassBorder,
     paddingVertical: 12,
     paddingHorizontal: 16,
     marginBottom: 20,
   },
-  namePillLabel: { fontSize: 11, color: 'rgba(255,255,255,0.4)', marginBottom: 3, letterSpacing: 0.3, textTransform: 'uppercase' },
-  namePillValue: { fontSize: 16, fontWeight: '600', color: '#FFFFFF' },
+  namePillLabel: { fontSize: 11, color: colors.ui.textFaint, marginBottom: 3, letterSpacing: 0.3, textTransform: 'uppercase' },
+  namePillValue: { fontSize: 16, fontWeight: '600', color: colors.ui.text },
 
   // Section label
   selectLabelRow: {
@@ -368,55 +368,55 @@ const styles = StyleSheet.create({
   selectLabel: {
     fontSize: 13,
     fontWeight: '500',
-    color: 'rgba(255,255,255,0.4)',
+    color: colors.ui.textFaint,
     letterSpacing: 0.1,
   },
   selectLabelDot: {
     width: 3,
     height: 3,
     borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: colors.ui.ink(0.2),
   },
   selectLabelBoth: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#5B8AFF',
+    color: colors.ui.accentText,
   },
 
   cards: { gap: 10 },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.ui.glass,
     borderRadius: 20,
     borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.09)',
+    borderColor: colors.ui.glassRaised,
     padding: 16,
     gap: 14,
   },
-  cardSelected: { backgroundColor: 'rgba(26,86,255,0.18)', borderColor: '#FF5043' },
-  iconWrap: { width: 50, height: 50, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.08)', justifyContent: 'center', alignItems: 'center', flexShrink: 0 },
-  iconWrapSelected: { backgroundColor: 'rgba(26,86,255,0.3)' },
+  cardSelected: { backgroundColor: colors.ui.accentSoft, borderColor: colors.ui.accent },
+  iconWrap: { width: 50, height: 50, borderRadius: 15, backgroundColor: colors.ui.divider, justifyContent: 'center', alignItems: 'center', flexShrink: 0 },
+  iconWrapSelected: { backgroundColor: colors.ui.accentBorder },
   iconEmoji: { fontSize: 24 },
   cardText: { flex: 1, gap: 4 },
   cardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  cardTitle: { fontSize: 17, fontWeight: '700', color: 'rgba(255,255,255,0.65)', letterSpacing: -0.3 },
-  cardTitleSelected: { color: '#FFFFFF' },
+  cardTitle: { fontSize: 17, fontWeight: '700', color: colors.ui.ink(0.65), letterSpacing: -0.3 },
+  cardTitleSelected: { color: colors.ui.text },
   cardTag: {
-    fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.4)',
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    fontSize: 11, fontWeight: '600', color: colors.ui.textFaint,
+    backgroundColor: colors.ui.divider,
     paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20, overflow: 'hidden',
   },
-  cardTagSelected: { color: '#FF5043', backgroundColor: 'rgba(26,86,255,0.2)' },
-  cardDesc: { fontSize: 13, color: 'rgba(255,255,255,0.35)', lineHeight: 19 },
+  cardTagSelected: { color: colors.ui.accent, backgroundColor: colors.ui.accentSoft },
+  cardDesc: { fontSize: 13, color: colors.ui.ink(0.35), lineHeight: 19 },
 
   // Checkbox
   checkbox: {
     width: 24, height: 24, borderRadius: 7,
-    borderWidth: 2, borderColor: 'rgba(255,255,255,0.2)',
+    borderWidth: 2, borderColor: colors.ui.ink(0.2),
     justifyContent: 'center', alignItems: 'center', flexShrink: 0,
   },
-  checkboxSelected: { backgroundColor: '#FF5043', borderColor: '#FF5043' },
+  checkboxSelected: { backgroundColor: colors.ui.accent, borderColor: colors.ui.accent },
   checkmark: { fontSize: 13, color: '#FFFFFF', fontWeight: '700' },
 
   // "Select both" / badge row
@@ -427,34 +427,34 @@ const styles = StyleSheet.create({
     borderRadius: 9999,
     borderWidth: 1,
     borderColor: 'rgba(91,138,255,0.35)',
-    backgroundColor: 'rgba(26,86,255,0.1)',
+    backgroundColor: colors.ui.accentSoft,
   },
   selectBothText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#5B8AFF',
+    color: colors.ui.accentText,
     letterSpacing: -0.2,
   },
   bothBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(26,86,255,0.18)',
+    backgroundColor: colors.ui.accentSoft,
     borderRadius: 9999,
     borderWidth: 1,
-    borderColor: 'rgba(26,86,255,0.4)',
+    borderColor: colors.ui.accentBorder,
     paddingVertical: 9,
     paddingHorizontal: 16,
     gap: 8,
   },
   bothBadgeEmoji: { fontSize: 15 },
-  bothBadgeText: { fontSize: 14, fontWeight: '700', color: '#5B8AFF' },
-  bothClear: { fontSize: 13, color: 'rgba(255,255,255,0.35)', fontWeight: '600' },
+  bothBadgeText: { fontSize: 14, fontWeight: '700', color: colors.ui.accentText },
+  bothClear: { fontSize: 13, color: colors.ui.ink(0.35), fontWeight: '600' },
 
-  roleError: { fontSize: 13, color: '#FF453A', textAlign: 'center', marginTop: 8 },
+  roleError: { fontSize: 13, color: colors.ui.error, textAlign: 'center', marginTop: 8 },
   spacer: { flex: 1, minHeight: 20 },
 
-  ctaBtn: { backgroundColor: '#FFFFFF', borderRadius: 9999, height: 58, justifyContent: 'center', alignItems: 'center' },
-  ctaBtnDisabled: { backgroundColor: 'rgba(255,255,255,0.12)' },
-  ctaText: { fontSize: 17, fontWeight: '700', color: '#000000', letterSpacing: -0.3 },
-  ctaTextDisabled: { color: 'rgba(255,255,255,0.25)' },
-});
+  ctaBtn: { backgroundColor: colors.ui.solid, borderRadius: 9999, height: 58, justifyContent: 'center', alignItems: 'center' },
+  ctaBtnDisabled: { backgroundColor: colors.ui.ink(0.12) },
+  ctaText: { fontSize: 17, fontWeight: '700', color: colors.ui.onSolid, letterSpacing: -0.3 },
+  ctaTextDisabled: { color: colors.ui.ink(0.25) },
+}));

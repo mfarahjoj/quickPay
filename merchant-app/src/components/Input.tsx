@@ -7,7 +7,7 @@ import {
   TextInputProps,
   ViewStyle,
 } from 'react-native';
-import { colors, spacing, borderRadius } from '../theme';
+import { spacing, makeStyles, useColors } from '../theme';
 
 interface InputProps extends TextInputProps {
   label?: string;
@@ -28,6 +28,8 @@ export function Input({
   onBlur,
   ...props
 }: InputProps) {
+  const colors = useColors();
+  const styles = useStyles();
   const [focused, setFocused] = useState(false);
 
   return (
@@ -48,7 +50,7 @@ export function Input({
             rightIcon ? styles.inputWithRightIcon : undefined,
             style,
           ]}
-          placeholderTextColor="#C7C7CC"
+          placeholderTextColor={colors.ui.textFaint}
           onFocus={(e) => {
             setFocused(true);
             onFocus?.(e);
@@ -66,21 +68,21 @@ export function Input({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     marginBottom: spacing.md,
   },
   label: {
     fontSize: 13,
     fontWeight: '500',
-    color: '#8E8E93',
+    color: colors.ui.textDim,
     marginBottom: 8,
     letterSpacing: 0.1,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F2F2F7',
+    backgroundColor: colors.ui.glass,
     borderRadius: 14,
     borderWidth: 1.5,
     borderColor: 'transparent',
@@ -92,13 +94,13 @@ const styles = StyleSheet.create({
   },
   inputError: {
     borderColor: colors.error,
-    backgroundColor: '#FFF5F5',
+    backgroundColor: colors.ui.errorSoft,
   },
   input: {
     flex: 1,
     fontSize: 17,
     fontWeight: '400',
-    color: '#000000',
+    color: colors.ui.text,
     paddingVertical: 16,
     paddingHorizontal: 16,
   },
@@ -119,4 +121,4 @@ const styles = StyleSheet.create({
     color: colors.error,
     marginTop: 6,
   },
-});
+}));

@@ -18,7 +18,7 @@ import {
   type CameraPhotoOutput,
 } from 'react-native-vision-camera';
 import { CAMERA_NATIVE_AVAILABLE, requestCameraPermission } from '../hooks/useQrScannerOutputs';
-import { GlassCard, PillButton, TEXT_DIM, TEXT_FAINT } from './DarkScreen';
+import { GlassCard, PillButton } from './DarkScreen';
 import { CloseIcon, CheckIcon, ReceiptIcon, TorchIcon } from './icons/AuthIcons';
 import {
   isReceiptOcrAvailable,
@@ -29,6 +29,7 @@ import { triggerHaptic } from '../services/haptics.service';
 import { ParsedReceipt, identifierToReference } from '../utils/receiptParser';
 import { formatCents } from '../utils/money';
 import { logger } from '../utils/logger';
+import { makeStyles, useColors } from '../theme';
 
 export interface ReceiptDetails {
   /** Dollar total in cents, or null when the receipt had none we trust. */
@@ -112,6 +113,8 @@ function CameraLayer({ active, torchOn, photoRef, onTorchAvailable, onPermission
  * pre-fill the Receive screen.
  */
 export function ReceiptScanner({ visible, onClose, onApply }: ReceiptScannerProps) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const photoRef = useRef<CameraPhotoOutput | null>(null);
 
@@ -229,7 +232,7 @@ export function ReceiptScanner({ visible, onClose, onApply }: ReceiptScannerProp
                       <Text style={styles.optionValue}>{id.value}</Text>
                     </View>
                     <View style={[styles.radio, selected === i && styles.radioOn]}>
-                      {selected === i && <CheckIcon size={14} color="#000000" />}
+                      {selected === i && <CheckIcon size={14} color={colors.ui.onSolid} />}
                     </View>
                   </TouchableOpacity>
                 </React.Fragment>
@@ -244,7 +247,7 @@ export function ReceiptScanner({ visible, onClose, onApply }: ReceiptScannerProp
               >
                 <Text style={[styles.optionLabel, styles.optionNone]}>{t('qr.receipt.none')}</Text>
                 <View style={[styles.radio, selected === -1 && styles.radioOn]}>
-                  {selected === -1 && <CheckIcon size={14} color="#000000" />}
+                  {selected === -1 && <CheckIcon size={14} color={colors.ui.onSolid} />}
                 </View>
               </TouchableOpacity>
             </GlassCard>
@@ -298,7 +301,7 @@ export function ReceiptScanner({ visible, onClose, onApply }: ReceiptScannerProp
                 accessibilityRole="button"
                 accessibilityLabel={t('qr.receipt.torch')}
               >
-                <TorchIcon size={18} color={torchOn ? '#000000' : '#FFFFFF'} />
+                <TorchIcon size={18} color={torchOn ? colors.ui.onSolid : colors.ui.text} />
               </TouchableOpacity>
             ) : (
               <View style={styles.roundSpacer} />
@@ -315,15 +318,15 @@ export function ReceiptScanner({ visible, onClose, onApply }: ReceiptScannerProp
               {!ready && (
                 <View style={styles.guideCenter}>
                   {available && hasPermission === null ? (
-                    <ActivityIndicator color="#FFFFFF" />
+                    <ActivityIndicator color={colors.ui.text} />
                   ) : (
-                    <ReceiptIcon size={48} color="rgba(255,255,255,0.4)" />
+                    <ReceiptIcon size={48} color={colors.ui.textFaint} />
                   )}
                 </View>
               )}
               {reading && (
                 <View style={styles.readingVeil}>
-                  <ActivityIndicator color="#FFFFFF" size="large" />
+                  <ActivityIndicator color={colors.ui.text} size="large" />
                   <Text style={styles.readingText}>{t('qr.receipt.reading')}</Text>
                 </View>
               )}
@@ -381,11 +384,11 @@ export function ReceiptScanner({ visible, onClose, onApply }: ReceiptScannerProp
 
 const CORNER = 26;
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   // camera
   cameraRoot: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: colors.ui.canvas,
   },
   cameraChrome: {
     flex: 1,
@@ -402,7 +405,7 @@ const styles = StyleSheet.create({
   cameraTitle: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.ui.text,
   },
   roundBtn: {
     width: 40,
@@ -410,12 +413,12 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: 'rgba(0,0,0,0.45)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
+    borderColor: colors.ui.glassBorderStrong,
     justifyContent: 'center',
     alignItems: 'center',
   },
   roundBtnOn: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.ui.solid,
   },
   roundSpacer: {
     width: 40,
@@ -440,7 +443,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: CORNER,
     height: CORNER,
-    borderColor: '#FFFFFF',
+    borderColor: '#FFFFFF', // camera overlay: white in both themes
   },
   tl: { top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3, borderTopLeftRadius: 10 },
   tr: { top: 0, right: 0, borderTopWidth: 3, borderRightWidth: 3, borderTopRightRadius: 10 },
@@ -457,7 +460,7 @@ const styles = StyleSheet.create({
   readingText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: colors.ui.text,
   },
   cameraFooter: {
     alignItems: 'center',
@@ -468,11 +471,11 @@ const styles = StyleSheet.create({
   cameraMessage: {
     fontSize: 15,
     lineHeight: 21,
-    color: 'rgba(255,255,255,0.85)',
+    color: colors.ui.ink(0.85),
     textAlign: 'center',
   },
   cameraError: {
-    color: '#FF6961',
+    color: colors.ui.error,
     fontWeight: '600',
   },
   settingsBtn: {
@@ -483,7 +486,7 @@ const styles = StyleSheet.create({
     height: 76,
     borderRadius: 38,
     borderWidth: 4,
-    borderColor: '#FFFFFF',
+    borderColor: '#FFFFFF', // camera overlay: white in both themes
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -494,13 +497,13 @@ const styles = StyleSheet.create({
     width: 58,
     height: 58,
     borderRadius: 29,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.ui.solid,
   },
 
   // review
   reviewRoot: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: colors.ui.canvas,
   },
   reviewContent: {
     paddingHorizontal: 24,
@@ -511,12 +514,12 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '800',
     letterSpacing: -0.8,
-    color: '#FFFFFF',
+    color: colors.ui.text,
   },
   reviewSubtitle: {
     fontSize: 15,
     lineHeight: 21,
-    color: TEXT_DIM,
+    color: colors.ui.textDim,
     marginTop: 6,
     marginBottom: 24,
   },
@@ -527,31 +530,31 @@ const styles = StyleSheet.create({
   cardLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: TEXT_FAINT,
+    color: colors.ui.textFaint,
     marginBottom: 6,
   },
   totalValue: {
     fontSize: 44,
     fontWeight: '800',
     letterSpacing: -1.5,
-    color: '#FFFFFF',
+    color: colors.ui.text,
     fontVariant: ['tabular-nums'],
   },
   totalMissing: {
     fontSize: 15,
     lineHeight: 21,
-    color: '#FFB020',
+    color: colors.ui.warning,
   },
   sectionLabel: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     marginBottom: 12,
   },
   noIdentifier: {
     fontSize: 15,
     lineHeight: 21,
-    color: TEXT_DIM,
+    color: colors.ui.textDim,
   },
   option: {
     flexDirection: 'row',
@@ -567,22 +570,22 @@ const styles = StyleSheet.create({
   },
   optionLabel: {
     fontSize: 13,
-    color: TEXT_DIM,
+    color: colors.ui.textDim,
   },
   optionNone: {
     fontSize: 16,
-    color: '#FFFFFF',
+    color: colors.ui.text,
   },
   optionValue: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     marginTop: 2,
     fontVariant: ['tabular-nums'],
   },
   optionDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: colors.ui.ink(0.14),
     marginLeft: 18,
   },
   radio: {
@@ -590,18 +593,18 @@ const styles = StyleSheet.create({
     height: 26,
     borderRadius: 13,
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: colors.ui.ink(0.3),
     justifyContent: 'center',
     alignItems: 'center',
   },
   radioOn: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#FFFFFF',
+    backgroundColor: colors.ui.solid,
+    borderColor: colors.ui.solid,
   },
   rememberHint: {
     fontSize: 13,
     lineHeight: 19,
-    color: TEXT_FAINT,
+    color: colors.ui.textFaint,
     marginTop: 12,
   },
   reviewFooter: {
@@ -609,4 +612,4 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     gap: 12,
   },
-});
+}));

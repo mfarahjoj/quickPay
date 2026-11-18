@@ -31,21 +31,13 @@ import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import { firestore, functions } from '../../services/firebase.config';
 import { useAuth } from '../../hooks/useAuth';
-import {
-  CurrencyToggle,
-  DarkScreen,
-  ScreenHeader,
-  GlassCard,
-  PillButton,
-  TEXT_DIM,
-  TEXT_FAINT,
-  type FloatCurrency,
-} from '../../components';
+import { CurrencyToggle, DarkScreen, ScreenHeader, GlassCard, PillButton, type FloatCurrency } from '../../components';
 import { SuccessCheckIcon } from '../../components/icons/AuthIcons';
 import { formatAmount, formatCents, sanitizeAmountFor, toAmount } from '../../utils/money';
 import { formatLocal, normaliseSomaliMsisdn } from '../../utils/zaad';
 import { callableErrorKey } from '../../utils/errors';
 import { AmountInput } from '../../components/AmountInput';
+import { makeStyles, useColors } from '../../theme';
 
 type Step = 'loading' | 'link' | 'activate' | 'amount' | 'send' | 'done';
 
@@ -66,6 +58,8 @@ interface Pending {
 const ussdUrl = (code: string) => `tel:${code.replace(/#/g, '%23')}`;
 
 export default function BuyFloatZaadScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
   const { user } = useAuth();
@@ -194,7 +188,7 @@ export default function BuyFloatZaadScreen() {
   if (step === 'loading') {
     return (
       <DarkScreen edges={[]} contentStyle={styles.centered}>
-        <ActivityIndicator color="#FFFFFF" />
+        <ActivityIndicator color={colors.ui.text} />
       </DarkScreen>
     );
   }
@@ -239,7 +233,7 @@ export default function BuyFloatZaadScreen() {
             <Text style={styles.hint}>{t('buyFloat.typeIt')}</Text>
           )}
           <View style={styles.waiting}>
-            <ActivityIndicator color="#FFFFFF" />
+            <ActivityIndicator color={colors.ui.text} />
             <Text style={styles.hint}>{t(activating ? 'buyFloat.waitingActivation' : 'buyFloat.waiting')}</Text>
           </View>
           <Text style={styles.hint}>{t('buyFloat.slowHint')}</Text>
@@ -269,7 +263,7 @@ export default function BuyFloatZaadScreen() {
               onChangeText={(v) => setAmount(sanitizeAmountFor(v, currency))}
               keyboardType={currency === 'SLS' ? 'number-pad' : 'decimal-pad'}
               placeholder={currency === 'SLS' ? '0,000' : '0.00'}
-              placeholderTextColor="rgba(255,255,255,0.25)"
+              placeholderTextColor={colors.ui.ink(0.25)}
               autoFocus
             />
           </GlassCard>
@@ -302,7 +296,7 @@ export default function BuyFloatZaadScreen() {
             onChangeText={(v) => setNumberText(v.replace(/[^\d+ ]/g, '').slice(0, 16))}
             keyboardType="phone-pad"
             placeholder="063 412 3456"
-            placeholderTextColor="rgba(255,255,255,0.25)"
+            placeholderTextColor={colors.ui.ink(0.25)}
           />
         </GlassCard>
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -312,21 +306,21 @@ export default function BuyFloatZaadScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   content: { flexGrow: 1, paddingBottom: 32 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
   body: { paddingHorizontal: 24, gap: 16 },
-  bigTitle: { fontSize: 24, fontWeight: '800', color: '#FFFFFF', textAlign: 'center', marginTop: 20 },
-  bigAmount: { fontSize: 44, fontWeight: '800', color: '#34C77B', letterSpacing: -2, marginTop: 8 },
-  sub: { fontSize: 15, lineHeight: 22, color: TEXT_DIM, textAlign: 'center' },
-  label: { fontSize: 12, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: TEXT_FAINT },
-  hint: { fontSize: 13, lineHeight: 19, color: TEXT_FAINT, textAlign: 'center' },
-  error: { fontSize: 14, color: '#FF6961', textAlign: 'center' },
+  bigTitle: { fontSize: 24, fontWeight: '800', color: colors.ui.text, textAlign: 'center', marginTop: 20 },
+  bigAmount: { fontSize: 44, fontWeight: '800', color: colors.ui.incoming, letterSpacing: -2, marginTop: 8 },
+  sub: { fontSize: 15, lineHeight: 22, color: colors.ui.textDim, textAlign: 'center' },
+  label: { fontSize: 12, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: colors.ui.textFaint },
+  hint: { fontSize: 13, lineHeight: 19, color: colors.ui.textFaint, textAlign: 'center' },
+  error: { fontSize: 14, color: colors.ui.error, textAlign: 'center' },
   inputCard: { height: 64, justifyContent: 'center', paddingHorizontal: 20 },
-  amountInput: { fontSize: 32, fontWeight: '800', color: '#FFFFFF' },
-  numberInput: { fontSize: 22, fontWeight: '700', color: '#FFFFFF' },
+  amountInput: { fontSize: 32, fontWeight: '800', color: colors.ui.text },
+  numberInput: { fontSize: 22, fontWeight: '700', color: colors.ui.text },
   codeCard: { padding: 18, alignItems: 'center', gap: 8 },
-  code: { fontSize: 22, fontWeight: '800', color: '#FFFFFF', letterSpacing: 1 },
+  code: { fontSize: 22, fontWeight: '800', color: colors.ui.text, letterSpacing: 1 },
   waiting: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 8 },
   block: { alignSelf: 'stretch', marginTop: 28 },
-});
+}));

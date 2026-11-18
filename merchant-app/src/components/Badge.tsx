@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { colors, typography, borderRadius } from '../theme';
+import { typography, borderRadius, useColors, type Colors, makeStyles } from '../theme';
 
 type BadgeVariant = 'completed' | 'pending' | 'failed' | 'cancelled';
 
@@ -17,7 +17,7 @@ const BADGE_KEYS: Record<BadgeVariant, string> = {
   cancelled: 'components.badge.cancelled',
 };
 
-const variantStyles: Record<BadgeVariant, { bg: string; text: string }> = {
+const variantStyles = (colors: Colors): Record<BadgeVariant, { bg: string; text: string }> => ({
   completed: {
     bg: colors.successLight,
     text: colors.successDark,
@@ -34,11 +34,13 @@ const variantStyles: Record<BadgeVariant, { bg: string; text: string }> = {
     bg: colors.background.tertiary,
     text: colors.text.secondary,
   },
-};
+});
 
 export function Badge({ status, label }: BadgeProps) {
+  const styles = useStyles();
+  const colors = useColors();
   const { t } = useTranslation();
-  const style = variantStyles[status];
+  const style = variantStyles(colors)[status];
   return (
     <View style={[styles.badge, { backgroundColor: style.bg }]}>
       <Text style={[styles.text, { color: style.text }]}>
@@ -48,7 +50,7 @@ export function Badge({ status, label }: BadgeProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   badge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -58,4 +60,4 @@ const styles = StyleSheet.create({
     ...typography.captionBold,
     textTransform: 'capitalize',
   },
-});
+}));

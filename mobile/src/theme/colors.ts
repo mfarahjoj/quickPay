@@ -91,7 +91,7 @@ const light: Palette = {
 };
 
 /**
- * The coral wallpaper behind the light Home header and the Paid screen. It
+ * The coral wallpaper behind the Home header and the Paid screen. It
  * runs from the brand coral into raspberry, deep enough wherever text sits
  * for white text to pass 4.5:1. Buttons and pills drawn on it are smoked
  * glass (`glass`, `glassBorder`).
@@ -103,15 +103,25 @@ export const wallpaper = {
   glassBorder: 'rgba(255,255,255,0.16)',
 };
 
-/** Soft fill and strong mark pairs for avatars and widgets in light mode. */
-export const tints = {
+/**
+ * Soft fill and strong mark pairs for avatars, icons and widgets. Read them
+ * from the theme (`colors.tints`) so dark mode gets its own pairs.
+ */
+const lightTints = {
   coral: { fill: '#FFEAE6', mark: '#C4352A' },
   green: { fill: '#E3F6EA', mark: '#13803F' },
   blue: { fill: '#E8EFFF', mark: '#2F5BD3' },
   amber: { fill: '#FFF1D9', mark: '#9A5B00' },
   grey: { fill: '#EEEEF2', mark: '#55555E' },
 };
-export type Tint = (typeof tints)[keyof typeof tints];
+export type Tint = (typeof lightTints)[keyof typeof lightTints];
+const darkTints: typeof lightTints = {
+  coral: { fill: 'rgba(255,80,67,0.18)', mark: '#FF8A7A' },
+  green: { fill: 'rgba(52,199,123,0.18)', mark: '#34C77B' },
+  blue: { fill: 'rgba(91,138,255,0.18)', mark: '#8FB0FF' },
+  amber: { fill: 'rgba(245,166,35,0.18)', mark: '#F5B34A' },
+  grey: { fill: 'rgba(255,255,255,0.09)', mark: 'rgba(255,255,255,0.7)' },
+};
 
 function buildColors(ui: Palette, scheme: Scheme) {
   const isDark = scheme === 'dark';
@@ -120,6 +130,7 @@ function buildColors(ui: Palette, scheme: Scheme) {
 
     // The screens' palette for the current scheme.
     ui,
+    tints: isDark ? darkTints : lightTints,
 
     background: {
       primary: ui.canvas,
