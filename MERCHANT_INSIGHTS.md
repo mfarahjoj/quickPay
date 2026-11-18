@@ -174,18 +174,27 @@ box as `data-login`) with `approvePortalLogin`, or by writing the session as it 
 
 ## Deploying Zapp Business
 
-1. Firebase console: add a web app "Zapp Business" and register it for App Check with a
-   reCAPTCHA Enterprise key limited to the site's domain. Put the config in
-   `portal/.env.local`. Set `PORTAL_WEB_APP_ID` in `functions/.env.quickpay-485417`.
-2. `firebase hosting:sites:create zapp-business` (the `portal` target maps to it).
+1. **Done 2026-11-18.** Firebase web app "Zapp Business" (`1:76440907220:web:6a12018730432a1483fa41`),
+   registered for App Check with reCAPTCHA Enterprise key `6LfLliYuAAAAAFVjf-W7EwhsLw_Xm9Dr2G2wWyrI`
+   (SCORE, zapp-business.web.app and .firebaseapp.com only, min score 0.5, as the admin
+   and display keys). It shares the project's browser API key with them. `PORTAL_WEB_APP_ID`
+   is set in `functions/.env.quickpay-485417`. `portal/.env.local` (not committed) holds
+   the config: copy `.env.example` and fill it from `firebase apps:sdkconfig WEB <app id>`.
+2. **Done 2026-11-18.** Hosting site `zapp-business` (https://zapp-business.web.app), the
+   `portal` target.
 3. **Order matters.** A portal token gets past the old `requireAuth` (it only checked
    for a signed-in user), so no portal token may exist while any callable from before
    this change is live. A portal uid owns nothing, but an old `setupPin` could still be
    asked to open an account for it. So:
-   1. First redeploy **every** callable from this code (they all share `requireAuth`). This
-      is a deploy of money functions with unchanged money logic. It needs the owner's
-      go-ahead, and the checkout must hold everything live in prod (compare with the
-      deployed source first, as for any full deploy).
+   1. First redeploy every **deployed callable that calls `requireAuth`** (or a helper that
+      does: `requireAgent`, `requireShop`). On 2026-11-18 that was 95 functions. Admin-only
+      callables (`requireAdmin`: an admin claim a portal token never has), counter display,
+      triggers, schedules and HTTP functions don't need it. This is a deploy of money
+      functions whose money logic is what main already has. It needs the owner's go-ahead.
+      Check the deployed source first: on 2026-11-18 every deployed function's source was
+      main or older, except `adminGetKycSubmission` and `adminGetRoleApplication`. Those
+      run uncommitted work from `~/quickPay-ux` (inline KYC photos) and are admin-only, so
+      they are left alone.
    2. Then deploy the rules and indexes, and the portal functions by name:
       `describePortalLogin,approvePortalLogin,listPortalSessions,revokePortalSession,
       expirePortalSessions,portalGetStore,portalGetCustomers,portalGetCustomer,
