@@ -7,7 +7,7 @@
  */
 
 import { CustomerRow, Currency, StoreInfo } from "./types";
-import { DayMap, heatmap, hourly, peakHours, totals, typicalDay } from "./stats";
+import { DayMap, heatmap, hourly, peakHours, summarize, totals, typicalDay } from "./stats";
 import { addDays, dayRange } from "./time";
 
 export type Severity = "urgent" | "opportunity" | "info";
@@ -16,7 +16,7 @@ export type InsightAction =
   /** Open a short checklist on the card itself. */
   | { kind: "checklist"; steps: string[] }
   /** Go to a part of the dashboard. */
-  | { kind: "goto"; target: "hourly" | "heatmap" | "customers:lapsed" | "transactions:refunds" }
+  | { kind: "goto"; target: "hourly" | "heatmap" | "customers:lapsed" | "transactions:refunds" | `store:${string}` }
   /** Done in the merchant app, where money moves with the PIN. */
   | { kind: "phone"; where: string };
 
@@ -31,8 +31,12 @@ export interface Insight {
     | "pace_ahead"
     | "lapsed_regulars"
     | "idle_balance"
-    | "peak_hours";
+    | "peak_hours"
+    | "store_behind";
   severity: Severity;
+  /** On "All stores": which store the card is about. */
+  storeName?: string;
+  storeUid?: string;
   /** Raw values; the card formats them for the language and currency. */
   values: Record<string, number | string>;
   action: InsightAction;
@@ -187,5 +191,42 @@ export function computeInsights(input: InsightInput): Insight[] {
     });
   }
 
+  return out.sort((a, b) => ORDER[a.severity] - ORDER[b.severity]);
+}
+
+/**
+ * "All stores": every store's own cards that need doing (urgent and worth
+ * doing; the good-to-know ones stay on each store's view), named by store,
+ * and a card for any store whose last 7 days fell 25% or more against the
+ * 7 before. Pure.
+ */
+export function groupInsights(
+  stores: Array<{ storeUid: string; name: string; input: InsightInput }>,
+  today: string,
+  hour: number,
+  currency: Currency
+): Insight[] {
+  const out: Insight[] = [];
+  for (const s of stores) {
+    for (const i of computeInsights(s.input)) {
+      if (i.severity === "info") continue;
+      out.push({ ...i, id: `${s.storeUid}_${i.id}`, storeName: s.name, storeUid: s.storeUid });
+    }
+    const t = summarize(s.input.days, today, hour, "7d", currency);
+    if (t.previous.net > 0 && t.previous.count >= 10) {
+      const pct = Math.round(((t.current.net - t.previous.net) / t.previous.net) * 100);
+      if (pct <= -25) {
+        out.push({
+          id: `store_behind_${s.storeUid}_${today}`,
+          type: "store_behind",
+          severity: "opportunity",
+          storeName: s.name,
+          storeUid: s.storeUid,
+          values: { pct, net: t.current.net, previous: t.previous.net, currency },
+          action: { kind: "goto", target: `store:${s.storeUid}` },
+        });
+      }
+    }
+  }
   return out.sort((a, b) => ORDER[a.severity] - ORDER[b.severity]);
 }

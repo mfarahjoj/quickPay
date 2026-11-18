@@ -45,6 +45,8 @@ export interface RecentItem {
   atMs: number;
   channel?: Channel;
   customerName?: string;
+  /** "All stores" only: which store. */
+  storeName?: string;
 }
 
 export interface StoreInfo {
@@ -58,9 +60,18 @@ export interface StoreInfo {
   displays: Array<{ name: string; online: boolean; lastSeenAtMs: number | null }>;
 }
 
+export interface StoreLinks {
+  /** Stores this shop has linked or invited. */
+  linked: Array<{ storeUid: string; storeName: string; status: "invited" | "active"; invitedAtMs: number }>;
+  /** A request to link this shop to an owner, or the link itself. */
+  incoming: { ownerName: string; status: "invited" | "active" } | null;
+}
+
 export interface PortalStore {
   merchantUid: string;
+  /** This shop first, then its active linked stores. */
   stores: StoreInfo[];
+  links: StoreLinks;
   session: { sessionId: string; browser: string; expiresAtMs: number };
   serverNowMs: number;
 }

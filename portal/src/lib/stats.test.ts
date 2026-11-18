@@ -210,3 +210,62 @@ describe("insights", () => {
     expect(types(computeInsights(input(days, 12, { store: store({ autoPayout: true, balances: { USD: 50000, SLS: 0 } }) })))).not.toContain("idle_balance");
   });
 });
+
+describe("several stores", () => {
+  const storeDays = (salesPerDay: number, weeks = 2): DayMap => {
+    const m: DayMap = new Map();
+    for (const d of dayRange(TODAY, weeks * 7)) m.set(d, dayDoc(d, { 12: [salesPerDay, salesPerDay * 1000] }));
+    return m;
+  };
+
+  it("adds stores up per currency, never across", async () => {
+    const { mergeDays } = await import("./stats");
+    const a: DayMap = new Map([[TODAY, dayDoc(TODAY, { 9: [2, 2000] })]]);
+    const b: DayMap = new Map([[TODAY, dayDoc(TODAY, { 9: [1, 500], 18: [1, 700] })]]);
+    b.get(TODAY)!.currencies.SLS = dayDoc(TODAY, { 9: [1, 60000] }, {}, "SLS").currencies.SLS;
+    const all = mergeDays([a, b]);
+    expect(totals(all, [TODAY], "USD")).toMatchObject({ count: 4, net: 3200 });
+    expect(totals(all, [TODAY], "SLS")).toMatchObject({ count: 1, net: 60000 });
+    expect(all.get(TODAY)!.currencies.USD!.hours.count[9]).toBe(3);
+    // The inputs are untouched.
+    expect(totals(a, [TODAY], "USD").count).toBe(2);
+  });
+
+  it("compares stores like for like, best first", async () => {
+    const { compareStores } = await import("./stats");
+    const rows = compareStores(
+      [
+        { storeUid: "a", name: "Small", days: storeDays(1) },
+        { storeUid: "b", name: "Big", days: storeDays(5) },
+      ],
+      TODAY,
+      23,
+      "7d",
+      "USD"
+    );
+    expect(rows.map((r) => r.name)).toEqual(["Big", "Small"]);
+    expect(rows[0]).toMatchObject({ net: 35000, count: 35, averageSale: 1000, change: 0 });
+  });
+
+  it("names the store a card is about, and flags a store that fell behind", async () => {
+    const { groupInsights } = await import("./insights");
+    const falling = storeDays(5);
+    for (const d of dayRange(TODAY, 7)) falling.set(d, dayDoc(d, { 12: [2, 2000] }));
+    const base = { today: TODAY, hour: 23, minute: 0, nowMs: Date.UTC(2026, 10, 18, 20), currency: "USD" as Currency, lapsed: null, lastSaleAtMs: null };
+    const shop = (uid: string, over: Partial<StoreInfo> = {}): StoreInfo => ({ storeUid: uid, name: uid, area: null, businessType: null, accountType: "merchant", autoPayout: true, balances: { USD: 0, SLS: 0 }, displays: [], ...over });
+    const out = groupInsights(
+      [
+        { storeUid: "a", name: "Jigjiga Yar", input: { ...base, days: storeDays(5), store: shop("a", { autoPayout: false, balances: { USD: 50000, SLS: 0 } }) } },
+        { storeUid: "b", name: "26 June", input: { ...base, days: falling, store: shop("b") } },
+      ],
+      TODAY,
+      23,
+      "USD"
+    );
+    const behind = out.find((i) => i.type === "store_behind")!;
+    expect(behind).toMatchObject({ storeName: "26 June", values: { pct: -60 }, action: { kind: "goto", target: "store:b" } });
+    expect(out.find((i) => i.type === "idle_balance")).toMatchObject({ storeName: "Jigjiga Yar", id: "a_idle_balance_2026-11-18" });
+    // Good-to-know cards stay on each store's own view.
+    expect(out.every((i) => i.severity !== "info")).toBe(true);
+  });
+});

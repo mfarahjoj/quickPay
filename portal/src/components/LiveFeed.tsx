@@ -41,7 +41,7 @@ export function LiveFeed({ items, nowMs, currency }: { items: RecentItem[]; nowM
               <div className="who">
                 <div>{i.customerName ? iso(i.customerName) : t("customers.unknown")}</div>
                 <div className="when">
-                  {ago(i.atMs)} · {i.type === "refund" ? t("live.refund") : i.channel ? t(`channel.${i.channel}` as StringKey) : ""}
+                  {ago(i.atMs)} · {i.storeName ? iso(i.storeName) : i.type === "refund" ? t("live.refund") : i.channel ? t(`channel.${i.channel}` as StringKey) : ""}
                 </div>
               </div>
               <div className={`amt${i.type === "refund" ? " refund" : ""}`}>

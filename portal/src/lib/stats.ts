@@ -313,3 +313,87 @@ export function isAgent(days: DayMap): boolean {
   }
   return false;
 }
+
+/**
+ * Several stores' days as one shop's, for "All stores": every count and amount
+ * summed per currency (dollars and shillings still apart). Distinct customers
+ * become customer visits per store: a customer of two stores counts twice.
+ */
+export function mergeDays(maps: DayMap[]): DayMap {
+  const out: DayMap = new Map();
+  const add = (a: number[] | undefined, b: number[] | undefined) => Array.from({ length: 24 }, (_, h) => (a?.[h] ?? 0) + (b?.[h] ?? 0));
+  for (const m of maps) {
+    for (const [day, d] of m) {
+      const prev = out.get(day);
+      if (!prev) {
+        out.set(day, JSON.parse(JSON.stringify(d)));
+        continue;
+      }
+      for (const c of ["USD", "SLS"] as Currency[]) {
+        const x = prev.currencies[c];
+        const y = d.currencies[c];
+        if (!y) continue;
+        if (!x) {
+          prev.currencies[c] = JSON.parse(JSON.stringify(y));
+          continue;
+        }
+        for (const k of ["sales", "refunds"] as const) {
+          x[k] = { count: x[k].count + y[k].count, gross: x[k].gross + y[k].gross, fee: x[k].fee + y[k].fee, net: x[k].net + y[k].net };
+        }
+        x.hours = { count: add(x.hours.count, y.hours.count), net: add(x.hours.net, y.hours.net) };
+        for (const ch of CHANNELS) {
+          x.channels[ch] = {
+            count: (x.channels?.[ch]?.count ?? 0) + (y.channels?.[ch]?.count ?? 0),
+            net: (x.channels?.[ch]?.net ?? 0) + (y.channels?.[ch]?.net ?? 0),
+          };
+        }
+        x.agent = {
+          cashIn: { count: x.agent.cashIn.count + y.agent.cashIn.count, amount: x.agent.cashIn.amount + y.agent.cashIn.amount },
+          cashOut: { count: x.agent.cashOut.count + y.agent.cashOut.count, amount: x.agent.cashOut.amount + y.agent.cashOut.amount },
+          commission: x.agent.commission + y.agent.commission,
+        };
+      }
+      prev.customers = {
+        unique: prev.customers.unique + d.customers.unique,
+        new: prev.customers.new + d.customers.new,
+        returning: prev.customers.returning + d.customers.returning,
+      };
+      prev.lastSaleAtMs = Math.max(prev.lastSaleAtMs ?? 0, d.lastSaleAtMs ?? 0) || undefined;
+    }
+  }
+  return out;
+}
+
+export interface StoreRow {
+  storeUid: string;
+  name: string;
+  net: number;
+  count: number;
+  averageSale: number;
+  change: number | null;
+  lastSaleAtMs: number | null;
+}
+
+/** One row per store for the comparison table, like-for-like as summarize(). */
+export function compareStores(
+  stores: Array<{ storeUid: string; name: string; days: DayMap }>,
+  today: string,
+  hour: number,
+  period: Period,
+  c: Currency
+): StoreRow[] {
+  return stores
+    .map(({ storeUid, name, days }) => {
+      const s = summarize(days, today, hour, period, c);
+      return {
+        storeUid,
+        name,
+        net: s.current.net,
+        count: s.current.count,
+        averageSale: s.averageSale,
+        change: change(s.current.net, s.previous.net),
+        lastSaleAtMs: lastSaleAt(days),
+      };
+    })
+    .sort((a, b) => b.net - a.net);
+}

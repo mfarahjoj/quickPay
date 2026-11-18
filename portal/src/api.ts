@@ -38,6 +38,9 @@ export const pollLogin = (loginId: string, pollSecret: string) => call<LoginPoll
 export const signOutSession = () => call<{ ended: number }>("revokePortalSession");
 
 export const getStore = () => call<PortalStore>("portalGetStore");
+export const inviteStore = (phone: string) => call<{ storeUid: string; storeName: string }>("portalInviteStore", { phone });
+export const respondLink = (accept: boolean) => call<{ status: string }>("portalRespondLink", { accept });
+export const unlinkStore = (storeUid?: string) => call<{ unlinked: string }>("portalUnlinkStore", storeUid ? { storeUid } : {});
 export const getCustomers = (storeUid: string, view: CustomerView, currency: Currency, limit = 20) =>
   call<{ customers: CustomerRow[]; today: string }>("portalGetCustomers", { storeUid, view, currency, limit });
 export const getCustomer = (storeUid: string, customerUid: string) =>

@@ -63,6 +63,12 @@ function texts(i: Insight, t: (k: StringKey, p?: Record<string, string | number>
         body: t("insight.idle_balance.body"),
         action: t("attention.onPhone"),
       };
+    case "store_behind":
+      return {
+        title: t("insight.store_behind.title", { pct: `${Math.abs(Number(v.pct))}%` }),
+        body: t("insight.store_behind.body", { net: amt(v.net, v.currency), previous: amt(v.previous, v.currency) }),
+        action: t("insight.store_behind.action"),
+      };
     case "peak_hours": {
       const day = weekdayName(Number(v.weekday), lang);
       return {
@@ -115,6 +121,7 @@ export function InsightCards(props: { insights: Insight[]; nowMs: number; onGoto
                   {i.severity === "urgent" ? <AlertIcon /> : i.severity === "opportunity" ? <BulbIcon /> : <InfoIcon />}
                   {t(`severity.${i.severity}` as StringKey)}
                 </span>
+                {i.storeName && <span className="pill" style={{ alignSelf: "flex-start" }}>{iso(i.storeName)}</span>}
                 <h3>{x.title}</h3>
                 <p>{x.body}</p>
                 {isOpen && i.action.kind === "checklist" && (

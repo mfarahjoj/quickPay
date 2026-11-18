@@ -6,11 +6,13 @@ import { InsightCards } from "../components/InsightCards";
 import { Kpis } from "../components/Kpis";
 import { LiveFeed } from "../components/LiveFeed";
 import { Transactions, TxFilter } from "../components/Transactions";
+import { IncomingLink, ManageStores, StoreComparison } from "../components/Stores";
 import { LANGS, Lang, StringKey, useI18n } from "../i18n";
-import { clock, count, hourLabel, money, moneyShort, shortDate, weekdayName } from "../lib/format";
-import { computeInsights } from "../lib/insights";
+import { clock, count, hourLabel, iso, money, moneyShort, shortDate, weekdayName } from "../lib/format";
+import { computeInsights, groupInsights } from "../lib/insights";
 import {
   channelMix,
+  compareStores,
   customerSeries,
   DayMap,
   dailySeries,
@@ -19,6 +21,7 @@ import {
   hourly,
   isAgent,
   lastSaleAt,
+  mergeDays,
   Period,
   PERIOD_DAYS,
   summarize,
@@ -58,15 +61,17 @@ export function Dashboard({ onSessionEnded, onSignOut }: { onSessionEnded: () =>
   const { day: today, hour, minute, weekday } = localParts(nowMs);
 
   const [store, setStore] = useState<PortalStore | null>(null);
-  const [days, setDays] = useState<DayMap>(new Map());
-  const [daysLoaded, setDaysLoaded] = useState(false);
-  const [recent, setRecent] = useState<RecentItem[]>([]);
+  const [daysBy, setDaysBy] = useState<Map<string, DayMap>>(new Map());
+  const [loadedBy, setLoadedBy] = useState<Set<string>>(new Set());
+  const [recentBy, setRecentBy] = useState<Map<string, RecentItem[]>>(new Map());
   const [lapsed, setLapsed] = useState<CustomerRow[] | null>(null);
   const [unique, setUnique] = useState<number | null>(null);
   const [period, setPeriod] = useState<Period>("today");
   const [currency, setCurrency] = useState<Currency>("USD");
   const [customerTab, setCustomerTab] = useState<CustomerView>("top");
   const [txFilter, setTxFilter] = useState<TxFilter>("all");
+  /** A store's uid, or "all" when the shop has linked stores. */
+  const [selected, setSelected] = useState<string>("");
 
   const fail = useCallback(
     (e: unknown) => {
@@ -76,54 +81,67 @@ export function Dashboard({ onSessionEnded, onSignOut }: { onSessionEnded: () =>
     [onSessionEnded]
   );
 
-  const shop = store?.stores[0] ?? null;
-  const storeUid = shop?.storeUid ?? null;
-
-  // Who the shop is, balances and displays: now and every two minutes.
+  // Who the shop is (and its linked stores), balances and displays: now and every two minutes.
+  const reloadStore = useCallback(() => getStore().then(setStore).catch(fail), [fail]);
   useEffect(() => {
-    let live = true;
-    const load = () => getStore().then((s) => live && setStore(s)).catch(fail);
-    load();
-    const id = setInterval(load, 120_000);
-    return () => {
-      live = false;
-      clearInterval(id);
-    };
-  }, [fail]);
+    reloadStore();
+    const id = setInterval(reloadStore, 120_000);
+    return () => clearInterval(id);
+  }, [reloadStore]);
 
-  // The day docs and the live feed, as they change.
+  const stores = useMemo(() => store?.stores ?? [], [store]);
+  const multi = stores.length > 1;
+  const sel = selected === "all" && multi ? "all" : stores.find((s) => s.storeUid === selected)?.storeUid ?? stores[0]?.storeUid ?? "";
+  const shop = sel === "all" ? null : stores.find((s) => s.storeUid === sel) ?? null;
+  const storeUid = shop?.storeUid ?? null;
+  const storeKey = stores.map((s) => s.storeUid).join(",");
+
+  // Every store's day docs and live feed, as they change.
   const fromDay = addDays(today, -(HISTORY_DAYS - 1));
   useEffect(() => {
-    if (!storeUid) return;
-    const offDays = watchDays(
-      storeUid,
-      fromDay,
-      (docs) => {
-        setDays(new Map(docs.map((d) => [d.period, d])));
-        setDaysLoaded(true);
-      },
-      fail
-    );
-    const offRecent = watchRecent(storeUid, setRecent, fail);
-    return () => {
-      offDays();
-      offRecent();
-    };
-  }, [storeUid, fromDay, fail]);
+    const uids = storeKey ? storeKey.split(",") : [];
+    const offs = uids.flatMap((uid) => [
+      watchDays(
+        uid,
+        fromDay,
+        (docs) => {
+          setDaysBy((m) => new Map(m).set(uid, new Map(docs.map((d) => [d.period, d]))));
+          setLoadedBy((l) => new Set(l).add(uid));
+        },
+        fail
+      ),
+      watchRecent(uid, (items) => setRecentBy((m) => new Map(m).set(uid, items)), fail),
+    ]);
+    return () => offs.forEach((off) => off());
+  }, [storeKey, fromDay, fail]);
+
+  const days = useMemo(
+    () => (sel === "all" ? mergeDays(stores.map((s) => daysBy.get(s.storeUid) ?? new Map())) : daysBy.get(sel) ?? new Map()),
+    [sel, stores, daysBy]
+  );
+  const daysLoaded = sel === "all" ? stores.every((s) => loadedBy.has(s.storeUid)) : loadedBy.has(sel);
+  const recent = useMemo(() => {
+    if (sel !== "all") return recentBy.get(sel) ?? [];
+    return stores
+      .flatMap((s) => (recentBy.get(s.storeUid) ?? []).map((i) => ({ ...i, storeName: s.name })))
+      .sort((a, b) => b.atMs - a.atMs);
+  }, [sel, stores, recentBy]);
 
   const lastSale = lastSaleAt(days);
   const windows = windowsFor(today, period);
 
-  // Distinct customers in the period, exact: everyone last seen inside it.
+  // Distinct customers in the period, exact per store: everyone last seen inside it.
   useEffect(() => {
-    if (!storeUid) return;
-    countCustomersSince(storeUid, dayStartMs(windows.current[0]))
-      .then(setUnique)
+    const uids = sel === "all" ? stores.map((s) => s.storeUid) : sel ? [sel] : [];
+    if (uids.length === 0) return;
+    Promise.all(uids.map((u) => countCustomersSince(u, dayStartMs(windows.current[0]))))
+      .then((ns) => setUnique(ns.reduce((a, b) => a + b, 0)))
       .catch(fail);
-  }, [storeUid, windows.current[0], lastSale, fail]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sel, storeKey, windows.current[0], lastSale, fail]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Regulars gone quiet, for the attention card: on load and every ten minutes.
+  // Regulars gone quiet, for the attention card: on load and every ten minutes (one store at a time).
   useEffect(() => {
+    setLapsed(null);
     if (!storeUid) return;
     let live = true;
     const load = () => getCustomers(storeUid, "lapsed", currency, 50).then((r) => live && setLapsed(r.customers)).catch(fail);
@@ -135,20 +153,42 @@ export function Dashboard({ onSessionEnded, onSignOut }: { onSessionEnded: () =>
     };
   }, [storeUid, currency, fail]);
 
-  const showShillings = usesCurrency(days, "SLS") || (shop?.balances.SLS ?? 0) > 0;
+  const showShillings = usesCurrency(days, "SLS") || stores.some((s) => s.balances.SLS > 0);
   useEffect(() => {
     if (!showShillings && currency === "SLS") setCurrency("USD");
   }, [showShillings, currency]);
 
   const summary = useMemo(() => summarize(days, today, hour, period, currency), [days, today, hour, period, currency]);
-  const insights = useMemo(
-    () => computeInsights({ days, today, hour, minute, nowMs, currency, store: shop, lapsed, lastSaleAtMs: lastSale }),
-    [days, today, hour, minute, nowMs, currency, shop, lapsed, lastSale]
+  const insights = useMemo(() => {
+    if (sel === "all") {
+      return groupInsights(
+        stores.map((s) => {
+          const d = daysBy.get(s.storeUid) ?? new Map();
+          return { storeUid: s.storeUid, name: s.name, input: { days: d, today, hour, minute, nowMs, currency, store: s, lapsed: null, lastSaleAtMs: lastSaleAt(d) } };
+        }),
+        today,
+        hour,
+        currency
+      );
+    }
+    return computeInsights({ days, today, hour, minute, nowMs, currency, store: shop, lapsed, lastSaleAtMs: lastSale });
+  }, [sel, stores, daysBy, days, today, hour, minute, nowMs, currency, shop, lapsed, lastSale]);
+  const storeRows = useMemo(
+    () => (sel === "all" ? compareStores(stores.map((s) => ({ storeUid: s.storeUid, name: s.name, days: daysBy.get(s.storeUid) ?? new Map() })), today, hour, period, currency) : []),
+    [sel, stores, daysBy, today, hour, period, currency]
   );
   const trend = useMemo(() => dailySeries(days, dayRange(today, 12), currency).map((p) => p.net), [days, today, currency]);
   const agent = isAgent(days) || shop?.accountType === "agent_merchant";
+  const wallet = sel === "all"
+    ? { USD: stores.reduce((a, s) => a + s.balances.USD, 0), SLS: stores.reduce((a, s) => a + s.balances.SLS, 0) }
+    : shop?.balances ?? null;
 
   const goto = (target: string) => {
+    if (target.startsWith("store:")) {
+      setSelected(target.slice(6));
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
     if (target === "hourly") setPeriod("today");
     if (target === "customers:lapsed") setCustomerTab("lapsed");
     if (target === "transactions:refunds") setTxFilter("refunds");
@@ -257,7 +297,7 @@ export function Dashboard({ onSessionEnded, onSignOut }: { onSessionEnded: () =>
             </span>
           </div>
           <div className="shop">
-            <span className="shop-name">{shop?.name ?? "…"}</span>
+            <span className="shop-name">{sel === "all" ? t("stores.all") : shop ? iso(shop.name) : "…"}</span>
             <span className="shop-meta">
               <span className="live-dot" aria-hidden="true" />
               {lastSale ? t("header.lastSale", { time: localParts(lastSale).day === today ? clock(lastSale) : `${shortDate(localParts(lastSale).day, lang)} ${clock(lastSale)}` }) : t("header.noSales")}
@@ -265,12 +305,12 @@ export function Dashboard({ onSessionEnded, onSignOut }: { onSessionEnded: () =>
             </span>
           </div>
           <span className="spacer" />
-          {shop && (
+          {wallet && (
             <div className="shop" style={{ textAlign: "end" }}>
               <span className="hint">{t("header.wallet")}</span>
               <strong>
-                {money(shop.balances.USD, "USD")}
-                {shop.balances.SLS > 0 ? ` · ${money(shop.balances.SLS, "SLS")}` : ""}
+                {money(wallet.USD, "USD")}
+                {wallet.SLS > 0 ? ` · ${money(wallet.SLS, "SLS")}` : ""}
               </strong>
             </div>
           )}
@@ -320,14 +360,26 @@ export function Dashboard({ onSessionEnded, onSignOut }: { onSessionEnded: () =>
               ))}
             </div>
           )}
+          {multi && (
+            <select className="ghost" value={sel} onChange={(e) => setSelected(e.target.value)} aria-label={t("stores.switch")}>
+              <option value="all">{t("stores.all")}</option>
+              {stores.map((s) => (
+                <option key={s.storeUid} value={s.storeUid}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          )}
           <span className="hint">{t("header.hargeisaTime")}</span>
         </div>
 
         <div className="grid">
+          {store && <IncomingLink links={store.links} onChanged={reloadStore} />}
           <InsightCards insights={insights} nowMs={nowMs} onGoto={goto} />
           <div className="span-12">
             <Kpis summary={summary} period={period} currency={currency} weekday={weekday} uniqueCustomers={unique} trend={trend} agent={agent} />
           </div>
+          {sel === "all" && <StoreComparison rows={storeRows} currency={currency} today={today} onPick={setSelected} />}
 
           {trendCard}
           <LiveFeed items={recent} nowMs={nowMs} currency={currency} />
@@ -400,6 +452,12 @@ export function Dashboard({ onSessionEnded, onSignOut }: { onSessionEnded: () =>
           </ChartCard>
 
           {storeUid && <Transactions storeUid={storeUid} filter={txFilter} onFilter={setTxFilter} refreshKey={lastSale ?? 0} onError={fail} today={today} />}
+          {!storeUid && store && (
+            <section className="card span-8">
+              <p className="hint" style={{ margin: 0 }}>{t("stores.pickOne")}</p>
+            </section>
+          )}
+          {store && <ManageStores links={store.links} onChanged={reloadStore} />}
         </div>
 
         {store && (
