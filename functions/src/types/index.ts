@@ -557,7 +557,9 @@ export interface Notification {
     | "new_device"
     | "phone_changed"
     | "zaad_agent_topup"
-    | "topup_cancelled";
+    | "topup_cancelled"
+    /** Zapp Business: an urgent insight pushed to the shop (insights/alerts.ts). */
+    | "insight_alert";
   title: string;
   body: string;
   data?: Record<string, string>;

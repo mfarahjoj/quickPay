@@ -192,6 +192,7 @@ export { ledgerInvariantCheck } from "./ledger/invariantCheck";
 // `transactions`, never read by a money flow.
 export { merchantStatsOnTransaction } from "./merchantStats/triggers";
 export { merchantStatsNightly } from "./merchantStats/nightly";
+export { merchantInsightAlerts } from "./insights/alerts";
 
 // Zapp Business on the web (portal/): sign in by scanning a QR with the
 // merchant app; a read-only session that requireAuth refuses everywhere else.
