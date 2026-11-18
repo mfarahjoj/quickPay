@@ -17,6 +17,9 @@
         ],
         "display": [
           "zapp-display"
+        ],
+        "portal": [
+          "zapp-business"
         ]
       }
     }
