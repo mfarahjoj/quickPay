@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   Animated,
-  StatusBar,
   TouchableOpacity,
   Modal,
   Pressable,
@@ -14,12 +13,14 @@ import { useTranslation } from 'react-i18next';
 import { SUPPORTED_LANGUAGES, LanguageOption } from '../../i18n/languages';
 import { applyLanguage } from '../../i18n';
 import type { PreferredLanguage } from '../../types';
+import { makeStyles } from '../../theme';
 
 interface Props {
   navigation: any;
 }
 
 function LanguagePicker() {
+  const styles = useStyles();
   const { i18n } = useTranslation();
   const [open, setOpen] = useState(false);
   const currentLang = SUPPORTED_LANGUAGES.find(l => l.code === i18n.language) ?? SUPPORTED_LANGUAGES[0];
@@ -91,6 +92,7 @@ function LanguagePicker() {
 }
 
 export default function WelcomeScreen({ navigation }: Props) {
+  const styles = useStyles();
   const { t } = useTranslation();
   const logoScale = useRef(new Animated.Value(0.8)).current;
   const logoOpacity = useRef(new Animated.Value(0)).current;
@@ -134,7 +136,6 @@ export default function WelcomeScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <StatusBar barStyle="light-content" backgroundColor="#000000" />
 
       <Animated.View
         style={[styles.glowContainer, { opacity: glowOpacity, transform: [{ scale: glowScale }] }]}
@@ -193,10 +194,10 @@ export default function WelcomeScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: colors.ui.canvas,
   },
 
   // Glow
@@ -211,7 +212,7 @@ const styles = StyleSheet.create({
     width: 180,
     height: 180,
     borderRadius: 90,
-    backgroundColor: '#FF5043',
+    backgroundColor: colors.ui.accent,
     opacity: 0.18,
   },
   glowOuter: {
@@ -219,7 +220,7 @@ const styles = StyleSheet.create({
     width: 300,
     height: 300,
     borderRadius: 150,
-    backgroundColor: '#FF5043',
+    backgroundColor: colors.ui.accent,
     opacity: 0.06,
   },
 
@@ -240,7 +241,7 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 15,
-    backgroundColor: '#FF5043',
+    backgroundColor: colors.ui.accent,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -257,26 +258,26 @@ const styles = StyleSheet.create({
     fontSize: 19,
     fontWeight: '700',
     letterSpacing: -0.4,
-    color: '#FFFFFF',
+    color: colors.ui.text,
   },
   tagline: {
     fontSize: 12,
     fontWeight: '400',
-    color: 'rgba(255,255,255,0.4)',
+    color: colors.ui.textFaint,
   },
 
   // Language picker trigger
   langBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.ui.glassBorder,
     borderRadius: 20,
     paddingVertical: 7,
     paddingLeft: 10,
     paddingRight: 8,
     gap: 5,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: colors.ui.ink(0.12),
   },
   langFlag: {
     fontSize: 16,
@@ -284,12 +285,12 @@ const styles = StyleSheet.create({
   langCode: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     letterSpacing: 0.3,
   },
   langChevron: {
     fontSize: 16,
-    color: 'rgba(255,255,255,0.5)',
+    color: colors.ui.ink(0.5),
     marginTop: -1,
   },
 
@@ -301,12 +302,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 80,
     right: 24,
-    backgroundColor: '#1C1C1E',
+    backgroundColor: colors.ui.surface,
     borderRadius: 16,
     overflow: 'hidden',
     minWidth: 200,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: colors.ui.divider,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.5,
@@ -322,7 +323,7 @@ const styles = StyleSheet.create({
   },
   langOptionBorder: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
+    borderBottomColor: colors.ui.divider,
   },
   optionFlag: {
     fontSize: 24,
@@ -334,18 +335,18 @@ const styles = StyleSheet.create({
   optionName: {
     fontSize: 15,
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.65)',
+    color: colors.ui.ink(0.65),
   },
   optionNameSelected: {
-    color: '#FFFFFF',
+    color: colors.ui.text,
   },
   optionLabel: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.35)',
+    color: colors.ui.ink(0.35),
   },
   optionCheck: {
     fontSize: 15,
-    color: '#FF5043',
+    color: colors.ui.accent,
     fontWeight: '700',
   },
 
@@ -360,14 +361,14 @@ const styles = StyleSheet.create({
     fontSize: 48,
     fontWeight: '800',
     letterSpacing: -2,
-    color: '#FFFFFF',
+    color: colors.ui.text,
     lineHeight: 56,
   },
   heroSub: {
     fontSize: 17,
     fontWeight: '400',
     lineHeight: 26,
-    color: 'rgba(255,255,255,0.45)',
+    color: colors.ui.textDim,
   },
 
   // Bottom CTA
@@ -377,7 +378,7 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   getStartedBtn: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.ui.solid,
     borderRadius: 9999,
     height: 58,
     justifyContent: 'center',
@@ -386,17 +387,17 @@ const styles = StyleSheet.create({
   getStartedText: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#000000',
+    color: colors.ui.onSolid,
     letterSpacing: -0.3,
   },
   signInHint: {
     textAlign: 'center',
     fontSize: 14,
-    color: 'rgba(255,255,255,0.35)',
+    color: colors.ui.ink(0.35),
     paddingBottom: 4,
   },
   signInLink: {
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.ui.ink(0.7),
     fontWeight: '600',
   },
-});
+}));

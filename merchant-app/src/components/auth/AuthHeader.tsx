@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
-import { colors, typography, spacing, shadows } from '../../theme';
+import { typography, spacing, shadows, makeStyles } from '../../theme';
 
 interface AuthHeaderProps {
   icon?: React.ReactNode;
@@ -11,6 +11,7 @@ interface AuthHeaderProps {
 }
 
 export function AuthHeader({ icon, title, subtitle, highlight, centered = true }: AuthHeaderProps) {
+  const styles = useStyles();
   const fade = useRef(new Animated.Value(0)).current;
   const slide = useRef(new Animated.Value(14)).current;
 
@@ -39,7 +40,7 @@ export function AuthHeader({ icon, title, subtitle, highlight, centered = true }
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     marginTop: spacing.md,
     marginBottom: spacing.xl,
@@ -63,14 +64,14 @@ const styles = StyleSheet.create({
     fontSize: 34,
     fontWeight: '800',
     letterSpacing: -1.2,
-    color: '#000000',
+    color: colors.ui.onSolid,
     marginBottom: spacing.smPlus,
   },
   subtitle: {
     fontSize: 17,
     fontWeight: '400',
     lineHeight: 26,
-    color: '#8E8E93',
+    color: colors.ui.textDim,
   },
   highlight: {
     ...typography.bodyLarge,
@@ -81,4 +82,4 @@ const styles = StyleSheet.create({
   textCenter: {
     textAlign: 'center',
   },
-});
+}));

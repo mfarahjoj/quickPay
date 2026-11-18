@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { auth, firestore } from '../../services/firebase.config';
 import { triggerHaptic } from '../../services/haptics.service';
 import { formatCents } from '../../utils/money';
-import { GlassCard, TEXT_DIM, TEXT_FAINT } from '../../components';
+import { GlassCard } from '../../components';
+import { makeStyles } from '../../theme';
 
 /**
  * Live feed of payments landing on the counter code.
@@ -41,6 +42,7 @@ function useElapsedTick(intervalMs = 30000) {
 }
 
 export default function CounterIncomingFeed() {
+  const styles = useStyles();
   const { t } = useTranslation();
   const [payments, setPayments] = useState<IncomingPayment[]>([]);
   const [failed, setFailed] = useState(false);
@@ -131,7 +133,7 @@ export default function CounterIncomingFeed() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   card: { width: '100%', marginTop: 20, padding: 16 },
   headerRow: {
     flexDirection: 'row',
@@ -143,22 +145,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.6,
-    color: TEXT_DIM,
+    color: colors.ui.textDim,
     textTransform: 'uppercase',
   },
-  liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#34C77B' },
-  liveDotDead: { backgroundColor: '#FF6961' },
-  muted: { fontSize: 13, color: TEXT_FAINT },
+  liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.ui.incoming },
+  liveDotDead: { backgroundColor: colors.ui.error },
+  muted: { fontSize: 13, color: colors.ui.textFaint },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.08)',
+    borderTopColor: colors.ui.divider,
   },
   rowLeft: { gap: 2 },
-  amount: { fontSize: 17, fontWeight: '700', color: '#34C77B' },
-  net: { fontSize: 12, color: TEXT_FAINT },
-  time: { fontSize: 12, color: TEXT_DIM },
-});
+  amount: { fontSize: 17, fontWeight: '700', color: colors.ui.incoming },
+  net: { fontSize: 12, color: colors.ui.textFaint },
+  time: { fontSize: 12, color: colors.ui.textDim },
+}));

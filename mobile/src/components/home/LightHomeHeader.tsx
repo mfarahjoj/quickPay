@@ -40,7 +40,7 @@ interface Props {
 }
 
 /**
- * The top of Home in light mode: the coral wallpaper with the profile,
+ * The top of Home: the coral wallpaper with the profile,
  * language and notifications buttons, the balance, and the four actions as
  * round smoked-glass buttons.
  */

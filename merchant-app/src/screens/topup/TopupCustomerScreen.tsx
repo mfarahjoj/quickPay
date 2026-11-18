@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useExitGuard } from '../../hooks/useExitGuard';
-import { PinInput, DarkScreen, GlassCard, PillButton, ACCENT, TEXT_DIM, TEXT_FAINT } from '../../components';
+import { PinInput, DarkScreen, GlassCard, PillButton } from '../../components';
 import { SuccessCheckIcon, CloseIcon, TopUpIcon } from '../../components/icons/AuthIcons';
 import { lookupCustomer, topupCustomer } from '../../services/topup.service';
 import type { CustomerLookupResult, TopupResult } from '../../services/topup.service';
@@ -22,6 +22,7 @@ import { formatAmount, sanitizeAmountFor, toAmount } from '../../utils/money';
 import { newIdempotencyKey } from '../../utils/idempotency';
 import { isWrongPin, pinActionErrorKey } from '../../utils/errors';
 import { getZaadStatus } from '../../services/zaadAgent.service';
+import { makeStyles, useColors } from '../../theme';
 
 type Step = 'lookup' | 'amount' | 'pin' | 'result';
 type PaymentMethod = 'cash' | 'zaad' | 'edahab';
@@ -46,9 +47,9 @@ const PAYMENT_METHODS: { key: PaymentMethod; labelKey: string; icon: string }[] 
   { key: 'edahab', labelKey: 'topup.methods.edahab', icon: '\u{1F4F2}' },
 ];
 
-const PLACEHOLDER = 'rgba(255,255,255,0.3)';
-
 export default function TopupCustomerScreen({ navigation }: { navigation: any }) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const [step, setStep] = useState<Step>('lookup');
 
@@ -250,7 +251,7 @@ export default function TopupCustomerScreen({ navigation }: { navigation: any })
     return (
       <DarkScreen edges={[]} contentStyle={styles.resultWrap}>
         <View style={styles.failIcon}>
-          <CloseIcon size={32} color="#FF6961" />
+          <CloseIcon size={32} color={colors.ui.error} />
         </View>
         <Text style={styles.resultTitle}>{t('topup.result.failedTitle')}</Text>
         <Text style={styles.resultSubtitle}>{resultError || t('topup.result.somethingWrong')}</Text>
@@ -294,7 +295,7 @@ export default function TopupCustomerScreen({ navigation }: { navigation: any })
         />
         {pinError ? <Text style={styles.pinError}>{pinError}</Text> : null}
 
-        {submitting && <ActivityIndicator color={ACCENT} style={{ marginTop: 20 }} />}
+        {submitting && <ActivityIndicator color={colors.ui.accent} style={{ marginTop: 20 }} />}
 
         <TouchableOpacity style={styles.backLink} onPress={() => { setPin(''); setStep('amount'); }}>
           <Text style={styles.backLinkText}>← {t('common.back')}</Text>
@@ -329,7 +330,7 @@ export default function TopupCustomerScreen({ navigation }: { navigation: any })
           <TextInput
             style={styles.amountInput}
             placeholder={currency === 'SLS' ? '0,000' : '0.00'}
-            placeholderTextColor={PLACEHOLDER}
+            placeholderTextColor={colors.ui.textFaint}
             value={amount}
             onChangeText={(v) => setAmount(sanitizeAmountFor(v, currency))}
             keyboardType={currency === 'SLS' ? 'number-pad' : 'decimal-pad'}
@@ -367,7 +368,7 @@ export default function TopupCustomerScreen({ navigation }: { navigation: any })
           <TextInput
             style={styles.referenceInput}
             placeholder={t('topup.amount.referencePlaceholder')}
-            placeholderTextColor={PLACEHOLDER}
+            placeholderTextColor={colors.ui.textFaint}
             value={reference}
             onChangeText={setReference}
           />
@@ -409,7 +410,7 @@ export default function TopupCustomerScreen({ navigation }: { navigation: any })
           keyboardType="phone-pad"
           maxLength={selectedCountry.maxInput}
           autoFocus
-          placeholderTextColor={PLACEHOLDER}
+          placeholderTextColor={colors.ui.textFaint}
           textContentType="telephoneNumber"
           onSubmitEditing={() => { if (isPhoneValid && !lookupLoading) handleLookup(); }}
         />
@@ -464,6 +465,7 @@ export default function TopupCustomerScreen({ navigation }: { navigation: any })
 }
 
 function Receipt({ label, value }: { label: string; value: string }) {
+  const styles = useStyles();
   return (
     <View style={styles.receiptRow}>
       <Text style={styles.receiptLabel}>{label}</Text>
@@ -472,7 +474,7 @@ function Receipt({ label, value }: { label: string; value: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 24,
     paddingTop: 20,
@@ -487,7 +489,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 20,
-    backgroundColor: ACCENT,
+    backgroundColor: colors.ui.accent,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
@@ -496,13 +498,13 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '800',
     letterSpacing: -1,
-    color: '#FFFFFF',
+    color: colors.ui.text,
     textAlign: 'center',
     marginBottom: 8,
   },
   stepSubtitle: {
     fontSize: 15,
-    color: TEXT_DIM,
+    color: colors.ui.textDim,
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -511,7 +513,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 0.4,
     textTransform: 'uppercase',
-    color: 'rgba(255,255,255,0.4)',
+    color: colors.ui.textFaint,
     marginBottom: 12,
   },
 
@@ -528,14 +530,14 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   flag: { fontSize: 22, marginRight: 6 },
-  countryCode: { fontSize: 17, fontWeight: '600', color: '#FFFFFF' },
-  dropdownArrow: { fontSize: 13, color: TEXT_FAINT, marginLeft: 4 },
-  phoneDivider: { width: 1, height: 28, backgroundColor: 'rgba(255,255,255,0.12)' },
+  countryCode: { fontSize: 17, fontWeight: '600', color: colors.ui.text },
+  dropdownArrow: { fontSize: 13, color: colors.ui.textFaint, marginLeft: 4 },
+  phoneDivider: { width: 1, height: 28, backgroundColor: colors.ui.ink(0.12) },
   phoneInput: {
     flex: 1,
     fontSize: 17,
     fontWeight: '500',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     paddingVertical: 16,
     paddingHorizontal: 14,
   },
@@ -544,11 +546,11 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: colors.ui.ink(0.15),
     justifyContent: 'center',
     alignItems: 'center',
   },
-  clearIconText: { fontSize: 11, color: '#FFFFFF', fontWeight: '700' },
+  clearIconText: { fontSize: 11, color: colors.ui.text, fontWeight: '700' },
 
   customerCard: {
     padding: 20,
@@ -560,11 +562,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 1,
     textTransform: 'uppercase',
-    color: '#FF8A7A',
+    color: colors.ui.accentText,
     marginBottom: 6,
   },
-  customerName: { fontSize: 22, fontWeight: '700', color: '#FFFFFF', letterSpacing: -0.5 },
-  customerPhone: { fontSize: 14, color: TEXT_DIM, marginTop: 2 },
+  customerName: { fontSize: 22, fontWeight: '700', color: colors.ui.text, letterSpacing: -0.5 },
+  customerPhone: { fontSize: 14, color: colors.ui.textDim, marginTop: 2 },
 
   currencyToggle: { marginBottom: 16 },
   amountCard: {
@@ -574,33 +576,33 @@ const styles = StyleSheet.create({
     height: 72,
     marginBottom: 8,
   },
-  currency: { fontSize: 32, fontWeight: '700', color: '#FFFFFF', marginRight: 8 },
-  amountInput: { flex: 1, fontSize: 36, fontWeight: '800', color: '#FFFFFF', letterSpacing: -1, padding: 0 },
-  limitHint: { fontSize: 13, color: TEXT_FAINT, marginBottom: 24 },
+  currency: { fontSize: 32, fontWeight: '700', color: colors.ui.text, marginRight: 8 },
+  amountInput: { flex: 1, fontSize: 36, fontWeight: '800', color: colors.ui.text, letterSpacing: -1, padding: 0 },
+  limitHint: { fontSize: 13, color: colors.ui.textFaint, marginBottom: 24 },
 
   methodRow: { flexDirection: 'row', gap: 10, marginBottom: 24 },
-  zaadHint: { fontSize: 13, color: 'rgba(255,255,255,0.5)', marginTop: -12, marginBottom: 20 },
+  zaadHint: { fontSize: 13, color: colors.ui.ink(0.5), marginTop: -12, marginBottom: 20 },
   methodCard: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.ui.glass,
     borderRadius: 16,
     paddingVertical: 16,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: colors.ui.glassBorder,
   },
   methodCardSelected: {
-    borderColor: ACCENT,
-    backgroundColor: 'rgba(26,86,255,0.15)',
+    borderColor: colors.ui.accent,
+    backgroundColor: colors.ui.accentSoft,
   },
   methodIcon: { fontSize: 24, marginBottom: 6 },
-  methodLabel: { fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.6)' },
-  methodLabelSelected: { color: '#FFFFFF' },
+  methodLabel: { fontSize: 13, fontWeight: '600', color: colors.ui.textDim },
+  methodLabelSelected: { color: colors.ui.text },
 
   referenceCard: { marginBottom: 28 },
   referenceInput: {
     fontSize: 16,
-    color: '#FFFFFF',
+    color: colors.ui.text,
     paddingHorizontal: 18,
     paddingVertical: 16,
   },
@@ -618,7 +620,7 @@ const styles = StyleSheet.create({
     marginBottom: 28,
   },
   pinInput: { width: '100%' },
-  pinError: { fontSize: 14, color: '#FF6961', textAlign: 'center', marginTop: 16 },
+  pinError: { fontSize: 14, color: colors.ui.error, textAlign: 'center', marginTop: 16 },
 
   resultWrap: {
     flexGrow: 1,
@@ -631,14 +633,14 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: 'rgba(255,59,48,0.14)',
+    backgroundColor: colors.ui.errorSoft,
     justifyContent: 'center',
     alignItems: 'center',
   },
   resultTitle: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     letterSpacing: -0.5,
     textAlign: 'center',
     marginTop: 24,
@@ -647,13 +649,13 @@ const styles = StyleSheet.create({
   resultAmount: {
     fontSize: 40,
     fontWeight: '800',
-    color: '#34C77B',
+    color: colors.ui.incoming,
     letterSpacing: -1.5,
     marginBottom: 8,
   },
   resultSubtitle: {
     fontSize: 15,
-    color: TEXT_DIM,
+    color: colors.ui.textDim,
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 24,
@@ -669,15 +671,15 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     gap: 16,
   },
-  receiptLabel: { fontSize: 14, color: 'rgba(255,255,255,0.5)' },
-  receiptValue: { fontSize: 14, fontWeight: '600', color: '#FFFFFF', textAlign: 'right', flexShrink: 1 },
+  receiptLabel: { fontSize: 14, color: colors.ui.ink(0.5) },
+  receiptValue: { fontSize: 14, fontWeight: '600', color: colors.ui.text, textAlign: 'right', flexShrink: 1 },
 
   resultActions: { alignSelf: 'stretch', gap: 6 },
   ghostLink: { paddingVertical: 14, alignItems: 'center' },
-  ghostLinkText: { fontSize: 15, fontWeight: '600', color: TEXT_DIM },
+  ghostLinkText: { fontSize: 15, fontWeight: '600', color: colors.ui.textDim },
 
   backLink: { alignItems: 'center', paddingVertical: 16, marginTop: 4 },
-  backLinkText: { fontSize: 15, fontWeight: '600', color: '#FF8A7A' },
+  backLinkText: { fontSize: 15, fontWeight: '600', color: colors.ui.accentText },
 
   modalOverlay: {
     flex: 1,
@@ -688,17 +690,17 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     width: '100%',
-    backgroundColor: '#1C1C1E',
+    backgroundColor: colors.ui.surface,
     borderRadius: 20,
     padding: 16,
     maxHeight: 300,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: colors.ui.divider,
   },
   modalTitle: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     textAlign: 'center',
     marginBottom: 12,
     marginTop: 4,
@@ -710,10 +712,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 12,
   },
-  countryRowSelected: { backgroundColor: 'rgba(26,86,255,0.15)' },
+  countryRowSelected: { backgroundColor: colors.ui.accentSoft },
   countryRowFlag: { fontSize: 26, marginRight: 14 },
   countryRowInfo: { flex: 1 },
-  countryRowName: { fontSize: 15, fontWeight: '600', color: '#FFFFFF' },
-  countryRowCode: { fontSize: 13, color: TEXT_DIM },
-  countryCheck: { fontSize: 16, color: '#FF8A7A', fontWeight: '700' },
-});
+  countryRowName: { fontSize: 15, fontWeight: '600', color: colors.ui.text },
+  countryRowCode: { fontSize: 13, color: colors.ui.textDim },
+  countryCheck: { fontSize: 16, color: colors.ui.accentText, fontWeight: '700' },
+}));

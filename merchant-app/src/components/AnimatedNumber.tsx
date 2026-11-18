@@ -6,7 +6,7 @@ import Animated, {
   withSpring,
   withSequence,
 } from 'react-native-reanimated';
-import { typography } from '../theme';
+import { typography, makeStyles } from '../theme';
 
 interface AnimatedNumberProps {
   value: number;
@@ -23,6 +23,7 @@ export function AnimatedNumber({
   decimals = 2,
   style,
 }: AnimatedNumberProps) {
+  const styles = useStyles();
   const scale = useSharedValue(1);
 
   useEffect(() => {
@@ -45,8 +46,8 @@ export function AnimatedNumber({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   text: {
     ...typography.h1,
   },
-});
+}));

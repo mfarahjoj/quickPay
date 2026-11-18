@@ -2,7 +2,7 @@ import React, { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
-import { DarkScreen, GlassCard, PillButton, PinInput, TEXT_DIM } from '../../components';
+import { DarkScreen, GlassCard, PillButton, PinInput } from '../../components';
 import { QrScannerView } from '../../components/QrScannerView';
 import { SuccessCheckIcon, CloseIcon } from '../../components/icons/AuthIcons';
 import { triggerHaptic } from '../../services/haptics.service';
@@ -15,6 +15,7 @@ import {
 } from '../../services/portal.service';
 import { isWrongPin, pinActionErrorKey } from '../../utils/errors';
 import { ZAPP_BUSINESS_URL } from './ZappBusinessScreen';
+import { makeStyles, useColors } from '../../theme';
 
 type Step =
   | { kind: 'scan' }
@@ -34,6 +35,8 @@ type Step =
  * computer in front of you, now.
  */
 export default function PortalSignInScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
   const [step, setStep] = useState<Step>({ kind: 'scan' });
@@ -113,7 +116,7 @@ export default function PortalSignInScreen() {
   if (step.kind === 'checking') {
     return (
       <DarkScreen edges={[]} contentStyle={styles.centered}>
-        <ActivityIndicator size="large" color="#FFFFFF" />
+        <ActivityIndicator size="large" color={colors.ui.text} />
       </DarkScreen>
     );
   }
@@ -151,7 +154,7 @@ export default function PortalSignInScreen() {
           style={styles.pinInput}
         />
         {pinError ? <Text style={styles.error}>{pinError}</Text> : null}
-        {sending ? <ActivityIndicator color="#FFFFFF" style={styles.spinner} /> : null}
+        {sending ? <ActivityIndicator color={colors.ui.text} style={styles.spinner} /> : null}
         <View style={styles.block}>
           <PillButton label={t('common.cancel')} variant="glass" disabled={sending} onPress={() => decline(step.login)} />
         </View>
@@ -166,7 +169,7 @@ export default function PortalSignInScreen() {
         <SuccessCheckIcon size={72} />
       ) : (
         <View style={styles.failIcon}>
-          <CloseIcon size={32} color="#FF6961" />
+          <CloseIcon size={32} color={colors.ui.error} />
         </View>
       )}
       <Text style={styles.bigTitle}>{ok ? t('portal.doneTitle') : t('portal.declinedTitle')}</Text>
@@ -178,16 +181,16 @@ export default function PortalSignInScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
-  bigTitle: { fontSize: 24, fontWeight: '700', color: '#FFFFFF', textAlign: 'center', marginTop: 16 },
-  sub: { fontSize: 15, color: TEXT_DIM, textAlign: 'center', lineHeight: 21, marginTop: 8 },
+  bigTitle: { fontSize: 24, fontWeight: '700', color: colors.ui.text, textAlign: 'center', marginTop: 16 },
+  sub: { fontSize: 15, color: colors.ui.textDim, textAlign: 'center', lineHeight: 21, marginTop: 8 },
   browserCard: { alignSelf: 'stretch', padding: 20, marginTop: 24, alignItems: 'center' },
-  browser: { fontSize: 20, fontWeight: '700', color: '#FFFFFF' },
-  browserSub: { fontSize: 14, color: TEXT_DIM, marginTop: 6, textAlign: 'center', lineHeight: 20 },
-  warning: { fontSize: 14, color: '#FFB86B', textAlign: 'center', lineHeight: 20, marginTop: 20 },
+  browser: { fontSize: 20, fontWeight: '700', color: colors.ui.text },
+  browserSub: { fontSize: 14, color: colors.ui.textDim, marginTop: 6, textAlign: 'center', lineHeight: 20 },
+  warning: { fontSize: 14, color: colors.ui.warning, textAlign: 'center', lineHeight: 20, marginTop: 20 },
   pinInput: { marginTop: 32 },
-  error: { fontSize: 14, color: '#FF6961', marginTop: 16, textAlign: 'center' },
+  error: { fontSize: 14, color: colors.ui.error, marginTop: 16, textAlign: 'center' },
   spinner: { marginTop: 16 },
   block: { alignSelf: 'stretch', marginTop: 32 },
   gap: { height: 12 },
@@ -195,8 +198,8 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: 'rgba(255,105,97,0.15)',
+    backgroundColor: colors.ui.errorSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
-});
+}));

@@ -2,9 +2,10 @@ import React from 'react';
 import { View, Text, Modal, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { PillButton, TEXT_DIM, TEXT_FAINT } from './DarkScreen';
+import { PillButton } from './DarkScreen';
 import { PriorPayment } from '../utils/paidReference';
 import { formatAmount } from '../utils/money';
+import { makeStyles } from '../theme';
 
 interface PaidReferenceSheetProps {
   /** The earlier payment, or null to hide the sheet. */
@@ -39,6 +40,7 @@ export function PaidReferenceSheet({
   onChargeAgain,
   loading,
 }: PaidReferenceSheetProps) {
+  const styles = useStyles();
   const { t } = useTranslation();
   const when = prior ? formatWhen(prior.paidAt) : '';
 
@@ -97,6 +99,7 @@ function Row({
   mono?: boolean;
   last?: boolean;
 }) {
+  const styles = useStyles();
   return (
     <View style={[styles.row, !last && styles.rowDivider]}>
       <Text style={styles.rowLabel}>{label}</Text>
@@ -110,9 +113,7 @@ function Row({
   );
 }
 
-const AMBER = '#FFB020';
-
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
@@ -122,12 +123,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   sheet: {
-    backgroundColor: '#111113',
+    backgroundColor: colors.ui.surface,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     borderWidth: 1,
     borderBottomWidth: 0,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: colors.ui.glassBorder,
     paddingHorizontal: 24,
     paddingTop: 10,
     paddingBottom: 12,
@@ -137,7 +138,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: colors.ui.ink(0.2),
     marginBottom: 20,
   },
   badge: {
@@ -145,34 +146,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
-    backgroundColor: 'rgba(255,176,32,0.14)',
+    backgroundColor: colors.ui.warningSoft,
     borderWidth: 1,
-    borderColor: 'rgba(255,176,32,0.35)',
+    borderColor: colors.ui.warningSoft,
     marginBottom: 12,
   },
   badgeText: {
     fontSize: 12,
     fontWeight: '700',
-    color: AMBER,
+    color: colors.ui.warning,
     letterSpacing: 0.3,
   },
   title: {
     fontSize: 24,
     fontWeight: '800',
     letterSpacing: -0.6,
-    color: '#FFFFFF',
+    color: colors.ui.text,
   },
   subtitle: {
     fontSize: 15,
     lineHeight: 21,
-    color: TEXT_DIM,
+    color: colors.ui.textDim,
     marginTop: 6,
     marginBottom: 20,
   },
   card: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: colors.ui.glassBorder,
     borderRadius: 18,
     paddingHorizontal: 16,
     marginBottom: 24,
@@ -186,17 +187,17 @@ const styles = StyleSheet.create({
   },
   rowDivider: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.12)',
+    borderBottomColor: colors.ui.ink(0.12),
   },
   rowLabel: {
     fontSize: 14,
-    color: TEXT_FAINT,
+    color: colors.ui.textFaint,
   },
   rowValue: {
     flexShrink: 1,
     fontSize: 15,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     textAlign: 'right',
   },
   rowValueStrong: {
@@ -210,4 +211,4 @@ const styles = StyleSheet.create({
   actions: {
     gap: 12,
   },
-});
+}));

@@ -2,7 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { DarkScreen, ScreenHeader, GlassCard, PillButton, TEXT_DIM, TEXT_FAINT } from '../../components';
+import { DarkScreen, ScreenHeader, GlassCard, PillButton } from '../../components';
 import { useCounterDisplayOn } from '../../hooks/useCounterDisplayOn';
 import {
   CounterDisplay,
@@ -11,14 +11,15 @@ import {
   unlinkDisplay,
 } from '../../services/counterDisplay.service';
 import { logger } from '../../utils/logger';
-
-const GREEN = '#34C77B';
+import { makeStyles, useColors } from '../../theme';
 
 /**
  * Settings → Counter display: the tablets linked to this shop. Rename one,
  * or unlink one that's lost; linking a new one starts LinkDisplayScreen.
  */
 export default function CounterDisplaysScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
   const { url } = useCounterDisplayOn();
@@ -85,9 +86,9 @@ export default function CounterDisplaysScreen() {
     ]);
 
   const status = (d: CounterDisplay) => {
-    if (d.status === 'pending_confirm') return { text: t('counterDisplay.waitingConfirm'), color: TEXT_FAINT };
-    if (d.online) return { text: t('counterDisplay.online'), color: GREEN };
-    return { text: t('counterDisplay.offline'), color: TEXT_FAINT };
+    if (d.status === 'pending_confirm') return { text: t('counterDisplay.waitingConfirm'), color: colors.ui.textFaint };
+    if (d.online) return { text: t('counterDisplay.online'), color: colors.ui.incoming };
+    return { text: t('counterDisplay.offline'), color: colors.ui.textFaint };
   };
 
   return (
@@ -101,7 +102,7 @@ export default function CounterDisplaysScreen() {
       ) : null}
 
       {displays === null ? (
-        <ActivityIndicator color="#FFFFFF" style={styles.spinner} />
+        <ActivityIndicator color={colors.ui.text} style={styles.spinner} />
       ) : error ? (
         <Text style={styles.error}>{error}</Text>
       ) : displays.length === 0 ? (
@@ -134,7 +135,7 @@ export default function CounterDisplaysScreen() {
                 ) : null}
               </View>
               {busy === d.displayId ? (
-                <ActivityIndicator color="#FFFFFF" style={styles.rowSpinner} />
+                <ActivityIndicator color={colors.ui.text} style={styles.rowSpinner} />
               ) : (
                 <View style={styles.actions}>
                   <TouchableOpacity
@@ -162,29 +163,29 @@ export default function CounterDisplaysScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   content: { paddingBottom: 48 },
-  intro: { fontSize: 15, color: TEXT_DIM, lineHeight: 21, marginHorizontal: 24, marginBottom: 12 },
-  url: { fontSize: 15, color: '#FFFFFF', fontWeight: '600', marginHorizontal: 24, marginBottom: 20 },
+  intro: { fontSize: 15, color: colors.ui.textDim, lineHeight: 21, marginHorizontal: 24, marginBottom: 12 },
+  url: { fontSize: 15, color: colors.ui.text, fontWeight: '600', marginHorizontal: 24, marginBottom: 20 },
   spinner: { marginTop: 24 },
   rowSpinner: { marginTop: 12, alignSelf: 'flex-start' },
-  error: { fontSize: 14, color: '#FF6961', marginHorizontal: 24 },
-  empty: { fontSize: 15, color: TEXT_FAINT, marginHorizontal: 24, lineHeight: 21 },
+  error: { fontSize: 14, color: colors.ui.error, marginHorizontal: 24 },
+  empty: { fontSize: 15, color: colors.ui.textFaint, marginHorizontal: 24, lineHeight: 21 },
   card: { marginHorizontal: 20, marginBottom: 12, padding: 16 },
-  name: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
+  name: { fontSize: 16, fontWeight: '700', color: colors.ui.text },
   nameInput: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.2)',
+    borderBottomColor: colors.ui.ink(0.2),
     paddingVertical: 4,
   },
   statusRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6, flexWrap: 'wrap' },
   dot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
-  meta: { fontSize: 13, color: TEXT_FAINT },
+  meta: { fontSize: 13, color: colors.ui.textFaint },
   actions: { flexDirection: 'row', gap: 28, marginTop: 12 },
-  action: { fontSize: 15, fontWeight: '600', color: '#FF8A7A' },
-  danger: { color: '#FF6961' },
+  action: { fontSize: 15, fontWeight: '600', color: colors.ui.accentText },
+  danger: { color: colors.ui.error },
   linkBtn: { marginHorizontal: 20, marginTop: 20 },
-});
+}));

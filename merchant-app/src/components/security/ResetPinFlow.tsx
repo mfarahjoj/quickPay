@@ -2,11 +2,12 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
-import { DarkScreen, ScreenHeader, PillButton, TEXT_DIM } from '../DarkScreen';
+import { DarkScreen, ScreenHeader, PillButton } from '../DarkScreen';
 import { PinInput as PinBoxes } from '../PinInput';
 import { CodeInput, isWeakPin } from '../auth/CodeInput';
 import { getCurrentUser, resetPin, sendOTP, verifyOTP } from '../../services/auth.service';
 import { logger } from '../../utils/logger';
+import { makeStyles, useColors } from '../../theme';
 
 /**
  * otp → newPin → confirm, then:
@@ -31,6 +32,8 @@ interface Props {
  * navigator, so it takes callbacks rather than navigation.
  */
 export function ResetPinFlow({ onDone, onCancel }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const [step, setStep] = useState<Step>('otp');
   const [otpCode, setOtpCode] = useState('');
@@ -193,7 +196,7 @@ export function ResetPinFlow({ onDone, onCancel }: Props) {
             autoCorrect={false}
             maxLength={4}
             placeholder="····"
-            placeholderTextColor="rgba(255,255,255,0.25)"
+            placeholderTextColor={colors.ui.ink(0.25)}
             accessibilityLabel={t('security.reset.idTitle')}
           />
           {idError ? <Text style={styles.error}>{idError}</Text> : null}
@@ -217,7 +220,7 @@ export function ResetPinFlow({ onDone, onCancel }: Props) {
           <Text style={styles.title}>{t('security.reset.otpTitle')}</Text>
           <Text style={styles.sub}>{t('security.reset.otpSubtitle', { phone: phoneNumber })}</Text>
           {sending ? (
-            <ActivityIndicator color="#FFFFFF" style={styles.block} />
+            <ActivityIndicator color={colors.ui.text} style={styles.block} />
           ) : (
             <>
               <View style={styles.block}>
@@ -275,38 +278,38 @@ export function ResetPinFlow({ onDone, onCancel }: Props) {
           style={styles.pin}
         />
         {pinError ? <Text style={styles.error}>{pinError}</Text> : null}
-        {submitting ? <ActivityIndicator color="#FFFFFF" style={styles.block} /> : null}
+        {submitting ? <ActivityIndicator color={colors.ui.text} style={styles.block} /> : null}
       </View>
     </DarkScreen>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   body: { paddingHorizontal: 24, paddingBottom: 48 },
   center: { alignItems: 'center' },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
   title: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     letterSpacing: -0.5,
     textAlign: 'center',
     marginTop: 20,
   },
-  sub: { fontSize: 15, color: TEXT_DIM, textAlign: 'center', marginTop: 6, lineHeight: 21 },
+  sub: { fontSize: 15, color: colors.ui.textDim, textAlign: 'center', marginTop: 6, lineHeight: 21 },
   pin: { marginTop: 28 },
-  error: { fontSize: 14, color: '#FF6961', textAlign: 'center', marginTop: 16 },
+  error: { fontSize: 14, color: colors.ui.error, textAlign: 'center', marginTop: 16 },
   block: { alignSelf: 'stretch', marginTop: 28 },
   idInput: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     textAlign: 'center',
     letterSpacing: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.2)',
+    borderBottomColor: colors.ui.ink(0.2),
     paddingVertical: 12,
     marginTop: 28,
     marginHorizontal: 24,
   },
-});
+}));

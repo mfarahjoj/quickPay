@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { Transaction } from '../types';
-import { typography, spacing, borderRadius, makeStyles, useColors, useTheme, tints, type Tint } from '../theme';
+import { makeStyles, useColors, type Colors, type Tint } from '../theme';
 import { formatMajor } from '../utils/money';
 import { initialsOf } from '../utils/initials';
 import {
@@ -21,134 +21,12 @@ interface TransactionItemProps {
   onPress?: () => void;
 }
 
-/** A transaction row: tinted avatars in light mode, IN / OUT badges in dark. */
+/** A transaction row: a tinted avatar for what it is, the time, the amount. */
 export function TransactionItem(props: TransactionItemProps) {
-  const { scheme } = useTheme();
-  return scheme === 'light' ? <LightTransactionRow {...props} /> : <ClassicTransactionRow {...props} />;
+  return <TransactionRow {...props} />;
 }
 
-function ClassicTransactionRow({ transaction, onPress }: TransactionItemProps) {
-  const colors = useColors();
-  const styles = useStyles();
-  const { t } = useTranslation();
-  // A cancelled or expired cash-out returned its money: never show it as spent.
-  const voided = transaction.status === 'cancelled' || transaction.status === 'failed';
-  const pending = transaction.status === 'pending';
-
-  return (
-    <TouchableOpacity
-      style={styles.container}
-      onPress={onPress}
-      activeOpacity={0.7}
-      disabled={!onPress}
-    >
-      <View
-        style={[
-          styles.icon,
-          {
-            backgroundColor: transaction.isIncoming
-              ? colors.ui.incomingSoft
-              : colors.ui.warningSoft,
-          },
-        ]}
-      >
-        <Text style={styles.iconText}>
-          {transaction.isIncoming
-            ? t('transaction.direction.incoming')
-            : t('transaction.direction.outgoing')}
-        </Text>
-      </View>
-
-      <View style={styles.info}>
-        <Text style={styles.name} numberOfLines={1}>
-          {transaction.description}
-        </Text>
-        <Text style={styles.date}>{transaction.createdAt.toLocaleDateString()}</Text>
-      </View>
-
-      <View style={styles.right}>
-        <Text
-          style={[
-            styles.amount,
-            transaction.isIncoming ? styles.amountIncoming : styles.amountOutgoing,
-            voided && styles.amountVoided,
-          ]}
-        >
-          {transaction.isIncoming ? '+' : '-'}
-          {formatMajor(transaction.amount, transaction.currency)}
-        </Text>
-        {voided || pending ? (
-          <Text style={styles.statusText}>
-            {t(`transaction.status.${transaction.status}`)}
-          </Text>
-        ) : null}
-      </View>
-    </TouchableOpacity>
-  );
-}
-
-const useStyles = makeStyles((colors) => StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.light,
-  },
-  icon: {
-    width: 36,
-    height: 36,
-    borderRadius: borderRadius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: spacing.md,
-  },
-  iconText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.text.primary,
-  },
-  info: {
-    flex: 1,
-  },
-  name: {
-    ...typography.body,
-    fontWeight: '500',
-    color: colors.text.primary,
-    marginBottom: 2,
-  },
-  date: {
-    ...typography.caption,
-    color: colors.text.muted,
-  },
-  right: {
-    alignItems: 'flex-end',
-  },
-  amount: {
-    fontSize: typography.tabularAmount.fontSize,
-    fontWeight: typography.tabularAmount.fontWeight,
-    lineHeight: typography.tabularAmount.lineHeight,
-    fontVariant: ['tabular-nums'],
-  },
-  amountIncoming: {
-    color: colors.success,
-  },
-  amountOutgoing: {
-    color: colors.text.primary,
-  },
-  amountVoided: {
-    color: colors.text.muted,
-    textDecorationLine: 'line-through',
-  },
-  statusText: {
-    ...typography.caption,
-    color: colors.text.muted,
-    marginTop: 2,
-  },
-}));
-
-// ─── Light: a tinted avatar for what the row is, the time, the amount ───
+// ─── The row: a tinted avatar for what it is, the time, the amount ───
 
 interface RowLook {
   tint: Tint;
@@ -157,7 +35,7 @@ interface RowLook {
 }
 
 /** The avatar for a row, from what it really is (its kind). */
-function rowLook(tx: Transaction): RowLook {
+function rowLook(tx: Transaction, tints: Colors['tints']): RowLook {
   switch (tx.kind) {
     case 'merchant_payment':
     case 'online_payment':
@@ -199,13 +77,14 @@ function whenLabel(at: Date, t: TFunction): string {
   return `${at.toLocaleDateString([], { day: 'numeric', month: 'short' })}, ${time}`;
 }
 
-function LightTransactionRow({ transaction, onPress }: TransactionItemProps) {
-  const styles = useLightStyles();
+function TransactionRow({ transaction, onPress }: TransactionItemProps) {
+  const styles = useStyles();
+  const colors = useColors();
   const { t } = useTranslation();
   // A cancelled or expired cash-out returned its money: never show it as spent.
   const voided = transaction.status === 'cancelled' || transaction.status === 'failed';
   const pending = transaction.status === 'pending';
-  const look = rowLook(transaction);
+  const look = rowLook(transaction, colors.tints);
   const status = voided || pending ? t(`transaction.status.${transaction.status}`) : null;
   const Icon = look.Icon;
 
@@ -241,7 +120,7 @@ function LightTransactionRow({ transaction, onPress }: TransactionItemProps) {
   );
 }
 
-const useLightStyles = makeStyles((colors) => StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',

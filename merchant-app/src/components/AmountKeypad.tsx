@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { BackspaceIcon } from './icons/AuthIcons';
 import { triggerHaptic } from '../services/haptics.service';
 import { sanitizeAmountFor } from '../utils/money';
+import { makeStyles, useColors } from '../theme';
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'del'] as const;
 
@@ -25,6 +26,8 @@ interface AmountKeypadProps {
  * counter without looking.
  */
 export function AmountKeypad({ value, onChange, keyHeight = 62, deleteLabel, wholeOnly }: AmountKeypadProps) {
+  const colors = useColors();
+  const styles = useStyles();
   const press = (key: (typeof KEYS)[number]) => {
     triggerHaptic('light');
     if (key === 'del') {
@@ -56,7 +59,7 @@ export function AmountKeypad({ value, onChange, keyHeight = 62, deleteLabel, who
           accessibilityLabel={key === 'del' ? deleteLabel : key === '.' && wholeOnly ? '000' : key}
         >
           {key === 'del' ? (
-            <BackspaceIcon size={26} color="rgba(255,255,255,0.8)" />
+            <BackspaceIcon size={26} color={colors.ui.ink(0.8)} />
           ) : (
             <Text style={styles.keyText}>{key === '.' && wholeOnly ? '000' : key}</Text>
           )}
@@ -66,7 +69,7 @@ export function AmountKeypad({ value, onChange, keyHeight = 62, deleteLabel, who
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   pad: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -80,7 +83,7 @@ const styles = StyleSheet.create({
   keyText: {
     fontSize: 30,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     fontVariant: ['tabular-nums'],
   },
-});
+}));

@@ -6,7 +6,8 @@
 import React from 'react';
 import { StyleProp, StyleSheet, Text, TouchableOpacity, View, ViewStyle } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { GLASS, GLASS_BORDER, TEXT_DIM } from './DarkScreen';
+
+import { makeStyles } from '../theme';
 
 export type FloatCurrency = 'USD' | 'SLS';
 
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export function CurrencyToggle({ value, onChange, disabled, style }: Props) {
+  const styles = useStyles();
   const { t } = useTranslation();
   const options: Array<{ currency: FloatCurrency; label: string }> = [
     { currency: 'SLS', label: t('currency.shillings') },
@@ -45,17 +47,17 @@ export function CurrencyToggle({ value, onChange, disabled, style }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   row: {
     flexDirection: 'row',
-    backgroundColor: GLASS,
-    borderColor: GLASS_BORDER,
+    backgroundColor: colors.ui.glass,
+    borderColor: colors.ui.glassBorder,
     borderWidth: 1,
     borderRadius: 999,
     padding: 4,
   },
   item: { flex: 1, paddingVertical: 10, borderRadius: 999, alignItems: 'center' },
-  itemOn: { backgroundColor: '#FFFFFF' },
-  text: { fontSize: 15, fontWeight: '700', color: TEXT_DIM },
-  textOn: { color: '#000000' },
-});
+  itemOn: { backgroundColor: colors.ui.solid },
+  text: { fontSize: 15, fontWeight: '700', color: colors.ui.textDim },
+  textOn: { color: colors.ui.onSolid },
+}));

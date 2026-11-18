@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, TextInput, StyleSheet, StyleProp, ViewStyle } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { colors, typography, spacing, borderRadius } from '../theme';
+import { typography, spacing, borderRadius, makeStyles } from '../theme';
 
 const PIN_LENGTH = 6;
 
@@ -28,6 +28,7 @@ export function PinInput({
   autoFocus = false,
 }: PinInputProps) {
   const { t } = useTranslation();
+  const styles = useStyles();
   const inputRefs = useRef<Array<TextInput | null>>([]);
   const digits = value.split('').concat(Array(PIN_LENGTH - value.length).fill(''));
 
@@ -88,7 +89,7 @@ export function PinInput({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -110,4 +111,4 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
     backgroundColor: colors.primaryLight,
   },
-});
+}));

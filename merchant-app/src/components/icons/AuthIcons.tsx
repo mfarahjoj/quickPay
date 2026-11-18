@@ -1,14 +1,16 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated } from 'react-native';
 import Svg, { Path, Circle, Rect, G, Defs, LinearGradient, Stop, Ellipse, Polygon } from 'react-native-svg';
-import { colors } from '../../theme';
+import { useColors } from '../../theme';
 
 interface IconProps {
   size?: number;
   color?: string;
 }
 
-export function ChevronDownIcon({ size = 16, color = colors.text.tertiary }: IconProps) {
+export function ChevronDownIcon({ size = 16, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.text.tertiary;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M6 9l6 6 6-6" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
@@ -16,7 +18,9 @@ export function ChevronDownIcon({ size = 16, color = colors.text.tertiary }: Ico
   );
 }
 
-export function ChevronLeftIcon({ size = 24, color = colors.text.primary }: IconProps) {
+export function ChevronLeftIcon({ size = 24, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.text.primary;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M15 18l-6-6 6-6" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
@@ -24,7 +28,9 @@ export function ChevronLeftIcon({ size = 24, color = colors.text.primary }: Icon
   );
 }
 
-export function CheckIcon({ size = 20, color = colors.primary }: IconProps) {
+export function CheckIcon({ size = 20, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.primary;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M20 6L9 17l-5-5" stroke={color} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
@@ -32,7 +38,9 @@ export function CheckIcon({ size = 20, color = colors.primary }: IconProps) {
   );
 }
 
-export function CloseIcon({ size = 14, color = colors.text.primary }: IconProps) {
+export function CloseIcon({ size = 14, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.text.primary;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M18 6L6 18M6 6l12 12" stroke={color} strokeWidth={2.5} strokeLinecap="round" />
@@ -41,7 +49,9 @@ export function CloseIcon({ size = 14, color = colors.text.primary }: IconProps)
 }
 
 /** OTP screen — messaging bubble with 3 dots + signal arc */
-export function PhoneIcon({ size = 32, color = colors.primary }: IconProps) {
+export function PhoneIcon({ size = 32, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.primary;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       {/* bubble body */}
@@ -63,12 +73,14 @@ export function PhoneIcon({ size = 32, color = colors.primary }: IconProps) {
 }
 
 /** PIN setup — two-tone shield with padlock inside */
-export function ShieldIcon({ size = 32, color = colors.primary }: IconProps) {
+export function ShieldIcon({ size = 32, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.primary;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Defs>
         <LinearGradient id="shieldFill" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0%" stopColor="rgba(255,80,67,0.18)" />
+          <Stop offset="0%" stopColor={colors.ui.accentSoft} />
           <Stop offset="100%" stopColor="rgba(255,80,67,0.08)" />
         </LinearGradient>
       </Defs>
@@ -89,12 +101,14 @@ export function ShieldIcon({ size = 32, color = colors.primary }: IconProps) {
 }
 
 /** App lock — two-tone padlock with keyhole */
-export function LockIcon({ size = 32, color = colors.primary }: IconProps) {
+export function LockIcon({ size = 32, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.primary;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Defs>
         <LinearGradient id="lockFill" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0%" stopColor="rgba(255,80,67,0.18)" />
+          <Stop offset="0%" stopColor={colors.ui.accentSoft} />
           <Stop offset="100%" stopColor="rgba(255,80,67,0.08)" />
         </LinearGradient>
       </Defs>
@@ -109,7 +123,9 @@ export function LockIcon({ size = 32, color = colors.primary }: IconProps) {
   );
 }
 
-export function WalletIcon({ size = 32, color = colors.primary }: IconProps) {
+export function WalletIcon({ size = 32, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.primary;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Rect x="3" y="6" width="18" height="14" rx="2" stroke={color} strokeWidth={1.8} />
@@ -119,7 +135,9 @@ export function WalletIcon({ size = 32, color = colors.primary }: IconProps) {
   );
 }
 
-export function BoltIcon({ size = 40, color = colors.primary }: IconProps) {
+export function BoltIcon({ size = 40, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.primary;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" stroke={color} strokeWidth={1.8} strokeLinejoin="round" />
@@ -127,7 +145,9 @@ export function BoltIcon({ size = 40, color = colors.primary }: IconProps) {
   );
 }
 
-export function ChartIcon({ size = 40, color = colors.primary }: IconProps) {
+export function ChartIcon({ size = 40, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.primary;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M4 19V5M4 19h16" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
@@ -137,7 +157,9 @@ export function ChartIcon({ size = 40, color = colors.primary }: IconProps) {
 }
 
 /** Biometric setup — Face ID with scan lines and two-tone treatment */
-export function FaceIdIcon({ size = 48, color = colors.primary }: IconProps) {
+export function FaceIdIcon({ size = 48, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.primary;
   const dim = size;
   return (
     <Svg width={dim} height={dim} viewBox="0 0 48 48" fill="none">
@@ -163,13 +185,15 @@ export function FaceIdIcon({ size = 48, color = colors.primary }: IconProps) {
 }
 
 /** Biometric setup — fingerprint with 8 gradient arcs and core dot */
-export function FingerprintIcon({ size = 48, color = colors.primary }: IconProps) {
+export function FingerprintIcon({ size = 48, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.primary;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Defs>
         <LinearGradient id="fpGrad" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0%" stopColor="#FF5043" />
-          <Stop offset="100%" stopColor="#FF8A7A" />
+          <Stop offset="0%" stopColor={colors.ui.accent} />
+          <Stop offset="100%" stopColor={colors.ui.accentText} />
         </LinearGradient>
       </Defs>
       {/* 8 concentric arcs, outermost to innermost */}
@@ -182,13 +206,14 @@ export function FingerprintIcon({ size = 48, color = colors.primary }: IconProps
       <Path d="M20 15c-.2 1.5-.8 3-1.8 4" stroke="url(#fpGrad)" strokeWidth={1.5} strokeLinecap="round" fill="none" opacity={0.55} />
       <Path d="M8 20c1 1 2.5 1.5 4 1.5s3-.5 4-1.5" stroke="url(#fpGrad)" strokeWidth={1.5} strokeLinecap="round" fill="none" opacity={0.45} />
       {/* core dot */}
-      <Circle cx="12" cy="14.2" r="1.2" fill="#FF5043" />
+      <Circle cx="12" cy="14.2" r="1.2" fill={colors.ui.accent} />
     </Svg>
   );
 }
 
 /** Completion moment — filled green circle + white checkmark + pulse ring */
 export function SuccessCheckIcon({ size = 64 }: { size?: number }) {
+  const colors = useColors();
   const pulseScale = useRef(new Animated.Value(1)).current;
   const pulseOpacity = useRef(new Animated.Value(0.28)).current;
 
@@ -236,7 +261,9 @@ export function SuccessCheckIcon({ size = 64 }: { size?: number }) {
   );
 }
 
-export function StoreIcon({ size = 32, color = colors.primary }: IconProps) {
+export function StoreIcon({ size = 32, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.primary;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M3 9l2-4h14l2 4" stroke={color} strokeWidth={1.8} strokeLinejoin="round" />
@@ -246,7 +273,9 @@ export function StoreIcon({ size = 32, color = colors.primary }: IconProps) {
   );
 }
 
-export function HandshakeIcon({ size = 28, color = colors.primary }: IconProps) {
+export function HandshakeIcon({ size = 28, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.primary;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path
@@ -260,7 +289,9 @@ export function HandshakeIcon({ size = 28, color = colors.primary }: IconProps) 
 }
 
 /** QR code — generate payment QR */
-export function QrIcon({ size = 24, color = colors.primary }: IconProps) {
+export function QrIcon({ size = 24, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.primary;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Rect x="3" y="3" width="7" height="7" rx="1.5" stroke={color} strokeWidth={1.8} />
@@ -272,7 +303,9 @@ export function QrIcon({ size = 24, color = colors.primary }: IconProps) {
 }
 
 /** Receipt — torn-edge till slip, for Scan receipt */
-export function ReceiptIcon({ size = 24, color = colors.primary }: IconProps) {
+export function ReceiptIcon({ size = 24, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.primary;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path
@@ -287,7 +320,9 @@ export function ReceiptIcon({ size = 24, color = colors.primary }: IconProps) {
 }
 
 /** Backspace — keypad delete */
-export function BackspaceIcon({ size = 24, color = colors.primary }: IconProps) {
+export function BackspaceIcon({ size = 24, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.primary;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path
@@ -302,7 +337,9 @@ export function BackspaceIcon({ size = 24, color = colors.primary }: IconProps) 
 }
 
 /** Torch — camera light toggle */
-export function TorchIcon({ size = 24, color = colors.primary }: IconProps) {
+export function TorchIcon({ size = 24, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.primary;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M13 2L5 13h6l-1 9 8-11h-6l1-9z" stroke={color} strokeWidth={1.8} strokeLinejoin="round" />
@@ -311,7 +348,9 @@ export function TorchIcon({ size = 24, color = colors.primary }: IconProps) {
 }
 
 /** Scan — camera viewfinder with center dot */
-export function ScanIcon({ size = 24, color = colors.primary }: IconProps) {
+export function ScanIcon({ size = 24, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.primary;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M4 8V6a2 2 0 012-2h2" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
@@ -324,7 +363,9 @@ export function ScanIcon({ size = 24, color = colors.primary }: IconProps) {
 }
 
 /** Top up — card with plus */
-export function TopUpIcon({ size = 24, color = colors.primary }: IconProps) {
+export function TopUpIcon({ size = 24, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.primary;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Rect x="3" y="6" width="18" height="12" rx="2" stroke={color} strokeWidth={1.8} />
@@ -335,7 +376,9 @@ export function TopUpIcon({ size = 24, color = colors.primary }: IconProps) {
 }
 
 /** Send — an arrow leaving, up and to the right */
-export function SendIcon({ size = 24, color = colors.primary }: IconProps) {
+export function SendIcon({ size = 24, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.primary;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M7 17L17 7" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
@@ -345,7 +388,9 @@ export function SendIcon({ size = 24, color = colors.primary }: IconProps) {
 }
 
 /** History — clock with hands */
-export function HistoryIcon({ size = 24, color = colors.primary }: IconProps) {
+export function HistoryIcon({ size = 24, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.primary;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Circle cx="12" cy="12" r="9" stroke={color} strokeWidth={1.8} />
@@ -359,6 +404,7 @@ export function BrandMarkIcon({ size = 48, onDark = false }: { size?: number; on
   return (
     <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
       <Rect width="100" height="100" rx="26" fill={onDark ? 'rgba(255,80,67,0.15)' : '#FF5043'} />
+      {/* Zapp bolt: coral on dark, white on the coral tile */}
       <Polygon
         points="57,8 26,54 45,54 43,92 74,44 55,44"
         fill={onDark ? '#FF5043' : '#FFFFFF'}

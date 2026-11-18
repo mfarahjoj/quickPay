@@ -12,7 +12,6 @@ import {
   Platform,
   ScrollView,
   Animated,
-  StatusBar,
   Modal,
   Pressable,
 } from 'react-native';
@@ -21,7 +20,7 @@ import { useTranslation } from 'react-i18next';
 import { sendOTP } from '../../services/auth.service';
 import { BottomSheet } from '../../components/BottomSheet';
 import { CheckIcon } from '../../components/icons/AuthIcons';
-import { colors } from '../../theme';
+import { makeStyles, useColors } from '../../theme';
 
 interface Props {
   navigation: any;
@@ -54,6 +53,8 @@ const COUNTRIES: Country[] = [
 
 
 export default function LoginScreen({ navigation }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const [selectedCountry, setSelectedCountry] = useState<Country>(COUNTRIES[0]);
   const [localNumber, setLocalNumber] = useState('');
@@ -131,7 +132,6 @@ export default function LoginScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <StatusBar barStyle="light-content" backgroundColor="#000000" />
 
       {/* Subtle glow — same as welcome screen for continuity */}
       <View style={styles.glowContainer} pointerEvents="none">
@@ -199,7 +199,7 @@ export default function LoginScreen({ navigation }: Props) {
                 onChangeText={handlePhoneChange}
                 keyboardType="phone-pad"
                 maxLength={selectedCountry.maxInput}
-                placeholderTextColor="rgba(255,255,255,0.2)"
+                placeholderTextColor={colors.ui.ink(0.2)}
                 textContentType="telephoneNumber"
                 onFocus={() => setFocused(true)}
                 onBlur={() => setFocused(false)}
@@ -282,10 +282,10 @@ export default function LoginScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: colors.ui.canvas,
   },
   flex: { flex: 1 },
 
@@ -301,7 +301,7 @@ const styles = StyleSheet.create({
     width: 160,
     height: 160,
     borderRadius: 80,
-    backgroundColor: '#FF5043',
+    backgroundColor: colors.ui.accent,
     opacity: 0.12,
   },
   glowOuter: {
@@ -309,7 +309,7 @@ const styles = StyleSheet.create({
     width: 280,
     height: 280,
     borderRadius: 140,
-    backgroundColor: '#FF5043',
+    backgroundColor: colors.ui.accent,
     opacity: 0.05,
   },
 
@@ -330,7 +330,7 @@ const styles = StyleSheet.create({
   },
   backChevron: {
     fontSize: 38,
-    color: '#FFFFFF',
+    color: colors.ui.text,
     lineHeight: 42,
     fontWeight: '300',
   },
@@ -340,7 +340,7 @@ const styles = StyleSheet.create({
     fontSize: 42,
     fontWeight: '800',
     letterSpacing: -1.8,
-    color: '#FFFFFF',
+    color: colors.ui.text,
     lineHeight: 50,
     marginBottom: 14,
   },
@@ -348,7 +348,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '400',
     lineHeight: 24,
-    color: 'rgba(255,255,255,0.45)',
+    color: colors.ui.textDim,
     marginBottom: 40,
   },
 
@@ -359,19 +359,19 @@ const styles = StyleSheet.create({
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: colors.ui.divider,
     borderRadius: 18,
     borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: colors.ui.glassBorder,
     height: 64,
   },
   inputRowFocused: {
-    backgroundColor: 'rgba(255,255,255,0.11)',
-    borderColor: '#FF5043',
+    backgroundColor: colors.ui.ink(0.11),
+    borderColor: colors.ui.accent,
   },
   inputRowError: {
-    borderColor: '#FF453A',
-    backgroundColor: 'rgba(255,69,58,0.08)',
+    borderColor: colors.ui.error,
+    backgroundColor: colors.ui.errorSoft,
   },
   countryBtn: {
     flexDirection: 'row',
@@ -386,24 +386,24 @@ const styles = StyleSheet.create({
   countryCode: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: colors.ui.text,
   },
   dropChevron: {
     fontSize: 18,
-    color: 'rgba(255,255,255,0.35)',
+    color: colors.ui.ink(0.35),
     marginTop: -1,
     transform: [{ rotate: '90deg' }],
   },
   divider: {
     width: 1,
     height: 28,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: colors.ui.ink(0.12),
   },
   phoneInput: {
     flex: 1,
     fontSize: 18,
     fontWeight: '500',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     paddingHorizontal: 16,
     paddingVertical: 0,
     height: '100%',
@@ -413,11 +413,11 @@ const styles = StyleSheet.create({
   },
   clearX: {
     fontSize: 13,
-    color: 'rgba(255,255,255,0.35)',
+    color: colors.ui.ink(0.35),
   },
   errorText: {
     fontSize: 13,
-    color: '#FF453A',
+    color: colors.ui.error,
     paddingLeft: 4,
   },
 
@@ -425,7 +425,7 @@ const styles = StyleSheet.create({
 
   // CTA — white pill like welcome screen
   ctaBtn: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.ui.solid,
     borderRadius: 9999,
     height: 58,
     justifyContent: 'center',
@@ -433,28 +433,28 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   ctaBtnDisabled: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: colors.ui.ink(0.15),
   },
   ctaText: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#000000',
+    color: colors.ui.onSolid,
     letterSpacing: -0.3,
   },
   ctaTextDisabled: {
-    color: 'rgba(255,255,255,0.3)',
+    color: colors.ui.ink(0.3),
   },
 
   // Legal
   legal: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.25)',
+    color: colors.ui.ink(0.25),
     textAlign: 'center',
     lineHeight: 18,
     paddingBottom: 4,
   },
   legalLink: {
-    color: 'rgba(255,255,255,0.5)',
+    color: colors.ui.ink(0.5),
     fontWeight: '600',
   },
 
@@ -462,7 +462,7 @@ const styles = StyleSheet.create({
   sheetTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#000000',
+    color: colors.ui.onSolid,
     textAlign: 'center',
     marginBottom: 16,
   },
@@ -475,7 +475,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   countryRowSelected: {
-    backgroundColor: '#F0F4FF',
+    backgroundColor: colors.ui.accentSoft,
   },
   countryRowFlag: {
     fontSize: 28,
@@ -486,11 +486,11 @@ const styles = StyleSheet.create({
   countryRowName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#000000',
+    color: colors.ui.onSolid,
   },
   countryRowCode: {
     fontSize: 13,
-    color: '#8E8E93',
+    color: colors.ui.textDim,
     marginTop: 2,
   },
-});
+}));

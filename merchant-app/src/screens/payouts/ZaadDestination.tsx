@@ -2,11 +2,13 @@ import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
-import { GlassCard, ACCENT, TEXT_DIM, TEXT_FAINT } from '../../components';
+import { GlassCard } from '../../components';
 import { formatLocal } from '../../utils/zaad';
+import { makeStyles } from '../../theme';
 
 /** Where payouts go: the Zaad account on file, with a way to change it. */
 export function ZaadDestination({ zaad }: { zaad?: { msisdn: string; name: string } }) {
+  const styles = useStyles();
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
   return (
@@ -31,19 +33,19 @@ export function ZaadDestination({ zaad }: { zaad?: { msisdn: string; name: strin
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   label: {
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.6,
-    color: TEXT_FAINT,
+    color: colors.ui.textFaint,
     textTransform: 'uppercase',
     marginTop: 18,
     marginBottom: 8,
   },
   card: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 12 },
   text: { flex: 1, gap: 2 },
-  number: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
-  name: { fontSize: 13, color: TEXT_DIM },
-  change: { fontSize: 14, fontWeight: '600', color: ACCENT },
-});
+  number: { fontSize: 16, fontWeight: '700', color: colors.ui.text },
+  name: { fontSize: 13, color: colors.ui.textDim },
+  change: { fontSize: 14, fontWeight: '600', color: colors.ui.accent },
+}));

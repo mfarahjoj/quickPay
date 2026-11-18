@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { Alert, StyleSheet } from 'react-native';
+import { Alert, StatusBar, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { guardFreshInstall } from './services/installGuard';
 import AppNavigator, { openZaadRequest } from './navigation/AppNavigator';
@@ -13,8 +13,10 @@ import { messaging, auth } from './services/firebase.config';
 import { registerForPushNotifications } from './services/notification.service';
 import crashlytics from '@react-native-firebase/crashlytics';
 import { firebase } from '@react-native-firebase/app-check';
+import { makeStyles, ThemeProvider, useTheme } from './theme';
 
 function AppContent() {
+  const styles = useStyles();
   const { t } = useTranslation();
 
   useEffect(() => {
@@ -80,8 +82,14 @@ function AppContent() {
   // After the App Check setup above: the gate's first read should carry a token.
   const updateGate = useUpdateGate();
 
+  const { scheme, colors } = useTheme();
+
   return (
-    <GestureHandlerRootView style={styles.root}>
+    <GestureHandlerRootView style={[styles.root, { backgroundColor: colors.ui.canvas }]}>
+      <StatusBar
+        barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'}
+        backgroundColor={colors.ui.canvas}
+      />
       <SafeAreaProvider>
         <ToastProvider>
           <LanguageSync />
@@ -102,9 +110,9 @@ export default function App() {
   useEffect(() => {
     guardFreshInstall().finally(() => setInstallChecked(true));
   }, []);
-  return installChecked ? <AppContent /> : null;
+  return <ThemeProvider>{installChecked ? <AppContent /> : null}</ThemeProvider>;
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   root: { flex: 1 },
-});
+}));

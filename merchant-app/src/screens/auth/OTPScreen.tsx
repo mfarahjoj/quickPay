@@ -5,7 +5,7 @@ import { verifyOTP, sendOTP } from '../../services/auth.service';
 import { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import { AuthLayout, CodeInput, useToast } from '../../components/auth';
 import { Button } from '../../components/Button';
-import { colors, typography, spacing } from '../../theme';
+import { typography, spacing, makeStyles } from '../../theme';
 
 const RESEND_SECONDS = 60;
 
@@ -20,6 +20,7 @@ interface Props {
 }
 
 export default function OTPScreen({ navigation, route }: Props) {
+  const styles = useStyles();
   const { t } = useTranslation();
   const { showToast } = useToast();
   const { phoneNumber, confirmation } = route.params;
@@ -129,7 +130,7 @@ export default function OTPScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   content: {
     paddingTop: 16,
   },
@@ -140,19 +141,19 @@ const styles = StyleSheet.create({
     fontSize: 40,
     fontWeight: '800',
     letterSpacing: -1.5,
-    color: '#000000',
+    color: colors.ui.onSolid,
     marginBottom: 10,
   },
   subtitle: {
     fontSize: 17,
     fontWeight: '400',
     lineHeight: 26,
-    color: '#8E8E93',
+    color: colors.ui.textDim,
   },
   phoneHighlight: {
     fontSize: 17,
     fontWeight: '600',
-    color: '#000000',
+    color: colors.ui.onSolid,
   },
   codeWrap: {
     marginBottom: spacing.xl,
@@ -167,16 +168,16 @@ const styles = StyleSheet.create({
   },
   resendText: {
     fontSize: 15,
-    color: '#8E8E93',
+    color: colors.ui.textDim,
   },
   countdown: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#8E8E93',
+    color: colors.ui.textDim,
   },
   resendLink: {
     fontSize: 15,
     fontWeight: '600',
     color: colors.primary,
   },
-});
+}));

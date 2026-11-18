@@ -9,13 +9,14 @@ import React, { useCallback, useState } from 'react';
 import { StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
-import { TEXT_DIM, TEXT_FAINT } from './DarkScreen';
-import { ATTENTION } from './ZaadRequestList';
+
 import { formatCents } from '../utils/money';
 import { getZaadStatus, setZaadOnline, watchZaadAgent, type ZaadAgentStatus } from '../services/zaadAgent.service';
 import { useZaadAgentRequests } from '../hooks/useZaadAgentRequests';
+import { makeStyles } from '../theme';
 
 export function ZaadHomeCard({ uid, onOpen }: { uid: string; onOpen: () => void }) {
+  const styles = useStyles();
   const { t } = useTranslation();
   const [status, setStatus] = useState<ZaadAgentStatus | null>(null);
   const [online, setOnline] = useState<boolean | null>(null);
@@ -76,23 +77,23 @@ export function ZaadHomeCard({ uid, onOpen }: { uid: string; onOpen: () => void 
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   card: {
     marginBottom: 22,
     padding: 16,
     gap: 10,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: colors.ui.glassBorder,
   },
-  cardAttention: { backgroundColor: 'rgba(255,176,46,0.12)', borderColor: 'rgba(255,176,46,0.4)' },
+  cardAttention: { backgroundColor: colors.ui.warningSoft, borderColor: colors.ui.warningSoft },
   top: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   flex: { flex: 1 },
-  label: { fontSize: 12, fontWeight: '700', color: TEXT_FAINT, letterSpacing: 1, textTransform: 'uppercase' },
-  state: { fontSize: 18, fontWeight: '800', color: '#FFFFFF', marginTop: 2 },
+  label: { fontSize: 12, fontWeight: '700', color: colors.ui.textFaint, letterSpacing: 1, textTransform: 'uppercase' },
+  state: { fontSize: 18, fontWeight: '800', color: colors.ui.text, marginTop: 2 },
   counts: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
-  count: { fontSize: 15, fontWeight: '700', color: TEXT_DIM },
-  attention: { fontSize: 15, fontWeight: '800', color: ATTENTION },
-  float: { fontSize: 13, color: TEXT_FAINT },
-});
+  count: { fontSize: 15, fontWeight: '700', color: colors.ui.textDim },
+  attention: { fontSize: 15, fontWeight: '800', color: colors.ui.warning },
+  float: { fontSize: 13, color: colors.ui.textFaint },
+}));

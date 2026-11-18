@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { ChevronLeftIcon } from '../icons/AuthIcons';
 import { StepProgress } from './StepProgress';
-import { colors, spacing } from '../../theme';
+import { spacing, makeStyles, useColors } from '../../theme';
 
 interface AuthLayoutProps {
   children: React.ReactNode;
@@ -36,6 +36,8 @@ export function AuthLayout({
   topRight,
   variant = 'light',
 }: AuthLayoutProps) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const dark = variant === 'dark';
   const body = (
@@ -86,7 +88,7 @@ export function AuthLayout({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.background.primary,
@@ -125,4 +127,4 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
   },
-});
+}));

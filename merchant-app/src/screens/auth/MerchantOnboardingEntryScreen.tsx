@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { colors } from '../../theme';
+import { makeStyles, useColors } from '../../theme';
 import { auth, firestore } from '../../services/firebase.config';
 import { userHasPin } from '../../utils/pinHash';
 import type { MerchantOnboardingParamList } from '../../navigation/MerchantOnboardingNavigator';
@@ -9,6 +9,8 @@ import type { MerchantOnboardingParamList } from '../../navigation/MerchantOnboa
 type Nav = StackNavigationProp<MerchantOnboardingParamList, 'MerchantOnboardingEntry'>;
 
 export default function MerchantOnboardingEntryScreen({ navigation }: { navigation: Nav }) {
+  const colors = useColors();
+  const styles = useStyles();
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -47,11 +49,11 @@ export default function MerchantOnboardingEntryScreen({ navigation }: { navigati
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   loading: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: colors.background.primary,
   },
-});
+}));

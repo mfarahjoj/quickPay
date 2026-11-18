@@ -169,16 +169,14 @@ function AuthStackNavigator({
 
 function MainTabs() {
   const colors = useColors();
-  const { scheme } = useTheme();
   const { t } = useTranslation();
-  // Light: a white bar, the current tab in ink and the rest in grey.
-  const light = scheme === 'light';
+  // A surface-coloured bar, the current tab in ink and the rest in grey.
 
   return (
     <Tab.Navigator
       screenOptions={{
-        tabBarActiveTintColor: light ? colors.ui.text : colors.action.primary,
-        tabBarInactiveTintColor: light ? colors.ui.textFaint : '#9A9AA0',
+        tabBarActiveTintColor: colors.ui.text,
+        tabBarInactiveTintColor: colors.ui.textFaint,
         headerStyle: { backgroundColor: colors.background.primary },
         headerTitleStyle: { fontWeight: '700', color: colors.text.primary },
         headerTintColor: colors.text.primary,
@@ -192,8 +190,8 @@ function MainTabs() {
           paddingTop: 6,
         },
         tabBarStyle: {
-          backgroundColor: light ? colors.ui.surface : colors.background.primary,
-          borderTopColor: light ? colors.ui.glassBorder : colors.border.light,
+          backgroundColor: colors.ui.surface,
+          borderTopColor: colors.ui.glassBorder,
           borderTopWidth: StyleSheet.hairlineWidth,
           height: 88,
           paddingBottom: 28,

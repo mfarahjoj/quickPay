@@ -1,5 +1,11 @@
-import React from 'react';
-import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
+import React, { useMemo } from 'react';
+import {
+  NavigationContainer,
+  createNavigationContainerRef,
+  DarkTheme,
+  DefaultTheme,
+  type Theme,
+} from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useTranslation } from 'react-i18next';
@@ -17,7 +23,7 @@ import { ConsentGate } from '../components/legal/ConsentGate';
 import { ZaadGate } from '../screens/settings/ZaadAccountScreen';
 import { ZaadOfferWatcher } from '../components/ZaadOfferWatcher';
 import { View, StyleSheet, ActivityIndicator } from 'react-native';
-import { colors } from '../theme';
+import { makeStyles, useColors, useTheme } from '../theme';
 import {
   HomeTabIcon,
   ReceiveTabIcon,
@@ -130,6 +136,8 @@ const SettingsIcon = ({ color, focused }: TabIconArgs) => <SettingsTabIcon color
 const ReceiveIcon = ({ color, focused }: TabIconArgs) => <ReceiveTabIcon color={color} focused={focused} />;
 
 function BootstrapLoading() {
+  const colors = useColors();
+  const styles = useStyles();
   return (
     <View style={styles.bootstrapLoading}>
       <ActivityIndicator size="large" color={colors.action.primary} />
@@ -157,15 +165,18 @@ function AuthStackNavigator() {
 }
 
 function MainTabs() {
+  const colors = useColors();
   const { t } = useTranslation();
 
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.action.primary,
-        tabBarInactiveTintColor: '#9A9AA0',
-        headerStyle: { backgroundColor: colors.background.primary },
+        // A surface-coloured bar, the current tab in ink and the rest in grey,
+        // as in Zapp Pay.
+        tabBarActiveTintColor: colors.ui.text,
+        tabBarInactiveTintColor: colors.ui.textFaint,
+        headerStyle: { backgroundColor: colors.ui.canvas },
         headerTitleStyle: { fontWeight: 'bold' },
         tabBarLabelStyle: {
           fontSize: 11,
@@ -177,8 +188,8 @@ function MainTabs() {
           paddingTop: 6,
         },
         tabBarStyle: {
-          backgroundColor: colors.background.primary,
-          borderTopColor: colors.border.light,
+          backgroundColor: colors.ui.surface,
+          borderTopColor: colors.ui.glassBorder,
           borderTopWidth: StyleSheet.hairlineWidth,
           height: 88,
           paddingBottom: 28,
@@ -227,15 +238,16 @@ function MainTabs() {
 }
 
 function MainStackNavigator() {
+  const colors = useColors();
   const { t } = useTranslation();
 
   return (
     <MainStack.Navigator
       screenOptions={{
-        cardStyle: { backgroundColor: '#000000' },
-        headerStyle: { backgroundColor: '#000000', elevation: 0, shadowOpacity: 0 },
-        headerTitleStyle: { fontWeight: '700', color: '#FFFFFF' },
-        headerTintColor: '#FFFFFF',
+        cardStyle: { backgroundColor: colors.ui.canvas },
+        headerStyle: { backgroundColor: colors.ui.canvas, elevation: 0, shadowOpacity: 0 },
+        headerTitleStyle: { fontWeight: '700', color: colors.ui.text },
+        headerTintColor: colors.ui.text,
         headerShadowVisible: false,
         // The label would be the previous route's title, and MainTabs has
         // none, so iOS showed the internal name "MainTabs" in every language.
@@ -421,6 +433,22 @@ function MainStackNavigator() {
 
 export default function AppNavigator() {
   const { t } = useTranslation();
+  const { scheme, colors } = useTheme();
+  // What shows behind and between screens matches the canvas.
+  const navigationTheme = useMemo<Theme>(() => {
+    const base = scheme === 'dark' ? DarkTheme : DefaultTheme;
+    return {
+      ...base,
+      colors: {
+        ...base.colors,
+        primary: colors.ui.accent,
+        background: colors.ui.canvas,
+        card: colors.ui.canvas,
+        text: colors.ui.text,
+        border: colors.ui.divider,
+      },
+    };
+  }, [scheme, colors]);
   const { user } = useAuth();
   const { loading, state, requestedRole, rejectionReason, kycVerified } = useMerchantOnboardingGate();
   useIdleSignOut(!!user);
@@ -450,7 +478,7 @@ export default function AppNavigator() {
 
   if (user && (state === 'onboarding' || (state === 'rejected' && reapplying))) {
     return (
-      <NavigationContainer>
+      <NavigationContainer theme={navigationTheme}>
         <MerchantOnboardingNavigator />
       </NavigationContainer>
     );
@@ -485,7 +513,7 @@ export default function AppNavigator() {
   }
 
   const app = (
-    <NavigationContainer ref={navigationRef}>
+    <NavigationContainer ref={navigationRef} theme={navigationTheme}>
       <RootStack.Navigator
         screenOptions={{
           headerShown: false,
@@ -519,11 +547,11 @@ export default function AppNavigator() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   bootstrapLoading: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: colors.background.primary,
   },
-});
+}));

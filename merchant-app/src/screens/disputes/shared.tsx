@@ -1,20 +1,23 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { useColors, type Colors, makeStyles } from '../../theme';
 import type { DisputeStatus } from '../../services/dispute.service';
 
-const TONE: Record<DisputeStatus, { fg: string; bg: string }> = {
-  open: { fg: '#FFB02E', bg: 'rgba(255,176,46,0.15)' },
-  under_review: { fg: '#FFB02E', bg: 'rgba(255,176,46,0.15)' },
-  awaiting_funds: { fg: '#FF6961', bg: 'rgba(255,105,97,0.15)' },
-  resolved: { fg: '#34C77B', bg: 'rgba(52,199,123,0.15)' },
-  withdrawn: { fg: 'rgba(255,255,255,0.45)', bg: 'rgba(255,255,255,0.08)' },
-};
+const tones = (colors: Colors): Record<DisputeStatus, { fg: string; bg: string }> => ({
+  open: { fg: colors.ui.warning, bg: colors.ui.warningSoft },
+  under_review: { fg: colors.ui.warning, bg: colors.ui.warningSoft },
+  awaiting_funds: { fg: colors.ui.error, bg: colors.ui.errorSoft },
+  resolved: { fg: colors.ui.incoming, bg: colors.ui.incomingSoft },
+  withdrawn: { fg: colors.ui.textDim, bg: colors.ui.glassRaised },
+});
 
 /** Status from the shop's side: "Reply needed" rather than "Waiting for reply". */
 export function DisputeStatusPill({ status, mine }: { status: DisputeStatus; mine: boolean }) {
+  const styles = useStyles();
+  const colors = useColors();
   const { t } = useTranslation();
-  const tone = TONE[status];
+  const tone = tones(colors)[status];
   const key = status === 'open' && mine ? 'disputes.status.replyNeeded' : `disputes.status.${status}`;
   return (
     <View style={[styles.pill, { backgroundColor: tone.bg }]}>
@@ -25,7 +28,7 @@ export function DisputeStatusPill({ status, mine }: { status: DisputeStatus; min
 
 export const money = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   pill: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999 },
   text: { fontSize: 12, fontWeight: '700' },
-});
+}));

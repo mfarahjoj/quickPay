@@ -12,15 +12,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import {
-  DarkScreen,
-  ScreenHeader,
-  GlassCard,
-  PillButton,
-  PinInput,
-  TEXT_DIM,
-  TEXT_FAINT,
-} from '../../components';
+import { DarkScreen, ScreenHeader, GlassCard, PillButton, PinInput } from '../../components';
 import { useAuth } from '../../hooks/useAuth';
 import { functions } from '../../services/firebase.config';
 import {
@@ -32,6 +24,7 @@ import {
 } from '../../services/dispute.service';
 import { isWrongPin, pinActionErrorKey } from '../../utils/errors';
 import { DisputeStatusPill, money } from './shared';
+import { makeStyles, useColors } from '../../theme';
 
 function nextStep(d: Dispute, mine: boolean, t: (k: string, o?: any) => string): string {
   if (d.status === 'open') {
@@ -52,6 +45,8 @@ function nextStep(d: Dispute, mine: boolean, t: (k: string, o?: any) => string):
 }
 
 export default function DisputeDetailScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
@@ -70,7 +65,7 @@ export default function DisputeDetailScreen() {
       <DarkScreen>
         <ScreenHeader title={t('disputes.detail.title')} onBack={() => navigation.goBack()} />
         {loading ? (
-          <ActivityIndicator color="#FFFFFF" style={styles.loader} />
+          <ActivityIndicator color={colors.ui.text} style={styles.loader} />
         ) : (
           <Text style={styles.muted}>{t('disputes.error.generic')}</Text>
         )}
@@ -137,7 +132,7 @@ export default function DisputeDetailScreen() {
           style={styles.pinInput}
         />
         {pinError ? <Text style={styles.pinError}>{pinError}</Text> : null}
-        {refunding ? <ActivityIndicator color="#FFFFFF" style={styles.spinner} /> : null}
+        {refunding ? <ActivityIndicator color={colors.ui.text} style={styles.spinner} /> : null}
         <View style={styles.block}>
           <PillButton label={t('common.cancel')} variant="glass" onPress={() => setPinStep(false)} disabled={refunding} />
         </View>
@@ -190,7 +185,7 @@ export default function DisputeDetailScreen() {
               value={reply}
               onChangeText={setReply}
               placeholder={t('disputes.detail.replyPlaceholder')}
-              placeholderTextColor={TEXT_FAINT}
+              placeholderTextColor={colors.ui.textFaint}
               multiline
               maxLength={1000}
               textAlignVertical="top"
@@ -209,29 +204,29 @@ export default function DisputeDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   body: { paddingHorizontal: 24, paddingBottom: 48 },
   loader: { marginTop: 32 },
-  muted: { fontSize: 15, color: TEXT_DIM, textAlign: 'center', marginTop: 32 },
+  muted: { fontSize: 15, color: colors.ui.textDim, textAlign: 'center', marginTop: 32 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
-  bigTitle: { fontSize: 24, fontWeight: '800', color: '#FFFFFF', textAlign: 'center', letterSpacing: -0.5 },
-  sub: { fontSize: 15, color: TEXT_DIM, textAlign: 'center', marginTop: 6 },
+  bigTitle: { fontSize: 24, fontWeight: '800', color: colors.ui.text, textAlign: 'center', letterSpacing: -0.5 },
+  sub: { fontSize: 15, color: colors.ui.textDim, textAlign: 'center', marginTop: 6 },
   pinInput: { marginTop: 28 },
-  pinError: { fontSize: 14, color: '#FF6961', textAlign: 'center', marginTop: 16 },
+  pinError: { fontSize: 14, color: colors.ui.error, textAlign: 'center', marginTop: 16 },
   spinner: { marginTop: 20 },
   block: { alignSelf: 'stretch', marginTop: 28 },
   summary: { padding: 18, marginBottom: 16 },
   summaryTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  kind: { fontSize: 15, fontWeight: '600', color: '#FFFFFF', flex: 1, marginRight: 10 },
-  amount: { fontSize: 32, fontWeight: '800', color: '#FFFFFF', marginVertical: 8, letterSpacing: -0.6 },
-  next: { fontSize: 14, color: TEXT_DIM, lineHeight: 20 },
-  reason: { fontSize: 13, color: TEXT_FAINT, marginTop: 8 },
+  kind: { fontSize: 15, fontWeight: '600', color: colors.ui.text, flex: 1, marginRight: 10 },
+  amount: { fontSize: 32, fontWeight: '800', color: colors.ui.text, marginVertical: 8, letterSpacing: -0.6 },
+  next: { fontSize: 14, color: colors.ui.textDim, lineHeight: 20 },
+  reason: { fontSize: 13, color: colors.ui.textFaint, marginTop: 8 },
   accept: { marginBottom: 16 },
-  acceptHint: { fontSize: 13, color: TEXT_FAINT, marginTop: 8, lineHeight: 18 },
+  acceptHint: { fontSize: 13, color: colors.ui.textFaint, marginTop: 8, lineHeight: 18 },
   section: {
     fontSize: 12,
     fontWeight: '700',
-    color: TEXT_FAINT,
+    color: colors.ui.textFaint,
     letterSpacing: 1,
     marginTop: 8,
     marginBottom: 10,
@@ -240,23 +235,23 @@ const styles = StyleSheet.create({
   message: {
     padding: 12,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.ui.glass,
     marginBottom: 8,
     marginRight: 32,
   },
-  messageMine: { backgroundColor: 'rgba(26,86,255,0.18)', marginRight: 0, marginLeft: 32 },
-  messageWho: { fontSize: 12, color: TEXT_FAINT, marginBottom: 3 },
-  messageText: { fontSize: 15, color: '#FFFFFF', lineHeight: 21 },
+  messageMine: { backgroundColor: colors.ui.accentSoft, marginRight: 0, marginLeft: 32 },
+  messageWho: { fontSize: 12, color: colors.ui.textFaint, marginBottom: 3 },
+  messageText: { fontSize: 15, color: colors.ui.text, lineHeight: 21 },
   reply: {
     fontSize: 15,
-    color: '#FFFFFF',
+    color: colors.ui.text,
     minHeight: 80,
     padding: 12,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: colors.ui.glassBorder,
     marginTop: 12,
     marginBottom: 10,
   },
-});
+}));

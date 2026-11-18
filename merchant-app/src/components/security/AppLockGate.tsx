@@ -2,13 +2,14 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import { DarkScreen, PillButton, TEXT_DIM } from '../DarkScreen';
+import { DarkScreen, PillButton } from '../DarkScreen';
 import { PinInput } from '../PinInput';
 import { BrandLogo } from '../auth/BrandLogo';
 import { PinLockoutError, signOut, validatePin } from '../../services/auth.service';
 import { isAppLockEnabled, LOCK_AFTER_MS } from '../../utils/appLock';
 import { ResetPinFlow } from './ResetPinFlow';
 import { logger } from '../../utils/logger';
+import { makeStyles, useColors } from '../../theme';
 
 /** A PIN lockout, in the merchant's language. */
 export function pinLockoutText(err: PinLockoutError, t: TFunction | ((k: string, o?: any) => string)): string {
@@ -23,6 +24,8 @@ export function pinLockoutText(err: PinLockoutError, t: TFunction | ((k: string,
  * mounted underneath, so the merchant returns to where they were.
  */
 export function AppLockGate({ children }: { children: React.ReactNode }) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const [locked, setLocked] = useState<boolean | null>(null);
   const [resetting, setResetting] = useState(false);
@@ -111,7 +114,7 @@ export function AppLockGate({ children }: { children: React.ReactNode }) {
                 style={styles.pin}
               />
               {error ? <Text style={styles.error}>{error}</Text> : null}
-              {checking ? <ActivityIndicator color="#FFFFFF" style={styles.spinner} /> : null}
+              {checking ? <ActivityIndicator color={colors.ui.text} style={styles.spinner} /> : null}
               <View style={styles.block}>
                 <PillButton variant="glass" label={t('security.forgotPin')} onPress={() => setResetting(true)} />
                 <PillButton
@@ -129,21 +132,21 @@ export function AppLockGate({ children }: { children: React.ReactNode }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   fill: { flex: 1 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
   title: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     letterSpacing: -0.5,
     textAlign: 'center',
     marginTop: 24,
   },
-  sub: { fontSize: 15, color: TEXT_DIM, textAlign: 'center', marginTop: 6 },
+  sub: { fontSize: 15, color: colors.ui.textDim, textAlign: 'center', marginTop: 6 },
   pin: { marginTop: 28 },
-  error: { fontSize: 14, color: '#FF6961', textAlign: 'center', marginTop: 16 },
+  error: { fontSize: 14, color: colors.ui.error, textAlign: 'center', marginTop: 16 },
   spinner: { marginTop: 20 },
   block: { alignSelf: 'stretch', marginTop: 36 },
   signOut: { marginTop: 12 },
-});
+}));
