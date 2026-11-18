@@ -9,6 +9,7 @@
 
 import React from 'react';
 import { StyleProp, StyleSheet, Text, TextInput, TextInputProps, TextStyle, View } from 'react-native';
+import { makeStyles, useColors } from '../theme';
 
 interface Props extends Omit<TextInputProps, 'placeholder' | 'style'> {
   value: string;
@@ -19,11 +20,13 @@ interface Props extends Omit<TextInputProps, 'placeholder' | 'style'> {
 }
 
 export function AmountInput({ value, placeholder, style, placeholderTextColor, ...rest }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   return (
     <View style={styles.wrap}>
       {value ? null : (
         <Text
-          style={[style, styles.ghost, { color: placeholderTextColor ?? 'rgba(255,255,255,0.25)' }]}
+          style={[style, styles.ghost, { color: placeholderTextColor ?? colors.ui.ink(0.25) }]}
           numberOfLines={1}
           pointerEvents="none"
           accessibilityElementsHidden
@@ -37,7 +40,7 @@ export function AmountInput({ value, placeholder, style, placeholderTextColor, .
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   wrap: { flex: 1, justifyContent: 'center' },
   ghost: { position: 'absolute', left: 0, right: 0, flex: 0, height: 'auto', paddingVertical: 0 },
-});
+}));

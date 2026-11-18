@@ -14,15 +14,7 @@ import {
   cancelPaymentRequest,
   ChargeStatus,
 } from '../../services/scan.service';
-import {
-  DarkScreen,
-  GlassCard,
-  PillButton,
-  PaidReferenceSheet,
-  ACCENT,
-  TEXT_DIM,
-  TEXT_FAINT,
-} from '../../components';
+import { DarkScreen, GlassCard, PillButton, PaidReferenceSheet } from '../../components';
 import { SuccessCheckIcon, CloseIcon } from '../../components/icons/AuthIcons';
 import { useExitGuard } from '../../hooks/useExitGuard';
 import { formatAmount, sanitizeAmountFor, toAmount } from '../../utils/money';
@@ -36,6 +28,7 @@ import {
 import { REFERENCE_MAX_LENGTH } from '../../utils/receiptParser';
 import { triggerHaptic } from '../../services/haptics.service';
 import { AmountInput } from '../../components/AmountInput';
+import { makeStyles, useColors } from '../../theme';
 
 interface Props {
   route: {
@@ -95,6 +88,8 @@ const formatClock = (seconds: number) =>
   `${Math.floor(seconds / 60)}:${(seconds % 60).toString().padStart(2, '0')}`;
 
 export default function ChargeScreen({ route, navigation }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const { tokenId } = route.params;
   // Resuming a request raised elsewhere: its name, amount and expiry come from the request.
@@ -358,7 +353,7 @@ export default function ChargeScreen({ route, navigation }: Props) {
     return (
       <DarkScreen edges={[]} contentStyle={styles.resultWrap}>
         <View style={styles.failIcon}>
-          <CloseIcon size={32} color="#FF6961" />
+          <CloseIcon size={32} color={colors.ui.error} />
         </View>
         <Text style={styles.resultTitle}>{title}</Text>
         <Text style={styles.resultSubtitle}>{message}</Text>
@@ -381,7 +376,7 @@ export default function ChargeScreen({ route, navigation }: Props) {
   if (phase === 'waiting' || phase === 'cancelling') {
     return (
       <DarkScreen edges={[]} contentStyle={styles.resultWrap}>
-        <ActivityIndicator size="large" color={ACCENT} style={styles.spinner} />
+        <ActivityIndicator size="large" color={colors.ui.accent} style={styles.spinner} />
         <Text style={styles.resultTitle}>{t(k('waitingApproval'))}</Text>
         <Text style={styles.resultSubtitle}>{t(k('confirmMessage'), { name: customerName })}</Text>
         <Text style={styles.waitingAmount}>{show(chargedCents)}</Text>
@@ -423,7 +418,7 @@ export default function ChargeScreen({ route, navigation }: Props) {
             <TextInput
               style={styles.refInput}
               placeholder={t('scan.charge.referencePlaceholder')}
-              placeholderTextColor="rgba(255,255,255,0.25)"
+              placeholderTextColor={colors.ui.ink(0.25)}
               value={reference}
               onChangeText={setReference}
               returnKeyType="next"
@@ -441,7 +436,7 @@ export default function ChargeScreen({ route, navigation }: Props) {
           <AmountInput
             style={styles.amountInput}
             placeholder={currency === 'SLS' ? '0,000' : '0.00'}
-            placeholderTextColor="rgba(255,255,255,0.25)"
+            placeholderTextColor={colors.ui.ink(0.25)}
             value={amount}
             onChangeText={(v) => setAmount(sanitizeAmountFor(v, currency))}
             keyboardType={currency === 'SLS' ? 'number-pad' : 'decimal-pad'}
@@ -483,7 +478,7 @@ export default function ChargeScreen({ route, navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   currencyToggle: { marginTop: 16 },
   content: { flex: 1, paddingTop: 20 },
   body: { flex: 1, paddingHorizontal: 24 },
@@ -499,13 +494,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 1,
     textTransform: 'uppercase',
-    color: '#FF8A7A',
+    color: colors.ui.accentText,
     marginBottom: 6,
   },
   customerName: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     letterSpacing: -0.5,
   },
   label: {
@@ -513,7 +508,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 0.4,
     textTransform: 'uppercase',
-    color: 'rgba(255,255,255,0.4)',
+    color: colors.ui.textFaint,
     marginBottom: 12,
   },
   amountLabel: { marginTop: 20 },
@@ -524,19 +519,19 @@ const styles = StyleSheet.create({
     height: 76,
   },
   amountCardFocused: {
-    borderColor: ACCENT,
+    borderColor: colors.ui.accent,
   },
   currency: {
     fontSize: 36,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     marginRight: 8,
   },
   amountInput: {
     flex: 1,
     fontSize: 40,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     letterSpacing: -1,
     padding: 0,
   },
@@ -553,14 +548,14 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: 'rgba(255,59,48,0.14)',
+    backgroundColor: colors.ui.errorSoft,
     justifyContent: 'center',
     alignItems: 'center',
   },
   resultTitle: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     letterSpacing: -0.5,
     textAlign: 'center',
     marginTop: 24,
@@ -569,7 +564,7 @@ const styles = StyleSheet.create({
   resultAmount: {
     fontSize: 40,
     fontWeight: '800',
-    color: '#34C77B',
+    color: colors.ui.incoming,
     letterSpacing: -1.5,
     marginBottom: 8,
   },
@@ -580,51 +575,51 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: colors.ui.divider,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
+    borderColor: colors.ui.ink(0.14),
     marginTop: 12,
   },
   receiptPillLabel: {
     fontSize: 13,
-    color: TEXT_FAINT,
+    color: colors.ui.textFaint,
   },
   receiptPillValue: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     letterSpacing: 0.6,
     fontVariant: ['tabular-nums'],
   },
   resultSubtitle: {
     fontSize: 15,
-    color: TEXT_DIM,
+    color: colors.ui.textDim,
     textAlign: 'center',
     lineHeight: 22,
   },
   waitingAmount: {
     fontSize: 28,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     letterSpacing: -1,
     marginTop: 20,
   },
   waitingRef: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.5)',
+    color: colors.ui.ink(0.5),
     marginTop: 8,
     letterSpacing: 0.2,
   },
   countdown: {
     fontSize: 14,
     fontWeight: '600',
-    color: TEXT_FAINT,
+    color: colors.ui.textFaint,
     marginTop: 16,
     fontVariant: ['tabular-nums'],
   },
   warning: {
     fontSize: 13,
-    color: '#FF6961',
+    color: colors.ui.error,
     textAlign: 'center',
     marginTop: 12,
   },
@@ -635,13 +630,13 @@ const styles = StyleSheet.create({
     height: 52,
   },
   refCardFocused: {
-    borderColor: ACCENT,
+    borderColor: colors.ui.accent,
   },
   refInput: {
     flex: 1,
     fontSize: 16,
     fontWeight: '500',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     padding: 0,
   },
   resultBtn: {
@@ -649,4 +644,4 @@ const styles = StyleSheet.create({
     marginTop: 32,
   },
   secondBtn: { marginTop: 12 },
-});
+}));

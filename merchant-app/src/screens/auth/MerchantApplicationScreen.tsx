@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, ActivityIndicator, ScrollView } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { DarkScreen, GlassCard, PillButton, ScreenHeader, ACCENT, GLASS, GLASS_BORDER, TEXT_DIM } from '../../components/DarkScreen';
+import { DarkScreen, GlassCard, PillButton, ScreenHeader } from '../../components/DarkScreen';
 import { Input } from '../../components/Input';
 import { PhotoCapture } from '../../components/PhotoCapture';
 import { MapPinPicker } from '../../components/MapPinPicker';
@@ -24,6 +24,7 @@ import {
 } from '../../services/roleApplication.service';
 import { logger } from '../../utils/logger';
 import { auth, firestore } from '../../services/firebase.config';
+import { makeStyles, useColors } from '../../theme';
 
 /**
  * "Find your shop on Google" needs the GOOGLE_MAPS_API_KEY secret and the
@@ -81,6 +82,8 @@ function looksLikeMsisdn(raw: string): boolean {
  * it once in the console, and approval sets everything up.
  */
 export default function MerchantApplicationScreen({ role, kycVerified }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const merchant = isMerchantRole(role);
   const agent = isAgentRole(role);
@@ -308,12 +311,12 @@ export default function MerchantApplicationScreen({ role, kycVerified }: Props) 
               <Image source={{ uri: photo.uri }} style={styles.photoImg} />
               {photo.uploading && (
                 <View style={styles.photoOverlay}>
-                  <ActivityIndicator color="#FFF" />
+                  <ActivityIndicator color="#FFFFFF" />
                 </View>
               )}
               {photo.path && (
                 <View style={styles.photoDone}>
-                  <CheckIcon size={14} color="#000" />
+                  <CheckIcon size={14} color={colors.ui.onSolid} />
                 </View>
               )}
             </>
@@ -396,7 +399,7 @@ export default function MerchantApplicationScreen({ role, kycVerified }: Props) 
                     accessibilityRole="button"
                     accessibilityLabel={t('application.find.button')}
                   >
-                    {searching ? <ActivityIndicator color="#000" /> : <Text style={styles.findBtnText}>{t('application.find.button')}</Text>}
+                    {searching ? <ActivityIndicator color={colors.ui.onSolid} /> : <Text style={styles.findBtnText}>{t('application.find.button')}</Text>}
                   </TouchableOpacity>
                 </View>
                 {results.map((r) => (
@@ -436,7 +439,7 @@ export default function MerchantApplicationScreen({ role, kycVerified }: Props) 
                     : t('application.business.locationHint')}
                 </Text>
               </View>
-              {locating ? <ActivityIndicator color="#FFF" /> : location ? <CheckIcon size={18} color="#5DCAA5" /> : null}
+              {locating ? <ActivityIndicator color={colors.ui.text} /> : location ? <CheckIcon size={18} color={colors.ui.incoming} /> : null}
             </TouchableOpacity>
             {!!errors.location && <Text style={styles.err}>{errors.location}</Text>}
 
@@ -523,41 +526,41 @@ export default function MerchantApplicationScreen({ role, kycVerified }: Props) 
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   scroll: { paddingHorizontal: 20, paddingBottom: 32, flexGrow: 1 },
   progress: { flexDirection: 'row', gap: 6, marginTop: 4, marginBottom: 20 },
-  progressDot: { flex: 1, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.12)' },
-  progressDotOn: { backgroundColor: ACCENT },
+  progressDot: { flex: 1, height: 4, borderRadius: 2, backgroundColor: colors.ui.ink(0.12) },
+  progressDotOn: { backgroundColor: colors.ui.accent },
   section: { gap: 14 },
-  sectionTitle: { color: '#FFF', fontSize: 17, fontWeight: '700' },
-  sectionHint: { color: TEXT_DIM, fontSize: 14, lineHeight: 20 },
+  sectionTitle: { color: colors.ui.text, fontSize: 17, fontWeight: '700' },
+  sectionHint: { color: colors.ui.textDim, fontSize: 14, lineHeight: 20 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     paddingHorizontal: 14,
     paddingVertical: 9,
     borderRadius: 18,
-    backgroundColor: GLASS,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: GLASS_BORDER,
+    borderColor: colors.ui.glassBorder,
   },
-  chipOn: { backgroundColor: '#FFF', borderColor: '#FFF' },
-  chipText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
-  chipTextOn: { color: '#000' },
+  chipOn: { backgroundColor: colors.ui.solid, borderColor: colors.ui.solid },
+  chipText: { color: colors.ui.text, fontSize: 14, fontWeight: '600' },
+  chipTextOn: { color: colors.ui.onSolid },
   pinRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     padding: 14,
     borderRadius: 16,
-    backgroundColor: GLASS,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: GLASS_BORDER,
+    borderColor: colors.ui.glassBorder,
   },
-  pinRowError: { borderColor: '#FF8A80' },
-  pinDot: { width: 18, height: 18, borderRadius: 9, backgroundColor: ACCENT, borderWidth: 3, borderColor: '#FFF' },
+  pinRowError: { borderColor: colors.ui.error },
+  pinDot: { width: 18, height: 18, borderRadius: 9, backgroundColor: colors.ui.accent, borderWidth: 3, borderColor: '#FFFFFF' },
   pinText: { flex: 1 },
-  pinTitle: { color: '#FFF', fontSize: 15, fontWeight: '600' },
-  pinSub: { color: TEXT_DIM, fontSize: 13, marginTop: 2 },
+  pinTitle: { color: colors.ui.text, fontSize: 15, fontWeight: '600' },
+  pinSub: { color: colors.ui.textDim, fontSize: 13, marginTop: 2 },
   findCard: { gap: 10 },
   findRow: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
   findInput: { flex: 1 },
@@ -565,24 +568,24 @@ const styles = StyleSheet.create({
     height: 52,
     paddingHorizontal: 16,
     borderRadius: 14,
-    backgroundColor: '#FFF',
+    backgroundColor: colors.ui.solid,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  findBtnText: { color: '#000', fontWeight: '700', fontSize: 15 },
-  result: { paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: GLASS_BORDER },
-  resultName: { color: '#FFF', fontSize: 15, fontWeight: '600' },
-  resultAddr: { color: TEXT_DIM, fontSize: 13, marginTop: 2 },
-  foundNote: { color: '#5DCAA5', fontSize: 13 },
+  findBtnText: { color: colors.ui.onSolid, fontWeight: '700', fontSize: 15 },
+  result: { paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.ui.glassBorder },
+  resultName: { color: colors.ui.text, fontSize: 15, fontWeight: '600' },
+  resultAddr: { color: colors.ui.textDim, fontSize: 13, marginTop: 2 },
+  foundNote: { color: colors.ui.incoming, fontSize: 13 },
   photoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
   photoSlot: { width: 100, alignItems: 'center', gap: 6 },
   photoBox: {
     width: 100,
     height: 100,
     borderRadius: 16,
-    backgroundColor: GLASS,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: GLASS_BORDER,
+    borderColor: colors.ui.glassBorder,
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
@@ -606,13 +609,13 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: '#5DCAA5',
+    backgroundColor: colors.ui.incoming,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  photoPlus: { color: '#FFF', fontSize: 28 },
-  photoLabel: { color: '#FFF', fontSize: 13, textAlign: 'center' },
-  link: { color: '#FFF', fontSize: 14, fontWeight: '600', textDecorationLine: 'underline' },
-  err: { color: '#FF8A80', fontSize: 13 },
+  photoPlus: { color: colors.ui.text, fontSize: 28 },
+  photoLabel: { color: colors.ui.text, fontSize: 13, textAlign: 'center' },
+  link: { color: colors.ui.text, fontSize: 14, fontWeight: '600', textDecorationLine: 'underline' },
+  err: { color: colors.ui.error, fontSize: 13 },
   footer: { marginTop: 'auto', paddingTop: 24, gap: 10 },
-});
+}));

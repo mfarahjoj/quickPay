@@ -9,13 +9,13 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { GlassCard, PillButton, TEXT_DIM, TEXT_FAINT } from './DarkScreen';
+import { GlassCard, PillButton } from './DarkScreen';
 import { formatCents } from '../utils/money';
 import { maskMsisdn, type ZaadTopupRow } from '../services/zaadAgent.service';
 import type { ZaadAgentRequests } from '../hooks/useZaadAgentRequests';
+import { makeStyles, useColors } from '../theme';
 
 /** The brand's attention colour, as on the dashboard's "needs reply" banner. */
-export const ATTENTION = '#FFB02E';
 
 /** One ticking clock for every row on screen. */
 function useNow(): number {
@@ -48,6 +48,8 @@ function Row({
   onPress: () => void;
   urgent?: boolean;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const at = deadline(row);
   const left = at ? Math.max(0, Math.round((at.toMillis() - now) / 1000)) : null;
@@ -65,7 +67,7 @@ function Row({
         </View>
         <View style={styles.rowSide}>
           {left !== null ? (
-            <Text style={[styles.rowTime, urgent && { color: ATTENTION }]}>{clock(left)}</Text>
+            <Text style={[styles.rowTime, urgent && { color: colors.ui.warning }]}>{clock(left)}</Text>
           ) : (
             <Text style={styles.rowStatus}>
               {t(`zaadTopups.list.status.${row.status}`, { defaultValue: row.status })}
@@ -79,6 +81,7 @@ function Row({
 }
 
 function Section({ title, count, color, children }: { title: string; count: number; color?: string; children: React.ReactNode }) {
+  const styles = useStyles();
   if (count === 0) return null;
   return (
     <View style={styles.section}>
@@ -102,6 +105,8 @@ export function ZaadRequestList({
   onAnswer: (id: string, accept: boolean) => void;
   busy: boolean;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const now = useNow();
   const nothing =
@@ -110,7 +115,7 @@ export function ZaadRequestList({
   return (
     <View style={styles.list}>
       {/* Several offers at once: a queue, not stacked pop-ups. */}
-      <Section title={t('zaadTopups.list.offers')} count={data.offers.length} color={ATTENTION}>
+      <Section title={t('zaadTopups.list.offers')} count={data.offers.length} color={colors.ui.warning}>
         {data.offers.map((row) => {
           const left = Math.max(0, Math.round(((row.offerExpiresAt?.toMillis() ?? 0) - now) / 1000));
           return (
@@ -121,7 +126,7 @@ export function ZaadRequestList({
                   <Text style={styles.rowWho}>{row.customerFirstName}</Text>
                   {row.reference ? <Text style={styles.rowRef}>{row.reference}</Text> : null}
                 </View>
-                <Text style={[styles.rowTime, { color: ATTENTION }]}>{clock(left)}</Text>
+                <Text style={[styles.rowTime, { color: colors.ui.warning }]}>{clock(left)}</Text>
               </View>
               <View style={styles.offerButtons}>
                 <View style={styles.flex}>
@@ -139,7 +144,7 @@ export function ZaadRequestList({
           );
         })}
       </Section>
-      <Section title={t('zaadTopups.list.toCheck')} count={data.toCheck.length} color={ATTENTION}>
+      <Section title={t('zaadTopups.list.toCheck')} count={data.toCheck.length} color={colors.ui.warning}>
         {data.toCheck.map((row) => (
           <Row key={row.id} row={row} now={now} urgent onPress={() => onOpen(row.id)} />
         ))}
@@ -169,23 +174,23 @@ export function ZaadRequestList({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   list: { gap: 18 },
   section: { gap: 8 },
-  sectionTitle: { fontSize: 12, fontWeight: '800', letterSpacing: 0.8, textTransform: 'uppercase', color: TEXT_FAINT },
+  sectionTitle: { fontSize: 12, fontWeight: '800', letterSpacing: 0.8, textTransform: 'uppercase', color: colors.ui.textFaint },
   row: { padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  rowUrgent: { borderColor: 'rgba(255,176,46,0.5)', borderWidth: 1 },
+  rowUrgent: { borderColor: colors.ui.warningSoft, borderWidth: 1 },
   rowMain: { flex: 1, gap: 2 },
-  rowAmount: { fontSize: 20, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.5 },
-  rowWho: { fontSize: 14, color: TEXT_DIM },
-  rowRef: { fontSize: 13, fontWeight: '700', color: TEXT_FAINT, letterSpacing: 1 },
+  rowAmount: { fontSize: 20, fontWeight: '800', color: colors.ui.text, letterSpacing: -0.5 },
+  rowWho: { fontSize: 14, color: colors.ui.textDim },
+  rowRef: { fontSize: 13, fontWeight: '700', color: colors.ui.textFaint, letterSpacing: 1 },
   rowSide: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  rowTime: { fontSize: 18, fontWeight: '800', color: '#FFFFFF' },
-  rowStatus: { fontSize: 13, color: TEXT_DIM },
-  chevron: { fontSize: 22, color: TEXT_FAINT },
+  rowTime: { fontSize: 18, fontWeight: '800', color: colors.ui.text },
+  rowStatus: { fontSize: 13, color: colors.ui.textDim },
+  chevron: { fontSize: 22, color: colors.ui.textFaint },
   offer: { padding: 14, gap: 12 },
   offerTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   offerButtons: { flexDirection: 'row', gap: 10 },
   flex: { flex: 1 },
-  empty: { fontSize: 14, color: TEXT_FAINT, textAlign: 'center' },
-});
+  empty: { fontSize: 14, color: colors.ui.textFaint, textAlign: 'center' },
+}));

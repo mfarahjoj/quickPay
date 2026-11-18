@@ -26,29 +26,16 @@ import {
   priorPaymentFromError,
   shouldCheckPaidReference,
 } from '../../utils/paidReference';
-import {
-  DarkScreen,
-  ScreenHeader,
-  GlassCard,
-  PillButton,
-  AmountKeypad,
-  ReceiptScanner,
-  PaidReferenceSheet,
-  CurrencyToggle,
-  ACCENT,
-  TEXT_DIM,
-  TEXT_FAINT,
-} from '../../components';
+import { DarkScreen, ScreenHeader, GlassCard, PillButton, AmountKeypad, ReceiptScanner, PaidReferenceSheet, CurrencyToggle } from '../../components';
 import type { ReceiptDetails } from '../../components/ReceiptScanner';
 import type { FloatCurrency } from '../../components/CurrencyToggle';
 import { ScanIcon, SuccessCheckIcon, ReceiptIcon, CloseIcon, QrIcon } from '../../components/icons/AuthIcons';
+import { makeStyles, useColors } from '../../theme';
 
 type Phase = 'entry' | 'showing' | 'paid' | 'expired';
 
 const TICKET_QR_SIZE = 232;
 // Flat, solid surfaces rather than bordered glass.
-const SURFACE = '#1C1C1E';
-const TEXT_MUTED = '#AEAEB2';
 
 /**
  * The Receive tab. The sale comes first: the amount, and an invoice number
@@ -60,6 +47,8 @@ const TEXT_MUTED = '#AEAEB2';
  * screen (CounterCodeScreen, "My QR"), reached from the top right.
  */
 export default function GenerateQRScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const { height: screenHeight } = useWindowDimensions();
   const navigation = useNavigation<any>();
@@ -433,7 +422,7 @@ export default function GenerateQRScreen() {
             accessibilityRole="button"
             accessibilityLabel={t('qr.display.cancelSale')}
           >
-            <CloseIcon size={14} color="#FFFFFF" />
+            <CloseIcon size={14} color={colors.ui.text} />
           </TouchableOpacity>
           <Text style={styles.showingTitle}>{t('qr.display.scanSubtitle')}</Text>
           <View style={styles.roundSpacer} />
@@ -465,7 +454,7 @@ export default function GenerateQRScreen() {
             value={qrData.qrData}
             size={TICKET_QR_SIZE}
             backgroundColor="#FFFFFF"
-            color="#000000"
+            color={colors.ui.onSolid}
           />
           <Text style={styles.ticketHint}>{t('qr.display.payHint')}</Text>
         </View>
@@ -477,7 +466,7 @@ export default function GenerateQRScreen() {
         ) : null}
 
         <View style={styles.statusCard}>
-          <ActivityIndicator color={warning ? '#FF6961' : ACCENT} />
+          <ActivityIndicator color={warning ? colors.ui.error : colors.ui.accent} />
           <View style={styles.statusBody}>
             <Text style={styles.statusText}>{t('qr.display.waiting')}</Text>
             <Text style={styles.statusSub}>
@@ -498,7 +487,7 @@ export default function GenerateQRScreen() {
           activeOpacity={0.7}
           accessibilityRole="button"
         >
-          <ScanIcon size={18} color="#FFFFFF" />
+          <ScanIcon size={18} color={colors.ui.text} />
           <Text style={styles.cantScanText}>{t('qr.display.cantScan')}</Text>
         </TouchableOpacity>
       </DarkScreen>
@@ -519,7 +508,7 @@ export default function GenerateQRScreen() {
           activeOpacity={0.8}
           accessibilityRole="button"
         >
-          <QrIcon size={16} color="#FFFFFF" />
+          <QrIcon size={16} color={colors.ui.text} />
           <Text style={styles.counterBtnText}>{t('qr.myQr.title')}</Text>
         </TouchableOpacity>
       </View>
@@ -574,7 +563,7 @@ export default function GenerateQRScreen() {
                 <TextInput
                   style={styles.refInput}
                   placeholder={t('qr.receive.referencePlaceholder')}
-                  placeholderTextColor="rgba(255,255,255,0.3)"
+                  placeholderTextColor={colors.ui.ink(0.3)}
                   value={reference}
                   onChangeText={handleReferenceChange}
                   returnKeyType="done"
@@ -597,7 +586,7 @@ export default function GenerateQRScreen() {
                   onPress={() => setRefEditing(true)}
                   activeOpacity={0.7}
                 >
-                  <ReceiptIcon size={16} color="rgba(255,255,255,0.7)" />
+                  <ReceiptIcon size={16} color={colors.ui.ink(0.7)} />
                   <Text style={styles.refChipText} numberOfLines={1}>
                     {trimmedReference}
                   </Text>
@@ -609,7 +598,7 @@ export default function GenerateQRScreen() {
                   accessibilityRole="button"
                   accessibilityLabel={t('qr.receive.clearReference')}
                 >
-                  <CloseIcon size={10} color="#FFFFFF" />
+                  <CloseIcon size={10} color={colors.ui.text} />
                 </TouchableOpacity>
               </View>
             ) : (
@@ -632,7 +621,7 @@ export default function GenerateQRScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={t('qr.receive.scanReceipt')}
               >
-                <ReceiptIcon size={18} color="#FFFFFF" />
+                <ReceiptIcon size={18} color={colors.ui.text} />
                 {trimmedReference ? null : (
                   <Text style={styles.receiptBtnText}>{t('qr.receive.scanReceipt')}</Text>
                 )}
@@ -684,7 +673,7 @@ export default function GenerateQRScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   currencyToggle: { marginHorizontal: 24, marginTop: 4 },
   content: {
     paddingBottom: 16,
@@ -714,7 +703,7 @@ const styles = StyleSheet.create({
     fontSize: 34,
     fontWeight: '700',
     letterSpacing: -0.6,
-    color: '#FFFFFF',
+    color: colors.ui.text,
   },
   counterBtn: {
     flexDirection: 'row',
@@ -723,9 +712,9 @@ const styles = StyleSheet.create({
     height: 44,
     paddingHorizontal: 16,
     borderRadius: 22,
-    backgroundColor: SURFACE,
+    backgroundColor: colors.ui.surface,
   },
-  counterBtnText: { fontSize: 15, fontWeight: '600', color: '#FFFFFF' },
+  counterBtnText: { fontSize: 15, fontWeight: '600', color: colors.ui.text },
 
   offlineBanner: {
     marginHorizontal: 24,
@@ -733,14 +722,14 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,176,32,0.14)',
+    backgroundColor: colors.ui.warningSoft,
     borderWidth: 1,
-    borderColor: 'rgba(255,176,32,0.35)',
+    borderColor: colors.ui.warningSoft,
   },
   offlineText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#FFB020',
+    color: colors.ui.warning,
     textAlign: 'center',
   },
   errorBanner: {
@@ -749,9 +738,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,59,48,0.12)',
+    backgroundColor: colors.ui.errorSoft,
     borderWidth: 1,
-    borderColor: 'rgba(255,59,48,0.35)',
+    borderColor: colors.ui.errorSoft,
   },
   showingBanner: {
     alignSelf: 'stretch',
@@ -761,7 +750,7 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#FF6961',
+    color: colors.ui.error,
     textAlign: 'center',
   },
 
@@ -779,20 +768,20 @@ const styles = StyleSheet.create({
     fontSize: 64,
     fontWeight: '800',
     letterSpacing: -2.5,
-    color: '#FFFFFF',
+    color: colors.ui.text,
     fontVariant: ['tabular-nums'],
   },
   amountTextEmpty: {
-    color: 'rgba(255,255,255,0.28)',
+    color: colors.ui.ink(0.28),
   },
   amountNote: {
     fontSize: 13,
-    color: TEXT_FAINT,
+    color: colors.ui.textFaint,
     marginTop: 4,
     textAlign: 'center',
   },
   amountNoteWarn: {
-    color: '#FFB020',
+    color: colors.ui.warning,
     fontWeight: '600',
   },
 
@@ -813,7 +802,7 @@ const styles = StyleSheet.create({
     height: 40,
     paddingHorizontal: 14,
     borderRadius: 20,
-    backgroundColor: SURFACE,
+    backgroundColor: colors.ui.surface,
   },
   receiptBtnIcon: {
     width: 40,
@@ -822,19 +811,19 @@ const styles = StyleSheet.create({
   receiptBtnText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.ui.text,
   },
   refAdd: {
     height: 40,
     paddingHorizontal: 18,
     borderRadius: 20,
     justifyContent: 'center',
-    backgroundColor: SURFACE,
+    backgroundColor: colors.ui.surface,
   },
   refAddText: {
     fontSize: 14,
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.ui.ink(0.7),
   },
   refChip: {
     flexDirection: 'row',
@@ -844,7 +833,7 @@ const styles = StyleSheet.create({
     paddingLeft: 14,
     paddingRight: 10,
     borderRadius: 20,
-    backgroundColor: SURFACE,
+    backgroundColor: colors.ui.surface,
     gap: 10,
   },
   refChipMain: {
@@ -856,14 +845,14 @@ const styles = StyleSheet.create({
   refChipText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     flexShrink: 1,
   },
   refClear: {
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: colors.ui.glassBorderStrong,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -874,19 +863,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     height: 48,
     gap: 12,
-    borderColor: ACCENT,
+    borderColor: colors.ui.accent,
   },
   refInput: {
     flex: 1,
     fontSize: 16,
     fontWeight: '500',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     padding: 0,
   },
   refDone: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.ui.text,
   },
 
   // keypad
@@ -904,7 +893,8 @@ const styles = StyleSheet.create({
   },
   footerBtn: { flex: 1 },
 
-  // ticket (customer-facing)
+  // ticket (customer-facing): white with black ink in both themes, like a
+  // printed slip, so the QR scans the same either way.
   ticket: {
     alignSelf: 'stretch',
     marginHorizontal: 20,
@@ -972,12 +962,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginBottom: 18,
   },
-  showingTitle: { fontSize: 17, fontWeight: '600', color: '#FFFFFF' },
+  showingTitle: { fontSize: 17, fontWeight: '600', color: colors.ui.text },
   roundBtn: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: SURFACE,
+    backgroundColor: colors.ui.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -991,19 +981,19 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderRadius: 20,
-    backgroundColor: SURFACE,
+    backgroundColor: colors.ui.surface,
   },
   statusBody: { flex: 1, gap: 2 },
-  statusText: { fontSize: 16, fontWeight: '600', color: '#FFFFFF' },
-  statusSub: { fontSize: 13, color: TEXT_MUTED },
+  statusText: { fontSize: 16, fontWeight: '600', color: colors.ui.text },
+  statusSub: { fontSize: 13, color: colors.ui.textDim },
   statusTime: {
     fontSize: 15,
     fontWeight: '600',
-    color: TEXT_MUTED,
+    color: colors.ui.textDim,
     fontVariant: ['tabular-nums'],
   },
   statusTimeWarn: {
-    color: '#FF6961',
+    color: colors.ui.error,
   },
   showingSpacer: { flexGrow: 1, minHeight: 12 },
   cantScan: {
@@ -1014,7 +1004,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
     paddingHorizontal: 20,
   },
-  cantScanText: { fontSize: 16, fontWeight: '600', color: '#FFFFFF' },
+  cantScanText: { fontSize: 16, fontWeight: '600', color: colors.ui.text },
 
   // expired
   expiredAmount: {
@@ -1024,18 +1014,18 @@ const styles = StyleSheet.create({
   },
   expiredLabel: {
     fontSize: 13,
-    color: TEXT_FAINT,
+    color: colors.ui.textFaint,
     marginBottom: 4,
   },
   expiredValue: {
     fontSize: 44,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     letterSpacing: -2,
   },
   expiredRef: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.5)',
+    color: colors.ui.ink(0.5),
     marginTop: 6,
   },
   resultFooter: {
@@ -1052,26 +1042,26 @@ const styles = StyleSheet.create({
   paidTitle: {
     fontSize: 17,
     fontWeight: '600',
-    color: '#30D158',
+    color: colors.ui.incoming,
   },
   paidAmount: {
     fontSize: 64,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     letterSpacing: -2.5,
     marginTop: 6,
     fontVariant: ['tabular-nums'],
   },
   paidFrom: {
     fontSize: 17,
-    color: TEXT_MUTED,
+    color: colors.ui.textDim,
     marginTop: 4,
     marginBottom: 28,
   },
   receiptValue: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     fontVariant: ['tabular-nums'],
   },
   breakdown: {
@@ -1080,7 +1070,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: SURFACE,
+    backgroundColor: colors.ui.surface,
     marginBottom: 24,
   },
   breakdownRow: {
@@ -1091,27 +1081,27 @@ const styles = StyleSheet.create({
   },
   breakdownLabel: {
     fontSize: 14,
-    color: TEXT_DIM,
+    color: colors.ui.textDim,
   },
   breakdownLabelStrong: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.ui.text,
   },
   breakdownValue: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: colors.ui.text,
   },
   breakdownNet: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#30D158',
+    color: colors.ui.incoming,
   },
   breakdownDivider: {
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.ui.glassBorder,
     marginVertical: 8,
   },
 
-});
+}));

@@ -5,7 +5,7 @@ import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { wallpaper } from '../theme';
 
 /**
- * The coral wallpaper of the light Home header and the Paid screen: brand
+ * The coral wallpaper of the Home header and the Paid screen: brand
  * coral into raspberry, with a warm glow top right, a coral glow on the left
  * and a plum shade bottom right. It fills its parent, behind the content.
  */

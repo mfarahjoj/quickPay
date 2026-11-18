@@ -13,14 +13,10 @@ import { useTranslation } from 'react-i18next';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useTransactionSummary } from '../../hooks/useTransactionSummary';
 import { SummaryPeriod, Transaction } from '../../types';
-import { DarkScreen, ScreenHeader, ACCENT, GLASS, GLASS_BORDER, TEXT_DIM, TEXT_FAINT } from '../../components';
+import { DarkScreen, ScreenHeader } from '../../components';
 import { HistoryIcon } from '../../components/icons/AuthIcons';
 import { CURRENCY_SYMBOL } from '../../config/constants';
-
-const GREEN = '#34C77B';
-const GOLD = '#F5B544';
-const RED = '#FF6961';
-const AMBER = '#FFB02E';
+import { makeStyles, useColors } from '../../theme';
 
 type FilterKey = 'all' | 'payments' | 'topups' | 'pending';
 const FILTERS: Array<{ key: FilterKey; labelKey: string }> = [
@@ -97,6 +93,8 @@ function buildSections(list: Transaction[], t: (k: string) => string): Section[]
 }
 
 function TxRow({ tx, onPress }: { tx: Transaction; onPress: () => void }) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const pending = tx.status === 'pending';
   const failed = tx.status === 'failed' || tx.status === 'cancelled';
@@ -119,14 +117,14 @@ function TxRow({ tx, onPress }: { tx: Transaction; onPress: () => void }) {
     : `${kind} · ${time}`;
 
   const amountColor = failed || pending
-    ? TEXT_FAINT
+    ? colors.ui.textFaint
     : commission
-    ? GOLD
+    ? colors.ui.warning
     : tx.type === 'refund' && !tx.isIncoming
-    ? RED
+    ? colors.ui.error
     : incoming
-    ? GREEN
-    : '#FFFFFF';
+    ? colors.ui.incoming
+    : colors.ui.text;
 
   const avatarStyle = commission
     ? styles.avGold
@@ -178,6 +176,8 @@ function SummaryHeader({
   filter: FilterKey;
   setFilter: (f: FilterKey) => void;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const { summary, loading } = useTransactionSummary(period);
 
@@ -211,14 +211,14 @@ function SummaryHeader({
           {t('transactions.summary.netTakings')} · {t(`transactions.summary.periodWord.${period}`)}
         </Text>
         {loading && !summary ? (
-          <ActivityIndicator color="#FFFFFF" style={{ marginVertical: 10 }} />
+          <ActivityIndicator color={colors.ui.text} style={{ marginVertical: 10 }} />
         ) : (
           <Text style={styles.heroAmount}>{money(summary?.netTakings ?? 0)}</Text>
         )}
         {!!summary && (
           <Text style={styles.heroMeta}>
             {delta !== null && (
-              <Text style={{ color: deltaUp ? GREEN : RED }}>
+              <Text style={{ color: deltaUp ? colors.ui.incoming : colors.ui.error }}>
                 {deltaUp ? '▲' : '▼'} {Math.abs(delta)}% {t('transactions.summary.vsPrevious')}
                 {'  ·  '}
               </Text>
@@ -233,14 +233,14 @@ function SummaryHeader({
       {/* Stream chips */}
       <View style={styles.streams}>
         <View style={styles.stream}>
-          <View style={[styles.streamDot, { backgroundColor: GREEN }]} />
+          <View style={[styles.streamDot, { backgroundColor: colors.ui.incoming }]} />
           <View>
             <Text style={styles.streamLabel}>{t('transactions.summary.payments')}</Text>
             <Text style={styles.streamValue}>{money(summary?.paymentsNet ?? 0)}</Text>
           </View>
         </View>
         <View style={styles.stream}>
-          <View style={[styles.streamDot, { backgroundColor: GOLD }]} />
+          <View style={[styles.streamDot, { backgroundColor: colors.ui.warning }]} />
           <View>
             <Text style={styles.streamLabel}>{t('transactions.summary.commission')}</Text>
             <Text style={styles.streamValue}>{money(summary?.commission ?? 0)}</Text>
@@ -254,7 +254,7 @@ function SummaryHeader({
         <TextInput
           style={styles.searchInput}
           placeholder={t('transactions.search')}
-          placeholderTextColor="rgba(255,255,255,0.3)"
+          placeholderTextColor={colors.ui.ink(0.3)}
           value={query}
           onChangeText={setQuery}
           autoCapitalize="none"
@@ -288,6 +288,8 @@ function SummaryHeader({
 }
 
 export default function TransactionHistoryScreen({ navigation }: { navigation: any }) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const [period, setPeriod] = useState<SummaryPeriod>('week');
   const [query, setQuery] = useState('');
@@ -329,7 +331,7 @@ export default function TransactionHistoryScreen({ navigation }: { navigation: a
       <ScreenHeader title={t('navigation.tabs.history')} />
       {loading && transactions.length === 0 ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={ACCENT} />
+          <ActivityIndicator size="large" color={colors.ui.accent} />
         </View>
       ) : (
         <SectionList
@@ -349,7 +351,7 @@ export default function TransactionHistoryScreen({ navigation }: { navigation: a
           renderSectionHeader={({ section }) => (
             <View style={styles.groupHeader}>
               <Text style={styles.groupTitle}>{section.title}</Text>
-              <Text style={[styles.groupSubtotal, { color: section.subtotal >= 0 ? GREEN : RED }]}>
+              <Text style={[styles.groupSubtotal, { color: section.subtotal >= 0 ? colors.ui.incoming : colors.ui.error }]}>
                 {section.subtotal >= 0 ? '+' : '−'}{money(Math.abs(section.subtotal))}
               </Text>
             </View>
@@ -359,16 +361,16 @@ export default function TransactionHistoryScreen({ navigation }: { navigation: a
           )}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FFFFFF" />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.ui.text} />}
           onEndReachedThreshold={0.4}
           onEndReached={() => { if (hasMore) loadMore(); }}
           ListFooterComponent={
-            loadingMore ? <ActivityIndicator color={TEXT_DIM} style={{ paddingVertical: 20 }} /> : null
+            loadingMore ? <ActivityIndicator color={colors.ui.textDim} style={{ paddingVertical: 20 }} /> : null
           }
           ListEmptyComponent={
             <View style={styles.empty}>
               <View style={styles.emptyIcon}>
-                <HistoryIcon size={30} color="rgba(255,255,255,0.5)" />
+                <HistoryIcon size={30} color={colors.ui.ink(0.5)} />
               </View>
               <Text style={styles.emptyTitle}>{t('transactions.empty.title')}</Text>
               <Text style={styles.emptyMsg}>{t('transactions.empty.message')}</Text>
@@ -380,32 +382,32 @@ export default function TransactionHistoryScreen({ navigation }: { navigation: a
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   list: { paddingHorizontal: 20, paddingBottom: 40, flexGrow: 1 },
 
   // segmented
   seg: {
     flexDirection: 'row',
-    backgroundColor: GLASS,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: GLASS_BORDER,
+    borderColor: colors.ui.glassBorder,
     borderRadius: 12,
     padding: 4,
     gap: 4,
     marginBottom: 18,
   },
   segItem: { flex: 1, paddingVertical: 8, borderRadius: 9, alignItems: 'center' },
-  segItemActive: { backgroundColor: ACCENT },
-  segText: { fontSize: 13, fontWeight: '600', color: TEXT_DIM },
+  segItemActive: { backgroundColor: colors.ui.accent },
+  segText: { fontSize: 13, fontWeight: '600', color: colors.ui.textDim },
   segTextActive: { color: '#FFFFFF' },
 
   // hero
   hero: { alignItems: 'center', marginBottom: 18 },
-  heroLabel: { fontSize: 12, color: TEXT_FAINT, marginBottom: 6, letterSpacing: 0.2 },
-  heroAmount: { fontSize: 40, fontWeight: '800', color: '#FFFFFF', letterSpacing: -1.6 },
+  heroLabel: { fontSize: 12, color: colors.ui.textFaint, marginBottom: 6, letterSpacing: 0.2 },
+  heroAmount: { fontSize: 40, fontWeight: '800', color: colors.ui.text, letterSpacing: -1.6 },
   heroMeta: { fontSize: 12, marginTop: 6 },
-  heroMetaDim: { color: TEXT_FAINT },
+  heroMetaDim: { color: colors.ui.textFaint },
 
   // streams
   streams: { flexDirection: 'row', gap: 10, marginBottom: 16 },
@@ -414,33 +416,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 9,
-    backgroundColor: GLASS,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: GLASS_BORDER,
+    borderColor: colors.ui.glassBorder,
     borderRadius: 14,
     paddingVertical: 11,
     paddingHorizontal: 13,
   },
   streamDot: { width: 8, height: 8, borderRadius: 4 },
-  streamLabel: { fontSize: 11, color: TEXT_FAINT },
-  streamValue: { fontSize: 14, fontWeight: '700', color: '#FFFFFF', letterSpacing: -0.3 },
+  streamLabel: { fontSize: 11, color: colors.ui.textFaint },
+  streamValue: { fontSize: 14, fontWeight: '700', color: colors.ui.text, letterSpacing: -0.3 },
 
   // search
   search: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: GLASS,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: GLASS_BORDER,
+    borderColor: colors.ui.glassBorder,
     borderRadius: 12,
     paddingHorizontal: 12,
     height: 44,
     marginBottom: 12,
   },
-  searchIcon: { fontSize: 18, color: TEXT_FAINT },
-  searchInput: { flex: 1, color: '#FFFFFF', fontSize: 14, padding: 0 },
-  searchClear: { fontSize: 13, color: TEXT_FAINT },
+  searchIcon: { fontSize: 18, color: colors.ui.textFaint },
+  searchInput: { flex: 1, color: colors.ui.text, fontSize: 14, padding: 0 },
+  searchClear: { fontSize: 13, color: colors.ui.textFaint },
 
   // chips
   chips: { flexDirection: 'row', gap: 8, marginBottom: 8 },
@@ -448,12 +450,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 9999,
-    backgroundColor: GLASS,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: GLASS_BORDER,
+    borderColor: colors.ui.glassBorder,
   },
-  chipActive: { backgroundColor: ACCENT, borderColor: ACCENT },
-  chipText: { fontSize: 12, fontWeight: '600', color: TEXT_DIM },
+  chipActive: { backgroundColor: colors.ui.accent, borderColor: colors.ui.accent },
+  chipText: { fontSize: 12, fontWeight: '600', color: colors.ui.textDim },
   chipTextActive: { color: '#FFFFFF' },
 
   // group header
@@ -467,7 +469,7 @@ const styles = StyleSheet.create({
   groupTitle: {
     fontSize: 12,
     fontWeight: '700',
-    color: TEXT_FAINT,
+    color: colors.ui.textFaint,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -476,20 +478,20 @@ const styles = StyleSheet.create({
   // row
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 13 },
   avatar: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
-  avIn: { backgroundColor: 'rgba(52,199,123,0.16)' },
+  avIn: { backgroundColor: colors.ui.incomingSoft },
   avGold: { backgroundColor: 'rgba(245,181,68,0.16)' },
-  avRed: { backgroundColor: 'rgba(255,105,97,0.14)' },
-  avOut: { backgroundColor: 'rgba(255,255,255,0.08)' },
-  avatarGlyph: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
+  avRed: { backgroundColor: colors.ui.errorSoft },
+  avOut: { backgroundColor: colors.ui.divider },
+  avatarGlyph: { fontSize: 15, fontWeight: '700', color: colors.ui.text },
   rowInfo: { flex: 1 },
-  rowName: { fontSize: 15, fontWeight: '600', color: '#FFFFFF', marginBottom: 2 },
-  rowSub: { fontSize: 12, color: TEXT_FAINT },
+  rowName: { fontSize: 15, fontWeight: '600', color: colors.ui.text, marginBottom: 2 },
+  rowSub: { fontSize: 12, color: colors.ui.textFaint },
   rowRight: { alignItems: 'flex-end' },
   rowAmount: { fontSize: 15, fontWeight: '700', letterSpacing: -0.3, fontVariant: ['tabular-nums'] },
   strike: { textDecorationLine: 'none' },
   pendDot: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
-  pendDotInner: { width: 6, height: 6, borderRadius: 3, backgroundColor: AMBER },
-  pendText: { fontSize: 10, color: AMBER, fontWeight: '600' },
+  pendDotInner: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.ui.warning },
+  pendText: { fontSize: 10, color: colors.ui.warning, fontWeight: '600' },
 
   // empty
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40, paddingTop: 80 },
@@ -497,11 +499,11 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.ui.glass,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 18,
   },
-  emptyTitle: { fontSize: 17, fontWeight: '700', color: '#FFFFFF', marginBottom: 6 },
-  emptyMsg: { fontSize: 14, color: TEXT_FAINT, textAlign: 'center', lineHeight: 20 },
-});
+  emptyTitle: { fontSize: 17, fontWeight: '700', color: colors.ui.text, marginBottom: 6 },
+  emptyMsg: { fontSize: 14, color: colors.ui.textFaint, textAlign: 'center', lineHeight: 20 },
+}));

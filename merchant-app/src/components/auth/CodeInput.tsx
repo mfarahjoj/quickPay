@@ -8,7 +8,7 @@ import {
   Text,
   Platform,
 } from 'react-native';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles } from '../../theme';
 
 const CODE_LENGTH = 6;
 
@@ -32,6 +32,7 @@ export function CodeInput({
   autoFocus = true,
   otpMode = false,
 }: CodeInputProps) {
+  const styles = useStyles();
   const { t } = useTranslation();
   const inputRefs = useRef<Array<TextInput | null>>([]);
   const shakeAnim = useRef(new Animated.Value(0)).current;
@@ -129,7 +130,7 @@ export function CodeInput({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -139,9 +140,9 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 68,
     borderRadius: 14,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.ui.glass,
     borderWidth: 1.5,
-    borderColor: '#D1D1D6',
+    borderColor: colors.ui.glassBorder,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
@@ -149,17 +150,17 @@ const styles = StyleSheet.create({
   cellFocused: {
     borderColor: colors.primary,
     borderWidth: 2,
-    backgroundColor: '#F5F8FF',
+    backgroundColor: colors.ui.accentSoft,
   },
   cellError: {
     borderColor: colors.error,
-    backgroundColor: '#FFF5F5',
+    backgroundColor: colors.ui.errorSoft,
   },
   digit: {
     fontSize: 32,
     fontWeight: '700',
     textAlign: 'center',
-    color: '#000000',
+    color: colors.ui.onSolid,
     width: '100%',
     padding: 0,
   },
@@ -169,7 +170,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     textAlign: 'center',
   },
-});
+}));
 
 /**
  * Same rules as functions/src/utils/weakPin.ts, which is the authority: the

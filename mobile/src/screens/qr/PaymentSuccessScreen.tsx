@@ -1,25 +1,20 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, StatusBar, Share, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  useAnimatedReaction,
   withSpring,
   withTiming,
   withDelay,
-  runOnJS,
 } from 'react-native-reanimated';
-import { Button } from '../../components/Button';
-import { SuccessCheckIcon } from '../../components/icons/AuthIcons';
-import { typography, spacing, borderRadius, makeStyles, useColors, useTheme, wallpaper } from '../../theme';
+import { makeStyles, useColors, wallpaper } from '../../theme';
 import { Wallpaper } from '../../components/Wallpaper';
 import { CheckIcon, ShareIcon } from '../../components/icons/LineIcons';
-import { formatMajor, toCurrency } from '../../utils/money';
+import { formatMajor } from '../../utils/money';
 import { triggerHaptic } from '../../services/haptics.service';
 import { Springs } from '../../constants/springs';
-import { useCountUp } from '../../hooks/useCountUp';
 
 interface Props {
   navigation: any;
@@ -35,68 +30,15 @@ interface Props {
   };
 }
 
-// ─── Confetti particle ────────────────────────────────────────
-
-interface ParticleConfig {
-  dx: number;
-  dy: number;
-  color: string;
-  size: number;
-  delay: number;
-}
-
-function ConfettiParticle({ dx, dy, color, size, delay }: ParticleConfig) {
-  const x = useSharedValue(0);
-  const y = useSharedValue(0);
-  const opacity = useSharedValue(0);
-
-  useEffect(() => {
-    x.value = withDelay(delay, withTiming(dx, { duration: 750 }));
-    y.value = withDelay(delay, withTiming(dy, { duration: 750 }));
-    opacity.value = withDelay(
-      delay,
-      withTiming(1, { duration: 60 }),
-    );
-    opacity.value = withDelay(
-      delay + 350,
-      withTiming(0, { duration: 400 }),
-    );
-  }, [delay, dx, dy, opacity, x, y]);
-
-  const style = useAnimatedStyle(() => ({
-    transform: [{ translateX: x.value }, { translateY: y.value }],
-    opacity: opacity.value,
-  }));
-
-  return (
-    <Animated.View
-      pointerEvents="none"
-      style={[
-        {
-          position: 'absolute',
-          width: size,
-          height: size,
-          borderRadius: size / 3,
-          backgroundColor: color,
-        },
-        style,
-      ]}
-    />
-  );
-}
-
 // ─── Main screen ──────────────────────────────────────────────
 
 export default function PaymentSuccessScreen({ navigation, route }: Props) {
   const colors = useColors();
-  const styles = useStyles();
   const { t } = useTranslation();
   const { transactionId, receiptNumber, amount, currency, merchantName } = route.params;
-  // Light mode celebrates on the coral wallpaper.
-  const { scheme } = useTheme();
-  const isLight = scheme === 'light';
+  // Paid celebrates on the coral wallpaper.
   const insets = useSafeAreaInsets();
-  const lightStyles = useLightStyles();
+  const styles = useStyles();
   const [paidAt] = useState(() => new Date());
 
   // Content stagger shared values
@@ -109,34 +51,6 @@ export default function PaymentSuccessScreen({ navigation, route }: Props) {
   // Ring bloom behind checkmark
   const ringScale = useSharedValue(0.8);
   const ringOpacity = useSharedValue(0.35);
-
-  // Count-up amount
-  const [activeAmount, setActiveAmount] = useState(0);
-  const countValue = useCountUp(activeAmount, 650);
-  const [displayAmount, setDisplayAmount] = useState(0);
-
-  useAnimatedReaction(
-    () => countValue.value,
-    (current) => {
-      runOnJS(setDisplayAmount)(current);
-    },
-  );
-
-  // Stable confetti particles
-  const particles = useMemo<ParticleConfig[]>(() => {
-    const particleColors = [
-      colors.ui.incoming,
-      colors.ui.accentText,
-      colors.ui.warning,
-    ];
-    return Array.from({ length: 12 }).map(() => ({
-      dx: (Math.random() - 0.5) * 130,
-      dy: -(100 + Math.random() * 90),
-      color: particleColors[Math.floor(Math.random() * particleColors.length)],
-      size: 4 + Math.random() * 3,
-      delay: Math.floor(Math.random() * 250),
-    }));
-  }, [colors]);
 
   useEffect(() => {
     // Immediate: haptic + ring bloom
@@ -154,19 +68,13 @@ export default function PaymentSuccessScreen({ navigation, route }: Props) {
 
     buttonOpacity.value = withDelay(650, withTiming(1, { duration: 240 }));
 
-    // Amount count-up starts with card
-    const timer = setTimeout(() => {
-      setActiveAmount(amount);
-    }, 480);
-
     // Confirmation echo haptic
     const echo = setTimeout(() => triggerHaptic('light'), 600);
 
     return () => {
-      clearTimeout(timer);
       clearTimeout(echo);
     };
-  }, [amount, ringOpacity, ringScale, titleOpacity, titleY, cardOpacity, cardY, buttonOpacity]);
+  }, [ringOpacity, ringScale, titleOpacity, titleY, cardOpacity, cardY, buttonOpacity]);
 
   const ringStyle = useAnimatedStyle(() => ({
     transform: [{ scale: ringScale.value }],
@@ -210,234 +118,70 @@ export default function PaymentSuccessScreen({ navigation, route }: Props) {
     }).catch(() => undefined);
   };
 
-  if (isLight) {
-    const time = paidAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const day = paidAt.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
-    return (
-      <View style={lightStyles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={wallpaper.top} />
-        <Wallpaper />
-        <View style={[lightStyles.body, { paddingTop: insets.top + 56, paddingBottom: insets.bottom + 16 }]}>
-          <View style={lightStyles.hero}>
-            <View style={lightStyles.ringOuter} />
-            <View style={lightStyles.ringInner} />
-            <Animated.View style={[lightStyles.bloom, ringStyle]} pointerEvents="none" />
-            <View style={lightStyles.checkCircle}>
-              <CheckIcon size={46} color={colors.ui.accent} strokeWidth={2.6} />
-            </View>
-          </View>
-
-          <Animated.View style={[lightStyles.titleBlock, titleStyle]}>
-            <Text style={lightStyles.title}>{t('qr.success.paid')}</Text>
-            <Text style={lightStyles.subtitle}>
-              {merchantName ? t('qr.success.paidTo', { amount: amountText, merchant: merchantName }) : amountText}
-            </Text>
-          </Animated.View>
-
-          <Animated.View style={[lightStyles.card, cardStyle]}>
-            <View style={[lightStyles.row, lightStyles.rowDivider]}>
-              <Text style={lightStyles.rowKey}>
-                {receiptNumber ? t('qr.success.receipt') : t('qr.success.reference')}
-              </Text>
-              <Text style={lightStyles.rowValue}>{reference}</Text>
-            </View>
-            <View style={lightStyles.row}>
-              <Text style={lightStyles.rowKey}>{t('qr.success.date')}</Text>
-              <Text style={lightStyles.rowValue}>{`${day}, ${time}`}</Text>
-            </View>
-          </Animated.View>
-
-          <View style={lightStyles.spacer} />
-
-          <Animated.View style={[lightStyles.buttons, buttonStyle]}>
-            <TouchableOpacity
-              style={lightStyles.shareButton}
-              onPress={handleShare}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-            >
-              <ShareIcon size={20} color="#FFFFFF" strokeWidth={2.1} />
-              <Text style={lightStyles.shareText}>{t('common.share')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={lightStyles.doneButton}
-              onPress={handleDone}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-            >
-              <Text style={lightStyles.doneText}>{t('qr.success.done')}</Text>
-            </TouchableOpacity>
-          </Animated.View>
-        </View>
-      </View>
-    );
-  }
-
+  const time = paidAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const day = paidAt.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
   return (
     <View style={styles.container}>
-      <View style={styles.content}>
-        {/* Checkmark + ring bloom + confetti */}
-        <View style={styles.heroArea}>
-          {/* Ring bloom */}
-          <Animated.View style={[styles.ring, ringStyle]} pointerEvents="none" />
-
-          {/* Confetti particles — positioned at center */}
-          <View style={styles.confettiAnchor} pointerEvents="none">
-            {particles.map((p, i) => (
-              <ConfettiParticle key={i} {...p} />
-            ))}
+      <StatusBar barStyle="light-content" backgroundColor={wallpaper.top} />
+      <Wallpaper />
+      <View style={[styles.body, { paddingTop: insets.top + 56, paddingBottom: insets.bottom + 16 }]}>
+        <View style={styles.hero}>
+          <View style={styles.ringOuter} />
+          <View style={styles.ringInner} />
+          <Animated.View style={[styles.bloom, ringStyle]} pointerEvents="none" />
+          <View style={styles.checkCircle}>
+            <CheckIcon size={46} color={colors.ui.accent} strokeWidth={2.6} />
           </View>
-
-          {/* The checkmark (already animated internally) */}
-          <SuccessCheckIcon size={100} />
         </View>
 
-        {/* Title */}
-        <Animated.View style={titleStyle}>
-          <Text style={styles.title}>{t('qr.success.title')}</Text>
-          <Text style={styles.subtitle}>{t('qr.success.subtitle')}</Text>
-        </Animated.View>
-
-        {/* Summary card with count-up amount */}
-        <Animated.View style={[styles.summary, cardStyle]}>
-          <Text style={styles.summaryAmount} numberOfLines={1} adjustsFontSizeToFit>
-            {formatMajor(displayAmount, currency)}
+        <Animated.View style={[styles.titleBlock, titleStyle]}>
+          <Text style={styles.title}>{t('qr.success.paid')}</Text>
+          <Text style={styles.subtitle}>
+            {merchantName ? t('qr.success.paidTo', { amount: amountText, merchant: merchantName }) : amountText}
           </Text>
-          {toCurrency(currency) === 'SLS' ? null : <Text style={styles.summaryLabel}>{currency}</Text>}
-          <View style={styles.divider} />
-          <View style={styles.summaryRow}>
-            {receiptNumber ? (
-              <>
-                <Text style={styles.summaryKey}>{t('qr.success.receipt')}</Text>
-                <Text style={[styles.summaryValue, styles.receiptValue]} selectable>
-                  {receiptNumber}
-                </Text>
-              </>
-            ) : (
-              <>
-                <Text style={styles.summaryKey}>{t('qr.success.reference')}</Text>
-                <Text style={styles.summaryValue}>{transactionId.slice(0, 12)}...</Text>
-              </>
-            )}
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryKey}>{t('qr.success.date')}</Text>
-            <Text style={styles.summaryValue}>
-              {new Date().toLocaleDateString()}{' '}
-              {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </Animated.View>
+
+        <Animated.View style={[styles.card, cardStyle]}>
+          <View style={[styles.row, styles.rowDivider]}>
+            <Text style={styles.rowKey}>
+              {receiptNumber ? t('qr.success.receipt') : t('qr.success.reference')}
             </Text>
+            <Text style={styles.rowValue}>{reference}</Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.rowKey}>{t('qr.success.date')}</Text>
+            <Text style={styles.rowValue}>{`${day}, ${time}`}</Text>
           </View>
         </Animated.View>
 
-        {/* Done button */}
-        <Animated.View style={[styles.doneWrap, buttonStyle]}>
-          <Button
-            title={t('qr.success.done')}
+        <View style={styles.spacer} />
+
+        <Animated.View style={[styles.buttons, buttonStyle]}>
+          <TouchableOpacity
+            style={styles.shareButton}
+            onPress={handleShare}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+          >
+            <ShareIcon size={20} color="#FFFFFF" strokeWidth={2.1} />
+            <Text style={styles.shareText}>{t('common.share')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.doneButton}
             onPress={handleDone}
-            variant="primary"
-            fullWidth
-          />
+            activeOpacity={0.85}
+            accessibilityRole="button"
+          >
+            <Text style={styles.doneText}>{t('qr.success.done')}</Text>
+          </TouchableOpacity>
         </Animated.View>
       </View>
     </View>
   );
 }
 
-const useStyles = makeStyles((colors) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.ui.canvas,
-    justifyContent: 'center',
-  },
-  content: {
-    padding: spacing.xl,
-    alignItems: 'center',
-  },
-  heroArea: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.xl,
-    height: 120,
-    width: 120,
-  },
-  ring: {
-    position: 'absolute',
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 2,
-    borderColor: colors.ui.incoming,
-  },
-  confettiAnchor: {
-    position: 'absolute',
-    width: 1,
-    height: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'visible',
-  },
-  title: {
-    ...typography.h1,
-    color: colors.ui.text,
-    marginBottom: spacing.sm,
-    textAlign: 'center',
-  },
-  subtitle: {
-    ...typography.body,
-    color: colors.ui.textDim,
-    marginBottom: spacing.xxl,
-    textAlign: 'center',
-  },
-  summary: {
-    width: '100%',
-    backgroundColor: colors.ui.glass,
-    borderWidth: 1,
-    borderColor: colors.ui.glassBorder,
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing.xl,
-  },
-  summaryAmount: {
-    ...typography.h1,
-    color: colors.ui.incoming,
-    textAlign: 'center',
-    marginBottom: spacing.xs,
-  },
-  summaryLabel: {
-    ...typography.caption,
-    color: colors.ui.textFaint,
-    textAlign: 'center',
-    marginBottom: spacing.md,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: colors.ui.divider,
-    marginVertical: spacing.md,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm,
-  },
-  summaryKey: {
-    ...typography.caption,
-    color: colors.ui.textFaint,
-  },
-  summaryValue: {
-    ...typography.bodySemibold,
-    color: colors.ui.text,
-  },
-  receiptValue: {
-    letterSpacing: 0.6,
-    fontVariant: ['tabular-nums'],
-  },
-  doneWrap: {
-    width: '100%',
-  },
-}));
-
 // ─── Light: the coral wallpaper, a white check, a white receipt ─
-const useLightStyles = makeStyles((colors) => StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: wallpaper.top,

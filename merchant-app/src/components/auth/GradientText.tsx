@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleProp, Text, TextStyle } from 'react-native';
 import MaskedView from '@react-native-masked-view/masked-view';
 import LinearGradient from 'react-native-linear-gradient';
-import { colors } from '../../theme';
+import { useColors } from '../../theme';
 
 interface GradientTextProps {
   children: string;
@@ -16,6 +16,7 @@ interface GradientTextProps {
  * Best used for a single emphasized line within a dark hero headline.
  */
 export function GradientText({ children, style, gradientColors }: GradientTextProps) {
+  const colors = useColors();
   const palette = gradientColors ?? colors.hero.accentGradient;
   return (
     <MaskedView

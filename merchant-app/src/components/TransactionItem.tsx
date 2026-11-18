@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Transaction } from '../types';
-import { colors, typography, spacing, borderRadius } from '../theme';
+import { typography, spacing, borderRadius, makeStyles, useColors } from '../theme';
 import { formatMajor } from '../utils/money';
 
 interface TransactionItemProps {
@@ -11,6 +11,8 @@ interface TransactionItemProps {
 }
 
 export function TransactionItem({ transaction, onPress }: TransactionItemProps) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
 
   return (
@@ -59,7 +61,7 @@ export function TransactionItem({ transaction, onPress }: TransactionItemProps) 
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -109,4 +111,4 @@ const styles = StyleSheet.create({
   amountOutgoing: {
     color: colors.text.primary,
   },
-});
+}));

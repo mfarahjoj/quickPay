@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Linking, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { BrandMarkIcon } from './icons/AuthIcons';
+import { makeStyles } from '../theme';
 
 /**
  * Shown in place of the whole app when this build is older than
@@ -11,11 +12,11 @@ import { BrandMarkIcon } from './icons/AuthIcons';
  * now raise is better stopped with a clear way out than left half-working.
  */
 export function UpdateRequired({ updateUrl }: { updateUrl?: string }) {
+  const styles = useStyles();
   const { t } = useTranslation();
 
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="light-content" backgroundColor="#000000" />
       <View style={styles.glow} pointerEvents="none" />
       <View style={styles.body}>
         <BrandMarkIcon size={64} onDark />
@@ -40,8 +41,8 @@ export function UpdateRequired({ updateUrl }: { updateUrl?: string }) {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#000000' },
+const useStyles = makeStyles((colors) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.ui.canvas },
   glow: {
     position: 'absolute',
     top: -140,
@@ -49,7 +50,7 @@ const styles = StyleSheet.create({
     width: 380,
     height: 380,
     borderRadius: 190,
-    backgroundColor: '#FF5043',
+    backgroundColor: colors.ui.accent,
     opacity: 0.12,
   },
   body: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
@@ -57,14 +58,14 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '800',
     letterSpacing: -0.6,
-    color: '#FFFFFF',
+    color: colors.ui.text,
     textAlign: 'center',
     marginTop: 28,
   },
   message: {
     fontSize: 16,
     lineHeight: 23,
-    color: 'rgba(255,255,255,0.62)',
+    color: colors.ui.textDim,
     textAlign: 'center',
     marginTop: 12,
   },
@@ -72,10 +73,10 @@ const styles = StyleSheet.create({
   button: {
     height: 56,
     borderRadius: 16,
-    backgroundColor: '#FF5043',
+    backgroundColor: colors.ui.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   buttonText: { fontSize: 17, fontWeight: '700', color: '#FFFFFF' },
-  hint: { fontSize: 14, color: 'rgba(255,255,255,0.45)', textAlign: 'center', lineHeight: 20 },
-});
+  hint: { fontSize: 14, color: colors.ui.textFaint, textAlign: 'center', lineHeight: 20 },
+}));

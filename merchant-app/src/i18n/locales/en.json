@@ -1098,5 +1098,9 @@
   "application.business.landmarkPlaceholder": "e.g. next to the Central Mosque",
   "application.photo.passport": "Passport photo page",
   "application.id.usePassport": "I have a passport instead",
-  "application.id.useNationalId": "Use my national ID instead"
+  "application.id.useNationalId": "Use my national ID instead",
+  "settings.section.appearance": "APPEARANCE",
+  "settings.appearanceAuto": "Auto",
+  "settings.appearanceLight": "Light",
+  "settings.appearanceDark": "Dark"
 }

@@ -6,19 +6,12 @@ import { useFocusEffect } from '@react-navigation/native';
 import { getZaadStatus, startZaadInPerson, type ZaadAgentStatus } from '../../services/zaadAgent.service';
 import { CodeSheet, QrScannerView, ScannerButton } from '../../components/QrScannerView';
 import { functions } from '../../services/firebase.config';
-import {
-  DarkScreen,
-  GlassCard,
-  PillButton,
-  PinInput,
-  ACCENT,
-  TEXT_DIM,
-  TEXT_FAINT,
-} from '../../components';
+import { DarkScreen, GlassCard, PillButton, PinInput } from '../../components';
 import { SuccessCheckIcon, CloseIcon } from '../../components/icons/AuthIcons';
 import { formatAmount, READS_CURRENCIES } from '../../utils/money';
 import { useExitGuard } from '../../hooks/useExitGuard';
 import { isWrongPin, pinActionErrorKey } from '../../utils/errors';
+import { makeStyles, useColors } from '../../theme';
 
 type Step = 'capture' | 'checking' | 'review' | 'pin' | 'processing' | 'success' | 'error';
 
@@ -88,6 +81,8 @@ function shortConfirmation(id: string): string {
  * customer chooses the amount, but the agent's float pays it.
  */
 export default function ConfirmTopupScreen({ navigation }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const [step, setStep] = useState<Step>('capture');
   const [typing, setTyping] = useState(false);
@@ -258,7 +253,7 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
     return (
       <DarkScreen edges={[]} contentStyle={styles.resultWrap}>
         <View style={styles.failIcon}>
-          <CloseIcon size={32} color="#FF6961" />
+          <CloseIcon size={32} color={colors.ui.error} />
         </View>
         <Text style={styles.resultTitle}>{t('agent.couldNotConfirm')}</Text>
         <Text style={styles.resultSub}>{errorMsg}</Text>
@@ -377,7 +372,7 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
   if (step === 'processing' || step === 'checking') {
     return (
       <DarkScreen edges={[]} contentStyle={styles.resultWrap}>
-        <ActivityIndicator size="large" color={ACCENT} />
+        <ActivityIndicator size="large" color={colors.ui.accent} />
         <Text style={styles.processingText}>
           {t(step === 'checking' ? 'topup.confirm.checking' : 'topup.confirm.processing')}
         </Text>
@@ -434,32 +429,32 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   resultWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
   failIcon: {
     width: 72, height: 72, borderRadius: 36,
-    backgroundColor: 'rgba(255,59,48,0.12)',
+    backgroundColor: colors.ui.errorSoft,
     alignItems: 'center', justifyContent: 'center',
   },
-  resultTitle: { fontSize: 24, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.5, textAlign: 'center', marginTop: 20 },
-  resultAmount: { fontSize: 44, fontWeight: '800', color: '#34C77B', letterSpacing: -2, marginTop: 8 },
-  resultSub: { fontSize: 15, color: TEXT_DIM, textAlign: 'center', marginTop: 6 },
-  reviewLabel: { fontSize: 12, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: TEXT_FAINT },
-  reviewAmount: { fontSize: 52, fontWeight: '800', color: '#FFFFFF', letterSpacing: -2, marginTop: 8 },
-  reviewName: { fontSize: 20, fontWeight: '700', color: '#FFFFFF', marginTop: 4, textAlign: 'center' },
+  resultTitle: { fontSize: 24, fontWeight: '800', color: colors.ui.text, letterSpacing: -0.5, textAlign: 'center', marginTop: 20 },
+  resultAmount: { fontSize: 44, fontWeight: '800', color: colors.ui.incoming, letterSpacing: -2, marginTop: 8 },
+  resultSub: { fontSize: 15, color: colors.ui.textDim, textAlign: 'center', marginTop: 6 },
+  reviewLabel: { fontSize: 12, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: colors.ui.textFaint },
+  reviewAmount: { fontSize: 52, fontWeight: '800', color: colors.ui.text, letterSpacing: -2, marginTop: 8 },
+  reviewName: { fontSize: 20, fontWeight: '700', color: colors.ui.text, marginTop: 4, textAlign: 'center' },
   reviewCard: { marginTop: 24, padding: 16, width: '100%' },
-  reviewHint: { fontSize: 15, lineHeight: 21, color: TEXT_DIM, textAlign: 'center' },
+  reviewHint: { fontSize: 15, lineHeight: 21, color: colors.ui.textDim, textAlign: 'center' },
   confCard: { marginTop: 20, padding: 16, alignItems: 'center', width: '100%' },
-  confLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: TEXT_FAINT },
-  confValue: { fontSize: 22, fontWeight: '800', color: '#FFFFFF', marginTop: 4, letterSpacing: 1 },
+  confLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: colors.ui.textFaint },
+  confValue: { fontSize: 22, fontWeight: '800', color: colors.ui.text, marginTop: 4, letterSpacing: 1 },
   commissionCard: { marginTop: 14, padding: 16, alignItems: 'center', width: '100%' },
-  commissionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: TEXT_FAINT },
-  commissionValue: { fontSize: 26, fontWeight: '800', color: '#34C77B', marginTop: 4 },
+  commissionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: colors.ui.textFaint },
+  commissionValue: { fontSize: 26, fontWeight: '800', color: colors.ui.incoming, marginTop: 4 },
   resultBtn: { alignSelf: 'stretch', marginTop: 28 },
   secondBtn: { marginTop: 12 },
   pinInput: { marginTop: 28 },
-  zaadReason: { fontSize: 13, color: 'rgba(255,255,255,0.5)', textAlign: 'center', marginTop: 12 },
-  zaadError: { fontSize: 14, color: '#FF6961', textAlign: 'center', marginTop: 12 },
-  pinError: { fontSize: 14, color: '#FF6961', textAlign: 'center', marginTop: 16 },
-  processingText: { fontSize: 16, color: TEXT_DIM, marginTop: 20 },
-});
+  zaadReason: { fontSize: 13, color: colors.ui.ink(0.5), textAlign: 'center', marginTop: 12 },
+  zaadError: { fontSize: 14, color: colors.ui.error, textAlign: 'center', marginTop: 12 },
+  pinError: { fontSize: 14, color: colors.ui.error, textAlign: 'center', marginTop: 16 },
+  processingText: { fontSize: 16, color: colors.ui.textDim, marginTop: 20 },
+}));

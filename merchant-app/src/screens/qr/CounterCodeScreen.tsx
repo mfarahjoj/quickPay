@@ -6,8 +6,9 @@ import QRCode from 'react-native-qrcode-svg';
 import { generateMerchantSticker } from '../../services/qr.service';
 import { MerchantStickerData } from '../../types';
 import { callableErrorKey } from '../../utils/errors';
-import { DarkScreen, ScreenHeader, PillButton, TEXT_DIM } from '../../components';
+import { DarkScreen, ScreenHeader, PillButton } from '../../components';
 import CounterIncomingFeed from './CounterIncomingFeed';
+import { makeStyles, useColors } from '../../theme';
 
 /**
  * My QR: the shop's own code. The customer scans it and types the amount
@@ -19,6 +20,8 @@ import CounterIncomingFeed from './CounterIncomingFeed';
  * customer across a counter. Reached from the top of Receive.
  */
 export default function CounterCodeScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
   const { width } = useWindowDimensions();
@@ -89,7 +92,7 @@ export default function CounterCodeScreen() {
                 value={sticker.qrData}
                 size={qrSize}
                 backgroundColor="#FFFFFF"
-                color="#000000"
+                color={colors.ui.onSolid}
                 getRef={(c) => {
                   qrRef.current = c;
                 }}
@@ -116,7 +119,7 @@ export default function CounterCodeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   content: { flexGrow: 1, paddingBottom: 24 },
   card: {
     alignItems: 'center',
@@ -141,7 +144,7 @@ const styles = StyleSheet.create({
   cardText: { fontSize: 15, fontWeight: '600', color: '#48484A', textAlign: 'center' },
   footer: { paddingHorizontal: 20, paddingTop: 16, gap: 12 },
   feed: { paddingHorizontal: 20, marginTop: 12 },
-  info: { fontSize: 13, lineHeight: 19, color: TEXT_DIM, textAlign: 'center' },
+  info: { fontSize: 13, lineHeight: 19, color: colors.ui.textDim, textAlign: 'center' },
   infoAlone: { marginTop: 40, paddingHorizontal: 24 },
   errorBanner: {
     marginHorizontal: 20,
@@ -149,7 +152,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,59,48,0.12)',
+    backgroundColor: colors.ui.errorSoft,
   },
-  errorText: { fontSize: 13, fontWeight: '600', color: '#FF6961', textAlign: 'center' },
-});
+  errorText: { fontSize: 13, fontWeight: '600', color: colors.ui.error, textAlign: 'center' },
+}));

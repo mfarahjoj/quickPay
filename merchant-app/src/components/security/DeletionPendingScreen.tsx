@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { DarkScreen, PillButton, TEXT_DIM } from '../DarkScreen';
+import { DarkScreen, PillButton } from '../DarkScreen';
 import { PinInput } from '../PinInput';
 import { functions } from '../../services/firebase.config';
 import { signOut } from '../../services/auth.service';
+import { makeStyles, useColors } from '../../theme';
 
 interface Props {
   dueAt: Date;
@@ -16,6 +17,8 @@ interface Props {
  * screen goes by itself); otherwise they sign out.
  */
 export function DeletionPendingScreen({ dueAt }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t, i18n } = useTranslation();
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
@@ -50,18 +53,18 @@ export function DeletionPendingScreen({ dueAt }: Props) {
         style={styles.pin}
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      {busy ? <ActivityIndicator color="#FFFFFF" style={styles.spinner} /> : null}
+      {busy ? <ActivityIndicator color={colors.ui.text} style={styles.spinner} /> : null}
       <PillButton label={t('deletionPending.signOut')} variant="glass" onPress={() => signOut().catch(() => undefined)} style={styles.signOut} />
     </DarkScreen>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   content: { flex: 1, justifyContent: 'center', paddingHorizontal: 24 },
-  title: { fontSize: 24, fontWeight: '800', color: '#FFFFFF', textAlign: 'center' },
-  body: { fontSize: 15, color: TEXT_DIM, textAlign: 'center', marginTop: 10, lineHeight: 21 },
+  title: { fontSize: 24, fontWeight: '800', color: colors.ui.text, textAlign: 'center' },
+  body: { fontSize: 15, color: colors.ui.textDim, textAlign: 'center', marginTop: 10, lineHeight: 21 },
   pin: { marginTop: 32 },
-  error: { color: '#FF6961', textAlign: 'center', marginTop: 12 },
+  error: { color: colors.ui.error, textAlign: 'center', marginTop: 12 },
   spinner: { marginTop: 16 },
   signOut: { marginTop: 32 },
-});
+}));

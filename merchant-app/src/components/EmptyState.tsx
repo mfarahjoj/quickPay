@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Button } from './Button';
-import { colors, typography, spacing } from '../theme';
+import { typography, spacing, makeStyles } from '../theme';
 
 interface EmptyStateProps {
   icon?: string;
@@ -18,6 +18,7 @@ export function EmptyState({
   actionLabel,
   onAction,
 }: EmptyStateProps) {
+  const styles = useStyles();
   return (
     <View style={styles.container}>
       <Text style={styles.icon}>{icon}</Text>
@@ -35,7 +36,7 @@ export function EmptyState({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'center',
@@ -61,4 +62,4 @@ const styles = StyleSheet.create({
   button: {
     minWidth: 160,
   },
-});
+}));

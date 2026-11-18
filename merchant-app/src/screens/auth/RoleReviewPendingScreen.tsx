@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, StatusBar } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { signOut } from '../../services/auth.service';
+import { makeStyles } from '../../theme';
 
 type MerchantRole = 'merchant' | 'topup_agent' | 'agent_merchant';
 
@@ -32,12 +33,12 @@ export default function RoleReviewPendingScreen({
   rejectionReason,
   onApplyAgain,
 }: Props) {
+  const styles = useStyles();
   const { t } = useTranslation();
   const rejected = variant === 'rejected';
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <StatusBar barStyle="light-content" backgroundColor="#000000" />
 
       <View style={styles.glowContainer} pointerEvents="none">
         <View style={[styles.glowCore, rejected && styles.glowCoreMuted]} />
@@ -101,8 +102,8 @@ export default function RoleReviewPendingScreen({
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#000000' },
+const useStyles = makeStyles((colors) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.ui.canvas },
 
   glowContainer: {
     position: 'absolute',
@@ -115,7 +116,7 @@ const styles = StyleSheet.create({
     width: 200,
     height: 200,
     borderRadius: 100,
-    backgroundColor: '#FF5043',
+    backgroundColor: colors.ui.accent,
     opacity: 0.1,
   },
   glowCoreMuted: { backgroundColor: '#6B7280' },
@@ -124,7 +125,7 @@ const styles = StyleSheet.create({
     width: 340,
     height: 340,
     borderRadius: 170,
-    backgroundColor: '#FF5043',
+    backgroundColor: colors.ui.accent,
     opacity: 0.04,
   },
   glowOuterMuted: { backgroundColor: '#6B7280' },
@@ -137,14 +138,14 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 26,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     textAlign: 'center',
     marginBottom: 12,
   },
   body: {
     fontSize: 15,
     lineHeight: 22,
-    color: 'rgba(255,255,255,0.62)',
+    color: colors.ui.ink(0.62),
     textAlign: 'center',
     maxWidth: 320,
   },
@@ -157,35 +158,35 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    borderColor: colors.ui.glassBorder,
   },
-  rolePillLabel: { fontSize: 13, color: 'rgba(255,255,255,0.5)' },
-  rolePillValue: { fontSize: 13, fontWeight: '600', color: '#FFFFFF' },
+  rolePillLabel: { fontSize: 13, color: colors.ui.ink(0.5) },
+  rolePillValue: { fontSize: 13, fontWeight: '600', color: colors.ui.text },
 
   reasonBox: {
     marginTop: 24,
     padding: 16,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: colors.ui.ink(0.05),
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: colors.ui.divider,
     maxWidth: 340,
   },
   reasonLabel: {
     fontSize: 12,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
-    color: 'rgba(255,255,255,0.45)',
+    color: colors.ui.textDim,
     marginBottom: 6,
   },
-  reasonText: { fontSize: 14, lineHeight: 20, color: 'rgba(255,255,255,0.8)' },
+  reasonText: { fontSize: 14, lineHeight: 20, color: colors.ui.ink(0.8) },
 
   hint: {
     marginTop: 20,
     fontSize: 13,
-    color: 'rgba(255,255,255,0.4)',
+    color: colors.ui.textFaint,
     textAlign: 'center',
     maxWidth: 300,
   },
@@ -194,11 +195,11 @@ const styles = StyleSheet.create({
   primaryBtn: {
     height: 54,
     borderRadius: 16,
-    backgroundColor: '#FF5043',
+    backgroundColor: colors.ui.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   primaryBtnText: { fontSize: 16, fontWeight: '600', color: '#FFFFFF' },
   ghostBtn: { height: 50, alignItems: 'center', justifyContent: 'center' },
-  ghostBtnText: { fontSize: 15, fontWeight: '500', color: 'rgba(255,255,255,0.55)' },
-});
+  ghostBtnText: { fontSize: 15, fontWeight: '500', color: colors.ui.ink(0.55) },
+}));

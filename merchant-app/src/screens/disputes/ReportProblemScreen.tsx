@@ -11,7 +11,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { DarkScreen, ScreenHeader, PillButton, TEXT_DIM, TEXT_FAINT } from '../../components';
+import { DarkScreen, ScreenHeader, PillButton } from '../../components';
 import {
   DisputeKind,
   DisputeOptions,
@@ -20,8 +20,11 @@ import {
   openDispute,
 } from '../../services/dispute.service';
 import { money } from './shared';
+import { makeStyles, useColors } from '../../theme';
 
 export default function ReportProblemScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
@@ -72,7 +75,7 @@ export default function ReportProblemScreen() {
         {loadError ? (
           <Text style={styles.muted}>{loadError}</Text>
         ) : !options ? (
-          <ActivityIndicator color="#FFFFFF" style={styles.loader} />
+          <ActivityIndicator color={colors.ui.text} style={styles.loader} />
         ) : !options.windowOpen ? (
           <Text style={styles.muted}>{t('disputes.error.windowClosed', { days: options.disputeWindowDays })}</Text>
         ) : (
@@ -100,7 +103,7 @@ export default function ReportProblemScreen() {
               value={note}
               onChangeText={setNote}
               placeholder={t('disputes.report.notePlaceholder')}
-              placeholderTextColor={TEXT_FAINT}
+              placeholderTextColor={colors.ui.textFaint}
               multiline
               maxLength={1000}
               textAlignVertical="top"
@@ -121,32 +124,32 @@ export default function ReportProblemScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   body: { paddingHorizontal: 24, paddingBottom: 48 },
   loader: { marginTop: 32 },
-  muted: { fontSize: 15, color: TEXT_DIM, textAlign: 'center', marginTop: 32, lineHeight: 21 },
-  lead: { fontSize: 15, color: TEXT_DIM, marginBottom: 16, lineHeight: 21 },
+  muted: { fontSize: 15, color: colors.ui.textDim, textAlign: 'center', marginTop: 32, lineHeight: 21 },
+  lead: { fontSize: 15, color: colors.ui.textDim, marginBottom: 16, lineHeight: 21 },
   kinds: { marginBottom: 12 },
   kind: {
     padding: 14,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: colors.ui.glassBorder,
     marginBottom: 8,
   },
-  kindSelected: { borderColor: 'rgba(26,86,255,0.8)', backgroundColor: 'rgba(26,86,255,0.18)' },
-  kindText: { fontSize: 15, color: '#FFFFFF' },
+  kindSelected: { borderColor: 'rgba(26,86,255,0.8)', backgroundColor: colors.ui.accentSoft },
+  kindText: { fontSize: 15, color: colors.ui.text },
   note: {
     fontSize: 15,
-    color: '#FFFFFF',
+    color: colors.ui.text,
     minHeight: 120,
     padding: 12,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: colors.ui.glassBorder,
     marginBottom: 12,
   },
-  hint: { fontSize: 13, color: TEXT_FAINT, marginBottom: 20, lineHeight: 18 },
-});
+  hint: { fontSize: 13, color: colors.ui.textFaint, marginBottom: 20, lineHeight: 18 },
+}));

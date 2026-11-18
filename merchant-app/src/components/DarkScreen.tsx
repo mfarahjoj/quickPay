@@ -14,12 +14,8 @@ import {
 } from 'react-native';
 import { SafeAreaView, Edge } from 'react-native-safe-area-context';
 import { ChevronLeftIcon } from './icons/AuthIcons';
+import { makeStyles, useColors, useTheme } from '../theme';
 
-export const ACCENT = '#FF5043';
-export const GLASS = 'rgba(255,255,255,0.06)';
-export const GLASS_BORDER = 'rgba(255,255,255,0.1)';
-export const TEXT_DIM = 'rgba(255,255,255,0.45)';
-export const TEXT_FAINT = 'rgba(255,255,255,0.4)';
 
 interface DarkScreenProps {
   children: React.ReactNode;
@@ -30,15 +26,21 @@ interface DarkScreenProps {
   contentStyle?: StyleProp<ViewStyle>;
 }
 
-/** Black canvas with the QuickPay ambient glow, shared across all screens. */
+/**
+ * The screen shell shared across the app: the theme's canvas (grey in light,
+ * black in dark), safe-area edges, optional scroll and keyboard avoidance.
+ * `glow` is accepted for older callers and draws nothing: Zapp Pay's
+ * screens are flat.
+ */
 export function DarkScreen({
   children,
   edges = ['top'],
   scroll = false,
   keyboard = false,
-  glow = true,
   contentStyle,
 }: DarkScreenProps) {
+  const styles = useStyles();
+  const { scheme, colors } = useTheme();
   const body = scroll ? (
     <ScrollView
       style={styles.flex}
@@ -62,8 +64,10 @@ export function DarkScreen({
 
   return (
     <SafeAreaView style={styles.safe} edges={edges}>
-      <StatusBar barStyle="light-content" backgroundColor="#000000" />
-      {glow && <View style={styles.glow} pointerEvents="none" />}
+      <StatusBar
+        barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'}
+        backgroundColor={colors.ui.canvas}
+      />
       {inner}
     </SafeAreaView>
   );
@@ -78,12 +82,14 @@ interface ScreenHeaderProps {
 
 /** Dark screen header: optional back chevron, title, and right slot. */
 export function ScreenHeader({ title, subtitle, onBack, right }: ScreenHeaderProps) {
+  const colors = useColors();
+  const styles = useStyles();
   return (
     <View style={styles.header}>
       <View style={styles.headerTop}>
         {onBack ? (
           <TouchableOpacity style={styles.backBtn} onPress={onBack} activeOpacity={0.7} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <ChevronLeftIcon size={26} color="#FFFFFF" />
+            <ChevronLeftIcon size={26} color={colors.ui.text} />
           </TouchableOpacity>
         ) : (
           <View style={styles.backSpacer} />
@@ -102,6 +108,7 @@ interface GlassCardProps {
 }
 
 export function GlassCard({ children, style }: GlassCardProps) {
+  const styles = useStyles();
   return <View style={[styles.glassCard, style]}>{children}</View>;
 }
 
@@ -116,6 +123,8 @@ interface PillButtonProps {
 
 /** White pill (primary) or frosted glass (secondary) — matches Welcome/Login. */
 export function PillButton({ label, onPress, loading, disabled, variant = 'primary', style }: PillButtonProps) {
+  const colors = useColors();
+  const styles = useStyles();
   const isPrimary = variant === 'primary';
   return (
     <TouchableOpacity
@@ -130,7 +139,7 @@ export function PillButton({ label, onPress, loading, disabled, variant = 'prima
       activeOpacity={0.85}
     >
       {loading ? (
-        <ActivityIndicator color={isPrimary ? '#000000' : '#FFFFFF'} />
+        <ActivityIndicator color={isPrimary ? colors.ui.onSolid : colors.ui.text} />
       ) : (
         <Text style={[styles.pillText, isPrimary ? styles.pillTextPrimary : styles.pillTextGlass]}>
           {label}
@@ -140,24 +149,14 @@ export function PillButton({ label, onPress, loading, disabled, variant = 'prima
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   flex: { flex: 1 },
   safe: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: colors.ui.canvas,
   },
   scrollContent: {
     flexGrow: 1,
-  },
-  glow: {
-    position: 'absolute',
-    top: -120,
-    alignSelf: 'center',
-    width: 360,
-    height: 360,
-    borderRadius: 180,
-    backgroundColor: ACCENT,
-    opacity: 0.1,
   },
 
   // header
@@ -187,20 +186,20 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: '800',
     letterSpacing: -1,
-    color: '#FFFFFF',
+    color: colors.ui.text,
   },
   headerSubtitle: {
     fontSize: 15,
-    color: TEXT_DIM,
+    color: colors.ui.textDim,
     marginTop: 6,
     lineHeight: 22,
   },
 
   // glass card
   glassCard: {
-    backgroundColor: GLASS,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: GLASS_BORDER,
+    borderColor: colors.ui.glassBorder,
     borderRadius: 20,
   },
 
@@ -212,15 +211,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   pillPrimary: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.ui.solid,
   },
   pillGlass: {
-    backgroundColor: GLASS,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: GLASS_BORDER,
+    borderColor: colors.ui.glassBorder,
   },
   pillDisabled: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: colors.ui.ink(0.15),
   },
   pillText: {
     fontSize: 17,
@@ -228,9 +227,9 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   pillTextPrimary: {
-    color: '#000000',
+    color: colors.ui.onSolid,
   },
   pillTextGlass: {
-    color: '#FFFFFF',
+    color: colors.ui.text,
   },
-});
+}));

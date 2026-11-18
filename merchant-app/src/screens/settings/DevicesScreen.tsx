@@ -2,9 +2,10 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
-import { DarkScreen, ScreenHeader, GlassCard, TEXT_DIM, TEXT_FAINT } from '../../components';
+import { DarkScreen, ScreenHeader, GlassCard } from '../../components';
 import { listMyDevices, removeMyDevice, renameMyDevice, TrustedDevice } from '../../services/devices.service';
 import { logger } from '../../utils/logger';
+import { makeStyles, useColors } from '../../theme';
 
 /**
  * Security → Trusted phones (review C9): phones that can sign in to this
@@ -12,6 +13,8 @@ import { logger } from '../../utils/logger';
  * removing also signs every other phone out.
  */
 export default function DevicesScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
   const [devices, setDevices] = useState<TrustedDevice[] | null>(null);
@@ -80,7 +83,7 @@ export default function DevicesScreen() {
       <ScreenHeader title={t('devices.title')} onBack={() => navigation.goBack()} />
       <Text style={styles.intro}>{t('devices.intro')}</Text>
       {devices === null ? (
-        <ActivityIndicator color="#FFFFFF" style={styles.spinner} />
+        <ActivityIndicator color={colors.ui.text} style={styles.spinner} />
       ) : error ? (
         <Text style={styles.error}>{error}</Text>
       ) : devices.length === 0 ? (
@@ -107,7 +110,7 @@ export default function DevicesScreen() {
               {t('devices.lastUsed', { date: when(d.lastUsedAt) })} · {t('devices.added', { date: when(d.createdAt) })}
             </Text>
             {busy === d.deviceId ? (
-              <ActivityIndicator color="#FFFFFF" style={styles.rowSpinner} />
+              <ActivityIndicator color={colors.ui.text} style={styles.rowSpinner} />
             ) : (
               <View style={styles.actions}>
                 <TouchableOpacity
@@ -130,25 +133,25 @@ export default function DevicesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   content: { paddingBottom: 48 },
-  intro: { fontSize: 15, color: TEXT_DIM, lineHeight: 21, marginHorizontal: 24, marginBottom: 20 },
+  intro: { fontSize: 15, color: colors.ui.textDim, lineHeight: 21, marginHorizontal: 24, marginBottom: 20 },
   spinner: { marginTop: 24 },
   rowSpinner: { marginTop: 12, alignSelf: 'flex-start' },
-  error: { fontSize: 14, color: '#FF6961', marginHorizontal: 24 },
-  empty: { fontSize: 15, color: TEXT_FAINT, marginHorizontal: 24, lineHeight: 21 },
+  error: { fontSize: 14, color: colors.ui.error, marginHorizontal: 24 },
+  empty: { fontSize: 15, color: colors.ui.textFaint, marginHorizontal: 24, lineHeight: 21 },
   card: { marginHorizontal: 20, marginBottom: 12, padding: 16 },
-  name: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
+  name: { fontSize: 16, fontWeight: '700', color: colors.ui.text },
   nameInput: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.2)',
+    borderBottomColor: colors.ui.ink(0.2),
     paddingVertical: 4,
   },
-  meta: { fontSize: 13, color: TEXT_FAINT, marginTop: 4 },
+  meta: { fontSize: 13, color: colors.ui.textFaint, marginTop: 4 },
   actions: { flexDirection: 'row', gap: 28, marginTop: 12 },
-  action: { fontSize: 15, fontWeight: '600', color: '#FF8A7A' },
-  danger: { color: '#FF6961' },
-});
+  action: { fontSize: 15, fontWeight: '600', color: colors.ui.accentText },
+  danger: { color: colors.ui.error },
+}));
