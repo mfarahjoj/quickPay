@@ -161,6 +161,35 @@ service cloud.firestore {
       allow write: if false;
     }
     
+    // Merchant insights read model (functions/src/merchantStats/,
+    // MERCHANT_INSIGHTS.md): a projection of the shop's own transactions,
+    // written only by the server. The shop may read its totals, customers and
+    // live feed; the idempotency and first-visit markers stay server-only
+    // (they match nothing here, so the default deny covers them).
+    function canViewStore(storeUid) {
+      return isAuthenticated() && isOwner(storeUid);
+    }
+    match /merchantStats/{storeUid} {
+      allow read: if canViewStore(storeUid);
+      allow write: if false;
+      match /days/{day} {
+        allow read: if canViewStore(storeUid);
+        allow write: if false;
+      }
+      match /months/{month} {
+        allow read: if canViewStore(storeUid);
+        allow write: if false;
+      }
+      match /customers/{customerUid} {
+        allow read: if canViewStore(storeUid);
+        allow write: if false;
+      }
+      match /live/{docId} {
+        allow read: if canViewStore(storeUid);
+        allow write: if false;
+      }
+    }
+
     // Notifications - users can read and mark as read their own notifications
     match /notifications/{notificationId} {
       allow read: if isAuthenticated() && isOwner(resource.data.userId);

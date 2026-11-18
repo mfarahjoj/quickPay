@@ -59,5 +59,6 @@ Every user-facing string ships in **all three locales** — `en`, `so`, `ar` —
 | `CASH_IN_CASH_OUT.md` | Agent cash-in/cash-out: flow steps, ledger entries, guards, threat model |
 | `COUNTER_DISPLAY.md` | Counter display tablet: pairing, state doc, tablet scans, threat model, shop setup, runbook, rollout |
 | `SHILLINGS.md` | Dollar and shilling balances: units, ledger projections, limits at `slsPerUsd`, which flows take shillings |
+| `MERCHANT_INSIGHTS.md` | Merchant insights read model (`functions/src/merchantStats/`): rollups per shop, nightly catch-up and drift check, backfill, phases of the web dashboard |
 | `MANUAL_TOPUP_GUIDE.md` | Agent top-up operational flow |
 | `TESTFLIGHT_QUICKSTART.md` | One-time Apple/signing setup |

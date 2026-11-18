@@ -188,6 +188,11 @@ export { stripeWebhook } from "./remittance/stripeWebhook";
 // Ledger integrity (LEDGER_ARCHITECTURE.md §3.5)
 export { ledgerInvariantCheck } from "./ledger/invariantCheck";
 
+// Merchant insights read model (MERCHANT_INSIGHTS.md): a projection of
+// `transactions`, never read by a money flow.
+export { merchantStatsOnTransaction } from "./merchantStats/triggers";
+export { merchantStatsNightly } from "./merchantStats/nightly";
+
 // Admin console (see ADMIN_CONSOLE_PLAN.md). Every callable here is gated by
 // custom claims in admin/guard.ts and writes to the admin_audit log.
 export { adminSetAccountStatus } from "./admin/setAccountStatus";
