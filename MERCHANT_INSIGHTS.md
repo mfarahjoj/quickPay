@@ -8,8 +8,8 @@ use too.
 |---|---|---|
 | 0 | Read model: rollups per shop, nightly catch-up and check, backfill | **Live** in prod since 2026-11-18 (backfilled) |
 | 1 | `portal/` web app, sign-in by scanning a QR with the merchant app, one-shop dashboard with insight cards | **Live** at zapp-business.web.app since 2026-11-18. The merchant app screen ships with the next build |
-| 2 | Server-side insights: hourly checks that push the urgent cards to the phone | Planned (the cards themselves run in the dashboard: `portal/src/lib/insights.ts`) |
-| 3 | Linked stores: an owner links several merchant accounts into a group (read-only view) | Planned |
+| 2 | Phone alerts: `merchantInsightAlerts` (hourly at :20) pushes the urgent cards (quiet till, display offline, refund spike), once per shop, type and day | **Live** 2026-11-18 |
+| 3 | Linked stores (`functions/src/portal/groups.ts`, `storeLinks/{store}`): invite by Zapp number; the store accepts from its own Zapp Business session; the owner gets All stores, a comparison and per-store cards | **Live** 2026-11-18 |
 
 ## Principles
 
@@ -174,7 +174,7 @@ box as `data-login`) with `approvePortalLogin`, or by writing the session as it 
 
 ## Deploying Zapp Business
 
-Done 2026-11-18 in this order: 95 `requireAuth` callables, then the Firestore rules, indexes and portal functions, then `startPortalLogin`/`pollPortalLogin`, then hosting. **Storage rules were not deployed**: the live Storage rules are older than main (main limits profile pictures to their owner, never deployed), so this branch's `isAuthenticated()` change there waits for whoever ships main's Storage rules.
+Done 2026-11-18 in this order: 95 `requireAuth` callables, then the Firestore rules, indexes and portal functions, then `startPortalLogin`/`pollPortalLogin`, then hosting. Storage rules followed later the same day, with main's owner-only profile pictures (no app reads others' profile pictures).
 
 
 1. **Done 2026-11-18.** Firebase web app "Zapp Business" (`1:76440907220:web:6a12018730432a1483fa41`),
