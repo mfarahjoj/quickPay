@@ -81,6 +81,17 @@ run("portal session rules", () => {
     expect(await write(portal, `merchantStats/${SHOP}/days/${DAY}`)).toBe(403);
   });
 
+  it("reads a store linked to it only while the link is active", async () => {
+    const portal = await idToken(`portal_${SID}`, { portal: true, portalFor: SHOP, portalSid: SID });
+    await db.doc(`storeLinks/${OTHER}`).set({ ownerUid: SHOP, storeUid: OTHER, status: "invited" });
+    expect(await read(portal, `merchantStats/${OTHER}/days/${DAY}`)).toBe(403);
+    await db.doc(`storeLinks/${OTHER}`).update({ status: "active" });
+    expect(await read(portal, `merchantStats/${OTHER}/days/${DAY}`)).toBe(200);
+    expect(await read(portal, `storeLinks/${OTHER}`)).toBe(403);
+    await db.doc(`storeLinks/${OTHER}`).delete();
+    expect(await read(portal, `merchantStats/${OTHER}/days/${DAY}`)).toBe(403);
+  });
+
   it("refuses claims that don't match the session, and the session once ended", async () => {
     const forged = await idToken(`portal_${SID}`, { portal: true, portalFor: OTHER, portalSid: SID });
     expect(await read(forged, `merchantStats/${OTHER}/days/${DAY}`)).toBe(403);

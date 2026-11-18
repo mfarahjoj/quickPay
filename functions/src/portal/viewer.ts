@@ -12,6 +12,7 @@ import * as admin from "firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { https } from "firebase-functions/v2";
 import { isPortalToken } from "../utils/validation";
+import { linkedStoreUids } from "./groups";
 import { PORTAL_SESSIONS, PortalSession, portalUid, SESSION_ID } from "./types";
 
 /** Write lastSeenAt at most this often, so a busy dashboard isn't a write per call. */
@@ -21,7 +22,7 @@ export interface PortalViewer {
   sessionId: string;
   /** The shop that signed this computer in. */
   merchantUid: string;
-  /** Shops this session may view: its own (and, later, linked stores). */
+  /** Shops this session may view: its own, then the stores it has linked. */
   storeUids: string[];
   session: PortalSession;
 }
@@ -52,7 +53,8 @@ export async function requirePortalViewer(request: https.CallableRequest, storeU
     throw sessionEnded();
   }
 
-  const storeUids = [merchantUid];
+  // Its own shop, and the stores it has linked (portal/groups.ts).
+  const storeUids = [merchantUid, ...(await linkedStoreUids(merchantUid))];
   if (storeUid !== undefined && (typeof storeUid !== "string" || !storeUids.includes(storeUid))) {
     throw new https.HttpsError("permission-denied", "This sign-in can't view that shop.", { reason: "portal_store_denied" });
   }

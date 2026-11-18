@@ -515,6 +515,16 @@ export const PUSH_TEMPLATES = {
     so: { title: "Celin aan caadi ahayn maanta", body: "{count} celin, {amount}: aad bay uga badan yihiin caadigaaga. Hubi in mid kasta loo ula jeeday." },
     ar: { title: "استردادات غير معتادة اليوم", body: "{count} عمليات استرداد، {amount}: أعلى بكثير من المعتاد. تحقق أن كل واحدة كانت مقصودة." },
   },
+  "storelink.invited": {
+    en: { title: "Link your shop?", body: "{owner} asked to see this shop's figures on Zapp Business. Sign in to Zapp Business on a computer to accept or decline." },
+    so: { title: "Ma isku xirtaa dukaankaaga?", body: "{owner} ayaa codsaday inuu ku arko tirooyinka dukaankan Zapp Business. Ka gal Zapp Business kombiyuutar si aad u aqbasho ama u diiddo." },
+    ar: { title: "ربط متجرك؟", body: "طلب {owner} رؤية أرقام هذا المتجر على Zapp Business. سجّل الدخول إلى Zapp Business على كمبيوتر للقبول أو الرفض." },
+  },
+  "storelink.accepted": {
+    en: { title: "Store linked", body: "{store} is now in your Zapp Business." },
+    so: { title: "Dukaanka waa la isku xiray", body: "{store} hadda wuxuu ku jiraa Zapp Business-kaaga." },
+    ar: { title: "تم ربط المتجر", body: "أصبح {store} الآن ضمن Zapp Business الخاص بك." },
+  },
 } as const satisfies Record<string, Translations>;
 
 export type PushTemplateKey = keyof typeof PUSH_TEMPLATES;

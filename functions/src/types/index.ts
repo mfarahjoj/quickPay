@@ -559,7 +559,9 @@ export interface Notification {
     | "zaad_agent_topup"
     | "topup_cancelled"
     /** Zapp Business: an urgent insight pushed to the shop (insights/alerts.ts). */
-    | "insight_alert";
+    | "insight_alert"
+    /** Zapp Business: a request to link stores, or its acceptance (portal/groups.ts). */
+    | "store_link";
   title: string;
   body: string;
   data?: Record<string, string>;

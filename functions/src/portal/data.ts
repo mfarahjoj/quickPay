@@ -27,6 +27,7 @@ import { CustomerStats } from "../merchantStats/types";
 import { buildStatementCsv } from "../payouts/statement";
 import { Transaction } from "../types";
 import { kindOf } from "../utils/transactionKind";
+import { linksFor } from "./groups";
 import { requirePortalViewer } from "./viewer";
 
 const MAX_PERIOD_MS = 93 * 24 * 60 * 60 * 1000;
@@ -90,11 +91,13 @@ export const portalGetStore = https.onCall({ enforceAppCheck: true }, async (req
       };
     })
   );
+  const links = await linksFor(viewer.merchantUid);
   return {
     success: true,
     data: {
       merchantUid: viewer.merchantUid,
       stores,
+      links,
       session: {
         sessionId: viewer.sessionId,
         browser: viewer.session.browser,

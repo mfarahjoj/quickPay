@@ -205,6 +205,7 @@ export {
   portalListTransactions,
   portalExportStatement,
 } from "./portal/data";
+export { portalInviteStore, portalRespondLink, portalUnlinkStore } from "./portal/groups";
 
 // Admin console (see ADMIN_CONSOLE_PLAN.md). Every callable here is gated by
 // custom claims in admin/guard.ts and writes to the admin_audit log.
