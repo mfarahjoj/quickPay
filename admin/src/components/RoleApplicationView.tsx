@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, type RoleApplicationDetail } from "../api";
 import { AccountLink } from "./AccountLink";
 import { Icon } from "./Icon";
+import { ReviewPhoto } from "./ReviewPhoto";
 import { ReasonPrompt } from "./ReasonPrompt";
 import { Loading } from "./ui";
 
@@ -52,14 +53,12 @@ export function RoleApplicationView({
   const [detail, setDetail] = useState<RoleApplicationDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [decision, setDecision] = useState<"approve" | "reject" | null>(null);
-  const [idNumber, setIdNumber] = useState("");
 
   const load = useCallback(async () => {
     setError(null);
     try {
       const d = await api.getRoleApplication(requestId);
       setDetail(d);
-      setIdNumber(d.kyc?.idNumber ?? "");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load the application");
     }
@@ -86,7 +85,7 @@ export function RoleApplicationView({
 
   const decide = async (reason: string) => {
     if (!decision) return;
-    await api.reviewRoleRequest(requestId, decision, reason, decision === "approve" ? idNumber.trim() || undefined : undefined);
+    await api.reviewRoleRequest(requestId, decision, reason);
     setDecision(null);
     await onDecided(
       decision === "approve"
@@ -118,9 +117,7 @@ export function RoleApplicationView({
             {detail.images.map((img) => (
               <figure key={img.label} className="photo">
                 {img.url ? (
-                  <a href={img.url} target="_blank" rel="noreferrer noopener">
-                    <img src={img.url} alt={PHOTO_LABEL[img.label]} />
-                  </a>
+                  <ReviewPhoto url={img.url} alt={PHOTO_LABEL[img.label]} />
                 ) : (
                   <div className="photo-missing">{img.error || "Not provided"}</div>
                 )}
@@ -157,6 +154,12 @@ export function RoleApplicationView({
                     · {app.location.lat.toFixed(5)}, {app.location.lng.toFixed(5)}
                     {app.location.accuracyM != null ? ` · ±${app.location.accuracyM} m` : ""}
                   </span>
+                  <iframe
+                    title="Shop location"
+                    className="map-embed"
+                    loading="lazy"
+                    src={`https://www.openstreetmap.org/export/embed.html?bbox=${app.location.lng - 0.004}%2C${app.location.lat - 0.003}%2C${app.location.lng + 0.004}%2C${app.location.lat + 0.003}&layer=mapnik&marker=${app.location.lat}%2C${app.location.lng}`}
+                  />
                 </>
               ) : (
                 "—"
@@ -205,9 +208,7 @@ export function RoleApplicationView({
                       {" "}
                       · <span className="mono">{detail.kyc.idNumber}</span>
                     </>
-                  ) : (
-                    <span className="muted"> · number not typed in: read it off the photo</span>
-                  )}
+                  ) : null}
                 </dd>
                 <dt>KYC</dt>
                 <dd>{detail.kyc.status}</dd>
@@ -263,13 +264,6 @@ export function RoleApplicationView({
           onConfirm={decide}
           onCancel={() => setDecision(null)}
         >
-          {decision === "approve" && (
-            <label className="stack" style={{ marginBottom: 12 }}>
-              <span className="muted">ID number, from the photo</span>
-              <input value={idNumber} onChange={(e) => setIdNumber(e.target.value)} autoComplete="off" />
-              <span className="muted">Lets them reset a forgotten PIN in the app with its last 4 characters.</span>
-            </label>
-          )}
         </ReasonPrompt>
       )}
     </div>

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Modal, StyleSheet, TouchableOpacity, ActivityIndicator, Linking } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, Modal, Platform, StyleSheet, TouchableOpacity, ActivityIndicator, Linking } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Camera, useCameraDevice, usePhotoOutput, type CameraPhotoOutput } from 'react-native-vision-camera';
 import { CAMERA_NATIVE_AVAILABLE, requestCameraPermission } from '../hooks/useQrScannerOutputs';
@@ -32,7 +32,9 @@ function CameraLayer({
 }) {
   const device = useCameraDevice(facing);
   // 'balanced': sharp enough to read an ID, small enough to upload on 3G.
-  const photoOutput = usePhotoOutput({ qualityPrioritization: 'balanced' });
+  // 'jpeg': the default ('native') is HEIC on iPhone, which the review console
+  // in Chrome cannot show, and the file is uploaded as .jpg either way.
+  const photoOutput = usePhotoOutput({ containerFormat: 'jpeg', quality: 0.85, qualityPrioritization: 'balanced' });
   const outputs = useMemo(() => [photoOutput], [photoOutput]);
 
   useEffect(() => {
@@ -62,6 +64,11 @@ export function PhotoCapture({ visible, facing, title, hint, onClose, onCaptured
   const colors = useColors();
   const styles = useStyles();
   const { t } = useTranslation();
+  // A SafeAreaView inside a Modal can report no top inset, which put the close
+  // button under the status bar. Read the insets and keep a floor below the notch.
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, Platform.OS === 'ios' ? 54 : 24);
+  const bottomInset = Math.max(insets.bottom, 12);
   const photoRef = useRef<CameraPhotoOutput | null>(null);
   const [permission, setPermission] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
@@ -97,7 +104,7 @@ export function PhotoCapture({ visible, facing, title, hint, onClose, onCaptured
           <CameraLayer facing={facing} photoRef={photoRef} onPermission={setPermission} />
         )}
 
-        <SafeAreaView style={styles.overlay} edges={['top', 'bottom']}>
+        <View style={[styles.overlay, { paddingTop: topInset, paddingBottom: bottomInset }]}>
           <View style={styles.top}>
             <TouchableOpacity onPress={onClose} style={styles.close} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <CloseIcon size={16} color="#FFFFFF" />
@@ -129,7 +136,7 @@ export function PhotoCapture({ visible, facing, title, hint, onClose, onCaptured
               </>
             )}
           </View>
-        </SafeAreaView>
+        </View>
       </View>
     </Modal>
   );
@@ -138,7 +145,7 @@ export function PhotoCapture({ visible, facing, title, hint, onClose, onCaptured
 const useStyles = makeStyles((colors) => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.ui.canvas },
   overlay: { flex: 1, justifyContent: 'space-between' },
-  top: { paddingHorizontal: 20, paddingTop: 8 },
+  top: { paddingHorizontal: 20, paddingTop: 4 },
   close: {
     width: 36,
     height: 36,
