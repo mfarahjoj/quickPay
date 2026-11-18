@@ -42,6 +42,12 @@ export function requireAdmin(
 
   const token = request.auth.token as Record<string, unknown>;
 
+  // A Zapp Business web sign-in never carries admin claims (pollPortalLogin
+  // mints a fixed set), but refuse it by name too.
+  if (token.portal === true) {
+    throw new https.HttpsError("permission-denied", "Not authorized");
+  }
+
   if (token.admin !== true) {
     // Deliberately identical to the role-mismatch message below: the console
     // is not a place to learn whether a given account is an admin at all.

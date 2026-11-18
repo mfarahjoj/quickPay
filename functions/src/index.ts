@@ -193,6 +193,18 @@ export { ledgerInvariantCheck } from "./ledger/invariantCheck";
 export { merchantStatsOnTransaction } from "./merchantStats/triggers";
 export { merchantStatsNightly } from "./merchantStats/nightly";
 
+// Zapp Business on the web (portal/): sign in by scanning a QR with the
+// merchant app; a read-only session that requireAuth refuses everywhere else.
+export { startPortalLogin, describePortalLogin, approvePortalLogin, pollPortalLogin } from "./portal/login";
+export { listPortalSessions, revokePortalSession, expirePortalSessions } from "./portal/sessions";
+export {
+  portalGetStore,
+  portalGetCustomers,
+  portalGetCustomer,
+  portalListTransactions,
+  portalExportStatement,
+} from "./portal/data";
+
 // Admin console (see ADMIN_CONSOLE_PLAN.md). Every callable here is gated by
 // custom claims in admin/guard.ts and writes to the admin_audit log.
 export { adminSetAccountStatus } from "./admin/setAccountStatus";

@@ -89,6 +89,22 @@ export function requireAuth(context: https.CallableRequest): void {
       "User must be authenticated to perform this action"
     );
   }
+  // A Zapp Business web sign-in (portal/) is a separate Firebase user that
+  // may only view a shop's figures. It gets past `!context.auth`, so it is
+  // turned away here, at the one check every app callable runs, and is let
+  // in only by requirePortalViewer (portal/viewer.ts). MERCHANT_INSIGHTS.md.
+  if (isPortalToken(context.auth.token)) {
+    throw new https.HttpsError(
+      "permission-denied",
+      "Zapp Business on the web can only view figures. Use the Zapp Pay app for this.",
+      { reason: "portal_session" }
+    );
+  }
+}
+
+/** A web dashboard sign-in, minted by pollPortalLogin with `portal: true`. */
+export function isPortalToken(token: unknown): boolean {
+  return !!token && typeof token === "object" && (token as Record<string, unknown>).portal === true;
 }
 
 /**

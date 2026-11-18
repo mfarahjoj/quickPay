@@ -60,6 +60,7 @@ function matches(doc: Data, field: string, op: string, value: any): boolean {
     case ">": return a > b;
     case ">=": return a >= b;
     case "in": return (value as any[]).includes(a);
+    case "array-contains": return Array.isArray(fieldAt(doc, field)) && fieldAt(doc, field).includes(value);
     default: throw new Error(`fakeFirestore: unsupported op ${op}`);
   }
 }

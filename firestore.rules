@@ -166,8 +166,22 @@ service cloud.firestore {
     // written only by the server. The shop may read its totals, customers and
     // live feed; the idempotency and first-visit markers stay server-only
     // (they match nothing here, so the default deny covers them).
+    //
+    // So may a live Zapp Business web session for that shop (portal/): its
+    // own Firebase user `portal_{sid}` with claims {portal, portalFor,
+    // portalSid}, honoured only while portalSessions/{sid} is active and
+    // unexpired. Such a user's uid never equals a real user's, so every
+    // isOwner() rule above already refuses it.
+    function isPortalFor(storeUid) {
+      return isAuthenticated()
+        && request.auth.token.get('portal', false) == true
+        && request.auth.token.get('portalFor', '') == storeUid
+        && request.auth.uid == 'portal_' + request.auth.token.get('portalSid', '')
+        && get(/databases/$(database)/documents/portalSessions/$(request.auth.token.portalSid)).data.active == true
+        && get(/databases/$(database)/documents/portalSessions/$(request.auth.token.portalSid)).data.expiresAt > request.time;
+    }
     function canViewStore(storeUid) {
-      return isAuthenticated() && isOwner(storeUid);
+      return (isAuthenticated() && isOwner(storeUid)) || isPortalFor(storeUid);
     }
     match /merchantStats/{storeUid} {
       allow read: if canViewStore(storeUid);
@@ -361,6 +375,15 @@ service cloud.firestore {
       allow read, write: if false;
     }
     match /display_rate_limits/{bucketId} {
+      allow read, write: if false;
+    }
+
+    // Zapp Business web sign-ins and sessions (functions/src/portal/):
+    // server-only. The rules above read a session through get().
+    match /portalLogins/{loginId} {
+      allow read, write: if false;
+    }
+    match /portalSessions/{sessionId} {
       allow read, write: if false;
     }
 
