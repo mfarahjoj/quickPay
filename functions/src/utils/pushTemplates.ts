@@ -495,6 +495,36 @@ export const PUSH_TEMPLATES = {
     so: { title: "Lacagtii la celiyay waa laguu magdhabay", body: "Zapp Pay waxay float-kaaga ku celisay {amount} lacag Zaad ah oo dib loo celiyay awgeed." },
     ar: { title: "تم تعويض الاسترداد", body: "عوّض Zapp Pay رصيدك التشغيلي بمبلغ {amount} عن دفعة زاد تم استردادها." },
   },
+  "insight.quiet_till": {
+    en: { title: "Your till has been quiet", body: "No sales since {time}, at a usually busy time. Check customers can pay: the QR sticker and the counter display." },
+    so: { title: "Khasnaddaadu way aamusan tahay", body: "Iib ma jiro tan iyo {time}, waqti caadi ahaan mashquul ah. Hubi in macaamiishu bixin karaan: stiikarka QR-ka iyo shaashadda miiska." },
+    ar: { title: "الصندوق هادئ", body: "لا مبيعات منذ {time} في وقت مزدحم عادةً. تأكد أن العملاء يستطيعون الدفع: ملصق QR وشاشة الكاشير." },
+  },
+  "insight.quiet_till_no_sale": {
+    en: { title: "No sales yet today", body: "This is usually a busy time. Check customers can pay: the QR sticker and the counter display." },
+    so: { title: "Maanta weli iib ma jiro", body: "Caadi ahaan waa waqti mashquul ah. Hubi in macaamiishu bixin karaan: stiikarka QR-ka iyo shaashadda miiska." },
+    ar: { title: "لا مبيعات اليوم بعد", body: "هذا وقت مزدحم عادةً. تأكد أن العملاء يستطيعون الدفع: ملصق QR وشاشة الكاشير." },
+  },
+  "insight.display_offline": {
+    en: { title: "Counter display offline", body: "\u201c{name}\u201d isn't showing your QR. Check the tablet is on and on Wi-Fi." },
+    so: { title: "Shaashadda miiska way go'an tahay", body: "\u201c{name}\u201d ma muujinayso QR-kaaga. Hubi in tablet-ku shidan yahay oo Wi-Fi ku xiran yahay." },
+    ar: { title: "شاشة الكاشير غير متصلة", body: "«{name}» لا تعرض رمز QR الخاص بك. تأكد أن الجهاز اللوحي يعمل ومتصل بشبكة Wi-Fi." },
+  },
+  "insight.refund_spike": {
+    en: { title: "Unusual refunds today", body: "{count} refunds, {amount}: well above your usual. Check each one was meant." },
+    so: { title: "Celin aan caadi ahayn maanta", body: "{count} celin, {amount}: aad bay uga badan yihiin caadigaaga. Hubi in mid kasta loo ula jeeday." },
+    ar: { title: "استردادات غير معتادة اليوم", body: "{count} عمليات استرداد، {amount}: أعلى بكثير من المعتاد. تحقق أن كل واحدة كانت مقصودة." },
+  },
+  "storelink.invited": {
+    en: { title: "Link your shop?", body: "{owner} asked to see this shop's figures on Zapp Business. Sign in to Zapp Business on a computer to accept or decline." },
+    so: { title: "Ma isku xirtaa dukaankaaga?", body: "{owner} ayaa codsaday inuu ku arko tirooyinka dukaankan Zapp Business. Ka gal Zapp Business kombiyuutar si aad u aqbasho ama u diiddo." },
+    ar: { title: "ربط متجرك؟", body: "طلب {owner} رؤية أرقام هذا المتجر على Zapp Business. سجّل الدخول إلى Zapp Business على كمبيوتر للقبول أو الرفض." },
+  },
+  "storelink.accepted": {
+    en: { title: "Store linked", body: "{store} is now in your Zapp Business." },
+    so: { title: "Dukaanka waa la isku xiray", body: "{store} hadda wuxuu ku jiraa Zapp Business-kaaga." },
+    ar: { title: "تم ربط المتجر", body: "أصبح {store} الآن ضمن Zapp Business الخاص بك." },
+  },
 } as const satisfies Record<string, Translations>;
 
 export type PushTemplateKey = keyof typeof PUSH_TEMPLATES;

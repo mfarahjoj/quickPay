@@ -6,6 +6,7 @@ Somaliland-focused mobile-money platform. **Zapp Pay** is the consumer brand; Qu
 - `merchant-app/` — React Native **merchant/agent** app (accept payments, agent top-ups)
 - `functions/` — Firebase Cloud Functions v2 (TypeScript) backend
 - `hosting/` — static pages (privacy, support)
+- `portal/` — Zapp Business, the merchant insights web dashboard (read-only, sign-in by QR from the merchant app; `MERCHANT_INSIGHTS.md`)
 
 Account types: `customer`, `merchant`, `topup_agent`, `agent_merchant`. Prod Firebase project: `quickpay-485417`.
 
@@ -60,5 +61,6 @@ Every user-facing string ships in **all three locales** — `en`, `so`, `ar` —
 | `CASH_IN_CASH_OUT.md` | Agent cash-in/cash-out: flow steps, ledger entries, guards, threat model |
 | `COUNTER_DISPLAY.md` | Counter display tablet: pairing, state doc, tablet scans, threat model, shop setup, runbook, rollout |
 | `SHILLINGS.md` | Dollar and shilling balances: units, ledger projections, limits at `slsPerUsd`, which flows take shillings |
+| `MERCHANT_INSIGHTS.md` | Zapp Business: the merchant insights read model (`functions/src/merchantStats/`), the read-only web sign-in (`functions/src/portal/`, threat model, deploy order), the dashboard (`portal/`) and its insight cards |
 | `MANUAL_TOPUP_GUIDE.md` | Agent top-up operational flow |
 | `TESTFLIGHT_QUICKSTART.md` | One-time Apple/signing setup |

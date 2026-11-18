@@ -9,6 +9,7 @@
  */
 
 import * as admin from "firebase-admin";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import * as crypto from "crypto";
 import { https } from "firebase-functions/v2";
 import { DISPLAY_RATE_LIMITS } from "./types";
@@ -28,8 +29,8 @@ export async function enforceDisplayRateLimit(
 
   await ref.set(
     {
-      count: admin.firestore.FieldValue.increment(1),
-      expireAt: admin.firestore.Timestamp.fromMillis((bucket + 2) * MINUTE_MS),
+      count: FieldValue.increment(1),
+      expireAt: Timestamp.fromMillis((bucket + 2) * MINUTE_MS),
     },
     { merge: true }
   );

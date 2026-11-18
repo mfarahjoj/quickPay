@@ -1,5 +1,6 @@
 /**
  * Ending sessions when it matters (ONBOARDING_SECURITY_REVIEW.md A5).
+ * That includes the shop's Zapp Business web sign-ins (portal/sessions.ts).
  *
  * A Firebase session refreshes for ever unless its refresh tokens are
  * revoked. After a PIN reset or change, a device revoke, or a freeze, every
@@ -15,6 +16,7 @@
 import * as admin from "firebase-admin";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { getRates } from "../config/rates";
+import { endAllPortalSessions } from "../portal/sessions";
 
 export async function endSessions(uid: string, opts: { keepCaller: boolean }): Promise<string | undefined> {
   try {
@@ -28,6 +30,12 @@ export async function endSessions(uid: string, opts: { keepCaller: boolean }): P
     // The change that led here has happened; don't undo it over this.
     console.error(`Failed to revoke sessions for ${uid}:`, err);
     return undefined;
+  }
+  // Computers signed in to Zapp Business on the web go too (portal/).
+  try {
+    await endAllPortalSessions(uid, "security");
+  } catch (err) {
+    console.error(`Failed to end Zapp Business sessions for ${uid}:`, err);
   }
   if (!opts.keepCaller) return undefined;
   try {

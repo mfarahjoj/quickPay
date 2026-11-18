@@ -182,6 +182,13 @@ Each ends in a PIN step, and on each the keyboard is now open. *−1 tap each.*
 *Unchanged.* The Zaad request's PIN step keeps a tap, because its first field is an
 optional Zaad reference.
 
+### M14 · See the shop live on a computer (Zapp Business) — *shop owner*
+On the computer: open zapp-business.web.app, which shows a QR. On the phone: Settings →
+Zapp Business on a computer → **Sign in on a computer** → scan → "Chrome on macOS"
+**Yes, sign in** → PIN → done. One decision per screen: the browser check is its own
+step, because it is the one that stops a relayed QR (MERCHANT_INSIGHTS.md). The computer
+only views figures. The same screen lists signed-in computers, each with **Sign out**.
+
 ---
 
 ## Admin console

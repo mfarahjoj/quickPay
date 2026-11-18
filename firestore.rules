@@ -3,8 +3,11 @@ service cloud.firestore {
   match /databases/{database}/documents {
     
     // Helper functions
+    // A signed-in app user. Zapp Business web sessions (portal/) are signed in
+    // too, but read-only: they are not "authenticated" for any rule here, only
+    // for isPortalFor below.
     function isAuthenticated() {
-      return request.auth != null;
+      return request.auth != null && request.auth.token.get('portal', false) != true;
     }
     
     function isOwner(userId) {
@@ -161,6 +164,57 @@ service cloud.firestore {
       allow write: if false;
     }
     
+    // Merchant insights read model (functions/src/merchantStats/,
+    // MERCHANT_INSIGHTS.md): a projection of the shop's own transactions,
+    // written only by the server. The shop may read its totals, customers and
+    // live feed; the idempotency and first-visit markers stay server-only
+    // (they match nothing here, so the default deny covers them).
+    //
+    // So may a live Zapp Business web session for that shop (portal/): its
+    // own Firebase user `portal_{sid}` with claims {portal, portalFor,
+    // portalSid}, honoured only while portalSessions/{sid} is active and
+    // unexpired. Such a user's uid never equals a real user's, so every
+    // isOwner() rule above already refuses it.
+    function portalSession() {
+      return get(/databases/$(database)/documents/portalSessions/$(request.auth.token.portalSid)).data;
+    }
+    // Its own shop, or a store linked to it with an active storeLinks doc
+    // (functions/src/portal/groups.ts). An invite alone gives nothing.
+    function isPortalFor(storeUid) {
+      return request.auth != null
+        && request.auth.token.get('portal', false) == true
+        && request.auth.uid == 'portal_' + request.auth.token.get('portalSid', '')
+        && portalSession().active == true
+        && portalSession().expiresAt > request.time
+        && portalSession().merchantUid == request.auth.token.get('portalFor', '')
+        && (storeUid == request.auth.token.portalFor
+            || (get(/databases/$(database)/documents/storeLinks/$(storeUid)).data.ownerUid == request.auth.token.portalFor
+                && get(/databases/$(database)/documents/storeLinks/$(storeUid)).data.status == 'active'));
+    }
+    function canViewStore(storeUid) {
+      return (isAuthenticated() && isOwner(storeUid)) || isPortalFor(storeUid);
+    }
+    match /merchantStats/{storeUid} {
+      allow read: if canViewStore(storeUid);
+      allow write: if false;
+      match /days/{day} {
+        allow read: if canViewStore(storeUid);
+        allow write: if false;
+      }
+      match /months/{month} {
+        allow read: if canViewStore(storeUid);
+        allow write: if false;
+      }
+      match /customers/{customerUid} {
+        allow read: if canViewStore(storeUid);
+        allow write: if false;
+      }
+      match /live/{docId} {
+        allow read: if canViewStore(storeUid);
+        allow write: if false;
+      }
+    }
+
     // Notifications - users can read and mark as read their own notifications
     match /notifications/{notificationId} {
       allow read: if isAuthenticated() && isOwner(resource.data.userId);
@@ -332,6 +386,18 @@ service cloud.firestore {
       allow read, write: if false;
     }
     match /display_rate_limits/{bucketId} {
+      allow read, write: if false;
+    }
+
+    // Zapp Business web sign-ins and sessions (functions/src/portal/):
+    // server-only. The rules above read a session through get().
+    match /portalLogins/{loginId} {
+      allow read, write: if false;
+    }
+    match /portalSessions/{sessionId} {
+      allow read, write: if false;
+    }
+    match /storeLinks/{storeUid} {
       allow read, write: if false;
     }
 

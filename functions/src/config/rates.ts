@@ -49,6 +49,7 @@ export interface Rates {
   maxTrustedDevices: number;
   trustedDeviceIdleDays: number;
   sessionIdleDays: number;
+  portalSessionHours: number;
   phoneChangeCooldownDays: number;
   accountDeletionGraceDays: number;
   topupMinCents: number;
@@ -397,6 +398,16 @@ export const RATE_FIELDS: { [K in keyof Rates]: RateFieldSpec } = {
     min: 7,
     max: 180,
     unit: "days",
+  },
+  portalSessionHours: {
+    group: "Sign-in and devices",
+    label: "Zapp Business web sign-in lasts",
+    help: "Hours a computer stays signed in to the Zapp Business dashboard after the shop approves it with the PIN on their phone. The web sign-in can only view figures, never move money.",
+    kind: "int",
+    default: 12,
+    min: 1,
+    max: 168,
+    unit: "hours",
   },
   phoneChangeCooldownDays: {
     group: "Sign-in and devices",

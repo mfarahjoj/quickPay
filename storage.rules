@@ -3,8 +3,10 @@ service firebase.storage {
   match /b/{bucket}/o {
     
     // Helper functions
+    // Zapp Business web sessions (portal/) are signed in but read-only, for a
+    // shop's figures only: nothing in Storage.
     function isAuthenticated() {
-      return request.auth != null;
+      return request.auth != null && request.auth.token.get('portal', false) != true;
     }
     
     function isOwner(userId) {
