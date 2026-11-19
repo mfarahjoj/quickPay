@@ -62,5 +62,6 @@ Every user-facing string ships in **all three locales** — `en`, `so`, `ar` —
 | `COUNTER_DISPLAY.md` | Counter display tablet: pairing, state doc, tablet scans, threat model, shop setup, runbook, rollout |
 | `SHILLINGS.md` | Dollar and shilling balances: units, ledger projections, limits at `slsPerUsd`, which flows take shillings |
 | `MERCHANT_INSIGHTS.md` | Zapp Business: the merchant insights read model (`functions/src/merchantStats/`), the read-only web sign-in (`functions/src/portal/`, threat model, deploy order), the dashboard (`portal/`) and its insight cards |
+| `docs/BILLS.md` | Bills: shops bill customers (once or repeating), customers pay with PIN/Face ID or auto-pay up to a limit; collections, ledger entry, guards, schedule |
 | `MANUAL_TOPUP_GUIDE.md` | Agent top-up operational flow |
 | `TESTFLIGHT_QUICKSTART.md` | One-time Apple/signing setup |

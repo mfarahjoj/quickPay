@@ -30,6 +30,7 @@ import {
   WalletIcon,
   HandshakeIcon,
   SendIcon,
+  ReceiptIcon,
 } from '../../components/icons/AuthIcons';
 import { type FloatCurrency } from '../../components/CurrencyToggle';
 import { ZaadHomeCard } from '../../components/ZaadHomeCard';
@@ -66,11 +67,11 @@ interface ActionDef {
 }
 
 /** A round smoked-glass action on the coral header. */
-function ActionButton({ action, onPress }: { action: ActionDef; onPress: () => void }) {
+function ActionButton({ action, width, onPress }: { action: ActionDef; width: `${number}%`; onPress: () => void }) {
   const styles = useStyles();
   const { Icon } = action;
   return (
-    <TouchableOpacity style={styles.actionBtn} onPress={onPress} activeOpacity={0.7}>
+    <TouchableOpacity style={[styles.actionBtn, { width }]} onPress={onPress} activeOpacity={0.7}>
       <View style={styles.actionCircle}>
         <Icon size={24} color="#FFFFFF" />
       </View>
@@ -152,8 +153,12 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
       { key: 'withdraw', label: t('dashboard.quickActions.withdraw'), Icon: WalletIcon, route: 'Payout' },
       { key: 'send', label: t('dashboard.quickActions.send'), Icon: SendIcon, route: 'Send' },
       { key: 'payroll', label: t('dashboard.quickActions.payroll'), Icon: HandshakeIcon, route: 'Payroll' },
+      { key: 'bills', label: t('dashboard.quickActions.bills'), Icon: ReceiptIcon, route: 'Bills' },
     ] : []),
   ];
+  // Four to a row, except five or six, which sit 3 + 2 / 3 + 3 rather than
+  // leaving one or two alone under a full row.
+  const actionWidth = actions.length === 5 || actions.length === 6 ? '33.33%' : '25%';
 
   // entrance animation
   const fade = useRef(new Animated.Value(0)).current;
@@ -283,7 +288,7 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
 
             <View style={styles.actions}>
               {actions.map((a) => (
-                <ActionButton key={a.key} action={a} onPress={() => navigation.navigate(a.route)} />
+                <ActionButton key={a.key} action={a} width={actionWidth} onPress={() => navigation.navigate(a.route)} />
               ))}
             </View>
           </Animated.View>
@@ -508,7 +513,6 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
     rowGap: 14,
   },
   actionBtn: {
-    width: '25%',
     alignItems: 'center',
     gap: 8,
   },

@@ -4,7 +4,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Alert, StatusBar, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { guardFreshInstall } from './services/installGuard';
-import AppNavigator, { openZaadRequest } from './navigation/AppNavigator';
+import AppNavigator, { openBills, openZaadRequest } from './navigation/AppNavigator';
 import { UpdateRequired } from './components/UpdateRequired';
 import { useUpdateGate } from './hooks/useUpdateGate';
 import { ToastProvider } from './components/auth';
@@ -65,6 +65,7 @@ function AppContent() {
     const openFromPush = (remoteMessage: { data?: Record<string, unknown> } | null) => {
       const data = remoteMessage?.data as Record<string, string> | undefined;
       if (data?.type?.startsWith('zaad_agent') && data.requestId) openZaadRequest(data.requestId);
+      else if (data?.type?.startsWith('bill')) openBills();
     };
     const unsubOpened = messaging().onNotificationOpenedApp(openFromPush);
 

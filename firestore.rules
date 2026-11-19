@@ -401,6 +401,21 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Bills (functions/src/bills/): server-only. Both apps list them through
+    // listMyBills / merchantListBills.
+    match /bills/{billId} {
+      allow read, write: if false;
+    }
+    match /billSeries/{seriesId} {
+      allow read, write: if false;
+    }
+    match /billAutopay/{settingId} {
+      allow read, write: if false;
+    }
+    match /billRequests/{requestId} {
+      allow read, write: if false;
+    }
+
     // Default deny all other access
     match /{document=**} {
       allow read, write: if false;
