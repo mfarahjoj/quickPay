@@ -50,6 +50,15 @@ function navigateWhenSignedIn(go: () => void) {
 
 /** Push notifications for charges: in-person requests and API charges. */
 function navigateFromNotification(data: Record<string, string>) {
+  if (data.type === 'bill_request') {
+    navigateWhenSignedIn(() => navigationRef.navigate('Bills'));
+    return;
+  }
+  if ((data.type === 'bill' || data.type === 'bill_paid') && data.billId) {
+    const billId = data.billId;
+    navigateWhenSignedIn(() => navigationRef.navigate('BillDetail', { billId }));
+    return;
+  }
   if (data.type === 'api_charge' && data.chargeId) {
     const chargeId = parseChargeLink(`zapppay://charge/${data.chargeId}`);
     if (chargeId) navigateToApiCharge(chargeId);
@@ -130,6 +139,17 @@ function AppContent() {
     // Foreground notification — show an alert so user can tap through
     const unsubForeground = messaging().onMessage(async (remoteMessage) => {
       const data = remoteMessage.data as Record<string, string> | undefined;
+      if (data?.type === 'bill' && data.billId) {
+        Alert.alert(
+          remoteMessage.notification?.title ?? t('bills.title'),
+          remoteMessage.notification?.body ?? '',
+          [
+            { text: t('common.dismiss'), style: 'cancel' },
+            { text: t('common.review'), onPress: () => navigateFromNotification(data) },
+          ],
+        );
+        return;
+      }
       if (data?.type === 'payment_request' || data?.type === 'api_charge') {
         Alert.alert(
           remoteMessage.notification?.title ?? t('notifications.paymentRequestTitle'),

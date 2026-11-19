@@ -36,7 +36,7 @@ import Animated, {
 import { Springs } from '../../constants/springs';
 import { LightHomeHeader } from '../../components/home/LightHomeHeader';
 import { HomeWidgets } from '../../components/home/HomeWidgets';
-import { ChevronIcon, PinIcon, SendIcon } from '../../components/icons/LineIcons';
+import { BillIcon, ChevronIcon, PinIcon, SendIcon } from '../../components/icons/LineIcons';
 import { initialsOf } from '../../utils/initials';
 
 interface Props {
@@ -488,6 +488,22 @@ export default function DashboardScreen({ navigation }: Props) {
                 <View style={lightStyles.linkText}>
                   <Text style={lightStyles.linkTitle}>{t('common.send')}</Text>
                   <Text style={lightStyles.linkSub}>{t('dashboard.sendText')}</Text>
+                </View>
+                <ChevronIcon size={18} color={colors.ui.textFaint} />
+              </TouchableOpacity>
+              <View style={lightStyles.linkDivider} />
+              <TouchableOpacity
+                style={lightStyles.linkRow}
+                onPress={() => { triggerHaptic('light'); navigation.navigate('Bills'); }}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+              >
+                <View style={[lightStyles.linkIcon, { backgroundColor: colors.tints.green.fill }]}>
+                  <BillIcon size={19} color={colors.tints.green.mark} strokeWidth={1.9} />
+                </View>
+                <View style={lightStyles.linkText}>
+                  <Text style={lightStyles.linkTitle}>{t('bills.title')}</Text>
+                  <Text style={lightStyles.linkSub}>{t('dashboard.billsText')}</Text>
                 </View>
                 <ChevronIcon size={18} color={colors.ui.textFaint} />
               </TouchableOpacity>
