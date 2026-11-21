@@ -16,13 +16,14 @@
  */
 
 import * as admin from "firebase-admin";
-import { foldCustomer, foldPeriod, foldRecent, foldRoot, shortName } from "./fold";
+import { foldCustomer, foldPeriod, foldRecent, foldRecentNames, foldRoot, shortName } from "./fold";
 import { localParts } from "./time";
 import {
   CustomerStats,
   PeriodStats,
   RecentFeed,
   RecentItem,
+  RecentNames,
   StoreEvent,
   StoreStatsRoot,
 } from "./types";
@@ -41,6 +42,7 @@ export function statsRefs(db: FirebaseFirestore.Firestore, storeUid: string) {
       root.collection("months").doc(month).collection("visitors").doc(customerUid),
     customer: (customerUid: string) => root.collection("customers").doc(customerUid),
     recent: root.collection("live").doc("recent"),
+    recentNames: root.collection("live").doc("recentNames"),
     applied: (txId: string) => root.collection("applied").doc(txId),
   };
 }
@@ -88,12 +90,13 @@ export async function applyStoreEvent(
 
   return db.runTransaction(async (tx) => {
     const nowMs = opts.nowMs ?? Date.now();
-    const [marker, rootSnap, daySnap, monthSnap, recentSnap] = await Promise.all([
+    const [marker, rootSnap, daySnap, monthSnap, recentSnap, namesSnap] = await Promise.all([
       tx.get(refs.applied(ev.txId)),
       tx.get(refs.root),
       tx.get(refs.day(day)),
       tx.get(refs.month(month)),
       tx.get(refs.recent),
+      tx.get(refs.recentNames),
     ]);
     if (marker.exists) return "already_applied" as const;
 
@@ -154,12 +157,37 @@ export async function applyStoreEvent(
         net: ev.net,
         atMs: ev.atMs,
         ...(ev.type === "sale" ? { channel: ev.channel } : {}),
-        ...(name ? { customerName: name } : {}),
       };
-      tx.set(refs.recent, foldRecent(recentSnap.data() as RecentFeed | undefined, item, nowMs));
+      const feed = foldRecent(recentSnap.data() as RecentFeed | undefined, item, nowMs);
+      tx.set(refs.recent, feed);
+      tx.set(refs.recentNames, foldRecentNames(namesSnap.data() as RecentNames | undefined, feed, ev.txId, name, nowMs));
     }
 
     tx.set(refs.applied(ev.txId), { type: ev.type, atMs: ev.atMs, appliedAtMs: nowMs });
     return "applied" as const;
+  });
+}
+
+/**
+ * Moves names left on a shop's feed items (written before they moved to
+ * `recentNames`) into `recentNames`. Run before a manager without "Show
+ * customers" signs in (portal/login.ts): a shop with no sale since then would
+ * otherwise still have them in the doc that manager reads. Idempotent.
+ */
+export async function moveLegacyFeedNames(db: FirebaseFirestore.Firestore, storeUid: string): Promise<number> {
+  const refs = statsRefs(db, storeUid);
+  return db.runTransaction(async (tx) => {
+    const [recentSnap, namesSnap] = await Promise.all([tx.get(refs.recent), tx.get(refs.recentNames)]);
+    type LegacyItem = RecentItem & { customerName?: string };
+    const feed = recentSnap.data() as { items?: LegacyItem[]; updatedAtMs?: number } | undefined;
+    const legacy = (feed?.items ?? []).filter((i) => typeof i.customerName === "string");
+    if (!feed || legacy.length === 0) return 0;
+    const nowMs = Date.now();
+    const names = { ...((namesSnap.data() as RecentNames | undefined)?.names ?? {}) };
+    for (const i of legacy) names[i.txId] ??= i.customerName!;
+    const items = (feed.items ?? []).map(({ customerName: _legacy, ...rest }) => rest);
+    tx.set(refs.recent, { ...feed, items });
+    tx.set(refs.recentNames, { names, updatedAtMs: nowMs });
+    return legacy.length;
   });
 }

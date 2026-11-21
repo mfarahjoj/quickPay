@@ -55,7 +55,7 @@ describe("portal identity is refused everywhere but the portal", () => {
         return e.name.endsWith(".ts") ? [full] : [];
       });
     // Guards, and the helpers that call one of them first.
-    const GUARDS = /\b(requireAuth|requireAdmin|requirePortalViewer|requirePortalApp|requireShop|requireAgent|requireDisplayApp|requireDisplay|loadPairing)\(/;
+    const GUARDS = /\b(requireAuth|requireAdmin|requirePortalViewer|requirePortalApp|requireShop|requireAgent|requireDisplayApp|requireDisplay|loadPairing|requireMerchantActor|requireShopOwner)\(/;
     // Unauthenticated by design, and never reading request.auth: signing in
     // with a trusted phone's secret and the PIN.
     const NO_AUTH_BY_DESIGN = new Set(["loginWithPin"]);

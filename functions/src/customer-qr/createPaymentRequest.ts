@@ -1,9 +1,9 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
+import { requireMerchantActor } from "../staff/access";
 import { assertAccountActive } from "../utils/accountStatus";
 import { enforcePerTransactionLimit } from "../utils/limits";
 import {
-  requireAuth,
   validateAmount,
 } from "../utils/validation";
 import { sendPushNotification } from "../utils/notifications";
@@ -38,14 +38,16 @@ interface ChargeResult {
   expiresInSeconds: number;
 }
 
-function assertChargeable(token: CustomerToken, merchantId: string): void {
+function assertChargeable(token: CustomerToken, merchantId: string, actorUid: string): void {
   if (token.status !== "scanned") {
     throw new https.HttpsError(
       "failed-precondition",
       "Token must be in scanned state"
     );
   }
-  if (token.scannedBy !== merchantId) {
+  // The shop, and who scanned for it: a staff member's scan is theirs to
+  // charge, not a colleague's, and the shop's own scan is the shop's.
+  if (token.scannedBy !== merchantId || (token.scannedByActor ?? merchantId) !== actorUid) {
     throw new https.HttpsError(
       "permission-denied",
       "Token was scanned by a different merchant"
@@ -64,9 +66,10 @@ function assertChargeable(token: CustomerToken, merchantId: string): void {
 function replay(
   request: MerchantPaymentRequest,
   merchantId: string,
+  actorUid: string,
   requestId: string
 ): ApiResponse<ChargeResult> {
-  if (request.merchantId !== merchantId) {
+  if (request.merchantId !== merchantId || (request.raisedBy ?? merchantId) !== actorUid) {
     throw new https.HttpsError(
       "permission-denied",
       "Token was scanned by a different merchant"
@@ -97,6 +100,8 @@ interface CreatePaymentRequestInput {
   /** As on generateQRCode: refuse if this reference has been paid. */
   checkPaidReference?: boolean;
   confirmPaidReference?: boolean;
+  /** A staff member charging for this shop (STAFF_ACCESS.md). Omitted by the shop itself. */
+  merchantId?: string;
 }
 
 export const createPaymentRequest = https.onCall(
@@ -104,8 +109,9 @@ export const createPaymentRequest = https.onCall(
   async (
     request: https.CallableRequest<CreatePaymentRequestInput>
   ): Promise<ApiResponse<ChargeResult>> => {
-    requireAuth(request);
-    const merchantId = request.auth!.uid;
+    const actor = await requireMerchantActor(request, request.data?.merchantId, "charge");
+    const merchantId = actor.merchantUid;
+    const actorUid = actor.actorUid;
 
     const db = admin.firestore();
 
@@ -121,6 +127,10 @@ export const createPaymentRequest = https.onCall(
     const purpose = request.data?.purpose ?? "payment";
     if (!isPurpose(purpose)) {
       throw new https.HttpsError("invalid-argument", "purpose must be payment or cash_out");
+    }
+    // Paying out cash moves the agent's float: never a staff member's to do.
+    if (actor.role !== "owner" && purpose !== "payment") {
+      throw new https.HttpsError("permission-denied", "Only the agent's own account can pay out cash", { reason: "staff_access_denied" });
     }
     if (!mayRaise(merchant.accountType, purpose)) {
       throw new https.HttpsError(
@@ -162,7 +172,7 @@ export const createPaymentRequest = https.onCall(
     const requestRef = db.collection("paymentRequests").doc(tokenId);
     const existing = await requestRef.get();
     if (existing.exists) {
-      return replay(existing.data() as MerchantPaymentRequest, merchantId, requestRef.id);
+      return replay(existing.data() as MerchantPaymentRequest, merchantId, actorUid, requestRef.id);
     }
 
     // Before the customer is asked to pay: a warning is cheaper than a refund.
@@ -182,7 +192,7 @@ export const createPaymentRequest = https.onCall(
     }
 
     const token = tokenDoc.data() as CustomerToken;
-    assertChargeable(token, merchantId);
+    assertChargeable(token, merchantId, actorUid);
 
     // KYC limit check on the customer
     const customerDoc = await db
@@ -211,6 +221,7 @@ export const createPaymentRequest = https.onCall(
       status: "pending",
       ...(reference ? { reference } : {}),
       ...(purpose === "cash_out" ? { purpose, feeCents } : {}),
+      ...(actor.role !== "owner" ? { raisedBy: actorUid } : {}),
       createdAt: now,
       expiresAt,
     };
@@ -229,7 +240,7 @@ export const createPaymentRequest = https.onCall(
       if (!tokenSnap.exists) {
         throw new https.HttpsError("not-found", "Token not found");
       }
-      assertChargeable(tokenSnap.data() as CustomerToken, merchantId);
+      assertChargeable(tokenSnap.data() as CustomerToken, merchantId, actorUid);
 
       tx.create(requestRef, paymentRequest);
       tx.update(tokenRef, { status: "used" });
@@ -237,7 +248,7 @@ export const createPaymentRequest = https.onCall(
     });
 
     if (!outcome.created) {
-      return replay(outcome.request, merchantId, requestRef.id);
+      return replay(outcome.request, merchantId, actorUid, requestRef.id);
     }
 
     const amountText = pushAmount(amount, currency);

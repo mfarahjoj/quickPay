@@ -114,13 +114,25 @@ export interface RecentItem {
   net: number;
   atMs: number;
   channel?: SaleChannel;
-  /** "Amina H.": enough for a live feed, no more. */
-  customerName?: string;
 }
 
-/** `merchantStats/{storeUid}/live/recent`: the last sales and refunds, newest first. */
+/**
+ * `merchantStats/{storeUid}/live/recent`: the last sales and refunds, newest
+ * first. No customer names: a staff manager without "Show customers" reads
+ * this doc (STAFF_ACCESS.md), so the names live in `recentNames`.
+ */
 export interface RecentFeed {
   items: RecentItem[];
+  updatedAtMs: number;
+}
+
+/**
+ * `merchantStats/{storeUid}/live/recentNames`: the feed's customer names
+ * ("Amina H.", enough for a live feed, no more) by txId, for the items still
+ * in the feed. The rules let only viewers who may see customers read it.
+ */
+export interface RecentNames {
+  names: Record<string, string>;
   updatedAtMs: number;
 }
 

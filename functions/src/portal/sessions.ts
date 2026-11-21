@@ -51,6 +51,31 @@ export async function endAllPortalSessions(merchantUid: string, reason: SessionE
   return sessions.length;
 }
 
+/** Sign out the computers one staff member signed in for one shop (STAFF_ACCESS.md). */
+export async function endStaffPortalSessions(merchantUid: string, staffUid: string, reason: SessionEndReason): Promise<number> {
+  const snap = await admin
+    .firestore()
+    .collection(PORTAL_SESSIONS)
+    .where("merchantUid", "==", merchantUid)
+    .where("actorUid", "==", staffUid)
+    .where("active", "==", true)
+    .get();
+  for (const doc of snap.docs) await endPortalSession(doc.id, reason);
+  return snap.size;
+}
+
+/** Sign out every computer a person signed in as staff, for any shop: their own PIN change, freeze, etc. */
+export async function endPortalSessionsSignedInBy(staffUid: string, reason: SessionEndReason = "security"): Promise<number> {
+  const snap = await admin
+    .firestore()
+    .collection(PORTAL_SESSIONS)
+    .where("actorUid", "==", staffUid)
+    .where("active", "==", true)
+    .get();
+  for (const doc of snap.docs) await endPortalSession(doc.id, reason);
+  return snap.size;
+}
+
 /** Keep at most MAX_ACTIVE_SESSIONS per shop, signing out the oldest. */
 export async function enforceSessionLimit(merchantUid: string): Promise<void> {
   const sessions = (await activeSessions(merchantUid)).sort(
@@ -63,6 +88,8 @@ export async function enforceSessionLimit(merchantUid: string): Promise<void> {
 export interface SessionSummary {
   sessionId: string;
   browser: string;
+  /** Who signed it in, when a staff member did ("Hodan · manager"). */
+  signedInBy: { name: string; role: string } | null;
   createdAtMs: number;
   expiresAtMs: number;
   lastSeenAtMs: number | null;
@@ -78,6 +105,7 @@ export const listPortalSessions = https.onCall({ enforceAppCheck: true }, async 
     .map((s) => ({
       sessionId: s.id,
       browser: s.data.browser,
+      signedInBy: s.data.actorUid ? { name: s.data.actorName ?? "", role: s.data.role ?? "manager" } : null,
       createdAtMs: s.data.createdAt.toMillis(),
       expiresAtMs: s.data.expiresAt.toMillis(),
       lastSeenAtMs: s.data.lastSeenAt?.toMillis() ?? null,

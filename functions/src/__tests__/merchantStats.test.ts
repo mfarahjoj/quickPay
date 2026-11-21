@@ -3,7 +3,7 @@ import { fakeFirestore, FakeDb } from "./helpers/fakeFirestore";
 import { classifyTransaction, saleChannel, statsCurrency } from "../merchantStats/classify";
 import { addDays, dayBounds, daysBetween, localParts } from "../merchantStats/time";
 import { applyStoreEvent } from "../merchantStats/apply";
-import { foldCustomer, shortName } from "../merchantStats/fold";
+import { foldCustomer, foldRecent, foldRecentNames, shortName } from "../merchantStats/fold";
 import { becameCompleted } from "../merchantStats/triggers";
 import { backfillStep, catchUp, checkDay, diffDay, eventsCompletedBetween, runMerchantStatsNightly } from "../merchantStats/nightly";
 import { PeriodStats, StoreEvent } from "../merchantStats/types";
@@ -208,12 +208,11 @@ describe("applyStoreEvent", () => {
     expect(d.customers).toEqual({ unique: 1, new: 1, returning: 0 });
     expect(db.get(`merchantStats/${SHOP}/months/2026-11`)!.currencies.USD.sales.count).toBe(1);
     expect(db.get(`merchantStats/${SHOP}/customers/${AMINA}`)).toMatchObject({ visits: 1, spendUSD: 1000, firstSeenDay: "2026-11-18" });
-    expect(db.get(`merchantStats/${SHOP}/live/recent`)!.items[0]).toMatchObject({
-      txId: "t1",
-      type: "sale",
-      customerName: "Amina H.",
-      channel: "sale_qr",
-    });
+    const item = db.get(`merchantStats/${SHOP}/live/recent`)!.items[0];
+    expect(item).toMatchObject({ txId: "t1", type: "sale", channel: "sale_qr" });
+    // Who paid sits apart, where only viewers allowed to see customers read it.
+    expect(item.customerName).toBeUndefined();
+    expect(db.get(`merchantStats/${SHOP}/live/recentNames`)!.names).toEqual({ t1: "Amina H." });
     expect(db.get(`merchantStats/${SHOP}`)).toMatchObject({ lastActivityDay: "2026-11-18", lastSaleAtMs: NOV18_0900 });
   });
 
@@ -373,5 +372,38 @@ describe("nightly catch-up, check and backfill", () => {
     const result = await runMerchantStatsNightly(NOW, db as any);
     expect(result).toMatchObject({ day: "2026-11-18", caughtUp: 2, storesChecked: 1, drifts: [] });
     expect(db.get("merchantStatsRuns/2026-11-18")).toMatchObject({ caughtUp: 2, driftCount: 0, shopEvents: 2 });
+  });
+});
+
+describe("live feed names", () => {
+  const item = (txId: string, atMs: number) => ({ txId, type: "sale" as const, currency: "USD" as const, gross: 100, net: 99, atMs });
+
+  it("drops names left on feed items from before they moved to recentNames", () => {
+    const legacy = { items: [{ ...item("old", 1), customerName: "Amina H." }], updatedAtMs: 0 } as any;
+    const feed = foldRecent(legacy, item("new", 2), 5);
+    expect(JSON.stringify(feed)).not.toContain("Amina");
+    expect(feed.items.map((i) => i.txId)).toEqual(["new", "old"]);
+  });
+
+  it("keeps a name only while its sale is in the feed", () => {
+    const feed = { items: [item("t2", 2), item("t1", 1)], updatedAtMs: 0 };
+    const names = foldRecentNames({ names: { t1: "Amina H.", gone: "Abdi W." }, updatedAtMs: 0 }, feed, "t2", "Hodan A.", 5);
+    expect(names).toEqual({ names: { t2: "Hodan A.", t1: "Amina H." }, updatedAtMs: 5 });
+  });
+});
+
+describe("moving names off old feeds", () => {
+  it("moves names left on feed items into recentNames, once", async () => {
+    const { moveLegacyFeedNames } = await import("../merchantStats/apply");
+    const db = fakeFirestore({
+      [`merchantStats/s1/live/recent`]: {
+        items: [{ txId: "t1", type: "sale", currency: "USD", gross: 100, net: 99, atMs: 1, customerName: "Amina H." }],
+        updatedAtMs: 0,
+      },
+    });
+    await expect(moveLegacyFeedNames(db as any, "s1")).resolves.toBe(1);
+    expect(JSON.stringify(db.get(`merchantStats/s1/live/recent`))).not.toContain("Amina");
+    expect(db.get(`merchantStats/s1/live/recentNames`)!.names).toEqual({ t1: "Amina H." });
+    await expect(moveLegacyFeedNames(db as any, "s1")).resolves.toBe(0);
   });
 });

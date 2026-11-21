@@ -70,6 +70,8 @@ export const portalInviteStore = https.onCall(
   { enforceAppCheck: true },
   async (request: https.CallableRequest<{ phone?: unknown }>) => {
     const viewer = await requirePortalViewer(request);
+    // Linking stores is the shop's own call, never a staff member's.
+    if (viewer.role !== "owner") throw new https.HttpsError("permission-denied", "Only the shop's own account can link stores.", { reason: "portal_owner_only" });
     const ownerUid = viewer.merchantUid;
     const phone = normaliseSomaliPhone(request.data?.phone);
     if (!phone) throw new https.HttpsError("invalid-argument", "Enter the shop's Zapp phone number.", { reason: "link_bad_phone" });
@@ -130,6 +132,8 @@ export const portalRespondLink = https.onCall(
   { enforceAppCheck: true },
   async (request: https.CallableRequest<{ accept?: unknown }>) => {
     const viewer = await requirePortalViewer(request);
+    // Linking stores is the shop's own call, never a staff member's.
+    if (viewer.role !== "owner") throw new https.HttpsError("permission-denied", "Only the shop's own account can link stores.", { reason: "portal_owner_only" });
     const storeUid = viewer.merchantUid;
     const ref = admin.firestore().collection(STORE_LINKS).doc(storeUid);
     const accept = request.data?.accept === true;
@@ -157,6 +161,8 @@ export const portalUnlinkStore = https.onCall(
   { enforceAppCheck: true },
   async (request: https.CallableRequest<{ storeUid?: unknown }>) => {
     const viewer = await requirePortalViewer(request);
+    // Linking stores is the shop's own call, never a staff member's.
+    if (viewer.role !== "owner") throw new https.HttpsError("permission-denied", "Only the shop's own account can link stores.", { reason: "portal_owner_only" });
     const target = typeof request.data?.storeUid === "string" ? request.data.storeUid : viewer.merchantUid;
     if (target.includes("/")) throw new https.HttpsError("invalid-argument", "storeUid is required");
     const ref = admin.firestore().collection(STORE_LINKS).doc(target);
