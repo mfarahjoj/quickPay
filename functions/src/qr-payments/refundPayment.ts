@@ -28,7 +28,10 @@ interface RefundRequest {
   pin: string;
   /** Partial refund (plan 3.3); omit to refund everything left. */
   amountCents?: number;
-  /** Required with a partial refund; resend the same one on retry. */
+  /**
+   * One per attempt, resent on retry so the retry gets the first answer.
+   * Required with a partial refund; recommended with a whole one.
+   */
   idempotencyKey?: string;
   /**
    * A staff manager refunding for this shop (STAFF_ACCESS.md), with their own
@@ -109,7 +112,9 @@ export const refundPayment = https.onCall(
           "Only completed payments can be refunded"
         );
       }
-      if (original.refundedAt) {
+      // A retry may find its own first attempt finished the payment; the
+      // refund core answers that one with what the attempt did.
+      if (original.refundedAt && !partKey) {
         throw new https.HttpsError(
           "failed-precondition",
           "This payment has already been refunded"

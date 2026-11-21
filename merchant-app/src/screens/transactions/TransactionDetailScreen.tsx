@@ -148,7 +148,10 @@ export default function TransactionDetailScreen({ route, navigation }: Props) {
       const res = await functions().httpsCallable('refundPayment')({
         transactionId: transaction.id,
         pin: enteredPin,
-        ...(partial ? { amountCents: refundCents, idempotencyKey: refundKey } : {}),
+        // The key goes on every attempt, so a retry after a dropped response
+        // gets the first answer instead of "already refunded".
+        idempotencyKey: refundKey,
+        ...(partial ? { amountCents: refundCents } : {}),
       });
       const left = (res.data as any)?.data?.remainingCents ?? 0;
       setRefundedCents(totalCents - left);
@@ -166,11 +169,18 @@ export default function TransactionDetailScreen({ route, navigation }: Props) {
       const reason = e?.details?.reason;
       setPin('');
       // None of these changes with another PIN, so leave the keypad.
-      if (reason === 'not_refundable' || reason === 'refund_window_closed' || reason === 'refund_amount') {
+      if (
+        reason === 'not_refundable' ||
+        reason === 'refund_window_closed' ||
+        reason === 'refund_amount' ||
+        reason === 'refund_key_reused'
+      ) {
         Alert.alert(
           t('common.error'),
           reason === 'not_refundable'
             ? t('transactions.refund.notRefundable')
+            : reason === 'refund_key_reused'
+            ? t('transactions.refund.alreadyMade')
             : reason === 'refund_window_closed'
               ? t('transactions.refund.windowClosed', { days: e.details.refundWindowDays })
               : t('transactions.refund.amountTooHigh', { amount: units(e.details.remainingCents ?? 0) })

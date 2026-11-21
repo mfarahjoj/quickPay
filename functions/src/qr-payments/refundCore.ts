@@ -15,7 +15,9 @@ import {
   prepareJournalEntry,
   userAccount,
   JournalLine,
+  JournalEntryDoc,
   JournalEntryType,
+  JOURNAL_COLLECTION,
   PLATFORM_FEES,
 } from "../ledger";
 import { claimReceiptNumber, reserveReceiptNumber } from "../utils/receiptNumber";
@@ -105,6 +107,23 @@ export async function prepareRefund(
   const refundedSoFar = original.refundedCents ?? (original.refundedAt ? gross : 0);
   const feeRefundedSoFar = original.refundedFeeCents ?? (original.refundedAt ? fee : 0);
   const remaining = gross - refundedSoFar;
+
+  // A retried attempt gets the answer the first one got, though the payment
+  // has moved on since: refunded in full, or less left than it asked for.
+  if (opts.partKey) {
+    const replay = await findAttempt(tx, transactionId, opts.partKey, original, Math.max(remaining, 0));
+    if (replay) {
+      if (opts.amountCents !== undefined && opts.amountCents !== replay.gross) {
+        throw new https.HttpsError(
+          "failed-precondition",
+          "This refund already went through for a different amount",
+          { reason: "refund_key_reused" }
+        );
+      }
+      return replay;
+    }
+  }
+
   if (original.refundedAt || remaining <= 0) {
     throw new https.HttpsError("failed-precondition", "This payment has already been refunded");
   }
@@ -157,6 +176,9 @@ export async function prepareRefund(
       receiptNumber: claimed,
       ...(opts.disputeId ? { disputeId: opts.disputeId } : {}),
       ...(opts.actorUid ? { actorUid: opts.actorUid } : {}),
+      // A whole refund's id is per payment, not per attempt: remember which
+      // attempt posted it, so that attempt's retry is answered, not refused.
+      ...(whole && opts.partKey ? { attemptKey: opts.partKey } : {}),
     },
     description: completes && !whole ? "Final refund" : whole ? "Refund" : "Partial refund",
     postedBy: opts.postedBy,
@@ -223,5 +245,42 @@ export async function prepareRefund(
         ...(completes ? { refundedAt: now, refundTransactionId } : {}),
       });
     },
+  };
+}
+
+/**
+ * The refund an earlier attempt with this key already posted, answered as it
+ * was: same row, same receipt number, the amount it gave back. A partial
+ * refund's entry is keyed by the attempt; a whole one carries the key in its
+ * refs. Reads only; undefined if this attempt hasn't posted anything.
+ */
+async function findAttempt(
+  tx: FirebaseFirestore.Transaction,
+  transactionId: string,
+  key: string,
+  original: Transaction,
+  remainingCents: number
+): Promise<PreparedRefund | undefined> {
+  const journal = admin.firestore().collection(JOURNAL_COLLECTION);
+  let snap = await tx.get(journal.doc(`refund_${transactionId}_${key}`));
+  if (!snap.exists) {
+    snap = await tx.get(journal.doc(`refund_${transactionId}`));
+    if (!snap.exists || snap.data()?.refs?.attemptKey !== key) return undefined;
+  }
+  const entry = snap.data() as JournalEntryDoc;
+  const customerId = original.fromUserId;
+  const toCustomer = entry.lines.find((l) => l.account === userAccount(customerId));
+  return {
+    alreadyPosted: true,
+    refundTransactionId: entry.refs?.transactionId ?? snap.id,
+    ...(entry.refs?.receiptNumber ? { receiptNumber: entry.refs.receiptNumber } : {}),
+    journalEntryId: snap.id,
+    merchantId: original.toUserId,
+    customerId,
+    gross: toCustomer?.credit ?? 0,
+    remainingCents,
+    completesRefund: false,
+    currency: original.currency,
+    write: () => undefined,
   };
 }

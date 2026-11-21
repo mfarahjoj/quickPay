@@ -200,6 +200,17 @@ describe("manager refunds", () => {
     expect(today()).toMatchObject({ usedCents: 1_300 });
   });
 
+  it("answers a retried refund that finished the payment, without counting it again", async () => {
+    seed();
+    const key = { idempotencyKey: "whole-0001-abcdefgh" };
+    const first = await call(HODAN, key);
+    const again = await call(HODAN, key);
+    expect(again.data).toEqual(first.data);
+    expect(refunds()).toHaveLength(1);
+    expect(today()).toMatchObject({ usedCents: 1_000, count: 1 });
+    expect(notifyUser).toHaveBeenCalledTimes(2); // customer and shop, once each
+  });
+
   it("counts shillings at slsPerUsd against the caps", async () => {
     // 200,000 SLS at 8,000 to the dollar is $25: over a $20 cap.
     seed(grant(HODAN, "manager", CAPS), { "transactions/tx-1": payment(200_000, "SLS") });

@@ -271,6 +271,55 @@ describe("partial refunds", () => {
     expect(db.get("transactions/tx-1")!.refundedCents).toBe(200);
   });
 
+  it("answers a retry whose refund finished the payment, instead of 'already refunded'", async () => {
+    const db = seed();
+    await part(333, KEY1);
+    const first = await part(667, KEY2);
+    const again = await part(667, KEY2);
+    expect(again.data).toEqual(first.data);
+    expect(db.get(`wallets/${CUSTOMER}`)!.balance).toBe(1_000);
+    expect(db.get("transactions/tx-1")!.refundCount).toBe(2);
+  });
+
+  it("answers a retry that now asks for more than is left", async () => {
+    const db = seed();
+    const first = await part(600, KEY1);
+    await part(300, KEY2);
+    // $1.00 is left, but this is the $6.00 refund already given, not a new one.
+    const again = await part(600, KEY1);
+    expect(again.data.refundTransactionId).toBe(first.data.refundTransactionId);
+    expect(again.data.receiptNumber).toBe(first.data.receiptNumber);
+    expect(again.data.amount).toBe(6);
+    expect(again.data.remainingCents).toBe(100);
+    expect(db.get(`wallets/${CUSTOMER}`)!.balance).toBe(900);
+  });
+
+  it("refuses a key reused for a different amount, and moves nothing", async () => {
+    const db = seed();
+    await part(200, KEY1);
+    const err = await part(300, KEY1).catch((e: any) => e);
+    expect(err.details).toEqual({ reason: "refund_key_reused" });
+    expect(db.get(`wallets/${CUSTOMER}`)!.balance).toBe(200);
+    expect(db.get("transactions/tx-1")!.refundedCents).toBe(200);
+  });
+
+  it("answers a retried whole refund sent with a key; another key is still refused", async () => {
+    const db = seed();
+    const whole = () =>
+      refund({ data: { transactionId: "tx-1", pin: "123456", idempotencyKey: KEY1 }, auth: { uid: MERCHANT } });
+    const first = await whole();
+    expect(db.get("journal_entries/refund_tx-1")!.refs.attemptKey).toBe(KEY1);
+    const again = await whole();
+    expect(again.data).toEqual(first.data);
+    expect(db.get(`wallets/${CUSTOMER}`)!.balance).toBe(1_000);
+    await expect(
+      refund({ data: { transactionId: "tx-1", pin: "123456", idempotencyKey: KEY2 }, auth: { uid: MERCHANT } })
+    ).rejects.toThrow(/already been refunded/);
+    await expect(
+      refund({ data: { transactionId: "tx-1", pin: "123456" }, auth: { uid: MERCHANT } })
+    ).rejects.toThrow(/already been refunded/);
+  });
+
   it("needs a key for a partial refund, and refuses more than is left", async () => {
     seed();
     await expect(part(200)).rejects.toThrow(/idempotency key/);

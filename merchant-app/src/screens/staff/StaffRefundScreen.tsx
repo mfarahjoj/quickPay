@@ -87,6 +87,8 @@ export default function StaffRefundScreen() {
               ? t('staffRefund.noAccess')
               : reason === 'not_refundable'
                 ? t('transactions.refund.notRefundable')
+                : reason === 'refund_key_reused'
+                ? t('transactions.refund.alreadyMade')
                 : reason === 'refund_window_closed'
                   ? t('transactions.refund.windowClosed', { days: d.refundWindowDays ?? limits.refundWindowDays })
                   : reason === 'refund_amount'

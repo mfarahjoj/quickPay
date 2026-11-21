@@ -656,6 +656,7 @@
   "transactions.refund.amountHint": "حتى {{amount}}. استرد مبلغًا أقل لإرجاع جزئي.",
   "transactions.refund.partialSuccess": "تم استرداد {{amount}}. لا يزال {{left}} قابلًا للاسترداد.",
   "transactions.refund.amountTooHigh": "المتبقي للاسترداد {{amount}} فقط.",
+  "transactions.refund.alreadyMade": "تمّ هذا الاسترداد بالفعل. افتح الدفعة لتراه.",
   "transactions.refund.refundedLabel": "تم الاسترداد",
   "transactions.refund.refundedOf": "{{refunded}} من {{total}}",
   "settings.section.help": "المساعدة",

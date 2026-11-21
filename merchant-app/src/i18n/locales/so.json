@@ -656,6 +656,7 @@
   "transactions.refund.amountHint": "Ilaa {{amount}}. Wax ka yar celi haddii qayb la soo celiyay.",
   "transactions.refund.partialSuccess": "{{amount}} waa la celiyay. {{left}} weli waa la celin karaa.",
   "transactions.refund.amountTooHigh": "Kaliya {{amount}} ayaa ka hadhay oo la celin karo.",
+  "transactions.refund.alreadyMade": "Celintan horey ayay u dhacday. Fur lacag-bixinta si aad u aragto.",
   "transactions.refund.refundedLabel": "La celiyay",
   "transactions.refund.refundedOf": "{{refunded}} ka mid ah {{total}}",
   "settings.section.help": "CAAWIMAAD",

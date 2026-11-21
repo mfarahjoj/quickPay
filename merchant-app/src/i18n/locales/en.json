@@ -656,6 +656,7 @@
   "transactions.refund.amountHint": "Up to {{amount}}. Refund less for a partial return.",
   "transactions.refund.partialSuccess": "Refunded {{amount}}. {{left}} can still be refunded.",
   "transactions.refund.amountTooHigh": "Only {{amount}} is left to refund.",
+  "transactions.refund.alreadyMade": "This refund already went through. Open the payment to see it.",
   "transactions.refund.refundedLabel": "Refunded",
   "transactions.refund.refundedOf": "{{refunded}} of {{total}}",
   "settings.section.help": "HELP",

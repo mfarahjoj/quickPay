@@ -202,7 +202,8 @@ export async function listShopPayments(): Promise<{ payments: StaffPayment[]; re
 
 /**
  * A manager's refund for the shop, with their own PIN. `idempotencyKey` is
- * one per attempt, resent on retry; it's needed for a partial refund.
+ * one per attempt, resent on retry, so a retry after a dropped response gets
+ * the first answer; it goes on whole refunds too.
  */
 export async function refundForShop(
   transactionId: string,
@@ -215,7 +216,8 @@ export async function refundForShop(
     transactionId,
     pin,
     ...actingFor(),
-    ...(partial ? { amountCents, idempotencyKey } : {}),
+    idempotencyKey,
+    ...(partial ? { amountCents } : {}),
   });
   return (result.data as { data: { refundTransactionId: string; remainingCents: number } }).data;
 }
