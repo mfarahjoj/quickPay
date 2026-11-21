@@ -114,6 +114,19 @@ type MerchantStackParamList = {
   LinkDisplay: undefined;
   ZappBusiness: undefined;
   PortalSignIn: undefined;
+  Staff: undefined;
+};
+
+/**
+ * Staff mode (STAFF_ACCESS.md): a person working for a shop on their own
+ * account. Only what a role can use is here: no balance, payouts, refunds or
+ * settings of the shop's. The server checks every call anyway.
+ */
+type StaffStackParamList = {
+  StaffHome: undefined;
+  ScanCharge: MerchantStackParamList['ScanCharge'];
+  Charge: MerchantStackParamList['Charge'];
+  PortalSignIn: undefined;
 };
 
 type TabParamList = {
@@ -126,6 +139,35 @@ type TabParamList = {
 const RootStack = createStackNavigator();
 const AuthStack = createStackNavigator<AuthStackParamList>();
 const MainStack = createStackNavigator<MerchantStackParamList>();
+const StaffStack = createStackNavigator<StaffStackParamList>();
+
+function StaffNavigator() {
+  const { t } = useTranslation();
+  const colors = useColors();
+  return (
+    <StaffStack.Navigator
+      screenOptions={{
+        headerShown: false,
+        animationEnabled: true,
+        cardStyle: { backgroundColor: colors.ui.canvas },
+        headerStyle: { backgroundColor: colors.ui.canvas, elevation: 0, shadowOpacity: 0 },
+        headerTitleStyle: { fontWeight: '700', color: colors.ui.text },
+        headerTintColor: colors.ui.text,
+        headerShadowVisible: false,
+        headerBackTitleVisible: false,
+      }}
+    >
+      <StaffStack.Screen name="StaffHome" getComponent={() => require('../screens/staff/StaffHomeScreen').default} />
+      <StaffStack.Screen name="ScanCharge" getComponent={() => require('../screens/scan/ScanCustomerScreen').default} />
+      <StaffStack.Screen
+        name="Charge"
+        getComponent={() => require('../screens/scan/ChargeScreen').default}
+        options={{ headerShown: true, title: t('navigation.headers.chargeCustomer'), presentation: 'modal' }}
+      />
+      <StaffStack.Screen name="PortalSignIn" getComponent={() => require('../screens/settings/PortalSignInScreen').default} />
+    </StaffStack.Navigator>
+  );
+}
 const Tab = createBottomTabNavigator<TabParamList>();
 
 type TabIconArgs = { color: string; focused: boolean };
@@ -427,6 +469,11 @@ function MainStackNavigator() {
         getComponent={() => require('../screens/settings/PortalSignInScreen').default}
         options={{ headerShown: false }}
       />
+      <MainStack.Screen
+        name="Staff"
+        getComponent={() => require('../screens/settings/StaffScreen').default}
+        options={{ headerShown: false }}
+      />
     </MainStack.Navigator>
   );
 }
@@ -510,6 +557,20 @@ export default function AppNavigator() {
   if (user && state === 'agentProfile') {
     const AgentProfileSetupScreen = require('../screens/auth/AgentProfileSetupScreen').default;
     return <AgentProfileSetupScreen navigation={{ goBack: () => confirmSignOut(t) }} />;
+  }
+
+  // Working for a shop on their own account: staff mode only, behind the
+  // same app lock and terms as the shop's app.
+  if (user && state === 'staff') {
+    return (
+      <AppLockGate key={user.uid}>
+        <ConsentGate uid={user.uid}>
+          <NavigationContainer theme={navigationTheme}>
+            <StaffNavigator />
+          </NavigationContainer>
+        </ConsentGate>
+      </AppLockGate>
+    );
   }
 
   const app = (

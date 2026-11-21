@@ -89,6 +89,9 @@ export default function ZappBusinessScreen() {
         sessions.map((s) => (
           <GlassCard key={s.sessionId} style={styles.card}>
             <Text style={styles.name}>{s.browser}</Text>
+            {s.signedInBy ? (
+              <Text style={styles.meta}>{t('portal.signedInBy', { name: s.signedInBy.name })}</Text>
+            ) : null}
             <Text style={styles.meta}>
               {t('portal.since', { time: when(s.createdAtMs) })} · {t('portal.until', { time: when(s.expiresAtMs) })}
             </Text>
