@@ -540,6 +540,11 @@ export const PUSH_TEMPLATES = {
     so: { title: "Gelitaankii shaqaalaha waa dhammaaday", body: "{shop} ayaa kaa saaray shaqaalahooda. Mar dambe uma shaqayn kartid Zapp Pay Merchant." },
     ar: { title: "انتهى وصول الموظف", body: "أزالك {shop} من موظفيه. لم يعد بإمكانك العمل لصالحه في Zapp Pay Merchant." },
   },
+  "staff.refunded": {
+    en: { title: "Refund by {name}", body: "{name} refunded {amount} to a customer from your shop's balance." },
+    so: { title: "Lacag celin uu sameeyay {name}", body: "{name} ayaa {amount} ugu celiyay macmiil haraaga dukaankaaga." },
+    ar: { title: "استرداد بواسطة {name}", body: "أعاد {name} مبلغ {amount} إلى عميل من رصيد متجرك." },
+  },
 } as const satisfies Record<string, Translations>;
 
 export type PushTemplateKey = keyof typeof PUSH_TEMPLATES;

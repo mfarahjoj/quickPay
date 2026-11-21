@@ -64,7 +64,7 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
     fontSize: 34,
     fontWeight: '800',
     letterSpacing: -1.2,
-    color: colors.ui.onSolid,
+    color: colors.ui.text,
     marginBottom: spacing.smPlus,
   },
   subtitle: {

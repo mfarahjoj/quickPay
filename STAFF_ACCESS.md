@@ -1,6 +1,6 @@
 # Staff access: owner-granted roles for the merchant app and Zapp Business
 
-*Drafted 2026-11-21. Status: first slice built on branch `feat/staff-access` (not deployed): grants, cashier counter charges, manager sign-in to Zapp Business, owner Staff screen and staff mode in the merchant app. Not yet built: manager refunds, a cashier incoming-payments feed, and Tables (`TABLE_CONNECT.md`).*
+*Drafted 2026-11-21. Status: the first slice (grants, cashier counter charges, manager sign-in to Zapp Business, owner Staff screen and staff mode) is merged (PR #41) and live in prod since 2026-11-21. Manager refunds are built on branch `feat/manager-refunds`, not deployed. Not yet built: a cashier incoming-payments feed, and Tables (`TABLE_CONNECT.md`).*
 
 ## Why
 
@@ -23,7 +23,7 @@ Today a shop is one login. Anyone who works the till either uses the owner's pho
 | Tables board, send table bill, move/clear table | ✓ | ✓ | ✓ | ✓ |
 | Counter charge (scan customer code, show shop QR) | | ✓ | ✓ | ✓ |
 | Incoming payments feed *(not built yet)* | own bills | ✓ | ✓ | ✓ |
-| Refund *(not built yet; a money-path change)* | | | ✓ own PIN, up to the owner-set cap | ✓ |
+| Refund | | | ✓ own PIN, only once the owner sets both caps | ✓ |
 | Zapp Business web: takings, sales, transactions, CSV | | | ✓ read-only | ✓ |
 | Zapp Business web: customer names and history | | | only if the owner ticks "Show customers" | ✓ |
 | Shop balance | | | | ✓ |
@@ -43,7 +43,7 @@ Agent accounts (`topup_agent`, `agent_merchant`) can add staff for the shop side
 merchantStaff/{merchantUid}_{staffUid}     // server-only
   merchantUid, staffUid, role: waiter | cashier | manager,
   status: invited | active | suspended | revoked,
-  showCustomers?: boolean, refundCapCents?: number,
+  showCustomers?: boolean, refundCapCents?: number, refundDayCapCents?: number,
   invitedBy, invitedAt, acceptedAt?, revokedAt?
 merchantStaffAudit/{autoId}                // server-only, append-only: grant, role change, revoke
 ```
@@ -75,14 +75,20 @@ merchantStaffAudit/{autoId}                // server-only, append-only: grant, r
 
 **Money paths**
 - **Table bills and counter charges** are not debits from the shop, so staff don't need a PIN to send them. The diner still approves with their own PIN. `raisedBy: actorUid` is written on the `paymentRequest` and copied to the `transactions` row.
-- **Refunds by a manager** debit the shop. They go through the existing `refundCore` with the manager's PIN, `refundCapCents`, velocity checks, and `actorUid` on the refund entry's `refs`. Run the `new-money-flow` checklist on this change.
+- **Refunds by a manager** debit the shop's wallet, never the manager's. `refundPayment` takes `merchantId` for a manager (`requireMerchantActor(…, "refund")`; only the manager role has the `refund` capability). The ledger entry is the shop's own refund (`refundCore`), unchanged except that the manager is `postedBy` and `refs.actorUid`, and the refund row carries `raisedBy`. The manager confirms with their own PIN; the PIN-reset pause applies to the shop and to the manager.
+  - **Caps (decided 2026-11-21).** Off by default: a manager can't refund until the owner sets both `refundCapCents` (most for one refund) and `refundDayCapCents` (most in a Hargeisa day) on the grant, in US cents, with shillings counted at `slsPerUsd`. Highest settable: $1,000 a refund, $5,000 a day (`MAX_REFUND_CAP_CENTS`, `MAX_REFUND_DAY_CAP_CENTS`). The owner sets them in Settings → Staff → Change with their PIN (`staffUpdate`); a cap-only change is audited and doesn't sign the manager's computers out. A role change away from manager drops them.
+  - **The day total** is `staffRefundDays/{grantId}_{YYYY-MM-DD}` (server-only), read and written inside the refund's own transaction, so two refunds at once can't both slip under the cap. A retried partial refund (same idempotency key) isn't counted twice.
+  - **Partial refunds** are allowed within the caps; each part counts.
+  - **Finding the payment:** `staffListPayments` returns the shop's last 50 counter payments still inside the refund window (online/API payments excluded), with the caps and what's used today. Names only with "Show customers".
+  - **The shop is told** about every manager refund (`staff.refunded` push).
 
 ## Deploying
 
-Nothing here is deployed. When it is, the order matters:
+The first slice went out on 2026-11-21 in this order, and the order matters:
 
 1. **Rules and indexes first** (`firebase deploy --only firestore`). The web app watches its own session doc; an app that ships before the rule allowing that read would be refused, read that as the session ending, and sign every open Zapp Business tab out.
 2. **Functions, by name, from a pushed commit:** the staff callables, the counter-charge callables (money path: needs explicit per-target authorization), the portal callables, and `merchantStatsOnTransaction` (it now writes names to `live/recentNames`).
+   - **Manager refunds** (`feat/manager-refunds`): rules (the `staffRefundDays` block), then `refundPayment` (money path: explicit per-target authorization), `staffUpdate`, `staffListPayments`. Nothing else changes behaviour. Then the merchant app.
 3. **The portal right after the functions.** Between the two, the old portal still looks for names on the feed's items, so an owner's Live card shows "Customer" for new sales until the new portal is up.
 4. **The merchant app** last (TestFlight only when asked).
 
@@ -98,5 +104,5 @@ Nothing here is deployed. When it is, the order matters:
 ## Open decisions
 
 1. Are the three fixed roles enough for v1, or do owners need per-permission ticks?
-2. What should the default manager refund cap be (for example $20 per refund, $100 per day)?
+2. ~~What should the default manager refund cap be?~~ Decided 2026-11-21: off until the owner sets both caps; partial refunds allowed within them; managers find payments in a recent-payments list.
 3. Should a cashier see the day's total takings, or only individual payments?

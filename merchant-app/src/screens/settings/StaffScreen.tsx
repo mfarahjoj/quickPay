@@ -9,12 +9,14 @@ import {
   removeStaff,
   STAFF_ROLES,
   staffErrorReason,
+  refundsOn,
   updateStaff,
   watchShopStaff,
   type StaffGrant,
   type StaffRole,
 } from '../../services/staff.service';
 import { isWrongPin, pinActionErrorKey } from '../../utils/errors';
+import { formatCents, sanitizeAmountInput, toCents } from '../../utils/money';
 import { logger } from '../../utils/logger';
 import { makeStyles, useColors } from '../../theme';
 
@@ -27,6 +29,7 @@ const REASON_KEYS: Record<string, string> = {
   staff_exists: 'staff.error.exists',
   staff_limit: 'staff.error.limit',
   staff_not_found: 'staff.error.notFound',
+  staff_bad_refund_caps: 'staff.error.refundCaps',
 };
 
 type Step =
@@ -50,6 +53,10 @@ export default function StaffScreen() {
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState<StaffRole>('waiter');
   const [showCustomers, setShowCustomers] = useState(false);
+  // Manager refunds: off unless the shop sets both limits (in dollars).
+  const [refunds, setRefunds] = useState(false);
+  const [capText, setCapText] = useState('');
+  const [dayText, setDayText] = useState('');
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
@@ -67,6 +74,10 @@ export default function StaffScreen() {
     setPhone('');
     setRole(editing?.role ?? 'waiter');
     setShowCustomers(editing?.showCustomers ?? false);
+    const on = editing ? refundsOn(editing) : false;
+    setRefunds(on);
+    setCapText(on ? (editing!.refundCapCents / 100).toFixed(2) : '');
+    setDayText(on ? (editing!.refundDayCapCents / 100).toFixed(2) : '');
     setError('');
     setStep({ kind: 'form', editing });
   };
@@ -75,7 +86,11 @@ export default function StaffScreen() {
     setSending(true);
     try {
       const customers = role === 'manager' && showCustomers;
-      if (editing) await updateStaff(editing.staffUid, role, customers, entered);
+      const caps =
+        role === 'manager' && refunds
+          ? { refundCapCents: toCents(capText), refundDayCapCents: toCents(dayText) }
+          : { refundCapCents: 0, refundDayCapCents: 0 };
+      if (editing) await updateStaff(editing.staffUid, role, customers, entered, caps);
       else await inviteStaff(phone, role, customers, entered);
       setStep({ kind: 'list' });
     } catch (err) {
@@ -144,7 +159,10 @@ export default function StaffScreen() {
 
   if (step.kind === 'form') {
     const editing = step.editing;
-    const canContinue = editing ? true : phone.replace(/\D/g, '').length >= 9;
+    const cap = toCents(capText);
+    const day = toCents(dayText);
+    const capsOk = !(editing && role === 'manager' && refunds) || (cap > 0 && day >= cap);
+    const canContinue = (editing ? true : phone.replace(/\D/g, '').length >= 9) && capsOk;
     return (
       <DarkScreen scroll contentStyle={styles.content}>
         <ScreenHeader
@@ -199,6 +217,46 @@ export default function StaffScreen() {
           </View>
         ) : null}
 
+        {role === 'manager' && editing ? (
+          <>
+            <View style={styles.toggleRow}>
+              <View style={styles.flex}>
+                <Text style={styles.toggleLabel}>{t('staff.refunds')}</Text>
+                <Text style={styles.help}>{t('staff.refundsHelp')}</Text>
+              </View>
+              <Switch value={refunds} onValueChange={setRefunds} />
+            </View>
+            {refunds ? (
+              <>
+                <Text style={styles.label}>{t('staff.refundCapLabel')}</Text>
+                <TextInput
+                  value={capText}
+                  onChangeText={(v) => setCapText(sanitizeAmountInput(v))}
+                  placeholder="20.00"
+                  placeholderTextColor={colors.ui.textFaint}
+                  keyboardType="decimal-pad"
+                  style={styles.input}
+                  accessibilityLabel={t('staff.refundCapLabel')}
+                />
+                <Text style={styles.label}>{t('staff.refundDayCapLabel')}</Text>
+                <TextInput
+                  value={dayText}
+                  onChangeText={(v) => setDayText(sanitizeAmountInput(v))}
+                  placeholder="100.00"
+                  placeholderTextColor={colors.ui.textFaint}
+                  keyboardType="decimal-pad"
+                  style={styles.input}
+                  accessibilityLabel={t('staff.refundDayCapLabel')}
+                />
+                <Text style={styles.help}>{t('staff.refundCapsHelp')}</Text>
+                {!capsOk && cap > 0 && day > 0 ? <Text style={styles.formError}>{t('staff.error.refundCaps')}</Text> : null}
+              </>
+            ) : null}
+          </>
+        ) : role === 'manager' ? (
+          <Text style={styles.help}>{t('staff.refundsAfterAccept')}</Text>
+        ) : null}
+
         <Text style={styles.never}>{t('staff.neverGranted')}</Text>
         {error ? <Text style={styles.formError}>{error}</Text> : null}
 
@@ -235,6 +293,11 @@ export default function StaffScreen() {
             </Text>
             {g.role === 'manager' && g.showCustomers ? (
               <Text style={styles.meta}>{t('staff.seesCustomers')}</Text>
+            ) : null}
+            {refundsOn(g) ? (
+              <Text style={styles.meta}>
+                {t('staff.refundsUpTo', { each: formatCents(g.refundCapCents), day: formatCents(g.refundDayCapCents) })}
+              </Text>
             ) : null}
             {busy === g.staffUid ? (
               <ActivityIndicator color={colors.ui.text} style={styles.rowSpinner} />

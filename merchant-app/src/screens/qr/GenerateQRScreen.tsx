@@ -454,7 +454,7 @@ export default function GenerateQRScreen() {
             value={qrData.qrData}
             size={TICKET_QR_SIZE}
             backgroundColor="#FFFFFF"
-            color={colors.ui.onSolid}
+            color="#000000"
           />
           <Text style={styles.ticketHint}>{t('qr.display.payHint')}</Text>
         </View>

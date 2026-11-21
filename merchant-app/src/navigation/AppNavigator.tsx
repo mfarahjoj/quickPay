@@ -119,11 +119,14 @@ type MerchantStackParamList = {
 
 /**
  * Staff mode (STAFF_ACCESS.md): a person working for a shop on their own
- * account. Only what a role can use is here: no balance, payouts, refunds or
- * settings of the shop's. The server checks every call anyway.
+ * account. Only what a role can use is here: no balance, payouts or settings
+ * of the shop's, and refunds only for a manager the shop turned them on for.
+ * The server checks every call anyway.
  */
 type StaffStackParamList = {
   StaffHome: undefined;
+  StaffPayments: undefined;
+  StaffRefund: { payment: import('../services/staff.service').StaffPayment; limits: import('../services/staff.service').StaffRefundLimits };
   ScanCharge: MerchantStackParamList['ScanCharge'];
   Charge: MerchantStackParamList['Charge'];
   PortalSignIn: undefined;
@@ -165,6 +168,8 @@ function StaffNavigator() {
         options={{ headerShown: true, title: t('navigation.headers.chargeCustomer'), presentation: 'modal' }}
       />
       <StaffStack.Screen name="PortalSignIn" getComponent={() => require('../screens/settings/PortalSignInScreen').default} />
+      <StaffStack.Screen name="StaffPayments" getComponent={() => require('../screens/staff/StaffPaymentsScreen').default} />
+      <StaffStack.Screen name="StaffRefund" getComponent={() => require('../screens/staff/StaffRefundScreen').default} />
     </StaffStack.Navigator>
   );
 }

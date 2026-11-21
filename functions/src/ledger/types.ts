@@ -16,6 +16,11 @@ export type JournalEntryType =
    * qr_payment: customer debited, merchant credited the net, fee to platform.
    */
   | "online_payment"
+  /**
+   * A customer pays a bill a shop sent them (bills/), with their PIN or by
+   * auto-pay. Same shape as qr_payment. Entry ID `bill_{billId}`.
+   */
+  | "bill_payment"
   | "refund"
   | "agent_topup"
   | "agent_cashout"
@@ -95,6 +100,13 @@ export interface JournalRefs {
   disputeId?: string;
   /** Zapp receipt number of the payment or refund this entry settles. */
   receiptNumber?: string;
+  /** Staff member who acted for the shop (STAFF_ACCESS.md); they are postedBy too. */
+  actorUid?: string;
+  /**
+   * The app attempt (idempotency key) that posted a whole refund, whose entry
+   * id is per payment; lets that attempt's retry be answered, not refused.
+   */
+  attemptKey?: string;
 }
 
 export interface JournalEntryInput {
