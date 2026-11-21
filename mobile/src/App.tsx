@@ -54,6 +54,16 @@ function navigateFromNotification(data: Record<string, string>) {
     navigateWhenSignedIn(() => navigationRef.navigate('Bills'));
     return;
   }
+  // "Shop approved your direct payment": the receipt for what was set up, not
+  // the first bill with its Pay button. Pushes from servers before this
+  // carried only billId and still open that bill.
+  if (data.type === 'bill' && data.seriesId) {
+    const { seriesId, requestId } = data;
+    navigateWhenSignedIn(() =>
+      navigationRef.navigate('DirectPaymentReceipt', { seriesId, ...(requestId ? { requestId } : {}) }),
+    );
+    return;
+  }
   if ((data.type === 'bill' || data.type === 'bill_paid') && data.billId) {
     const billId = data.billId;
     navigateWhenSignedIn(() => navigationRef.navigate('BillDetail', { billId }));
