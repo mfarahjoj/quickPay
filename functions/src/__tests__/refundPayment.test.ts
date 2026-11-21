@@ -78,7 +78,8 @@ describe("refundPayment", () => {
     [...db.store.keys()].filter((p) => p.startsWith("journal_entries/refund_"));
 
   describe("what can be refunded", () => {
-    it.each(["qr_payment", "customer_qr_payment"])("refunds a %s", async (entryType) => {
+    // bill_payment: a bill the shop sent, live in prod since the Bills deploy.
+    it.each(["qr_payment", "customer_qr_payment", "bill_payment"])("refunds a %s", async (entryType) => {
       const db = seed(entryType);
       await call();
       expect(refundEntries(db)).toHaveLength(1);

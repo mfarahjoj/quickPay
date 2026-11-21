@@ -32,6 +32,7 @@ import { formatAmount, parseCurrency } from "../utils/money";
 export const REFUNDABLE_ENTRY_TYPES: readonly JournalEntryType[] = [
   "qr_payment",
   "customer_qr_payment",
+  "bill_payment",
 ];
 
 export interface RefundOptions {
