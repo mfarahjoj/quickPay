@@ -105,6 +105,8 @@ type MainStackParamList = {
   // Bills from shops: pay, decline, auto-pay (functions/src/bills/).
   Bills: undefined;
   BillDetail: { billId: string };
+  // The receipt the "shop approved your direct payment" push opens.
+  DirectPaymentReceipt: { seriesId: string; requestId?: string };
   RequestDirectPayment: { shops?: { merchantId: string; name: string }[] } | undefined;
   // `MobileMoney` and `SendRemittance` are intentionally unregistered: both
   // screens call callables that were deleted from prod on 2026-09-18 because
@@ -406,6 +408,11 @@ function MainStackNavigator() {
       <MainStack.Screen
         name="BillDetail"
         getComponent={() => require('../screens/bills/BillDetailScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="DirectPaymentReceipt"
+        getComponent={() => require('../screens/bills/DirectPaymentReceiptScreen').default}
         options={{ headerShown: false }}
       />
       <MainStack.Screen

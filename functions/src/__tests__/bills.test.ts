@@ -607,6 +607,13 @@ describe("bills", () => {
       });
       expect(db.get(`billAutopay/${CUSTOMER}_${GYM}`)).toMatchObject({ active: true, maxAmount: 2_500, currency: "USD" });
       expect(notifiedKeys()).toEqual(["bill.request_approved"]);
+      // The push opens the set-up receipt in new builds, the first bill in old ones.
+      expect(mockedNotify.mock.calls[0][3]).toEqual({
+        type: "bill",
+        billId: `${seriesId}_${first}`,
+        requestId: reqId,
+        seriesId,
+      });
 
       expect((await runBillsNow(later(1))).paid).toBe(0);
       expect((await runBillsNow(later(49))).paid).toBe(1);
