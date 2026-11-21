@@ -1,13 +1,15 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { mayRaise } from "./counterCashOut";
-import { requireAuth } from "../utils/validation";
+import { requireMerchantActor } from "../staff/access";
 import { decrypt } from "../utils/encryption";
 import { ENCRYPTION_KEY, PIN_PEPPER } from "../config/secrets";
 import { ApiResponse, CustomerToken, User } from "../types";
 
 interface ScanTokenRequest {
   tokenData: string;
+  /** A staff member scanning for this shop (STAFF_ACCESS.md). Omitted by the shop itself. */
+  merchantId?: string;
 }
 
 interface ScanTokenResponse {
@@ -22,8 +24,9 @@ export const scanCustomerToken = https.onCall(
   async (
     request: https.CallableRequest<ScanTokenRequest>
   ): Promise<ApiResponse<ScanTokenResponse>> => {
-    requireAuth(request);
-    const merchantId = request.auth!.uid;
+    const actor = await requireMerchantActor(request, request.data?.merchantId, "charge");
+    const merchantId = actor.merchantUid;
+    const staff = actor.role !== "owner";
 
     const db = admin.firestore();
 
@@ -35,7 +38,8 @@ export const scanCustomerToken = https.onCall(
     const merchant = merchantDoc.data() as User;
     // Shops scan to charge; agents (topup_agent too) scan to pay out cash.
     // createPaymentRequest checks which of the two each account may raise.
-    if (!mayRaise(merchant.accountType, "payment") && !mayRaise(merchant.accountType, "cash_out")) {
+    // Staff charge for a shop; paying out cash from float stays the agent's own.
+    if (staff ? !mayRaise(merchant.accountType, "payment") : !mayRaise(merchant.accountType, "payment") && !mayRaise(merchant.accountType, "cash_out")) {
       throw new https.HttpsError(
         "permission-denied",
         "Only merchants and agents can scan customer tokens"
@@ -61,7 +65,7 @@ export const scanCustomerToken = https.onCall(
       );
     }
 
-    if (parsed.customerId === merchantId) {
+    if (parsed.customerId === merchantId || parsed.customerId === actor.actorUid) {
       throw new https.HttpsError(
         "permission-denied",
         "Cannot scan your own token"
@@ -98,6 +102,7 @@ export const scanCustomerToken = https.onCall(
     await tokenDoc.ref.update({
       status: "scanned",
       scannedBy: merchantId,
+      ...(staff ? { scannedByActor: actor.actorUid } : {}),
       scannedAt: admin.firestore.Timestamp.now(),
     });
 

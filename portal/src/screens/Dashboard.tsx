@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { countCustomersSince, getCustomers, getStore, isSessionEnded, watchDays, watchRecent } from "../api";
+import { countCustomersSince, getCustomers, getStore, isSessionEnded, watchDays, watchRecent, watchRecentNames } from "../api";
 import { ChartCard, ColumnPoint, ColumnsChart, Heatmap, HBars, Legend, StackedColumns } from "../components/charts";
 import { Customers } from "../components/Customers";
 import { InsightCards } from "../components/InsightCards";
@@ -64,6 +64,7 @@ export function Dashboard({ onSessionEnded, onSignOut }: { onSessionEnded: () =>
   const [daysBy, setDaysBy] = useState<Map<string, DayMap>>(new Map());
   const [loadedBy, setLoadedBy] = useState<Set<string>>(new Set());
   const [recentBy, setRecentBy] = useState<Map<string, RecentItem[]>>(new Map());
+  const [namesBy, setNamesBy] = useState<Map<string, Record<string, string>>>(new Map());
   const [lapsed, setLapsed] = useState<CustomerRow[] | null>(null);
   const [unique, setUnique] = useState<number | null>(null);
   const [period, setPeriod] = useState<Period>("today");
@@ -120,29 +121,50 @@ export function Dashboard({ onSessionEnded, onSignOut }: { onSessionEnded: () =>
     [sel, stores, daysBy]
   );
   const daysLoaded = sel === "all" ? stores.every((s) => loadedBy.has(s.storeUid)) : loadedBy.has(sel);
+  // Who paid, for the feed: only a viewer who may see customers, and only once
+  // the store says so (a manager's listener would be refused, which reads as
+  // the session ending).
+  const namesAllowed = store !== null && (store.viewer?.canSeeCustomers ?? true);
+  useEffect(() => {
+    if (!namesAllowed) {
+      setNamesBy(new Map());
+      return;
+    }
+    const uids = storeKey ? storeKey.split(",") : [];
+    const offs = uids.map((uid) => watchRecentNames(uid, (names) => setNamesBy((m) => new Map(m).set(uid, names)), fail));
+    return () => offs.forEach((off) => off());
+  }, [storeKey, namesAllowed, fail]);
+
   const recent = useMemo(() => {
-    if (sel !== "all") return recentBy.get(sel) ?? [];
+    const named = (uid: string) =>
+      (recentBy.get(uid) ?? []).map((i) => {
+        const customerName = namesBy.get(uid)?.[i.txId];
+        return customerName ? { ...i, customerName } : i;
+      });
+    if (sel !== "all") return named(sel);
     return stores
-      .flatMap((s) => (recentBy.get(s.storeUid) ?? []).map((i) => ({ ...i, storeName: s.name })))
+      .flatMap((s) => named(s.storeUid).map((i) => ({ ...i, storeName: s.name })))
       .sort((a, b) => b.atMs - a.atMs);
-  }, [sel, stores, recentBy]);
+  }, [sel, stores, recentBy, namesBy]);
 
   const lastSale = lastSaleAt(days);
   const windows = windowsFor(today, period);
+  // A staff manager sees customer details only if the shop allowed it (STAFF_ACCESS.md).
+  const canSeeCustomers = store?.viewer?.canSeeCustomers ?? true;
 
   // Distinct customers in the period, exact per store: everyone last seen inside it.
   useEffect(() => {
     const uids = sel === "all" ? stores.map((s) => s.storeUid) : sel ? [sel] : [];
-    if (uids.length === 0) return;
+    if (uids.length === 0 || !canSeeCustomers) return;
     Promise.all(uids.map((u) => countCustomersSince(u, dayStartMs(windows.current[0]))))
       .then((ns) => setUnique(ns.reduce((a, b) => a + b, 0)))
       .catch(fail);
-  }, [sel, storeKey, windows.current[0], lastSale, fail]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sel, storeKey, windows.current[0], lastSale, fail, canSeeCustomers]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Regulars gone quiet, for the attention card: on load and every ten minutes (one store at a time).
   useEffect(() => {
     setLapsed(null);
-    if (!storeUid) return;
+    if (!storeUid || !canSeeCustomers) return;
     let live = true;
     const load = () => getCustomers(storeUid, "lapsed", currency, 50).then((r) => live && setLapsed(r.customers)).catch(fail);
     load();
@@ -151,9 +173,9 @@ export function Dashboard({ onSessionEnded, onSignOut }: { onSessionEnded: () =>
       live = false;
       clearInterval(id);
     };
-  }, [storeUid, currency, fail]);
+  }, [storeUid, currency, fail, canSeeCustomers]);
 
-  const showShillings = usesCurrency(days, "SLS") || stores.some((s) => s.balances.SLS > 0);
+  const showShillings = usesCurrency(days, "SLS") || stores.some((s) => (s.balances?.SLS ?? 0) > 0);
   useEffect(() => {
     if (!showShillings && currency === "SLS") setCurrency("USD");
   }, [showShillings, currency]);
@@ -179,9 +201,11 @@ export function Dashboard({ onSessionEnded, onSignOut }: { onSessionEnded: () =>
   );
   const trend = useMemo(() => dailySeries(days, dayRange(today, 12), currency).map((p) => p.net), [days, today, currency]);
   const agent = isAgent(days) || shop?.accountType === "agent_merchant";
-  const wallet = sel === "all"
-    ? { USD: stores.reduce((a, s) => a + s.balances.USD, 0), SLS: stores.reduce((a, s) => a + s.balances.SLS, 0) }
-    : shop?.balances ?? null;
+  const wallet = stores.some((s) => !s.balances)
+    ? null
+    : sel === "all"
+      ? { USD: stores.reduce((a, s) => a + (s.balances?.USD ?? 0), 0), SLS: stores.reduce((a, s) => a + (s.balances?.SLS ?? 0), 0) }
+      : shop?.balances ?? null;
 
   const goto = (target: string) => {
     if (target.startsWith("store:")) {
@@ -374,7 +398,7 @@ export function Dashboard({ onSessionEnded, onSignOut }: { onSessionEnded: () =>
         </div>
 
         <div className="grid">
-          {store && <IncomingLink links={store.links} onChanged={reloadStore} />}
+          {store?.links && <IncomingLink links={store.links} onChanged={reloadStore} />}
           <InsightCards insights={insights} nowMs={nowMs} onGoto={goto} />
           <div className="span-12">
             <Kpis summary={summary} period={period} currency={currency} weekday={weekday} uniqueCustomers={unique} trend={trend} agent={agent} />
@@ -420,7 +444,7 @@ export function Dashboard({ onSessionEnded, onSignOut }: { onSessionEnded: () =>
             <HBars rows={mix.map((m) => ({ key: m.channel, label: t(`channel.${m.channel}` as StringKey), share: m.share, value: axis(m.net) }))} />
           </ChartCard>
 
-          {storeUid && (
+          {storeUid && canSeeCustomers && (
             <Customers storeUid={storeUid} currency={currency} tab={customerTab} onTab={setCustomerTab} refreshKey={lastSale ?? 0} onError={fail} />
           )}
 
@@ -457,7 +481,7 @@ export function Dashboard({ onSessionEnded, onSignOut }: { onSessionEnded: () =>
               <p className="hint" style={{ margin: 0 }}>{t("stores.pickOne")}</p>
             </section>
           )}
-          {store && <ManageStores links={store.links} onChanged={reloadStore} />}
+          {store?.links && <ManageStores links={store.links} onChanged={reloadStore} />}
         </div>
 
         {store && (
@@ -466,6 +490,7 @@ export function Dashboard({ onSessionEnded, onSignOut }: { onSessionEnded: () =>
               browser: store.session.browser,
               time: `${localParts(store.session.expiresAtMs).day === today ? "" : shortDate(localParts(store.session.expiresAtMs).day, lang) + " "}${clock(store.session.expiresAtMs)}`,
             })}
+            {store.viewer?.role === "manager" && ` ${t("footer.staff", { name: store.viewer.name ?? "" })}`}
           </p>
         )}
       </main>

@@ -168,7 +168,7 @@ export function computeInsights(input: InsightInput): Insight[] {
   }
 
   // Money sitting in the wallet with no automatic payout.
-  if (store && !store.autoPayout && store.balances.USD >= RULES.idleBalanceCents && store.accountType !== "agent_merchant") {
+  if (store && store.balances && !store.autoPayout && store.balances.USD >= RULES.idleBalanceCents && store.accountType !== "agent_merchant") {
     out.push({
       id: `idle_balance_${today}`,
       type: "idle_balance",

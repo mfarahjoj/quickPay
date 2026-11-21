@@ -56,7 +56,8 @@ export interface StoreInfo {
   businessType: string | null;
   accountType: string | null;
   autoPayout: boolean;
-  balances: Record<Currency, number>;
+  /** Null for a staff member's sign-in: the balance is the shop's own (STAFF_ACCESS.md). */
+  balances: Record<Currency, number> | null;
   displays: Array<{ name: string; online: boolean; lastSeenAtMs: number | null }>;
 }
 
@@ -71,7 +72,10 @@ export interface PortalStore {
   merchantUid: string;
   /** This shop first, then its active linked stores. */
   stores: StoreInfo[];
-  links: StoreLinks;
+  /** Null for a staff member's sign-in: linking stores is the shop's own call. */
+  links: StoreLinks | null;
+  /** Who is looking: the shop, or a staff manager it granted (STAFF_ACCESS.md). */
+  viewer?: { role: "owner" | "manager"; canSeeCustomers: boolean; name: string | null };
   session: { sessionId: string; browser: string; expiresAtMs: number };
   serverNowMs: number;
 }

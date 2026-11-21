@@ -1,4 +1,5 @@
 import { functions } from './firebase.config';
+import { actingFor } from './staff.service';
 
 /**
  * Zapp Business on the web (MERCHANT_INSIGHTS.md): a computer shows a QR,
@@ -35,6 +36,8 @@ export interface PortalSessionSummary {
   sessionId: string;
   /** "Chrome on macOS" */
   browser: string;
+  /** Set when one of the shop's staff signed it in. */
+  signedInBy?: { name: string; role: string } | null;
   createdAtMs: number;
   expiresAtMs: number;
   lastSeenAtMs: number | null;
@@ -42,16 +45,16 @@ export interface PortalSessionSummary {
 
 /** Which browser is asking, so the shop can check it's the computer in front of them. */
 export async function describePortalLogin(login: PortalLoginCode): Promise<{ browser: string; expiresAtMs: number }> {
-  const result = await functions().httpsCallable('describePortalLogin')(login);
+  const result = await functions().httpsCallable('describePortalLogin')({ ...login, ...actingFor() });
   return (result.data as { data: { browser: string; expiresAtMs: number } }).data;
 }
 
 export async function approvePortalLogin(login: PortalLoginCode, pin: string): Promise<void> {
-  await functions().httpsCallable('approvePortalLogin')({ ...login, pin });
+  await functions().httpsCallable('approvePortalLogin')({ ...login, pin, ...actingFor() });
 }
 
 export async function declinePortalLogin(login: PortalLoginCode): Promise<void> {
-  await functions().httpsCallable('approvePortalLogin')({ ...login, decline: true });
+  await functions().httpsCallable('approvePortalLogin')({ ...login, decline: true, ...actingFor() });
 }
 
 export async function listPortalSessions(): Promise<PortalSessionSummary[]> {

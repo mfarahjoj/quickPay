@@ -11,6 +11,7 @@ import {
   PeriodStats,
   RecentFeed,
   RecentItem,
+  RecentNames,
   RECENT_MAX,
   SALE_CHANNELS,
   SaleChannel,
@@ -200,10 +201,28 @@ export function shortName(full: unknown): string | undefined {
 }
 
 export function foldRecent(doc: RecentFeed | undefined, item: RecentItem, nowMs: number): RecentFeed {
-  const items = (doc?.items ?? []).filter((i) => i.txId !== item.txId);
+  // Feeds written before names moved to `recentNames` carry `customerName`
+  // on their items: drop it as they're rewritten.
+  const items = (doc?.items ?? [])
+    .filter((i) => i.txId !== item.txId)
+    .map(({ customerName: _legacy, ...rest }: RecentItem & { customerName?: string }) => rest);
   items.push(item);
   items.sort((a, b) => b.atMs - a.atMs);
   return { items: items.slice(0, RECENT_MAX), updatedAtMs: nowMs };
+}
+
+/** The names for the feed's items: the new one's added, those gone from the feed dropped. */
+export function foldRecentNames(
+  doc: RecentNames | undefined,
+  feed: RecentFeed,
+  txId: string,
+  name: string | undefined,
+  nowMs: number
+): RecentNames {
+  const all = { ...(doc?.names ?? {}), ...(name ? { [txId]: name } : {}) };
+  const names: Record<string, string> = {};
+  for (const i of feed.items) if (all[i.txId]) names[i.txId] = all[i.txId];
+  return { names, updatedAtMs: nowMs };
 }
 
 export function foldRoot(doc: StoreStatsRoot | undefined, ev: StoreEvent, nowMs: number): StoreStatsRoot {

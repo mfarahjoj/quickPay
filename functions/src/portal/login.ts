@@ -32,6 +32,9 @@ import { shopName } from "../counterDisplay/state";
 import { assertAccountActive } from "../utils/accountStatus";
 import { generateSecureId } from "../utils/encryption";
 import { requireAuth } from "../utils/validation";
+import { requireMerchantActor, staffDenied } from "../staff/access";
+import { grantId, MERCHANT_STAFF, StaffGrant } from "../staff/types";
+import { moveLegacyFeedNames } from "../merchantStats/apply";
 import { enforceSessionLimit } from "./sessions";
 import {
   LOGIN_CLEANUP_MS,
@@ -150,16 +153,29 @@ export const startPortalLogin = https.onCall({ enforceAppCheck: true }, async (r
 
 // ─── Phone: look, then approve ─────────────────────────────────────────────
 
-async function requireShop(request: https.CallableRequest) {
+/**
+ * Who is approving: the shop itself, or (with `merchantId`) a staff manager
+ * for that shop (STAFF_ACCESS.md). `uid` is the shop either way; `staff` is
+ * set for a staff member, whose own PIN approves.
+ */
+async function requireShop(request: https.CallableRequest<{ merchantId?: unknown }>) {
   requireAuth(request);
-  const uid = request.auth!.uid;
+  const callerUid = request.auth!.uid;
+  const merchantId = request.data?.merchantId;
+  let staff: { uid: string; name: string; showCustomers: boolean } | undefined;
+  let uid = callerUid;
+  if (merchantId !== undefined && merchantId !== callerUid) {
+    const actor = await requireMerchantActor(request, merchantId, "portal");
+    uid = actor.merchantUid;
+    staff = { uid: callerUid, name: actor.grant!.staffName, showCustomers: actor.grant!.showCustomers === true };
+  }
   const userSnap = await admin.firestore().collection("users").doc(uid).get();
   const user = userSnap.data();
   if (!userSnap.exists || !MERCHANT_TYPES.includes(user?.accountType)) {
     throw new https.HttpsError("permission-denied", "Zapp Business is for shops.", { reason: "portal_not_shop" });
   }
   assertAccountActive(user);
-  return { uid, user };
+  return { uid, user, staff };
 }
 
 /** A waiting login whose code matches, or not-found. */
@@ -174,7 +190,7 @@ async function waitingLogin(loginId: string, code: string) {
 
 export const describePortalLogin = https.onCall(
   { enforceAppCheck: true },
-  async (request: https.CallableRequest<{ loginId?: unknown; code?: unknown }>) => {
+  async (request: https.CallableRequest<{ loginId?: unknown; code?: unknown; merchantId?: unknown }>) => {
     await requireShop(request);
     const loginId = validId(request.data?.loginId);
     const code = validSecret(request.data?.code, "code");
@@ -185,8 +201,10 @@ export const describePortalLogin = https.onCall(
 
 export const approvePortalLogin = https.onCall(
   { enforceAppCheck: true },
-  async (request: https.CallableRequest<{ loginId?: unknown; code?: unknown; pin?: unknown; decline?: unknown }>) => {
-    const { uid, user } = await requireShop(request);
+  async (
+    request: https.CallableRequest<{ loginId?: unknown; code?: unknown; pin?: unknown; decline?: unknown; merchantId?: unknown }>
+  ) => {
+    const { uid, user, staff } = await requireShop(request);
     const loginId = validId(request.data?.loginId);
     const code = validSecret(request.data?.code, "code");
     const db = admin.firestore();
@@ -199,7 +217,12 @@ export const approvePortalLogin = https.onCall(
 
     const pin = request.data?.pin;
     if (typeof pin !== "string" || !pin) throw new https.HttpsError("invalid-argument", "PIN is required");
-    if (!(await verifyUserPin(uid, pin))) throw new https.HttpsError("permission-denied", "Invalid PIN");
+    // A staff member approves with their own PIN; they never know the shop's.
+    if (!(await verifyUserPin(staff?.uid ?? uid, pin))) throw new https.HttpsError("permission-denied", "Invalid PIN");
+
+    // A manager who may not see customers reads the shop's live feed: make
+    // sure no names from before they moved out of it are still there.
+    if (staff && !staff.showCustomers) await moveLegacyFeedNames(db, uid);
 
     const profile = (await db.collection("merchantProfiles").doc(uid).get()).data();
     const merchantName = shopName(user, profile);
@@ -209,7 +232,16 @@ export const approvePortalLogin = https.onCall(
     const expiresAtMs = await db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       const login = snap.data() as PortalLogin | undefined;
+      // Read with the session's creation, so a removal that lands now either
+      // happens first (and this refuses) or finds the new session to end.
+      const grantSnap = staff ? await tx.get(db.collection(MERCHANT_STAFF).doc(grantId(uid, staff.uid))) : null;
       const now = Date.now();
+      if (grantSnap) {
+        const grant = grantSnap.data() as StaffGrant | undefined;
+        if (grant?.status !== "active" || grant.role !== "manager" || grant.showCustomers !== staff!.showCustomers) {
+          throw staffDenied();
+        }
+      }
       if (!login || login.status !== "waiting" || login.expiresAt.toMillis() <= now || !sameDigest(login.codeSha256, sha256(code))) {
         throw loginNotFound();
       }
@@ -221,6 +253,7 @@ export const approvePortalLogin = https.onCall(
         loginId,
         createdAt: Timestamp.fromMillis(now),
         expiresAt: Timestamp.fromMillis(ends),
+        ...(staff ? { actorUid: staff.uid, actorName: staff.name, role: "manager" as const, showCustomers: staff.showCustomers } : {}),
       };
       tx.create(db.collection(PORTAL_SESSIONS).doc(sessionId), session);
       tx.update(ref, {

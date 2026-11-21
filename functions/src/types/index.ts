@@ -374,6 +374,11 @@ export interface Transaction {
   toUserId: string;
   /** [fromUserId, toUserId] — enables a single array-contains query per user. */
   participants?: string[];
+  /**
+   * The staff member who raised the charge for the shop (STAFF_ACCESS.md).
+   * Not a participant: it records who served, and gives them no read access.
+   */
+  raisedBy?: string;
   amount: number; // Gross amount, in cents
   /** Platform fee withheld from a payment, in cents (merchant absorbs it). */
   feeCents?: number;
@@ -561,7 +566,9 @@ export interface Notification {
     /** Zapp Business: an urgent insight pushed to the shop (insights/alerts.ts). */
     | "insight_alert"
     /** Zapp Business: a request to link stores, or its acceptance (portal/groups.ts). */
-    | "store_link";
+    | "store_link"
+    /** Staff access: an invite, a role change or a removal (staff/manage.ts). */
+    | "staff";
   title: string;
   body: string;
   data?: Record<string, string>;
@@ -589,6 +596,8 @@ export interface CustomerToken {
   scannedAt?: FirebaseFirestore.Timestamp;
   /** "counter_display" when a shop's counter tablet read the code. */
   scannedVia?: string;
+  /** A staff member who scanned for the shop in `scannedBy` (STAFF_ACCESS.md). */
+  scannedByActor?: string;
 }
 
 // Merchant-initiated payment request types
@@ -632,6 +641,11 @@ export interface MerchantPaymentRequest {
   transactionId?: string;
   /** Zapp receipt number of the payment this request settled. */
   receiptNumber?: string;
+  /**
+   * The staff member who raised it for the shop (STAFF_ACCESS.md). Absent
+   * when the shop's own account raised it.
+   */
+  raisedBy?: string;
 }
 
 // Remittance types

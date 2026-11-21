@@ -525,6 +525,21 @@ export const PUSH_TEMPLATES = {
     so: { title: "Dukaanka waa la isku xiray", body: "{store} hadda wuxuu ku jiraa Zapp Business-kaaga." },
     ar: { title: "تم ربط المتجر", body: "أصبح {store} الآن ضمن Zapp Business الخاص بك." },
   },
+  "staff.invited": {
+    en: { title: "Join {shop} as staff?", body: "{shop} added you to their staff on Zapp Pay. Open Zapp Pay Merchant and sign in with this number to accept." },
+    so: { title: "Ma ku biiraysaa shaqaalaha {shop}?", body: "{shop} ayaa kuugu daray shaqaalahooda Zapp Pay. Fur Zapp Pay Merchant oo ku gal lambarkan si aad u aqbasho." },
+    ar: { title: "الانضمام إلى موظفي {shop}؟", body: "أضافك {shop} إلى موظفيه على Zapp Pay. افتح Zapp Pay Merchant وسجّل الدخول بهذا الرقم للقبول." },
+  },
+  "staff.accepted": {
+    en: { title: "Staff member joined", body: "{name} accepted and can now work for your shop." },
+    so: { title: "Shaqaale ayaa ku biiray", body: "{name} wuu aqbalay, hadda wuu u shaqayn karaa dukaankaaga." },
+    ar: { title: "انضم موظف", body: "قبل {name} ويمكنه الآن العمل لمتجرك." },
+  },
+  "staff.removed": {
+    en: { title: "Staff access ended", body: "{shop} removed you from their staff. You can no longer work for them in Zapp Pay Merchant." },
+    so: { title: "Gelitaankii shaqaalaha waa dhammaaday", body: "{shop} ayaa kaa saaray shaqaalahooda. Mar dambe uma shaqayn kartid Zapp Pay Merchant." },
+    ar: { title: "انتهى وصول الموظف", body: "أزالك {shop} من موظفيه. لم يعد بإمكانك العمل لصالحه في Zapp Pay Merchant." },
+  },
 } as const satisfies Record<string, Translations>;
 
 export type PushTemplateKey = keyof typeof PUSH_TEMPLATES;

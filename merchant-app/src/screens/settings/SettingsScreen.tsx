@@ -132,6 +132,13 @@ export default function SettingsScreen() {
             />
           </>
         ) : null}
+        {/* People who work for the shop on their own accounts (STAFF_ACCESS.md). */}
+        {takesPayments ? (
+          <>
+            <View style={styles.divider} />
+            <TappableRow label={t('settings.staff')} onPress={() => navigation.navigate('Staff')} />
+          </>
+        ) : null}
       </GlassCard>
 
       {/* Security */}

@@ -58,6 +58,16 @@ export interface PortalSession {
   lastSeenAt?: Timestamp;
   endedAt?: Timestamp;
   endReason?: SessionEndReason;
+  /**
+   * Set when a staff member signed this computer in for the shop
+   * (STAFF_ACCESS.md). Fixed at sign-in: any change to their grant ends the
+   * session (staff/manage.ts), so the rules can trust these as they stand.
+   */
+  actorUid?: string;
+  actorName?: string;
+  role?: "manager";
+  /** Staff only: may see customer names and history. The shop always may. */
+  showCustomers?: boolean;
 }
 
 /** Custom claims on a session's token. `portal` is what requireAuth refuses. */
