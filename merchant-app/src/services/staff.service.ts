@@ -17,6 +17,12 @@ export interface StaffGrant {
   role: StaffRole;
   status: StaffStatus;
   showCustomers: boolean;
+  /**
+   * Manager refund caps in US cents (shillings count at the shop's rate).
+   * Both above zero means refunds are on; 0 means off.
+   */
+  refundCapCents: number;
+  refundDayCapCents: number;
   shopName: string;
   staffName: string;
   staffPhone: string;
@@ -30,6 +36,13 @@ export function roleCanCharge(role: StaffRole): boolean {
 }
 export function roleCanUsePortal(role: StaffRole): boolean {
   return role === 'manager';
+}
+export function roleCanRefund(role: StaffRole): boolean {
+  return role === 'manager';
+}
+/** Whether the shop has turned refunds on for this grant. */
+export function refundsOn(g: Pick<StaffGrant, 'role' | 'refundCapCents' | 'refundDayCapCents'>): boolean {
+  return g.role === 'manager' && g.refundCapCents > 0 && g.refundDayCapCents > 0;
 }
 
 // ─── Acting for a shop ─────────────────────────────────────────────────────
@@ -60,6 +73,8 @@ function toGrant(doc: { id: string; data: () => any }): StaffGrant {
     role: d.role,
     status: d.status,
     showCustomers: d.showCustomers === true,
+    refundCapCents: typeof d.refundCapCents === 'number' ? d.refundCapCents : 0,
+    refundDayCapCents: typeof d.refundDayCapCents === 'number' ? d.refundDayCapCents : 0,
     shopName: d.shopName ?? '',
     staffName: d.staffName ?? '',
     staffPhone: d.staffPhone ?? '',
@@ -123,8 +138,20 @@ export async function inviteStaff(phone: string, role: StaffRole, showCustomers:
   return (result.data as { data: StaffGrant }).data;
 }
 
-export async function updateStaff(staffUid: string, role: StaffRole, showCustomers: boolean, pin: string): Promise<void> {
-  await functions().httpsCallable('staffUpdate')({ staffUid, role, showCustomers, pin });
+/** Refund caps in US cents; both 0 turns a manager's refunds off. */
+export interface RefundCaps {
+  refundCapCents: number;
+  refundDayCapCents: number;
+}
+
+export async function updateStaff(
+  staffUid: string,
+  role: StaffRole,
+  showCustomers: boolean,
+  pin: string,
+  caps: RefundCaps = { refundCapCents: 0, refundDayCapCents: 0 }
+): Promise<void> {
+  await functions().httpsCallable('staffUpdate')({ staffUid, role, showCustomers, pin, ...caps });
 }
 
 export async function removeStaff(staffUid: string): Promise<void> {
@@ -139,6 +166,63 @@ export async function respondToInvite(merchantId: string, accept: boolean): Prom
 
 export async function leaveShop(merchantId: string): Promise<void> {
   await functions().httpsCallable('staffLeave')({ merchantId });
+}
+
+// ─── Manager: payments and refunds ─────────────────────────────────────────
+
+export interface StaffPayment {
+  id: string;
+  currency: 'USD' | 'SLS';
+  /** In the currency's smallest unit: cents, or whole shillings. */
+  amount: number;
+  refunded: number;
+  remaining: number;
+  /** Only when the shop lets this manager see customers. */
+  customerName: string | null;
+  reference: string | null;
+  receiptNumber: string | null;
+  createdAtMs: number;
+}
+
+export interface StaffRefundLimits {
+  enabled: boolean;
+  /** US cents. */
+  capCents: number;
+  dayCapCents: number;
+  usedTodayCents: number;
+  slsPerUsd: number;
+  refundWindowDays: number;
+}
+
+/** The shop's recent counter payments, for the manager to refund from. */
+export async function listShopPayments(): Promise<{ payments: StaffPayment[]; refunds: StaffRefundLimits }> {
+  const result = await functions().httpsCallable('staffListPayments')({ ...actingFor() });
+  return (result.data as { data: { payments: StaffPayment[]; refunds: StaffRefundLimits } }).data;
+}
+
+/**
+ * A manager's refund for the shop, with their own PIN. `idempotencyKey` is
+ * one per attempt, resent on retry; it's needed for a partial refund.
+ */
+export async function refundForShop(
+  transactionId: string,
+  pin: string,
+  amountCents: number,
+  partial: boolean,
+  idempotencyKey: string
+): Promise<{ refundTransactionId: string; remainingCents: number }> {
+  const result = await functions().httpsCallable('refundPayment')({
+    transactionId,
+    pin,
+    ...actingFor(),
+    ...(partial ? { amountCents, idempotencyKey } : {}),
+  });
+  return (result.data as { data: { refundTransactionId: string; remainingCents: number } }).data;
+}
+
+/** A refund's size in US cents against the caps, as the server counts it. */
+export function capCents(amount: number, currency: string, slsPerUsd: number): number {
+  return currency === 'SLS' && slsPerUsd > 0 ? Math.ceil((amount * 100) / slsPerUsd) : amount;
 }
 
 /** The server's reason for a refusal, when it gave one. */
