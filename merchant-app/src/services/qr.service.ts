@@ -3,6 +3,24 @@ import { QRCodeData, MerchantStickerData } from '../types';
 import { logger } from '../utils/logger';
 
 /**
+ * How long a sale code lives on the server (QR_CODE_EXPIRY_MINUTES in
+ * functions/src/qr-payments/generateQR.ts). Used only when the server's
+ * expiresAt can't be read.
+ */
+const QR_EXPIRY_FALLBACK_MS = 10 * 60 * 1000;
+
+/**
+ * Older servers sent expiresAt as a Date, which a callable delivers as {}:
+ * `new Date({})` is an Invalid Date, so the countdown read NaN:NaN and never
+ * expired. Fall back to the code's lifetime counted from just before the
+ * request, so the timer runs out no later than the server's does.
+ */
+function readExpiry(value: unknown, requestedAtMs: number): Date {
+  const ms = typeof value === 'string' ? new Date(value).getTime() : NaN;
+  return new Date(Number.isFinite(ms) ? ms : requestedAtMs + QR_EXPIRY_FALLBACK_MS);
+}
+
+/**
  * Generate a single-use QR code for a merchant sale.
  *
  * `amountCents` is already in whole cents — callers must convert from the
@@ -23,6 +41,7 @@ export async function generateQRCode(
 ): Promise<QRCodeData> {
   try {
     const generateQRFunction = functions().httpsCallable('generateQRCode');
+    const requestedAtMs = Date.now();
     const result = await generateQRFunction({
       amount: amountCents,
       currency,
@@ -36,7 +55,8 @@ export async function generateQRCode(
         qrCodeId: string;
         qrData: string;
         emvQrData?: string;
-        expiresAt: string;
+        /** ISO 8601; {} from servers that sent a Date. */
+        expiresAt: unknown;
         feeCents: number;
         netCents: number;
         merchantName: string;
@@ -53,7 +73,7 @@ export async function generateQRCode(
       // blob, which means a far less dense QR and a much better scan rate on
       // a phone screen outdoors.
       qrData: payload.data.emvQrData || payload.data.qrData,
-      expiresAt: new Date(payload.data.expiresAt),
+      expiresAt: readExpiry(payload.data.expiresAt, requestedAtMs),
       feeCents: payload.data.feeCents ?? 0,
       netCents: payload.data.netCents ?? amountCents,
       merchantName: payload.data.merchantName ?? '',

@@ -163,7 +163,9 @@ export const generateQRCode = https.onCall(
           // older clients reading either field get the same scannable string.
           qrData: emvQrData,
           emvQrData,
-          expiresAt,
+          // A string, never a Date: the callable encoder copies an object's
+          // own entries, a Date has none, and the app would receive {}.
+          expiresAt: expiresAt.toISOString(),
           feeCents,
           netCents,
           merchantName,

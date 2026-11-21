@@ -441,7 +441,8 @@ export const getAgentTopupHistory = https.onCall(
       const topups = topupsSnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
-        createdAt: doc.data().createdAt.toDate(),
+        // ISO 8601: a Date would reach the app as {} (callables send JSON).
+        createdAt: doc.data().createdAt?.toDate().toISOString() ?? null,
       }));
 
       return {
