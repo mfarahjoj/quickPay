@@ -160,7 +160,7 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
     fontSize: 32,
     fontWeight: '700',
     textAlign: 'center',
-    color: colors.ui.onSolid,
+    color: colors.ui.text,
     width: '100%',
     padding: 0,
   },
