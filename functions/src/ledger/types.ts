@@ -95,6 +95,8 @@ export interface JournalRefs {
   disputeId?: string;
   /** Zapp receipt number of the payment or refund this entry settles. */
   receiptNumber?: string;
+  /** Staff member who acted for the shop (STAFF_ACCESS.md); they are postedBy too. */
+  actorUid?: string;
 }
 
 export interface JournalEntryInput {

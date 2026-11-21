@@ -45,6 +45,11 @@ export interface RefundOptions {
    * attempt and resent on retry, so a dropped response can't refund twice.
    */
   partKey?: string;
+  /**
+   * A staff manager refunding for the shop (STAFF_ACCESS.md): recorded on the
+   * entry's refs and on the refund row as `raisedBy`. Not a participant.
+   */
+  actorUid?: string;
   /** Allow the merchant's debit to use money reserved for disputes they lost. */
   useReserved?: boolean;
   /** Dispute this refund settles, recorded on the rows. */
@@ -151,6 +156,7 @@ export async function prepareRefund(
       refundOfEntryId: original.journalEntryId,
       receiptNumber: claimed,
       ...(opts.disputeId ? { disputeId: opts.disputeId } : {}),
+      ...(opts.actorUid ? { actorUid: opts.actorUid } : {}),
     },
     description: completes && !whole ? "Final refund" : whole ? "Refund" : "Partial refund",
     postedBy: opts.postedBy,
@@ -197,6 +203,7 @@ export async function prepareRefund(
         refundOfTransactionId: transactionId,
         journalEntryId: entryId,
         ...(opts.disputeId ? { disputeId: opts.disputeId } : {}),
+        ...(opts.actorUid ? { raisedBy: opts.actorUid } : {}),
         createdAt: now,
         completedAt: now,
       };
