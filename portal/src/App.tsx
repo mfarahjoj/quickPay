@@ -1,6 +1,6 @@
 import { Component, ReactNode, useCallback, useEffect, useState } from "react";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
-import { signOutSession } from "./api";
+import { signOutSession, watchSession } from "./api";
 import { auth } from "./firebase";
 import { useI18n } from "./i18n";
 import { Dashboard } from "./screens/Dashboard";
@@ -32,6 +32,13 @@ export function App() {
     setNotice(t("signin.ended"));
     signOut(auth);
   }, [t]);
+
+  // Leave the moment the session ends, not at the next call: what's on
+  // screen should go too (a removed manager's open tab, STAFF_ACCESS.md).
+  useEffect(() => {
+    if (!user || !user.uid.startsWith("portal_")) return;
+    return watchSession(user.uid.slice("portal_".length), ended);
+  }, [user, ended]);
 
   const signOutHere = useCallback(async () => {
     try {

@@ -60,12 +60,49 @@ export function watchDays(storeUid: string, fromDay: string, onData: (days: DayS
   );
 }
 
-/** The last sales and refunds, live. */
+/** The last sales and refunds, live. No names: those are in `watchRecentNames`. */
 export function watchRecent(storeUid: string, onData: (items: RecentItem[]) => void, onError: (e: Error) => void): Unsubscribe {
   return onSnapshot(
     doc(db, "merchantStats", storeUid, "live", "recent"),
     (snap) => onData(((snap.data()?.items as RecentItem[] | undefined) ?? []).slice()),
     onError
+  );
+}
+
+/**
+ * The feed's customer names by txId, live. Only for a viewer who may see
+ * customers: the rules refuse anyone else (a manager without "Show customers").
+ */
+export function watchRecentNames(
+  storeUid: string,
+  onData: (names: Record<string, string>) => void,
+  onError: (e: Error) => void
+): Unsubscribe {
+  return onSnapshot(
+    doc(db, "merchantStats", storeUid, "live", "recentNames"),
+    (snap) => onData({ ...((snap.data()?.names as Record<string, string> | undefined) ?? {}) }),
+    onError
+  );
+}
+
+/**
+ * Calls `onEnded` once this browser's session is over: signed out from the
+ * phone, expired, or (staff) a grant change ended it. The rules let a session
+ * read only its own doc.
+ */
+export function watchSession(sessionId: string, onEnded: () => void): Unsubscribe {
+  return onSnapshot(
+    doc(db, "portalSessions", sessionId),
+    (snap) => {
+      const s = snap.data();
+      const expiresAtMs = (s?.expiresAt as { toMillis?: () => number } | undefined)?.toMillis?.() ?? 0;
+      if (!s || s.active !== true || expiresAtMs <= Date.now()) onEnded();
+    },
+    (err) => {
+      // Refused means it's not this browser's session any more: end it here too.
+      if ((err as { code?: string }).code === "permission-denied") onEnded();
+      else console.error(err);
+    }
   );
 }
 
