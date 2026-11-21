@@ -517,6 +517,8 @@
   "auth.biometricSetup.enableTitle": "تفعيل {{label}}؟",
   "auth.biometricSetup.enableSubtitle": "استخدم {{label}} لفتح التطبيق وتأكيد الدفع بشكل أسرع.",
   "auth.biometricSetup.enableButton": "تفعيل {{label}}",
+  "auth.biometricSetup.enabledTitle": "تم تفعيل {{label}}.",
+  "auth.biometricSetup.finishing": "جارٍ إكمال الإعداد…",
   "auth.biometricSetup.skip": "تخطي الآن",
   "auth.biometricSetup.enterPinTitle": "أدخل PIN",
   "auth.biometricSetup.enterPinSubtitle": "تحقق من PIN لتفعيل {{label}} للمدفوعات.",

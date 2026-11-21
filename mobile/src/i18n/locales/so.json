@@ -517,6 +517,8 @@
   "auth.biometricSetup.enableTitle": "Daar {{label}}?",
   "auth.biometricSetup.enableSubtitle": "Isticmaal {{label}} furitaanka app-ka iyo xaqiijinta lacag bixinta si degdeg ah.",
   "auth.biometricSetup.enableButton": "Daar {{label}}",
+  "auth.biometricSetup.enabledTitle": "{{label}} waa shidan yahay.",
+  "auth.biometricSetup.finishing": "Dejinta ayaa la dhammaystirayaa…",
   "auth.biometricSetup.skip": "Ka bood hadda",
   "auth.biometricSetup.enterPinTitle": "Geli PIN-kaaga",
   "auth.biometricSetup.enterPinSubtitle": "Xaqiiji PIN-kaaga si aad u daarto {{label}} lacag bixinta.",

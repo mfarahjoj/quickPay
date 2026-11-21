@@ -517,6 +517,8 @@
   "auth.biometricSetup.enableTitle": "Unlock with {{label}}.",
   "auth.biometricSetup.enableSubtitle": "Approve payments with {{label}} — faster than typing your PIN.",
   "auth.biometricSetup.enableButton": "Enable {{label}}",
+  "auth.biometricSetup.enabledTitle": "{{label}} is on.",
+  "auth.biometricSetup.finishing": "Finishing setup…",
   "auth.biometricSetup.skip": "Maybe later",
   "auth.biometricSetup.enterPinTitle": "Enter your PIN",
   "auth.biometricSetup.enterPinSubtitle": "Verify your PIN to enable {{label}} for payments.",
