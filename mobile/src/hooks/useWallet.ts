@@ -4,6 +4,17 @@ import { Wallet } from '../types';
 import { useAuth } from './useAuth';
 import { logger } from '../utils/logger';
 
+/**
+ * getBalance sends lastTransactionAt as an ISO string; older servers sent a
+ * Date, which a callable delivers as {}. Anything unreadable is null, never
+ * an object that throws on getTime().
+ */
+function readDate(value: unknown): Date | null {
+  if (typeof value !== 'string') return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 export function useWallet() {
   const { user } = useAuth();
   const [wallet, setWallet] = useState<Wallet | null>(null);
@@ -58,9 +69,18 @@ export function useWallet() {
       const getBalanceFunction = functions().httpsCallable('getBalance');
       const result = await getBalanceFunction();
 
-      const data = result.data as { success: boolean; data: Wallet };
+      const data = result.data as {
+        success: boolean;
+        data: Omit<Wallet, 'lastTransactionAt'> & { lastTransactionAt?: unknown };
+      };
       if (data.success) {
-        setWallet(data.data);
+        const fresh = data.data;
+        // The wallet listener already holds the real time; keep it if this
+        // response's can't be read.
+        setWallet((prev) => ({
+          ...fresh,
+          lastTransactionAt: readDate(fresh.lastTransactionAt) ?? prev?.lastTransactionAt ?? null,
+        }));
         setError(null);
       }
     } catch (err: any) {

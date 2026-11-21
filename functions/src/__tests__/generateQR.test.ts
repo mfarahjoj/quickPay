@@ -1,5 +1,7 @@
 import * as admin from "firebase-admin";
 import { generateEmvQRPayload, parseEmvQRPayload } from "../utils/emvqr";
+import { fakeFirestore, useFakeFirestore } from "./helpers/fakeFirestore";
+import { expectWireSafe } from "./helpers/wireSafe";
 
 const test = require("firebase-functions-test")();
 
@@ -38,6 +40,55 @@ describe("generateQRCode", () => {
         auth: { uid: "merchant-1" },
       })
     ).rejects.toThrow(/currency/i);
+  });
+
+  describe("response", () => {
+    let restore: () => void;
+    afterEach(() => restore?.());
+
+    const generate = async () => {
+      const db = fakeFirestore({
+        "users/merchant-1": { accountType: "merchant", fullName: "Owner" },
+        "merchantProfiles/merchant-1": { businessName: "Hargeisa Electronics" },
+      });
+      restore = useFakeFirestore(db);
+      const before = Date.now();
+      const res = await wrapped({
+        data: { amount: 1250, currency: "USD" },
+        auth: { uid: "merchant-1" },
+      });
+      return { db, res, before, after: Date.now() };
+    };
+
+    it("sends expiresAt as an ISO string ten minutes out", async () => {
+      const { res, before, after } = await generate();
+      // A Date here reaches the app as {}: the countdown showed NaN:NaN.
+      expect(typeof res.data.expiresAt).toBe("string");
+      const expiresMs = Date.parse(res.data.expiresAt);
+      expect(new Date(expiresMs).toISOString()).toBe(res.data.expiresAt);
+      expect(expiresMs).toBeGreaterThanOrEqual(before + 10 * 60_000);
+      expect(expiresMs).toBeLessThanOrEqual(after + 10 * 60_000);
+    });
+
+    it("holds only values a callable can send", async () => {
+      const { res, db } = await generate();
+      expectWireSafe(res);
+      expect(res).toMatchObject({
+        success: true,
+        data: {
+          qrCodeId: expect.any(String),
+          qrData: expect.any(String),
+          emvQrData: expect.any(String),
+          feeCents: expect.any(Number),
+          netCents: expect.any(Number),
+          merchantName: "Hargeisa Electronics",
+        },
+      });
+      expect(res.data.feeCents + res.data.netCents).toBe(1250);
+      // The stored code expires at the same instant the app counts down to.
+      const stored = db.get(`qrCodes/${res.data.qrCodeId}`)!;
+      expect(stored.expiresAt.toDate().toISOString()).toBe(res.data.expiresAt);
+    });
   });
 });
 
