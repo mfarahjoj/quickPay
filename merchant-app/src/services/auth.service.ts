@@ -55,6 +55,34 @@ export async function signOut(): Promise<void> {
 }
 
 /**
+ * i18n key for why a deletion was refused. The server sends the reasons in
+ * `details.blockers` (see functions/src/auth/accountDeletion.ts); anything we
+ * do not recognise falls back to a generic failure.
+ */
+export function deleteAccountErrorKey(error: any): string {
+  const blockers: string[] = error?.details?.blockers ?? [];
+  if (blockers.includes('frozen')) return 'settings.deleteBlocked.frozen';
+  if (blockers.includes('balance')) return 'settings.deleteBlocked.balance';
+  if (blockers.some((b) => b.startsWith('pending_'))) {
+    return 'settings.deleteBlocked.pending';
+  }
+  if (error?.code === 'functions/permission-denied') return 'settings.deleteWrongPin';
+  return 'settings.deleteFailed';
+}
+
+/**
+ * Permanently delete the signed-in account. The server erases the personal
+ * data and the login; afterwards we only clear what is left on this device.
+ * Throws if the server refuses (wrong PIN, balance, money in flight).
+ */
+export async function deleteAccount(pin: string): Promise<void> {
+  const fn = functions().httpsCallable('requestAccountDeletion');
+  await fn({ pin });
+  // The login no longer exists server-side; signing out just tidies local state.
+  await signOut().catch(() => {});
+}
+
+/**
  * Get current user
  */
 export function getCurrentUser(): FirebaseAuthTypes.User | null {

@@ -1,9 +1,10 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, Modal, ActivityIndicator } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { signOut } from '../../services/auth.service';
+import { signOut, deleteAccount, deleteAccountErrorKey } from '../../services/auth.service';
+import { PinInput } from '../../components/PinInput';
 import { useMerchantProfile } from '../../hooks/useMerchantProfile';
 import { useAuth } from '../../hooks/useAuth';
 import {
@@ -55,6 +56,42 @@ export default function SettingsScreen() {
       { text: t('common.cancel'), style: 'cancel' },
       { text: t('settings.signOut'), style: 'destructive', onPress: () => signOut() },
     ]);
+  };
+
+  const [showDelete, setShowDelete] = useState(false);
+  const [pin, setPin] = useState('');
+  const [deleting, setDeleting] = useState(false);
+
+  const closeDelete = () => {
+    if (deleting) return;
+    setShowDelete(false);
+    setPin('');
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(t('settings.deleteConfirmTitle'), t('settings.deleteConfirmMessage'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('settings.deleteAccount'),
+        style: 'destructive',
+        onPress: () => setShowDelete(true),
+      },
+    ]);
+  };
+
+  const confirmDelete = async () => {
+    if (pin.length !== 6 || deleting) return;
+    setDeleting(true);
+    try {
+      await deleteAccount(pin);
+      // deleteAccount signs out, which swaps this whole navigator away.
+      Alert.alert(t('settings.deletedTitle'), t('settings.deletedMessage'));
+    } catch (err: any) {
+      setPin('');
+      Alert.alert(t('common.error'), t(deleteAccountErrorKey(err)));
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const businessName = profile?.businessName || t('settings.merchantAccountFallback');
@@ -115,6 +152,47 @@ export default function SettingsScreen() {
       <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.8}>
         <Text style={styles.logoutText}>{t('settings.signOut')}</Text>
       </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.deleteBtn}
+        onPress={handleDeleteAccount}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+      >
+        <Text style={styles.deleteText}>{t('settings.deleteAccount')}</Text>
+      </TouchableOpacity>
+
+      <Modal visible={showDelete} transparent animationType="fade" onRequestClose={closeDelete}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>{t('settings.deleteAccount')}</Text>
+            <Text style={styles.modalPrompt}>{t('settings.enterPinDelete')}</Text>
+            <PinInput value={pin} onChange={setPin} />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.modalCancel}
+                onPress={closeDelete}
+                disabled={deleting}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.modalCancelText}>{t('common.cancel')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalConfirm, (pin.length !== 6 || deleting) && styles.modalConfirmOff]}
+                onPress={confirmDelete}
+                disabled={pin.length !== 6 || deleting}
+                activeOpacity={0.8}
+              >
+                {deleting ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.modalConfirmText}>{t('settings.confirmDelete')}</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </DarkScreen>
   );
 }
@@ -231,6 +309,53 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FF6961',
   },
+  deleteBtn: {
+    marginHorizontal: 20,
+    marginTop: 12,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deleteText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.45)',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    backgroundColor: '#15171C',
+    borderRadius: 20,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: '#fff', marginBottom: 8 },
+  modalPrompt: { fontSize: 14, color: 'rgba(255,255,255,0.6)', marginBottom: 16 },
+  modalButtons: { flexDirection: 'row', gap: 12, marginTop: 24 },
+  modalCancel: {
+    flex: 1,
+    height: 48,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  modalCancelText: { fontSize: 15, fontWeight: '600', color: '#fff' },
+  modalConfirm: {
+    flex: 1,
+    height: 48,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FF3B30',
+  },
+  modalConfirmOff: { opacity: 0.4 },
+  modalConfirmText: { fontSize: 15, fontWeight: '700', color: '#fff' },
   rowChevron: {
     fontSize: 20,
     color: 'rgba(255,255,255,0.25)',

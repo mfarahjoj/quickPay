@@ -13,6 +13,7 @@ import { Header } from '../../components/Header';
 import { Button } from '../../components/Button';
 import { PinInput } from '../../components/PinInput';
 import { functions } from '../../services/firebase.config';
+import { signOut } from '../../services/auth.service';
 import { colors, typography, spacing, borderRadius } from '../../theme';
 
 interface Props {
@@ -55,15 +56,23 @@ export default function AboutScreen({ navigation }: Props) {
       const data = result.data as { success: boolean; message?: string; error?: string };
 
       if (data.success) {
+        // The account and its login are gone; leave the signed-in screens.
         Alert.alert(
           t('profile.about.deletionRequested'),
-          data.message ?? t('profile.about.deletionMessage')
+          t('profile.about.deletionMessage')
         );
+        await signOut().catch(() => {});
       } else {
         Alert.alert(t('common.error'), data.error ?? t('profile.about.deleteFailed'));
       }
     } catch (err: any) {
-      Alert.alert(t('common.error'), err.message ?? t('profile.about.deleteFailed'));
+      const blockers: string[] = err?.details?.blockers ?? [];
+      let message = t('profile.about.deleteFailed');
+      if (blockers.includes('frozen')) message = t('profile.about.deleteBlocked.frozen');
+      else if (blockers.includes('balance')) message = t('profile.about.deleteBlocked.balance');
+      else if (blockers.some((b) => b.startsWith('pending_'))) message = t('profile.about.deleteBlocked.pending');
+      else if (err?.code === 'functions/permission-denied') message = t('profile.about.deleteWrongPin');
+      Alert.alert(t('common.error'), message);
     } finally {
       setDeleting(false);
       setPin('');
