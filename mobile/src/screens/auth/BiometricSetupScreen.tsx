@@ -12,7 +12,9 @@ import {
   setBiometricEnabled,
   enableBiometricKey,
   consumePendingSetupPin,
+  disableBiometricKey,
 } from '../../services/biometric.service';
+import { triggerHaptic } from '../../services/haptics.service';
 import { validatePin, PinLockoutError } from '../../services/auth.service';
 import { markBiometricSetupDone } from '../../hooks/useBiometricSetupDone';
 import ResetPinScreen from './ResetPinScreen';
@@ -21,14 +23,28 @@ import { typography, spacing, makeStyles } from '../../theme';
 type Step = 'prompt' | 'pin';
 
 /** Scanning-ring hero: dashed orbit, ripple, sweeping scan line, check pop. */
-function BiometricHero({ icon }: { icon: React.ReactNode }) {
+function BiometricHero({ icon, done = false }: { icon: React.ReactNode; done?: boolean }) {
   const heroStyles = useHeroStyles();
   const spin = useRef(new Animated.Value(0)).current;
   const ripple = useRef(new Animated.Value(0)).current;
   const scan = useRef(new Animated.Value(0)).current;
   const check = useRef(new Animated.Value(0)).current;
+  const lock = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    if (done) {
+      // Face ID approved: stop scanning, pop the check and hold it, and send
+      // out one ripple so the moment lands right away.
+      scan.stopAnimation();
+      scan.setValue(0);
+      ripple.setValue(0);
+      Animated.parallel([
+        Animated.spring(check, { toValue: 1, tension: 220, friction: 7, useNativeDriver: true }),
+        Animated.spring(lock, { toValue: 1, tension: 160, friction: 6, useNativeDriver: true }),
+        Animated.timing(ripple, { toValue: 1, duration: 700, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+      ]).start();
+      return;
+    }
     const anims = [
       Animated.loop(
         Animated.timing(spin, { toValue: 1, duration: 9000, easing: Easing.linear, useNativeDriver: true }),
@@ -57,13 +73,14 @@ function BiometricHero({ icon }: { icon: React.ReactNode }) {
     ];
     anims.forEach((a) => a.start());
     return () => anims.forEach((a) => a.stop());
-  }, [spin, ripple, scan, check]);
+  }, [spin, ripple, scan, check, lock, done]);
 
   return (
     <View style={heroStyles.wrap}>
       <Animated.View
         style={[
           heroStyles.ripple,
+          done && heroStyles.rippleDone,
           {
             transform: [{ scale: ripple.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1.8] }) }],
             opacity: ripple.interpolate({ inputRange: [0, 0.6, 1], outputRange: [0.8, 0.35, 0] }),
@@ -76,7 +93,13 @@ function BiometricHero({ icon }: { icon: React.ReactNode }) {
           { transform: [{ rotate: spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) }] },
         ]}
       />
-      <View style={heroStyles.core}>
+      <Animated.View
+        style={[
+          heroStyles.core,
+          done && heroStyles.coreDone,
+          { transform: [{ scale: lock.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.08, 1] }) }] },
+        ]}
+      >
         {icon}
         <Animated.View
           style={[
@@ -87,7 +110,7 @@ function BiometricHero({ icon }: { icon: React.ReactNode }) {
             },
           ]}
         />
-      </View>
+      </Animated.View>
       <Animated.View
         style={[
           heroStyles.check,
@@ -116,6 +139,12 @@ const useHeroStyles = makeStyles((colors) => StyleSheet.create({
     borderRadius: 75,
     borderWidth: 1.5,
     borderColor: 'rgba(255,80,67,0.5)',
+  },
+  rippleDone: {
+    borderColor: 'rgba(93,202,165,0.7)',
+  },
+  coreDone: {
+    borderColor: 'rgba(93,202,165,0.6)',
   },
   orbit: {
     position: 'absolute',
@@ -184,6 +213,10 @@ export default function BiometricSetupScreen() {
   const [showReset, setShowReset] = useState(false);
   // undefined: not taken yet; null: none (or it was refused).
   const heldPin = useRef<string | null | undefined>(undefined);
+  // The key registration started when Enable was tapped, if a PIN was held.
+  const registration = useRef<Promise<void> | null>(null);
+  const [enabling, setEnabling] = useState(false);
+  const [enabledMoment, setEnabledMoment] = useState(false);
 
   const label = useMemo(() => t(getBiometricLabelKey(biometryType)), [biometryType, t]);
 
@@ -210,35 +243,53 @@ export default function BiometricSetupScreen() {
   };
 
   const handleEnable = async () => {
+    if (enabling) return;
     setPromptError('');
-    const success = await authenticateWithBiometrics(t('common.enableBiometricPrompt', { label }));
-    if (!success) {
-      setPromptError(t('auth.biometricSetup.failedPrompt'));
-      return;
-    }
+    setEnabling(true);
     // The PIN was just created or entered on the previous screen — use it
     // instead of asking for it again. Held here so trying again after a
     // failed call (a slow first request) still has it.
     if (heldPin.current === undefined) heldPin.current = consumePendingSetupPin();
     const pendingPin = heldPin.current;
-    if (pendingPin) {
+    // Register the key with the server while the Face ID sheet is up, so
+    // there's nothing left to wait for once it passes. The server's check is
+    // the PIN; the key itself only signs behind Face ID.
+    if (pendingPin && !registration.current) {
+      registration.current = enableBiometricKey(pendingPin);
+      registration.current.catch(() => undefined);
+    }
+
+    const success = await authenticateWithBiometrics(t('common.enableBiometricPrompt', { label }));
+    if (!success) {
+      setEnabling(false);
+      setPromptError(t('auth.biometricSetup.failedPrompt'));
+      return;
+    }
+
+    const pending = registration.current;
+    if (pending) {
+      // Show it's on straight away; hold the moment briefly so it reads
+      // before the success screen, however fast the server was.
+      setEnabledMoment(true);
+      triggerHaptic('success');
       try {
-        setLoading(true);
-        await enableBiometricKey(pendingPin);
+        await Promise.all([pending, new Promise<void>((resolve) => setTimeout(resolve, 650))]);
         await finishSetup(true);
         return;
       } catch (err: any) {
         logger.warn('Enabling biometrics with the held PIN failed:', err);
+        registration.current = null;
+        setEnabledMoment(false);
         if (err?.code !== 'functions/permission-denied') {
           // Network or server trouble, not the PIN: let them try again.
+          setEnabling(false);
           setPromptError(t('auth.biometricSetup.failedEnable'));
           return;
         }
         heldPin.current = null;
-      } finally {
-        setLoading(false);
       }
     }
+    setEnabling(false);
     setStep('pin');
   };
 
@@ -270,6 +321,13 @@ export default function BiometricSetupScreen() {
   };
 
   const handleSkip = async () => {
+    // A key may have been registered while the Face ID sheet was up (and
+    // then cancelled): take it back off the server.
+    const pending = registration.current;
+    if (pending) {
+      registration.current = null;
+      pending.then(() => disableBiometricKey()).catch(() => undefined);
+    }
     await finishSetup(false);
   };
 
@@ -358,10 +416,18 @@ export default function BiometricSetupScreen() {
 
   return (
     <AuthLayout contentStyle={styles.centered}>
-      <BiometricHero icon={<BiometricIcon size={62} />} />
+      <BiometricHero icon={<BiometricIcon size={62} />} done={enabledMoment} />
       <AuthHeader
-        title={t('auth.biometricSetup.enableTitle', { label })}
-        subtitle={t('auth.biometricSetup.enableSubtitle', { label })}
+        title={
+          enabledMoment
+            ? t('auth.biometricSetup.enabledTitle', { label })
+            : t('auth.biometricSetup.enableTitle', { label })
+        }
+        subtitle={
+          enabledMoment
+            ? t('auth.biometricSetup.finishing')
+            : t('auth.biometricSetup.enableSubtitle', { label })
+        }
       />
 
       {promptError ? <Text style={styles.promptError}>{promptError}</Text> : null}
@@ -371,9 +437,15 @@ export default function BiometricSetupScreen() {
         onPress={handleEnable}
         variant="gradient"
         fullWidth
+        loading={enabledMoment}
+        disabled={enabling}
         style={styles.button}
       />
-      <TouchableOpacity onPress={handleSkip} style={styles.skipBtn}>
+      <TouchableOpacity
+        onPress={handleSkip}
+        disabled={enabling}
+        style={[styles.skipBtn, enabling && styles.dimmed]}
+      >
         <Text style={styles.skipText}>{t('auth.biometricSetup.skip')}</Text>
       </TouchableOpacity>
     </AuthLayout>
@@ -406,6 +478,9 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
     height: 50,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  dimmed: {
+    opacity: 0.4,
   },
   skipText: {
     fontSize: 14,

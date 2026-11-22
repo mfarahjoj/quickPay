@@ -103,6 +103,10 @@ type MainStackParamList = {
   // A partner (Ridy) asking to take payments, each approved in its own app.
   ApproveAgreement: { agreementId: string };
   LinkedApps: undefined;
+  // Bills from shops: pay, decline, auto-pay (functions/src/bills/).
+  Bills: undefined;
+  BillDetail: { billId: string };
+  RequestDirectPayment: { shops?: { merchantId: string; name: string }[] } | undefined;
   // `MobileMoney` and `SendRemittance` are intentionally unregistered: both
   // screens call callables that were deleted from prod on 2026-09-18 because
   // the Zaad/eDahab and Stripe stubs turned fake success into real balance.
@@ -393,6 +397,21 @@ function MainStackNavigator() {
       <MainStack.Screen
         name="LinkedApps"
         getComponent={() => require('../screens/agreements/LinkedAppsScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="Bills"
+        getComponent={() => require('../screens/bills/BillsScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="BillDetail"
+        getComponent={() => require('../screens/bills/BillDetailScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="RequestDirectPayment"
+        getComponent={() => require('../screens/bills/RequestDirectPaymentScreen').default}
         options={{ headerShown: false }}
       />
       <MainStack.Screen
