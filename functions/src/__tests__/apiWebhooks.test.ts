@@ -2,6 +2,7 @@ import * as admin from "firebase-admin";
 import { fakeFirestore, useFakeFirestore, FakeDb } from "./helpers/fakeFirestore";
 import {
   attemptDelivery,
+  recordAgreementEvent,
   eventsForChange,
   MAX_ATTEMPTS,
   RETRY_DELAYS_SECONDS,
@@ -194,5 +195,53 @@ describe("attemptDelivery", () => {
 
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(db.get(`webhook_deliveries/${DELIVERY}`)!.status).toBe("canceled");
+  });
+});
+
+describe("recordAgreementEvent", () => {
+  let db: FakeDb;
+  let restore: () => void;
+
+  beforeAll(() => {
+    if (!admin.apps.length) admin.initializeApp();
+  });
+
+  beforeEach(() => {
+    const endpoint = (livemode: boolean) => ({
+      merchantId: "ridy", url: "https://ridy.example/zapp", secretEnc: "x", enabled: true, livemode, createdAt: Timestamp.now(),
+    });
+    db = fakeFirestore({
+      "webhook_endpoints/we_liveliveliveliveliveli": endpoint(true),
+      "webhook_endpoints/we_testtesttesttesttestte": endpoint(false),
+    });
+    restore = useFakeFirestore(db);
+  });
+
+  afterEach(() => restore());
+
+  it("records the agreement as the partner sees it, for live endpoints only, once", async () => {
+    const agreement = {
+      merchantId: "ridy", merchantName: "Ridy", livemode: true, keyId: "k", customerPhone: "+252634111222",
+      customerId: "driver-1", status: "active", devicePublicKey: "secret-key", role: "worker",
+      customerToppedUpAt: Timestamp.now(), createdAt: Timestamp.now(), expiresAt: Timestamp.now(), approvedAt: Timestamp.now(),
+    } as any;
+    const pending = { eventId: "evt_agr_x_topped_up", type: "agreement.topped_up" as const };
+    const ids = await recordAgreementEvent("agr_x", agreement, pending);
+    expect(ids).toEqual(["evt_agr_x_topped_up__we_liveliveliveliveliveli"]);
+
+    const event = db.get("api_events/evt_agr_x_topped_up")!;
+    expect(event).toMatchObject({ type: "agreement.topped_up", merchantId: "ridy", agreementId: "agr_x" });
+    const body = JSON.parse(event.payload);
+    expect(body).toMatchObject({
+      type: "agreement.topped_up",
+      livemode: true,
+      data: { object: { id: "agr_x", object: "agreement", status: "active", role: "worker", customer_topped_up: true } },
+    });
+    expect(event.payload).not.toContain("secret-key");
+    expect(event.payload).not.toContain("customerToppedUpAt");
+
+    // A repeated trigger finds the event already recorded and sends nothing new.
+    expect(await recordAgreementEvent("agr_x", agreement, pending)).toEqual([]);
+    expect([...db.store.keys()].filter((k) => k.startsWith("webhook_deliveries/"))).toHaveLength(1);
   });
 });

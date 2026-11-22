@@ -297,11 +297,14 @@ export {
   getApiAgreement,
   approveApiAgreement,
   listMyAgreements,
+  getMyPendingAgreements,
   revokeMyAgreement,
 } from "./api/approveApiAgreement";
 export { adminListAgreements, adminRevokeAgreement } from "./admin/apiAgreements";
 export { expireApiCharges } from "./api/expireCharges";
-export { onApiChargeWritten, retryWebhookDeliveries } from "./api/webhooks";
+export { onApiChargeWritten, onApiAgreementWritten, retryWebhookDeliveries } from "./api/webhooks";
+// A customer's first top-up, for partners' agreements (Ridy drivers must have topped up once).
+export { agreementFundingOnTransaction } from "./api/agreementFunding";
 export {
   adminListApiKeys,
   adminIssueApiKey,
