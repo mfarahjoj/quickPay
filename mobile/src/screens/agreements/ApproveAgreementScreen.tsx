@@ -14,7 +14,11 @@ import { cooldownMessage } from '../../utils/cooldownMessage';
  * the partner's app on this phone with Face ID or the phone's passcode. The
  * customer reads what they are agreeing to — who, which phone, the limits,
  * how to switch it off — and approves with their PIN. Reached from
- * zapppay://agreement/{id}, which the partner's app opens.
+ * zapppay://agreement/{id}, which the partner's app opens, or right after
+ * sign-up when the partner asked before the person had Zapp.
+ *
+ * A worker (a Ridy driver) is paid by the partner and approves what they owe
+ * it, so their request reads that way round.
  */
 type Params = { ApproveAgreement: { agreementId: string } };
 type Step = 'review' | 'pin' | 'done' | 'closed';
@@ -107,6 +111,8 @@ export default function ApproveAgreementScreen() {
   const perPayment = formatMoney(agreement.maxChargeUsdCents, 'USD');
   const perDay = formatMoney(agreement.dailyUsdCents, 'USD');
   const device = agreement.deviceLabel || t('agreements.approve.thisPhone');
+  const merchant = agreement.merchantName;
+  const worker = agreement.role === 'worker';
 
   if (step === 'pin') {
     return (
@@ -129,13 +135,15 @@ export default function ApproveAgreementScreen() {
         <Text style={styles.avatarText}>{agreement.merchantName.charAt(0).toUpperCase()}</Text>
       </View>
       <Text style={[styles.title, styles.center]}>
-        {t('agreements.approve.title', { merchant: agreement.merchantName })}
+        {t(worker ? 'agreements.approve.titleWorker' : 'agreements.approve.title', { merchant })}
       </Text>
 
       <View style={styles.card}>
-        <Point text={t('agreements.approve.eachPayment', { merchant: agreement.merchantName, device })} />
+        {worker ? <Point text={t('agreements.approve.workerPaid', { merchant })} /> : null}
+        <Point text={t(worker ? 'agreements.approve.workerOwes' : 'agreements.approve.eachPayment', { merchant, device })} />
         <Point text={t('agreements.approve.limits', { perPayment, perDay })} />
         <Point text={t('agreements.approve.notify')} />
+        <Point text={t('agreements.approve.toppedUp', { merchant })} />
         <Point text={t('agreements.approve.switchOff')} />
       </View>
       <Text style={styles.warning}>{t('agreements.approve.notYourPhone')}</Text>

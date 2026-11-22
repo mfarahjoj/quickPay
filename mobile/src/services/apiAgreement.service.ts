@@ -9,10 +9,15 @@ import { functions } from './firebase.config';
 
 export type AgreementStatus = 'pending' | 'active' | 'revoked' | 'expired';
 
+/** customer: they pay the partner (a Ridy rider). worker: the partner pays them (a Ridy driver). */
+export type AgreementRole = 'customer' | 'worker';
+
 export interface AgreementDetails {
   agreementId: string;
   merchantName: string;
   status: AgreementStatus;
+  /** Absent from servers before roles: a customer. */
+  role?: AgreementRole;
   deviceLabel: string | null;
   /** US cents. */
   maxChargeUsdCents: number;
@@ -49,6 +54,23 @@ export const approveApiAgreement = (a: AgreementDetails, pin: string) =>
   });
 
 export const listMyAgreements = () => call<AgreementDetails[]>('listMyAgreements', {});
+
+export interface PendingAgreement extends AgreementDetails {
+  /** Left for this number before it had a Zapp account. */
+  signup: boolean;
+}
+
+export interface PendingAgreements {
+  agreements: PendingAgreement[];
+  /** Suggestions from the partner, for sign-up to fill in. */
+  prefill: { fullName: string | null; zaadNumber: string | null };
+}
+
+/**
+ * Requests to link addressed to this sign-in's number, newest first. Works
+ * mid-sign-up, before the PIN.
+ */
+export const getMyPendingAgreements = () => call<PendingAgreements>('getMyPendingAgreements', {});
 
 export const revokeMyAgreement = (agreementId: string) =>
   call<unknown>('revokeMyAgreement', { agreementId });

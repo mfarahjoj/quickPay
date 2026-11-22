@@ -23,6 +23,7 @@ import { hasDeviceCredential } from '../services/device.service';
 import { labelTrustedDevice, registerTrustedDevice, signOut } from '../services/auth.service';
 import { View, StyleSheet, ActivityIndicator, Linking, BackHandler, Platform } from 'react-native';
 import { parsePaymentLink, type PaymentLink } from '../services/paymentLink.service';
+import { takeOffer } from '../services/partnerSignup';
 import { makeStyles, useColors, useTheme } from '../theme';
 import OnboardingScreen from '../screens/onboarding/OnboardingScreen';
 import { Springs } from '../constants/springs';
@@ -528,6 +529,18 @@ export default function AppNavigator() {
     });
     setPendingLink(null);
   }, [pendingLink, user, navReadyTick]);
+
+  // Joined from a partner's app (Ridy): its request to link, left before they
+  // had Zapp, opens once the app is up — after the PIN, terms and Zaad, since
+  // the navigation container only mounts behind those gates.
+  useEffect(() => {
+    if (!user || !navigationRef.isReady()) return;
+    takeOffer(user.uid)
+      .then((agreementId) => {
+        if (agreementId && navigationRef.isReady()) navigationRef.navigate('ApproveAgreement', { agreementId });
+      })
+      .catch(() => undefined);
+  }, [user, navReadyTick]);
 
   // The welcome screen is the logged-out home, not a one-time tour: this is
   // session state, so signing out lands you back on it with both entry points
