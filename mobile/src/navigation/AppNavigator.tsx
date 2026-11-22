@@ -196,6 +196,7 @@ function MainTabs() {
         getComponent={() => require('../screens/payments/PaymentsScreen').default}
         options={{
           title: t('nav.tab.payments'),
+          headerShown: false,
           tabBarIcon: ({ focused, color, size }) => <PayTabIcon focused={focused} color={color} size={size} />,
           tabBarAccessibilityLabel: t('nav.tab.paymentsAccessibility'),
         }}

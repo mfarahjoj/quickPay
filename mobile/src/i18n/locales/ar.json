@@ -1234,5 +1234,21 @@
   "language.reopenForLayout": "أغلق Zapp Pay وأعد فتحه لإكمال تغيير اتجاه الواجهة.",
   "qr.scan.openSettings": "فتح الإعدادات",
   "auth.login.countrySomaliland": "صوماليلاند",
-  "auth.login.phoneInvalidHint": "أدخل رقمك المكوّن من {{digits}} أرقام، مثل {{example}}"
+  "auth.login.phoneInvalidHint": "أدخل رقمك المكوّن من {{digits}} أرقام، مثل {{example}}",
+  "payments.subtitle": "أرسل المال، ادفع لمتجر أو اعرض رمزك",
+  "payments.sendToPhone": "أرسل إلى رقم هاتف",
+  "payments.sendToPhoneHint": "مجاني وفوري لأي شخص على Zapp Pay",
+  "payments.recent": "الأخيرة",
+  "payments.otherWays": "طرق أخرى للدفع",
+  "payments.method.scanTitle": "امسح رمز QR",
+  "payments.method.scanSubtitle": "ادفع لمتجر بمسح رمز Zapp Pay الخاص به",
+  "payments.method.showQrTitle": "اعرض رمز QR الخاص بك",
+  "payments.method.showQrSubtitle": "دع المتجر يمسح رمزك لتحصيل الدفع",
+  "payments.method.cashOutTitle": "اسحب نقداً لدى وكيل",
+  "payments.method.cashOutSubtitle": "حوّل رصيدك إلى نقد بالقرب منك",
+  "payments.addMoney": "أضف المال",
+  "payments.method.topUpTitle": "اشحن لدى وكيل",
+  "payments.freeInstant": "مجاني · فوري",
+  "payments.free": "مجاني",
+  "payments.youSend": "أنت ترسل"
 }

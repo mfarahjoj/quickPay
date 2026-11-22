@@ -1234,5 +1234,21 @@
   "language.reopenForLayout": "Xir oo dib u fur Zapp Pay si uu u dhammaystiro beddelka jihada bogga.",
   "qr.scan.openSettings": "Fur Dejinta",
   "auth.login.countrySomaliland": "Somaliland",
-  "auth.login.phoneInvalidHint": "Geli lambarkaaga {{digits}}-da god ah, tusaale {{example}}"
+  "auth.login.phoneInvalidHint": "Geli lambarkaaga {{digits}}-da god ah, tusaale {{example}}",
+  "payments.subtitle": "Lacag dir, dukaan bixi ama muuji koodhkaaga",
+  "payments.sendToPhone": "U dir lambar telefoon",
+  "payments.sendToPhoneHint": "Bilaash oo isla markiiba qof kasta oo Zapp Pay ku jira",
+  "payments.recent": "Dhawaan",
+  "payments.otherWays": "Habab kale oo lacag bixin",
+  "payments.method.scanTitle": "Sawir koodh QR",
+  "payments.method.scanSubtitle": "Dukaan ku bixi adoo sawiraya koodhkiisa Zapp Pay",
+  "payments.method.showQrTitle": "Muuji koodhkaaga QR",
+  "payments.method.showQrSubtitle": "U oggolow dukaanka inuu ku sawiro si uu lacagta u qaato",
+  "payments.method.cashOutTitle": "Kala bax wakiil",
+  "payments.method.cashOutSubtitle": "Haraagaaga u beddel lacag caddaan ah meel kuu dhow",
+  "payments.addMoney": "Lacag ku dar",
+  "payments.method.topUpTitle": "Kaga shubo wakiil",
+  "payments.freeInstant": "Bilaash · Isla markiiba",
+  "payments.free": "Bilaash",
+  "payments.youSend": "Waxaad diraysaa"
 }

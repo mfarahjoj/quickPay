@@ -1234,5 +1234,21 @@
   "language.reopenForLayout": "Close and reopen Zapp Pay to finish switching the layout direction.",
   "qr.scan.openSettings": "Open Settings",
   "auth.login.countrySomaliland": "Somaliland",
-  "auth.login.phoneInvalidHint": "Enter your {{digits}}-digit number, e.g. {{example}}"
+  "auth.login.phoneInvalidHint": "Enter your {{digits}}-digit number, e.g. {{example}}",
+  "payments.subtitle": "Send money, pay a shop or show your code",
+  "payments.sendToPhone": "Send to a phone number",
+  "payments.sendToPhoneHint": "Free and instant to anyone on Zapp Pay",
+  "payments.recent": "Recent",
+  "payments.otherWays": "More ways to pay",
+  "payments.method.scanTitle": "Scan a QR code",
+  "payments.method.scanSubtitle": "Pay a shop by scanning its Zapp Pay code",
+  "payments.method.showQrTitle": "Show your QR code",
+  "payments.method.showQrSubtitle": "Let the shop scan you to take payment",
+  "payments.method.cashOutTitle": "Cash out at an agent",
+  "payments.method.cashOutSubtitle": "Turn your balance into cash nearby",
+  "payments.addMoney": "Add money",
+  "payments.method.topUpTitle": "Top up at an agent",
+  "payments.freeInstant": "Free · Instant",
+  "payments.free": "Free",
+  "payments.youSend": "You send"
 }
