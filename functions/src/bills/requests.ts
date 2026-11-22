@@ -391,7 +391,16 @@ export const answerDirectPaymentRequest = https.onCall(
             due: dayForPush(firstBill.dueDate),
           },
         },
-        { type: "bill", billId: answered.firstBillId! }
+        // type and billId are what builds up to 88 open (the first bill).
+        // requestId and seriesId tell newer builds to open the receipt for
+        // the set-up direct payment instead: the bill's Pay button read as
+        // "pay now" to a customer who had only set something up.
+        {
+          type: "bill",
+          billId: answered.firstBillId!,
+          requestId,
+          seriesId: answered.seriesId!,
+        }
       ).catch((err) => console.error("Failed to tell the customer their request was approved:", err));
     } else if (answered?.status === "declined") {
       notifyUser(

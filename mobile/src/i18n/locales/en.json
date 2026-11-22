@@ -1497,5 +1497,17 @@
   "bills.request.sentTitle": "Request sent",
   "bills.request.sentBody": "{{merchant}} will approve it in their Zapp Pay app. We'll tell you when they do.",
   "bills.request.tooMany": "You have too many requests waiting. Wait for an answer or cancel one.",
-  "bills.request.failed": "The request wasn't sent. Try again."
+  "bills.request.failed": "The request wasn't sent. Try again.",
+  "bills.setUp.title": "Direct payment set up",
+  "bills.setUp.approved": "{{merchant}} approved your direct payment.",
+  "bills.setUp.active": "Active",
+  "bills.setUp.nextPayment": "Next payment",
+  "bills.setUp.howPaid": "Paid",
+  "bills.setUp.paidByYou": "By you, bill by bill",
+  "bills.setUp.id": "Direct payment ID",
+  "bills.setUp.noteAutopay": "Nothing to do now. Zapp Pay pays {{merchant}} on {{date}}, and you get a message before and after.",
+  "bills.setUp.noteManual": "{{merchant}} sends you a bill for each payment. You'll find the first one in Bills, due {{date}}.",
+  "bills.setUp.manage": "See it in Bills",
+  "bills.setUp.notActive": "This direct payment isn't active any more.",
+  "bills.setUp.loadFailed": "Couldn't load this direct payment."
 }

@@ -1497,5 +1497,17 @@
   "bills.request.sentTitle": "Codsiga waa la diray",
   "bills.request.sentBody": "{{merchant}} wuxuu ku oggolaan doonaa app-kiisa Zapp Pay. Waan kuu sheegi doonaa marka uu oggolaado.",
   "bills.request.tooMany": "Codsiyo badan ayaa sugaya. Sug jawaab ama mid ka noqo.",
-  "bills.request.failed": "Codsiga lama dirin. Isku day mar kale."
+  "bills.request.failed": "Codsiga lama dirin. Isku day mar kale.",
+  "bills.setUp.title": "Lacag-bixinta toos ah waa la dejiyey",
+  "bills.setUp.approved": "{{merchant}} wuu oggolaaday lacag-bixintaada toos ah.",
+  "bills.setUp.active": "Shaqaynaysa",
+  "bills.setUp.nextPayment": "Lacag-bixinta xigta",
+  "bills.setUp.howPaid": "Bixinta",
+  "bills.setUp.paidByYou": "Adiga, biil-biil",
+  "bills.setUp.id": "Aqoonsiga lacag-bixinta toos ah",
+  "bills.setUp.noteAutopay": "Hadda waxba ma jiraan aad samayso. Zapp Pay wuxuu {{merchant}} bixinayaa {{date}}, fariinna waad heli doontaa ka hor iyo ka dib.",
+  "bills.setUp.noteManual": "{{merchant}} wuxuu kuu soo diraa biil lacag-bixin kasta. Kan ugu horreeya waxaad ka heli doontaa Biilasha, waxaana la bixinayaa {{date}}.",
+  "bills.setUp.manage": "Ka eeg Biilasha",
+  "bills.setUp.notActive": "Lacag-bixintan toos ah hadda ma shaqaynayso.",
+  "bills.setUp.loadFailed": "Lacag-bixintan toos ah lama soo rarin."
 }
