@@ -139,6 +139,7 @@ function initials(name: string): string {
 const BAR_MAX_H = 54;
 
 function TrendChart({ data }: { data: { label: string; value: number }[] }) {
+  const { t } = useTranslation();
   const max = Math.max(...data.map(d => d.value), 0.01);
   const showLabels = data.length <= 7;
 
@@ -162,7 +163,7 @@ function TrendChart({ data }: { data: { label: string; value: number }[] }) {
       {!showLabels && (
         <View style={chart.axis}>
           <Text style={chart.axisLabel}>{data[0]?.label}</Text>
-          <Text style={chart.axisLabel}>Today</Text>
+          <Text style={chart.axisLabel}>{t('insights.today')}</Text>
         </View>
       )}
     </View>

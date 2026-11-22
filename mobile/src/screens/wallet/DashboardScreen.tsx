@@ -746,8 +746,8 @@ export default function DashboardScreen({ navigation }: Props) {
           <Text style={styles.discoverIcon}>📍</Text>
         </View>
         <View style={styles.discoverTextWrapper}>
-          <Text style={styles.discoverRowTitle}>Find Agent</Text>
-          <Text style={styles.discoverRowSubtitle}>Cash in or cash out near you</Text>
+          <Text style={styles.discoverRowTitle}>{t('agentLocator.title')}</Text>
+          <Text style={styles.discoverRowSubtitle}>{t('agentLocator.subtitle')}</Text>
         </View>
         <Text style={styles.chevron}>›</Text>
       </TouchableOpacity>

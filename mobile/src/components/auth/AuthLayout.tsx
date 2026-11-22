@@ -23,6 +23,11 @@ interface AuthLayoutProps {
   footer?: React.ReactNode;
   topRight?: React.ReactNode;
   variant?: 'light' | 'dark' | 'white';
+  /**
+   * Decoration drawn behind everything, outside the scroll view, so it can
+   * reach under the status bar instead of being clipped at the safe area.
+   */
+  backdrop?: React.ReactNode;
 }
 
 export function AuthLayout({
@@ -34,6 +39,7 @@ export function AuthLayout({
   footer,
   topRight,
   variant = 'light',
+  backdrop,
 }: AuthLayoutProps) {
   const dark = variant === 'dark';
   const white = variant === 'white';
@@ -64,8 +70,9 @@ export function AuthLayout({
       style={[styles.safe, dark && styles.safeDark, white && styles.safeWhite]}
       edges={['top', 'bottom']}
     >
+      {backdrop}
       <StatusBar
-        barStyle={dark ? 'light-content' : 'dark-content'}
+        barStyle={white ? 'dark-content' : 'light-content'}
         backgroundColor={dark ? colors.hero.canvas : white ? '#FFFFFF' : colors.background.primary}
       />
       <KeyboardAvoidingView

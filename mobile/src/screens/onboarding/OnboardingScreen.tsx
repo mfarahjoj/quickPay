@@ -11,6 +11,8 @@ import {
   StatusBar,
 } from 'react-native';
 import Svg, { Circle, Rect, Path, Polygon } from 'react-native-svg';
+import { useTranslation } from 'react-i18next';
+import { LanguageSelector } from '../../components/LanguageSelector';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 const { width: SW } = Dimensions.get('window');
@@ -201,6 +203,7 @@ function OrbitChip({ children, angleStyle, counterRotate }: {
 }
 
 function Slide1Illo() {
+  const { t } = useTranslation();
   const orbit = useLoop(16000);
   const pulse = useRef(new Animated.Value(1)).current;
 
@@ -242,7 +245,7 @@ function Slide1Illo() {
         </OrbitChip>
         <OrbitChip angleStyle={s1.chipRight} counterRotate={unspin}>
           <CheckIcon size={13} color={TEAL} />
-          <Text style={s1.chipText}>Paid</Text>
+          <Text style={s1.chipText}>{t('onboarding.illoPaid')}</Text>
         </OrbitChip>
       </Animated.View>
 
@@ -304,6 +307,7 @@ const s1 = StyleSheet.create({
 const SCAN_LOOP = 5600;
 
 function Slide2Illo() {
+  const { t: tr } = useTranslation();
   const t = useLoop(SCAN_LOOP);
   const bob = useRef(new Animated.Value(0)).current;
 
@@ -362,7 +366,7 @@ function Slide2Illo() {
         <View style={s2.roleChipWrap}>
           <View style={s2.roleChip}>
             <UserIcon size={13} />
-            <Text style={s2.roleText}>You</Text>
+            <Text style={s2.roleText}>{tr('onboarding.illoYou')}</Text>
           </View>
         </View>
       </Animated.View>
@@ -402,7 +406,7 @@ function Slide2Illo() {
         <View style={s2.roleChipWrap}>
           <View style={s2.roleChip}>
             <StoreIcon size={13} />
-            <Text style={s2.roleText}>Merchant</Text>
+            <Text style={s2.roleText}>{tr('onboarding.illoMerchant')}</Text>
           </View>
         </View>
       </Animated.View>
@@ -639,25 +643,25 @@ const s3 = StyleSheet.create({
 const SLIDES = [
   {
     key: 'speed',
-    headlinePlain: 'Money at the\nspeed of ',
-    headlineAccent: 'Zapp.',
-    sub: 'Pay anyone in Hargeisa before they finish saying mahadsanid.',
+    headlinePlainKey: 'onboarding.speed.lead',
+    headlineAccentKey: 'onboarding.speed.accent',
+    subKey: 'onboarding.speed.sub',
     dwell: 5200,
     Illo: Slide1Illo,
   },
   {
     key: 'scan',
-    headlinePlain: 'Show your QR.\n',
-    headlineAccent: 'They scan.',
-    sub: 'Any merchant, any phone — paid in seconds.',
+    headlinePlainKey: 'onboarding.scan.lead',
+    headlineAccentKey: 'onboarding.scan.accent',
+    subKey: 'onboarding.scan.sub',
     dwell: SCAN_LOOP + 700,
     Illo: Slide2Illo,
   },
   {
     key: 'pin',
-    headlinePlain: 'Only you can\n',
-    headlineAccent: 'say yes.',
-    sub: 'Every charge pings your phone and waits for your PIN. No PIN, no payment.',
+    headlinePlainKey: 'onboarding.pin.lead',
+    headlineAccentKey: 'onboarding.pin.accent',
+    subKey: 'onboarding.pin.sub',
     dwell: PIN_LOOP + 1100,
     Illo: Slide3Illo,
   },
@@ -671,6 +675,7 @@ const FADE_MS = 720;
 const DRIFT = 20;
 
 function SlidePanel({ slide }: { slide: Slide }) {
+  const { t } = useTranslation();
   const Illo = slide.Illo;
   return (
     <View style={ob.panel}>
@@ -679,10 +684,10 @@ function SlidePanel({ slide }: { slide: Slide }) {
       </View>
       <View style={ob.txt}>
         <Text style={ob.headline}>
-          {slide.headlinePlain}
-          <Text style={ob.headlineAccent}>{slide.headlineAccent}</Text>
+          {t(slide.headlinePlainKey)}
+          <Text style={ob.headlineAccent}>{t(slide.headlineAccentKey)}</Text>
         </Text>
-        <Text style={ob.sub}>{slide.sub}</Text>
+        <Text style={ob.sub}>{t(slide.subKey)}</Text>
       </View>
     </View>
   );
@@ -702,6 +707,7 @@ interface Props {
 type Layer = { idx: number; seq: number; dir: 1 | -1 };
 
 export default function OnboardingScreen({ onGetStarted, onLogin }: Props) {
+  const { t } = useTranslation();
   const [front, setFront] = useState<Layer>({ idx: 0, seq: 0, dir: 1 });
   const [back, setBack] = useState<Layer | null>(null);
   const mix = useRef(new Animated.Value(1)).current;
@@ -803,6 +809,7 @@ export default function OnboardingScreen({ onGetStarted, onLogin }: Props) {
               <Text style={ob.brandLight}>Pay</Text>
             </Text>
           </View>
+          <LanguageSelector dark />
         </View>
 
         {/* Auto-playing backdrop: illustration + headline dissolve together */}
@@ -822,12 +829,12 @@ export default function OnboardingScreen({ onGetStarted, onLogin }: Props) {
         {/* Fixed entry points — never tied to which slide is showing */}
         <Animated.View style={[ob.btm, riseStyle]}>
           <TouchableOpacity style={ob.primaryBtn} onPress={onGetStarted} activeOpacity={0.85}>
-            <Text style={ob.primaryText}>Get started</Text>
+            <Text style={ob.primaryText}>{t('onboarding.getStartedCta')}</Text>
             <BoltIcon size={18} color="#FFFFFF" />
           </TouchableOpacity>
 
           <TouchableOpacity style={ob.secondaryBtn} onPress={onLogin} activeOpacity={0.7}>
-            <Text style={ob.secondaryText}>Log in</Text>
+            <Text style={ob.secondaryText}>{t('onboarding.logIn')}</Text>
           </TouchableOpacity>
         </Animated.View>
       </Animated.View>

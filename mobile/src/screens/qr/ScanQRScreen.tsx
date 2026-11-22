@@ -7,6 +7,8 @@ import {
   Alert,
   ActivityIndicator,
   Vibration,
+  Linking,
+  AppState,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useFocusEffect } from '@react-navigation/native';
@@ -22,33 +24,36 @@ interface Props {
 
 export default function ScanQRScreen({ navigation }: Props) {
   const { t } = useTranslation();
-  const [hasPermission, setHasPermission] = useState(false);
+  // 'checking' until the OS answers, so the denied message never flashes.
+  const [permission, setPermission] = useState<'checking' | 'granted' | 'denied'>('checking');
+  const hasPermission = permission === 'granted';
   const [isScanning, setIsScanning] = useState(true);
   const [torchOn, setTorchOn] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   const device = useCameraDevice('back');
 
-  React.useEffect(() => {
-    (async () => {
-      try {
-        const granted = await requestCameraPermission();
-        setHasPermission(granted);
-        if (!granted) {
-          Alert.alert(
-            t('qr.scan.permissionTitle'),
-            t('qr.scan.permissionMessage'),
-            [
-              { text: t('common.cancel'), onPress: () => navigation.goBack(), style: 'cancel' },
-              { text: t('common.ok') },
-            ],
-          );
-        }
-      } catch {
-        Alert.alert(t('common.error'), t('common.failedRequestPermission'));
-        navigation.goBack();
-      }
-    })();
+  const checkPermission = React.useCallback(async () => {
+    try {
+      const granted = await requestCameraPermission();
+      setPermission(granted ? 'granted' : 'denied');
+    } catch {
+      Alert.alert(t('common.error'), t('common.failedRequestPermission'));
+      navigation.goBack();
+    }
   }, [navigation, t]);
+
+  React.useEffect(() => {
+    void checkPermission();
+  }, [checkPermission]);
+
+  // Coming back from Settings with the camera allowed opens the scanner.
+  React.useEffect(() => {
+    if (permission !== 'denied') return;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void checkPermission();
+    });
+    return () => sub.remove();
+  }, [permission, checkPermission]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -106,18 +111,42 @@ export default function ScanQRScreen({ navigation }: Props) {
     }
   };
 
-  if (!hasPermission) {
+  const closeBar = (
+    <View style={styles.topBar}>
+      <TouchableOpacity
+        style={styles.closeButton}
+        onPress={() => navigation.goBack()}
+        accessibilityLabel={t('common.close')}
+      >
+        <Text style={styles.closeIcon}>✕</Text>
+      </TouchableOpacity>
+      <Text style={styles.topBarTitle}>{t('qr.scan.title')}</Text>
+      <View style={styles.torchButtonSpacer} />
+    </View>
+  );
+
+  if (permission === 'denied') {
     return (
       <View style={styles.container}>
-        <Text style={styles.errorText}>{t('qr.scan.permissionRequired')}</Text>
+        {closeBar}
+        <View style={styles.deniedBody}>
+          <Text style={styles.deniedTitle}>{t('qr.scan.permissionTitle')}</Text>
+          <Text style={styles.errorText}>{t('qr.scan.permissionMessage')}</Text>
+          <TouchableOpacity style={styles.settingsButton} onPress={() => Linking.openSettings()}>
+            <Text style={styles.settingsButtonText}>{t('qr.scan.openSettings')}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
 
-  if (!device) {
+  if (!hasPermission || !device) {
     return (
       <View style={styles.container}>
-        <ActivityIndicator size="large" color={colors.primary} />
+        {closeBar}
+        <View style={styles.deniedBody}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
       </View>
     );
   }
@@ -322,7 +351,31 @@ const styles = StyleSheet.create({
   },
   errorText: {
     ...typography.body,
+    color: 'rgba(255, 255, 255, 0.75)',
+    textAlign: 'center',
+  },
+  torchButtonSpacer: { width: 40, height: 40 },
+  deniedBody: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
+    gap: spacing.md,
+  },
+  deniedTitle: {
+    ...typography.h3,
     color: colors.text.inverse,
     textAlign: 'center',
+  },
+  settingsButton: {
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.primary,
+  },
+  settingsButtonText: {
+    ...typography.bodySemibold,
+    color: colors.text.inverse,
   },
 });

@@ -30,6 +30,7 @@ import { Springs } from '../../constants/springs';
 import { SuccessCheckIcon } from '../../components/icons/AuthIcons';
 import { formatCountdown } from '../../utils/time';
 import { triggerHaptic } from '../../services/haptics.service';
+import { appendAmountKey } from '../../utils/amountInput';
 import { functions } from '../../services/firebase.config';
 import {
   TokenResponse,
@@ -264,9 +265,8 @@ export default function PaymentsScreen({ route }: Props) {
   const amount = Number(amountText || '0');
 
   const appendDigit = (digit: string) => {
-    if (digit === '.' && amountText.includes('.')) return;
     triggerHaptic('light');
-    setAmountText((prev) => `${prev}${digit}`);
+    setAmountText((prev) => appendAmountKey(prev, digit));
   };
 
   const backspace = () => {

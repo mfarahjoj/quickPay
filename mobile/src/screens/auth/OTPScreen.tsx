@@ -5,6 +5,7 @@ import { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import { verifyOTP, sendOTP } from '../../services/auth.service';
 import { AuthLayout, AuthHeader, CodeInput, useToast } from '../../components/auth';
 import { Button } from '../../components/Button';
+import { LanguageSelector } from '../../components/LanguageSelector';
 import { colors, typography, spacing } from '../../theme';
 
 interface Props {
@@ -76,7 +77,11 @@ export default function OTPScreen({ navigation, route }: Props) {
   };
 
   return (
-    <AuthLayout onBack={() => navigation.goBack()} contentStyle={styles.content}>
+    <AuthLayout
+      onBack={() => navigation.goBack()}
+      contentStyle={styles.content}
+      topRight={<LanguageSelector dark />}
+    >
       <Text style={styles.stepChip}>STEP 2 OF 3</Text>
       <AuthHeader
         title={t('auth.otp.title')}

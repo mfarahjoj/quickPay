@@ -18,6 +18,7 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 import { functions } from '../../services/firebase.config';
 import { triggerHaptic } from '../../services/haptics.service';
 import { colors, typography, spacing, borderRadius } from '../../theme';
@@ -36,8 +37,9 @@ interface Agent {
   };
 }
 
+const ALL_AREAS = '__all__';
 const HARGEISA_AREAS = [
-  'All Areas',
+  ALL_AREAS,
   'Sha\'ab',
   'Jigjiga Yar',
   '26 June',
@@ -49,7 +51,12 @@ const HARGEISA_AREAS = [
   'Beer Khalaf',
 ];
 
+// Agents type their own area, so "Jigjiga yar" and "Jigjiga Yar" must match.
+const normalizeArea = (s: string) =>
+  s.toLowerCase().replace(/['’`]/g, '').replace(/\s+/g, ' ').trim();
+
 function AnimatedAgentRow({ agent, index }: { agent: Agent; index: number }) {
+  const { t } = useTranslation();
   const opacity = useSharedValue(0);
   const y = useSharedValue(12);
 
@@ -90,18 +97,18 @@ function AnimatedAgentRow({ agent, index }: { agent: Agent; index: number }) {
         <View style={styles.servicePills}>
           {hasCashIn && (
             <View style={[styles.servicePill, styles.cashInPill]}>
-              <Text style={styles.cashInPillText}>Cash In</Text>
+              <Text style={styles.cashInPillText}>{t('agentLocator.cashIn')}</Text>
             </View>
           )}
           {hasCashOut && (
             <View style={[styles.servicePill, styles.cashOutPill]}>
-              <Text style={styles.cashOutPillText}>Cash Out</Text>
+              <Text style={styles.cashOutPillText}>{t('agentLocator.cashOut')}</Text>
             </View>
           )}
         </View>
       </View>
       <TouchableOpacity style={styles.callBtn} onPress={handleCall} activeOpacity={0.7}>
-        <Text style={styles.callBtnText}>Call</Text>
+        <Text style={styles.callBtnText}>{t('agentLocator.call')}</Text>
       </TouchableOpacity>
     </Animated.View>
   );
@@ -109,10 +116,12 @@ function AnimatedAgentRow({ agent, index }: { agent: Agent; index: number }) {
 
 export default function AgentLocatorScreen() {
   const navigation = useNavigation();
+  const { t } = useTranslation();
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [loadError, setLoadError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedArea, setSelectedArea] = useState('All Areas');
+  const [selectedArea, setSelectedArea] = useState(ALL_AREAS);
   const [search, setSearch] = useState('');
 
   const fetchAgents = useCallback(async () => {
@@ -128,8 +137,10 @@ export default function AgentLocatorScreen() {
       }));
 
       setAgents(list);
+      setLoadError(false);
     } catch (e) {
       console.error('Failed to fetch agents:', e);
+      setLoadError(true);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -146,7 +157,9 @@ export default function AgentLocatorScreen() {
   };
 
   const filtered = agents.filter((a) => {
-    const matchArea = selectedArea === 'All Areas' || a.agentInfo?.area === selectedArea;
+    const matchArea =
+      selectedArea === ALL_AREAS ||
+      normalizeArea(a.agentInfo?.area || '') === normalizeArea(selectedArea);
     const q = search.toLowerCase();
     const matchSearch =
       !q ||
@@ -164,8 +177,8 @@ export default function AgentLocatorScreen() {
           <Text style={styles.backArrow}>‹</Text>
         </TouchableOpacity>
         <View style={styles.headerText}>
-          <Text style={styles.headerTitle}>Find Agent</Text>
-          <Text style={styles.headerSub}>Cash in or cash out near you</Text>
+          <Text style={styles.headerTitle}>{t('agentLocator.title')}</Text>
+          <Text style={styles.headerSub}>{t('agentLocator.subtitle')}</Text>
         </View>
       </View>
 
@@ -173,7 +186,7 @@ export default function AgentLocatorScreen() {
       <View style={styles.searchWrap}>
         <TextInput
           style={styles.searchInput}
-          placeholder="Search by name or area..."
+          placeholder={t('agentLocator.searchPlaceholder')}
           placeholderTextColor="rgba(255,255,255,0.3)"
           value={search}
           onChangeText={setSearch}
@@ -194,7 +207,7 @@ export default function AgentLocatorScreen() {
             activeOpacity={0.7}
           >
             <Text style={[styles.areaChipText, selectedArea === item && styles.areaChipTextActive]}>
-              {item}
+              {item === ALL_AREAS ? t('agentLocator.allAreas') : item}
             </Text>
           </TouchableOpacity>
         )}
@@ -207,8 +220,12 @@ export default function AgentLocatorScreen() {
         </View>
       ) : filtered.length === 0 ? (
         <View style={styles.center}>
-          <Text style={styles.emptyTitle}>No agents found</Text>
-          <Text style={styles.emptySub}>Try a different area or search term</Text>
+          <Text style={styles.emptyTitle}>
+            {loadError ? t('agentLocator.loadErrorTitle') : t('agentLocator.emptyTitle')}
+          </Text>
+          <Text style={styles.emptySub}>
+            {loadError ? t('agentLocator.loadErrorSub') : t('agentLocator.emptySub')}
+          </Text>
         </View>
       ) : (
         <FlatList

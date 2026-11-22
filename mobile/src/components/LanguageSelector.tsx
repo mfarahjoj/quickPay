@@ -18,9 +18,11 @@ import type { PreferredLanguage } from '../types';
 interface LanguageSelectorProps {
   currentLanguage?: PreferredLanguage;
   compact?: boolean;
+  /** For dark screens such as onboarding. */
+  dark?: boolean;
 }
 
-export function LanguageSelector({ currentLanguage = 'en', compact = false }: LanguageSelectorProps) {
+export function LanguageSelector({ currentLanguage = 'en', compact = false, dark = false }: LanguageSelectorProps) {
   const { t, i18n } = useTranslation();
   const [visible, setVisible] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -37,7 +39,7 @@ export function LanguageSelector({ currentLanguage = 'en', compact = false }: La
 
     try {
       setSaving(true);
-      await applyLanguage(code);
+      const directionChanged = await applyLanguage(code);
 
       try {
         const updateProfileFn = functions().httpsCallable('updateProfile');
@@ -47,7 +49,10 @@ export function LanguageSelector({ currentLanguage = 'en', compact = false }: La
       }
 
       setVisible(false);
-      Alert.alert(t('language.changedTitle'), t('language.changedMessage'));
+      Alert.alert(
+        t('language.changedTitle'),
+        directionChanged ? t('language.reopenForLayout') : t('language.changedMessage'),
+      );
     } catch {
       Alert.alert(t('common.error'), t('language.changeFailed'));
     } finally {
@@ -58,14 +63,14 @@ export function LanguageSelector({ currentLanguage = 'en', compact = false }: La
   return (
     <>
       <TouchableOpacity
-        style={[styles.trigger, compact && styles.triggerCompact]}
+        style={[styles.trigger, compact && styles.triggerCompact, dark && styles.triggerDark]}
         onPress={() => setVisible(true)}
         accessibilityLabel={t('language.selectLanguage')}
         activeOpacity={0.7}
       >
         <Text style={styles.triggerFlag}>{current.flag}</Text>
-        {!compact && <Text style={styles.triggerLabel}>{current.nativeName}</Text>}
-        <Text style={styles.triggerChevron}>▾</Text>
+        {!compact && <Text style={[styles.triggerLabel, dark && styles.triggerTextDark]}>{current.nativeName}</Text>}
+        <Text style={[styles.triggerChevron, dark && styles.triggerTextDark]}>▾</Text>
       </TouchableOpacity>
 
       <BottomSheet visible={visible} onClose={() => setVisible(false)} height="45%">
@@ -110,6 +115,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border.light,
     gap: spacing.xs,
+  },
+  triggerDark: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderColor: 'rgba(255,255,255,0.14)',
+  },
+  triggerTextDark: {
+    color: 'rgba(255,255,255,0.85)',
   },
   triggerCompact: {
     paddingHorizontal: spacing.sm,

@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { normalizeAmountText } from '../../utils/amountInput';
 import { cooldownMessage } from '../../utils/cooldownMessage';
 import { BiometryTypes } from 'react-native-biometrics';
 import LinearGradient from 'react-native-linear-gradient';
@@ -76,7 +77,7 @@ export default function EnterAmountScreen({ navigation, route }: Props) {
     );
   }, []);
 
-  const parsedAmount = parseFloat(amount);
+  const parsedAmount = Number(amount || 'NaN');
   const isValidAmount = !isNaN(parsedAmount) && parsedAmount > 0;
 
   const handleContinue = () => {
@@ -163,7 +164,7 @@ export default function EnterAmountScreen({ navigation, route }: Props) {
             <TextInput
               style={styles.amountInput}
               value={amount}
-              onChangeText={setAmount}
+              onChangeText={(text) => setAmount(normalizeAmountText(text))}
               placeholder="0.00"
               placeholderTextColor={colors.text.tertiary}
               keyboardType="decimal-pad"

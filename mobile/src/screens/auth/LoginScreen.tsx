@@ -11,11 +11,13 @@ import {
   Linking,
   FlatList,
 } from 'react-native';
-import Svg, { Polygon } from 'react-native-svg';
+import Svg, { Polygon, Rect } from 'react-native-svg';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { sendOTP } from '../../services/auth.service';
 import { AuthLayout } from '../../components/auth';
 import { BottomSheet } from '../../components/BottomSheet';
+import { LanguageSelector } from '../../components/LanguageSelector';
 import { CheckIcon, ChevronDownIcon, CloseIcon } from '../../components/icons/AuthIcons';
 import { colors, typography, spacing } from '../../theme';
 
@@ -32,32 +34,65 @@ interface Props {
 }
 
 interface Country {
+  /** Unique id; two countries can share a dialling code. */
+  id: string;
   code: string;
-  flag: string;
+  /** Emoji flag; null draws the Somaliland flag, which has no emoji. */
+  flag: string | null;
   nameKey: string;
-  placeholder: string;
-  localLength: number;
-  maxInput: number;
+  /** Digit groups as typed, e.g. [2, 3, 4] → "63 123 4567". */
+  groups: number[];
+  /** Accepted local lengths. A leading trunk 0 (UK, Sweden) is allowed and dropped. */
+  digits: number[];
+  trunkZero?: boolean;
+  example: string;
 }
 
+// Somali numbers only for now. Add a row here to open sign-up to another
+// country; the picker appears on its own once there is more than one.
 const COUNTRIES: Country[] = [
-  {
-    code: '+252',
-    flag: '\u{1F1F8}\u{1F1F4}',
-    nameKey: 'common.somalia',
-    placeholder: 'XX XXX XXXX',
-    localLength: 9,
-    maxInput: 14,
-  },
-  {
-    code: '+44',
-    flag: '\u{1F1EC}\u{1F1E7}',
-    nameKey: 'common.unitedKingdom',
-    placeholder: 'XXXX XXX XXX',
-    localLength: 10,
-    maxInput: 15,
-  },
+  { id: 'SL', code: '+252', flag: null, nameKey: 'auth.login.countrySomaliland', groups: [2, 3, 4], digits: [9], example: '63 123 4567' },
 ];
+const CAN_PICK_COUNTRY = COUNTRIES.length > 1;
+
+const placeholderFor = (c: Country) => c.example.replace(/\d/g, 'X');
+const maxDigits = (c: Country) => Math.max(...c.digits) + (c.trunkZero ? 1 : 0);
+
+/** Groups digits as the person types: "631234567" → "63 123 4567". */
+function formatLocal(digits: string, c: Country): string {
+  const body = c.trunkZero && digits.startsWith('0') ? digits.slice(1) : digits;
+  const lead = body === digits ? '' : '0';
+  const parts: string[] = [];
+  let i = 0;
+  c.groups.forEach((g, idx) => {
+    if (i >= body.length) return;
+    const last = idx === c.groups.length - 1;
+    parts.push(body.slice(i, last ? undefined : i + g));
+    i += g;
+  });
+  return lead + parts.join(' ');
+}
+
+/** Somaliland flag: green, white with a black star, red. */
+function SomalilandFlag({ width = 24 }: { width?: number }) {
+  const h = (width * 2) / 3;
+  return (
+    <Svg width={width} height={h} viewBox="0 0 30 20">
+      <Rect x="0" y="0" width="30" height="6.67" fill="#006D21" />
+      <Rect x="0" y="6.67" width="30" height="6.67" fill="#FFFFFF" />
+      <Rect x="0" y="13.33" width="30" height="6.67" fill="#D21034" />
+      <Polygon
+        points="15,7.4 15.7,9.4 17.8,9.4 16.1,10.6 16.7,12.6 15,11.4 13.3,12.6 13.9,10.6 12.2,9.4 14.3,9.4"
+        fill="#000000"
+      />
+    </Svg>
+  );
+}
+
+function CountryFlag({ country, size }: { country: Country; size: number }) {
+  if (country.flag) return <Text style={{ fontSize: size }}>{country.flag}</Text>;
+  return <SomalilandFlag width={size * 1.3} />;
+}
 
 
 const CORAL = colors.dark.accent;
@@ -92,17 +127,11 @@ export default function LoginScreen({ navigation, intent = 'signup', onBack }: P
   const rise = useRef(new Animated.Value(0)).current;
   const ignite = useRef(new Animated.Value(0)).current;
 
-  const cleanNumber = localNumber.replace(/[\s\-()]/g, '');
-
-  const isValid = (() => {
-    if (selectedCountry.code === '+252') {
-      return /^\d{9}$/.test(cleanNumber);
-    }
-    if (selectedCountry.code === '+44') {
-      return /^\d{10,11}$/.test(cleanNumber);
-    }
-    return false;
-  })();
+  const insets = useSafeAreaInsets();
+  const cleanNumber = localNumber.replace(/\D/g, '');
+  const nationalNumber =
+    selectedCountry.trunkZero && cleanNumber.startsWith('0') ? cleanNumber.slice(1) : cleanNumber;
+  const isValid = selectedCountry.digits.includes(nationalNumber.length);
 
   useEffect(() => {
     Animated.spring(rise, { toValue: 1, tension: 60, friction: 12, useNativeDriver: true }).start();
@@ -127,8 +156,11 @@ export default function LoginScreen({ navigation, intent = 'signup', onBack }: P
   }, [isValid, ignite]);
 
   const handlePhoneChange = (text: string) => {
-    const filtered = text.replace(/[^\d\s\-()]/g, '');
-    setLocalNumber(filtered);
+    // Pasted or autofilled numbers may carry the country code; drop it.
+    let digits = text.replace(/\D/g, '');
+    const cc = selectedCountry.code.slice(1);
+    if (text.trim().startsWith('+') && digits.startsWith(cc)) digits = digits.slice(cc.length);
+    setLocalNumber(formatLocal(digits.slice(0, maxDigits(selectedCountry)), selectedCountry));
     if (phoneError) setPhoneError('');
     if (submitError) setSubmitError('');
   };
@@ -143,16 +175,16 @@ export default function LoginScreen({ navigation, intent = 'signup', onBack }: P
 
   const handleContinue = async () => {
     if (!isValid) {
-      setPhoneError(t('auth.login.phoneInvalid'));
+      setPhoneError(
+        t('auth.login.phoneInvalidHint', {
+          digits: selectedCountry.digits[0],
+          example: selectedCountry.example,
+        }),
+      );
       return;
     }
 
-    let normalizedNumber = cleanNumber;
-    if (selectedCountry.code === '+44' && normalizedNumber.startsWith('0')) {
-      normalizedNumber = normalizedNumber.substring(1);
-    }
-
-    const fullNumber = `${selectedCountry.code}${normalizedNumber}`;
+    const fullNumber = `${selectedCountry.code}${nationalNumber}`;
 
     try {
       setLoading(true);
@@ -175,10 +207,18 @@ export default function LoginScreen({ navigation, intent = 'signup', onBack }: P
   const glowOpacity = glow.interpolate({ inputRange: [0, 1], outputRange: [1, 0.75] });
 
   return (
-    <AuthLayout contentStyle={styles.content} onBack={onBack}>
-      {/* Ambient aura */}
-      <Animated.View pointerEvents="none" style={[styles.auraOuter, { opacity: glowOpacity, transform: [{ scale: glowScale }] }]} />
-      <Animated.View pointerEvents="none" style={[styles.auraInner, { opacity: glowOpacity, transform: [{ scale: glowScale }] }]} />
+    <AuthLayout
+      contentStyle={styles.content}
+      onBack={onBack}
+      topRight={<LanguageSelector dark />}
+      backdrop={
+        // Ambient aura, drawn behind the status bar so it isn't cut off.
+        <>
+          <Animated.View pointerEvents="none" style={[styles.auraOuter, { top: insets.top - 170, opacity: glowOpacity, transform: [{ scale: glowScale }] }]} />
+          <Animated.View pointerEvents="none" style={[styles.auraInner, { top: insets.top - 120, opacity: glowOpacity, transform: [{ scale: glowScale }] }]} />
+        </>
+      }
+    >
 
       {/* Wordmark + progress dots */}
       <View style={styles.topRow}>
@@ -210,28 +250,30 @@ export default function LoginScreen({ navigation, intent = 'signup', onBack }: P
         <TouchableOpacity
           style={styles.countryPill}
           onPress={() => setShowCountryPicker(true)}
+          disabled={!CAN_PICK_COUNTRY}
           activeOpacity={0.7}
         >
-          <Text style={styles.flagText}>{selectedCountry.flag}</Text>
+          <CountryFlag country={selectedCountry} size={20} />
           <Text style={styles.countryCodeText}>{selectedCountry.code}</Text>
-          <ChevronDownIcon color="rgba(255,255,255,0.4)" />
+          {CAN_PICK_COUNTRY && <ChevronDownIcon color="rgba(255,255,255,0.4)" />}
         </TouchableOpacity>
 
         <View
           style={[
             styles.phoneBox,
             focused && styles.phoneBoxFocused,
+            isValid && styles.phoneBoxValid,
             phoneError ? styles.phoneBoxError : undefined,
           ]}
         >
           <TextInput
             ref={inputRef}
             style={styles.phoneInput}
-            placeholder={selectedCountry.placeholder}
+            placeholder={placeholderFor(selectedCountry)}
             value={localNumber}
             onChangeText={handlePhoneChange}
             keyboardType="phone-pad"
-            maxLength={selectedCountry.maxInput}
+            maxLength={maxDigits(selectedCountry) + selectedCountry.groups.length + 2}
             autoFocus
             placeholderTextColor="rgba(255,255,255,0.25)"
             textContentType="telephoneNumber"
@@ -290,23 +332,23 @@ export default function LoginScreen({ navigation, intent = 'signup', onBack }: P
         </Text>
       </Animated.View>
 
-      <BottomSheet visible={showCountryPicker} onClose={() => setShowCountryPicker(false)} height="40%">
+      <BottomSheet visible={showCountryPicker} onClose={() => setShowCountryPicker(false)} height="65%">
         <Text style={styles.sheetTitle}>{t('auth.login.selectCountry')}</Text>
         <FlatList
           data={COUNTRIES}
-          keyExtractor={(item) => item.code}
+          keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <TouchableOpacity
-              style={[styles.countryRow, item.code === selectedCountry.code && styles.countryRowSelected]}
+              style={[styles.countryRow, item.id === selectedCountry.id && styles.countryRowSelected]}
               onPress={() => handleCountrySelect(item)}
               activeOpacity={0.7}
             >
-              <Text style={styles.countryRowFlag}>{item.flag}</Text>
+              <View style={styles.countryRowFlagBox}><CountryFlag country={item} size={24} /></View>
               <View style={styles.countryRowInfo}>
                 <Text style={styles.countryRowName}>{t(item.nameKey)}</Text>
                 <Text style={styles.countryRowCode}>{item.code}</Text>
               </View>
-              {item.code === selectedCountry.code && <CheckIcon />}
+              {item.id === selectedCountry.id && <CheckIcon />}
             </TouchableOpacity>
           )}
         />
@@ -321,7 +363,6 @@ const styles = StyleSheet.create({
   },
   auraOuter: {
     position: 'absolute',
-    top: -170,
     left: -60,
     width: 360,
     height: 360,
@@ -330,7 +371,6 @@ const styles = StyleSheet.create({
   },
   auraInner: {
     position: 'absolute',
-    top: -120,
     left: 0,
     width: 240,
     height: 240,
@@ -400,7 +440,12 @@ const styles = StyleSheet.create({
     height: 58,
     paddingHorizontal: 4,
   },
+  // Focus is a neutral highlight; coral is kept for a complete number so an
+  // empty field never looks like an error.
   phoneBoxFocused: {
+    borderColor: 'rgba(255,255,255,0.35)',
+  },
+  phoneBoxValid: {
     borderColor: CORAL,
   },
   phoneBoxError: {
@@ -479,8 +524,9 @@ const styles = StyleSheet.create({
   countryRowSelected: {
     backgroundColor: colors.dark.accentSoft,
   },
-  countryRowFlag: {
-    fontSize: 28,
+  countryRowFlagBox: {
+    width: 36,
+    alignItems: 'center',
     marginRight: spacing.md,
   },
   countryRowInfo: {

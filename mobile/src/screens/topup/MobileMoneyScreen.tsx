@@ -15,6 +15,7 @@ import { colors, typography, spacing, borderRadius } from '../../theme';
 import { CURRENCY_SYMBOL, PHONE_PREFIX } from '../../config/constants';
 import { useAuth } from '../../hooks/useAuth';
 import { triggerHaptic } from '../../services/haptics.service';
+import { appendAmountKey } from '../../utils/amountInput';
 import { functions } from '../../services/firebase.config';
 
 type Mode = 'topup' | 'cashout';
@@ -41,9 +42,8 @@ export default function MobileMoneyScreen() {
   const providerLabel = provider === 'zaad' ? t('topup.mobileMoney.zaad') : t('topup.mobileMoney.edahab');
 
   const appendDigit = (digit: string) => {
-    if (digit === '.' && amountText.includes('.')) return;
     triggerHaptic('light');
-    setAmountText((prev) => `${prev}${digit}`);
+    setAmountText((prev) => appendAmountKey(prev, digit));
   };
 
   const backspace = () => {

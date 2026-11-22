@@ -11,6 +11,7 @@ import {
 } from './device.service';
 import { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import i18n from '../i18n';
 import { logger } from '../utils/logger';
 
 export interface SetupPinData {
@@ -59,8 +60,16 @@ export async function verifyOTP(
  */
 export async function setupPin(data: SetupPinData): Promise<{ alreadyHasPin: boolean }> {
   try {
+    // A new account's profile starts in English; carry over the language the
+    // person is already using so the profile doesn't flip them back.
+    const languageBefore = i18n.language;
     const setupPinFunction = functions().httpsCallable('setupPin');
     const result = await setupPinFunction(data);
+    if ((result.data as { success?: boolean })?.success && languageBefore !== 'en') {
+      functions()
+        .httpsCallable('updateProfile')({ preferredLanguage: languageBefore })
+        .catch(() => {});
+    }
 
     const responseData = result.data as {
       success: boolean;
