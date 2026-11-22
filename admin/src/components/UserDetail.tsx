@@ -6,7 +6,7 @@ import { Avatar, EmptyState, Loading } from "./ui";
 import { ApiKeysPanel } from "./ApiKeysPanel";
 import { AdjustModal } from "./AdjustModal";
 
-type PendingAction = "freeze" | "unfreeze" | "clearLockouts" | "revokeDevices";
+type PendingAction = "freeze" | "unfreeze" | "clearLockouts" | "allowPinReset" | "revokeDevices";
 
 const ACTION_COPY: Record<
   PendingAction,
@@ -29,6 +29,13 @@ const ACTION_COPY: Record<
     description:
       "Resets failed PIN and agent-code counters so the customer can try again straight away. This also opens a PIN that locked after too many wrong tries, so only do it once you've confirmed who you're talking to, in person or against their ID.",
     confirm: "Clear lockouts",
+  },
+  allowPinReset: {
+    title: "Open a PIN reset",
+    description:
+      "For a customer who forgot their PIN and is with you in person. You never see or set the PIN: for the next 30 minutes they can tap \"Forgot PIN?\" in the app, confirm the SMS code and choose a new one, without the usual trusted-phone or ID question. Sending money is still paused for 24 hours afterwards, their other phones are signed out, and they are notified.",
+    confirm: "Open PIN reset",
+    danger: true,
   },
   revokeDevices: {
     title: "Revoke trusted devices",
@@ -86,6 +93,8 @@ export function UserDetail({ userId, canAdjust = false }: { userId: string; canA
   const [action, setAction] = useState<PendingAction | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [adjusting, setAdjusting] = useState(false);
+  // Opening a PIN reset needs an in-person ID check, confirmed per use.
+  const [idChecked, setIdChecked] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -109,6 +118,15 @@ export function UserDetail({ userId, canAdjust = false }: { userId: string; canA
     if (action === "freeze") await api.setAccountStatus(userId, "frozen", reason);
     if (action === "unfreeze") await api.setAccountStatus(userId, "active", reason);
     if (action === "clearLockouts") await api.clearLockouts(userId, reason);
+    if (action === "allowPinReset") {
+      const { expiresAt } = await api.allowPinReset(userId, reason);
+      setNotice(
+        `PIN reset opened until ${new Date(expiresAt).toLocaleTimeString()}. Ask the customer to tap "Forgot PIN?" in the app now.`
+      );
+      setAction(null);
+      await load();
+      return;
+    }
     if (action === "revokeDevices") await api.revokeDevices(userId, reason);
     setNotice(`${ACTION_COPY[action].title} — done.`);
     setAction(null);
@@ -175,6 +193,8 @@ export function UserDetail({ userId, canAdjust = false }: { userId: string; canA
               : detail.pinFailedAttempts
                 ? ` · ${detail.pinFailedAttempts} wrong in a row`
                 : ""}
+            {detail.pinResetGrantUntil &&
+              ` · staff reset open until ${new Date(detail.pinResetGrantUntil).toLocaleTimeString()}`}
           </dd>
           <dt>Device check</dt>
           <dd>{deviceRiskText(profile.deviceRisk)}</dd>
@@ -221,6 +241,15 @@ export function UserDetail({ userId, canAdjust = false }: { userId: string; canA
             </button>
           )}
           <button onClick={() => setAction("clearLockouts")}>Clear lockouts</button>
+          <button
+            onClick={() => {
+              setIdChecked(false);
+              setAction("allowPinReset");
+            }}
+            disabled={!detail.hasPin || closed}
+          >
+            Open PIN reset
+          </button>
           <button
             onClick={() => setAction("revokeDevices")}
             disabled={detail.trustedDeviceCount === 0}
@@ -303,9 +332,24 @@ export function UserDetail({ userId, canAdjust = false }: { userId: string; canA
           description={ACTION_COPY[action].description}
           confirmLabel={ACTION_COPY[action].confirm}
           danger={ACTION_COPY[action].danger}
+          confirmDisabled={action === "allowPinReset" && !idChecked}
           onConfirm={run}
           onCancel={() => setAction(null)}
-        />
+        >
+          {action === "allowPinReset" && (
+            <label className="row" style={{ gap: 8, margin: "12px 0" }}>
+              <input
+                type="checkbox"
+                checked={idChecked}
+                onChange={(e) => setIdChecked(e.target.checked)}
+              />
+              <span>
+                I checked their ID in person, and the name and photo match{" "}
+                <strong>{profile.fullName || "this account"}</strong>.
+              </span>
+            </label>
+          )}
+        </ReasonPrompt>
       )}
     </div>
   );

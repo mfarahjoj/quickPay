@@ -82,6 +82,8 @@ export interface UserDetail {
   /** Locked after too many wrong PINs; a reset or Clear lockouts opens it. */
   pinHardLocked?: boolean;
   pinFailedAttempts?: number;
+  /** When an open staff PIN reset expires (ISO), if one is open. */
+  pinResetGrantUntil?: string | null;
   wallet: { balance?: number; currency?: string; frozen?: boolean } | null;
   kyc: Record<string, unknown> | null;
   trustedDeviceCount: number;
@@ -418,6 +420,12 @@ export const api = {
       userId,
       reason,
     }),
+
+  allowPinReset: (userId: string, reason: string) =>
+    call<{ userId: string; reason: string; idChecked: true }, { auditId: string; expiresAt: string }>(
+      "adminAllowPinReset",
+      { userId, reason, idChecked: true }
+    ),
 
   revokeDevices: (userId: string, reason: string) =>
     call<{ userId: string; reason: string }, { revoked: number }>(

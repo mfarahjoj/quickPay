@@ -145,6 +145,7 @@ export {
   adminSearchUsers,
   adminGetUser,
   adminClearLockouts,
+  adminAllowPinReset,
   adminRevokeUserDevices,
   adminGetLedgerHealth,
 } from "./admin/lookupUser";
