@@ -16,7 +16,7 @@ import type {
 } from 'react-native-webview/lib/WebViewTypes';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { colors } from '../../theme';
+import { makeStyles, useColors } from '../../theme';
 
 /**
  * Our own pages (terms, privacy, support) open in a sheet inside the app
@@ -58,6 +58,8 @@ export function openInAppBrowser(url: string): void {
 export function InAppBrowserHost() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const colors = useColors();
+  const styles = useStyles();
   const webRef = useRef<WebViewHandle>(null);
   const [url, setUrl] = useState<string | null>(null);
   const [currentUrl, setCurrentUrl] = useState<string | null>(null);
@@ -173,7 +175,7 @@ export function InAppBrowserHost() {
             />
             {loading && !failed ? (
               <View style={styles.loading} pointerEvents="none">
-                <ActivityIndicator color={colors.dark.accent} />
+                <ActivityIndicator color={colors.ui.accent} />
               </View>
             ) : null}
           </View>
@@ -183,24 +185,24 @@ export function InAppBrowserHost() {
   );
 }
 
-const styles = StyleSheet.create({
-  sheet: { flex: 1, backgroundColor: colors.dark.canvas },
+const useStyles = makeStyles((colors) => StyleSheet.create({
+  sheet: { flex: 1, backgroundColor: colors.ui.canvas },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.dark.divider,
+    borderBottomColor: colors.ui.divider,
   },
   headerBtn: { minWidth: 64, minHeight: 32, justifyContent: 'center' },
   headerBtnRight: { alignItems: 'flex-end' },
-  closeText: { color: colors.dark.accentText, fontSize: 16, fontWeight: '600' },
-  externalIcon: { color: colors.dark.textDim, fontSize: 20 },
+  closeText: { color: colors.ui.accentText, fontSize: 16, fontWeight: '600' },
+  externalIcon: { color: colors.ui.textDim, fontSize: 20 },
   title: {
     flex: 1,
     textAlign: 'center',
-    color: colors.dark.text,
+    color: colors.ui.text,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -217,14 +219,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
-  errorTitle: { color: colors.dark.text, fontSize: 16, textAlign: 'center', marginBottom: 16 },
+  errorTitle: { color: colors.ui.text, fontSize: 16, textAlign: 'center', marginBottom: 16 },
   retryBtn: {
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 999,
-    backgroundColor: colors.dark.accent,
+    backgroundColor: colors.ui.accent,
   },
   retryText: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
-});
+}));
