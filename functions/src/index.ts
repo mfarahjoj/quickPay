@@ -143,6 +143,27 @@ export { approvePaymentRequest } from "./customer-qr/approvePayment";
 export { rejectPaymentRequest } from "./customer-qr/rejectPayment";
 export { cancelPaymentRequest } from "./customer-qr/cancelPayment";
 
+// Bills: shops send bills, customers pay them or turn on auto-pay (bills/).
+export {
+  createBill,
+  cancelBill,
+  merchantListBills,
+  stopBillSeries,
+} from "./bills/merchant";
+export {
+  listMyBills,
+  payBill,
+  declineBill,
+  setBillAutopay,
+  disableBillAutopay,
+} from "./bills/customer";
+export {
+  requestDirectPayment,
+  cancelDirectPaymentRequest,
+  answerDirectPaymentRequest,
+} from "./bills/requests";
+export { billsHourly } from "./bills/schedule";
+
 // Merchant functions
 export { registerMerchant } from "./merchants/registerMerchant";
 export { getMerchantProfile } from "./merchants/getMerchantProfile";
@@ -298,11 +319,14 @@ export {
   getApiAgreement,
   approveApiAgreement,
   listMyAgreements,
+  getMyPendingAgreements,
   revokeMyAgreement,
 } from "./api/approveApiAgreement";
 export { adminListAgreements, adminRevokeAgreement } from "./admin/apiAgreements";
 export { expireApiCharges } from "./api/expireCharges";
-export { onApiChargeWritten, retryWebhookDeliveries } from "./api/webhooks";
+export { onApiChargeWritten, onApiAgreementWritten, retryWebhookDeliveries } from "./api/webhooks";
+// A customer's first top-up, for partners' agreements (Ridy drivers must have topped up once).
+export { agreementFundingOnTransaction } from "./api/agreementFunding";
 export {
   adminListApiKeys,
   adminIssueApiKey,

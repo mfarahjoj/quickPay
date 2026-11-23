@@ -47,11 +47,13 @@ import { assertCustomerMaySpend, settleChargeInTx } from "./settleCharge";
 import { chargeConfirmationPayload, isP256PublicKey, signatureValid } from "./agreementSignature";
 import {
   AGREEMENT_DAYS_SUBCOLLECTION,
+  API_AGREEMENT_ROLES,
   API_AGREEMENTS_COLLECTION,
   API_CHARGES_COLLECTION,
   API_IDEMPOTENCY_COLLECTION,
   AgreementDay,
   ApiAgreement,
+  ApiAgreementRole,
   ApiAgreementStatus,
   ApiCharge,
   ApiIdempotencyRecord,
@@ -61,6 +63,13 @@ import {
 
 export const AGREEMENT_ID_PATTERN = /^agr_[A-Za-z0-9_-]{16,64}$/;
 export const AGREEMENT_TTL_MS = 15 * 60 * 1000;
+/**
+ * How long a sign-up agreement waits: one made for a number with no Zapp
+ * account, which the person may only approve once they've installed Zapp
+ * and signed up with that number.
+ */
+export const SIGNUP_AGREEMENT_TTL_MS = 30 * 24 * 3600 * 1000;
+const MAX_CUSTOMER_NAME = 80;
 /** Confirms refused for a bad signature before the charge falls back to Zapp. */
 export const MAX_BAD_SIGNATURES = 5;
 const MAX_LABEL = 40;
@@ -93,6 +102,10 @@ export function serializeAgreement(id: string, a: ApiAgreement, now = Date.now()
     customer_phone: a.customerPhone,
     device_label: a.deviceLabel ?? null,
     reference: a.reference ?? null,
+    role: a.role ?? "customer",
+    signup: a.signup === true,
+    // Only whether, never how much or when exactly: the customer agreed to that much.
+    customer_topped_up: Boolean(a.customerToppedUpAt),
     deep_link: agreementDeepLink(id),
     max_charge: a.maxChargeUsdCents ?? null,
     daily_limit: a.dailyUsdCents ?? null,
@@ -111,6 +124,9 @@ interface NormalisedAgreementInput {
   devicePublicKey: string;
   deviceLabel?: string;
   reference?: string;
+  role: ApiAgreementRole;
+  signup: boolean;
+  customerName?: string;
 }
 
 export function parseAgreementInput(
@@ -130,12 +146,38 @@ export function parseAgreementInput(
     );
   }
   const label = parseOptionalString(body.device_label, "device_label", 200)?.trim().slice(0, MAX_LABEL);
+  const role = body.role ?? "customer";
+  if (typeof role !== "string" || !API_AGREEMENT_ROLES.includes(role as ApiAgreementRole)) {
+    throw badRequest("parameter_invalid", `role must be one of: ${API_AGREEMENT_ROLES.join(", ")}`, "role");
+  }
+  if (body.signup !== undefined && typeof body.signup !== "boolean") {
+    throw badRequest("parameter_invalid", "signup must be true or false", "signup");
+  }
+  const name = parseOptionalString(body.customer_name, "customer_name", 200)
+    ?.replace(/\s+/g, " ")
+    .trim()
+    .slice(0, MAX_CUSTOMER_NAME);
   return {
     customerPhone: phone,
     devicePublicKey: key,
     deviceLabel: label || undefined,
     reference: parseOptionalString(body.reference, "reference", MAX_REFERENCE),
+    role: role as ApiAgreementRole,
+    signup: body.signup === true,
+    customerName: name || undefined,
   };
+}
+
+/**
+ * Whether [phone] has a Zapp account that finished sign-up. A wallet is made
+ * with the PIN (setupPin), so someone who got the code and stopped there is
+ * still signing up.
+ */
+export async function hasZappWallet(phone: string): Promise<boolean> {
+  const db = admin.firestore();
+  const snap = await db.collection("users").where("phoneNumber", "==", phone).limit(1).get();
+  if (snap.empty) return false;
+  return (await db.collection("wallets").doc(snap.docs[0].id).get()).exists;
 }
 
 export async function createAgreement(
@@ -163,6 +205,10 @@ export async function createAgreement(
   const now = admin.firestore.Timestamp.now();
   const ref = db.collection(API_AGREEMENTS_COLLECTION).doc(newAgreementId());
   const merchantName = await merchantNameOf(caller);
+  // A sign-up agreement waits for the person to join Zapp. Someone already in
+  // Zapp approves within minutes, so theirs keeps the short life whatever the
+  // partner asked; the name is only for filling in sign-up, so it goes too.
+  const signup = input.signup && !(await hasZappWallet(input.customerPhone));
   const agreement: ApiAgreement = {
     merchantId: caller.merchantId,
     merchantName,
@@ -173,8 +219,13 @@ export async function createAgreement(
     devicePublicKey: input.devicePublicKey,
     ...(input.deviceLabel ? { deviceLabel: input.deviceLabel } : {}),
     ...(input.reference ? { reference: input.reference } : {}),
+    ...(input.role !== "customer" ? { role: input.role } : {}),
+    ...(signup ? { signup: true } : {}),
+    ...(signup && input.customerName ? { customerName: input.customerName } : {}),
     createdAt: now,
-    expiresAt: admin.firestore.Timestamp.fromMillis(now.toMillis() + AGREEMENT_TTL_MS),
+    expiresAt: admin.firestore.Timestamp.fromMillis(
+      now.toMillis() + (signup ? SIGNUP_AGREEMENT_TTL_MS : AGREEMENT_TTL_MS)
+    ),
   };
 
   const outcome = await db.runTransaction(async (tx): Promise<{ record: ApiIdempotencyRecord } | { created: true }> => {
@@ -192,6 +243,38 @@ export async function createAgreement(
   });
   if ("record" in outcome) return replay(outcome.record);
   return { id: ref.id, agreement, replayed: false };
+}
+
+/**
+ * At sign-up: note which partner brought [userId] to Zapp, from the newest
+ * open sign-up agreement left for [phone]. For counting only; it pays no one.
+ */
+export async function noteSignupSource(userId: string, phone: string | undefined): Promise<void> {
+  if (!phone) return;
+  const db = admin.firestore();
+  const snap = await db
+    .collection(API_AGREEMENTS_COLLECTION)
+    .where("customerPhone", "==", phone)
+    .where("livemode", "==", true)
+    .where("status", "==", "pending")
+    .get();
+  const now = Date.now();
+  const newest = snap.docs
+    .map((d) => ({ id: d.id, a: d.data() as ApiAgreement }))
+    .filter(({ a }) => a.signup === true && !agreementLapsed(a, now))
+    .sort((x, y) => y.a.createdAt.toMillis() - x.a.createdAt.toMillis())[0];
+  if (!newest) return;
+  await db.collection("users").doc(userId).set(
+    {
+      signupSource: {
+        merchantId: newest.a.merchantId,
+        merchantName: newest.a.merchantName,
+        agreementId: newest.id,
+        at: admin.firestore.Timestamp.now(),
+      },
+    },
+    { merge: true }
+  );
 }
 
 async function merchantNameOf(caller: ApiCaller): Promise<string> {

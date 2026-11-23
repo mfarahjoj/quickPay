@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from '../../components/SafeAreaView';
 import { useTranslation } from 'react-i18next';
 import { setupPin } from '../../services/auth.service';
+import { auth } from '../../services/firebase.config';
+import { loadPendingAgreements, rememberOffer, requestToOffer } from '../../services/partnerSignup';
 import { setPendingSetupPin } from '../../services/biometric.service';
 import { markPinVerifiedThisInstall } from '../../hooks/usePinVerifiedThisInstall';
 import { markPinSetupDone } from '../../hooks/usePinSetupDone';
@@ -19,6 +21,10 @@ type Step = 'name' | 'enter' | 'confirm';
  * Name and a new PIN. Finishing sets the gates' flags (services/signInFlags)
  * and AppNavigator moves on: to Face ID setup for a new PIN, or to
  * welcome-back when the account turned out to have one already.
+ *
+ * Someone joining from a partner's app (Ridy) finds their name filled in from
+ * the partner, and the partner's request to link opens once they're in
+ * (services/partnerSignup).
  */
 export default function SetupPinScreen() {
   const styles = useStyles();
@@ -33,6 +39,25 @@ export default function SetupPinScreen() {
   const [referralCode, setReferralCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  // The partner whose name for this person filled the field, while it stands.
+  const [prefilledBy, setPrefilledBy] = useState<string | null>(null);
+  const nameTyped = useRef(false);
+
+  useEffect(() => {
+    const uid = auth().currentUser?.uid;
+    if (!uid) return;
+    let live = true;
+    loadPendingAgreements(uid).then((pending) => {
+      const request = requestToOffer(pending);
+      const name = pending?.prefill.fullName;
+      if (!live || !request?.signup || !name || nameTyped.current) return;
+      setFullName(name);
+      setPrefilledBy(request.merchantName);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
 
   // ─── Step 1: Name ────────────────────────────────────────────
 
@@ -87,6 +112,11 @@ export default function SetupPinScreen() {
         // Before "has a PIN" below, which moves the navigator on: without it
         // welcome-back would come up asking for the PIN just chosen.
         markPinVerifiedThisInstall(pin);
+        // A partner's request waiting for this number opens once the app is
+        // ready. Also before "has a PIN", which unmounts this screen.
+        const uid = auth().currentUser?.uid;
+        const request = uid ? requestToOffer(await loadPendingAgreements(uid)) : null;
+        if (uid && request) await rememberOffer(uid, request.agreementId).catch(() => undefined);
       }
       await markPinSetupDone();
     } catch (error: any) {
@@ -126,12 +156,17 @@ export default function SetupPinScreen() {
           placeholder={t('auth.setupPin.fullNamePlaceholder')}
           value={fullName}
           onChangeText={(text) => {
+            nameTyped.current = true;
             setFullName(text);
+            setPrefilledBy(null);
             if (nameError) setNameError('');
           }}
           autoCapitalize="words"
           error={nameError}
         />
+        {prefilledBy ? (
+          <Text style={styles.prefilled}>{t('auth.setupPin.prefilled', { merchant: prefilledBy })}</Text>
+        ) : null}
         <Input
           label={t('invite.howInvited')}
           placeholder={t('invite.codePlaceholder')}
@@ -206,6 +241,12 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
   button: {
     marginTop: spacing.md,
     marginBottom: spacing.lg,
+  },
+  prefilled: {
+    ...typography.caption,
+    color: colors.ui.textFaint,
+    marginTop: -spacing.sm,
+    marginBottom: spacing.md,
   },
   submitError: {
     ...typography.caption,

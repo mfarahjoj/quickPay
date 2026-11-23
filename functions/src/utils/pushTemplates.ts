@@ -554,6 +554,63 @@ export const PUSH_TEMPLATES = {
     so: { title: "Gelitaankii shaqaalaha waa dhammaaday", body: "{shop} ayaa kaa saaray shaqaalahooda. Mar dambe uma shaqayn kartid Zapp Pay Merchant." },
     ar: { title: "انتهى وصول الموظف", body: "أزالك {shop} من موظفيه. لم يعد بإمكانك العمل لصالحه في Zapp Pay Merchant." },
   },
+
+  // Bills (bills/): a shop bills a customer; the customer pays or auto-pays.
+  "bill.received": {
+    en: { title: "New bill from {merchant}", body: "{amount} for {description}, due {due}." },
+    so: { title: "Biil cusub oo ka yimid {merchant}", body: "{amount} oo ah {description}, waxaa la bixinayaa {due}." },
+    ar: { title: "فاتورة جديدة من {merchant}", body: "{amount} مقابل {description}، تستحق في {due}." },
+  },
+  "bill.received_autopay": {
+    en: { title: "New bill from {merchant}", body: "{amount} for {description}. Auto-pay will pay it on {due}." },
+    so: { title: "Biil cusub oo ka yimid {merchant}", body: "{amount} oo ah {description}. Bixinta tooska ah ayaa bixin doonta {due}." },
+    ar: { title: "فاتورة جديدة من {merchant}", body: "{amount} مقابل {description}. سيدفعها الدفع التلقائي في {due}." },
+  },
+  "bill.over_autopay_limit": {
+    en: { title: "New bill from {merchant}", body: "{amount} is more than your auto-pay limit, so pay it yourself by {due}." },
+    so: { title: "Biil cusub oo ka yimid {merchant}", body: "{amount} wuu ka badan yahay xadka bixinta tooska ah, ee adigu bixi ka hor {due}." },
+    ar: { title: "فاتورة جديدة من {merchant}", body: "{amount} أكثر من حد الدفع التلقائي، فادفعها بنفسك قبل {due}." },
+  },
+  "bill.autopaid": {
+    en: { title: "Bill paid automatically", body: "You paid {merchant} {amount} for {description}." },
+    so: { title: "Biilka si toos ah ayaa loo bixiyay", body: "Waxaad {merchant} u bixisay {amount} oo ah {description}." },
+    ar: { title: "تم دفع الفاتورة تلقائيًا", body: "دفعت إلى {merchant} مبلغ {amount} مقابل {description}." },
+  },
+  "bill.autopay_failed": {
+    en: { title: "Auto-pay couldn't pay a bill", body: "Your {amount} bill from {merchant} is still due. Open Bills to pay it." },
+    so: { title: "Bixinta tooska ah ma bixin karin biil", body: "Biilkaaga {amount} ee {merchant} weli waa lagu leeyahay. Fur Biilasha si aad u bixiso." },
+    ar: { title: "تعذّر الدفع التلقائي لفاتورة", body: "فاتورتك بقيمة {amount} من {merchant} ما زالت مستحقة. افتح الفواتير لدفعها." },
+  },
+  "bill.paid": {
+    en: { title: "Bill paid", body: "{customer} paid {amount} for {description}." },
+    so: { title: "Biilka waa la bixiyay", body: "{customer} ayaa bixiyay {amount} oo ah {description}." },
+    ar: { title: "تم دفع الفاتورة", body: "دفع {customer} مبلغ {amount} مقابل {description}." },
+  },
+  "bill.declined": {
+    en: { title: "Bill declined", body: "{customer} declined your bill for {amount}." },
+    so: { title: "Biilka waa la diiday", body: "{customer} ayaa diiday biilkaaga {amount}." },
+    ar: { title: "تم رفض الفاتورة", body: "رفض {customer} فاتورتك بقيمة {amount}." },
+  },
+  "bill.series_stopped": {
+    en: { title: "Repeat bill stopped", body: "{customer} stopped your repeating bill for {description}." },
+    so: { title: "Biilka soo noqnoqda waa la joojiyay", body: "{customer} ayaa joojiyay biilkaaga soo noqnoqda ee {description}." },
+    ar: { title: "تم إيقاف الفاتورة المتكررة", body: "أوقف {customer} فاتورتك المتكررة مقابل {description}." },
+  },
+  "bill.request_received": {
+    en: { title: "Direct payment request", body: "{customer} wants to pay you {amount} {interval} for {description}. Approve it in Bills." },
+    so: { title: "Codsi lacag-bixin toos ah", body: "{customer} wuxuu rabaa inuu kuu bixiyo {amount} {interval} oo ah {description}. Ku oggolow Biilasha." },
+    ar: { title: "طلب دفع مباشر", body: "يريد {customer} أن يدفع لك {amount} {interval} مقابل {description}. وافق عليه في الفواتير." },
+  },
+  "bill.request_approved": {
+    en: { title: "Direct payment approved", body: "{merchant} approved it. Your first payment of {amount} is due {due}." },
+    so: { title: "Lacag-bixinta tooska ah waa la oggolaaday", body: "{merchant} wuu oggolaaday. Lacag-bixintaada ugu horreysa ee {amount} waxaa la bixinayaa {due}." },
+    ar: { title: "تمت الموافقة على الدفع المباشر", body: "وافق {merchant}. دفعتك الأولى بقيمة {amount} تستحق في {due}." },
+  },
+  "bill.request_declined": {
+    en: { title: "Direct payment declined", body: "{merchant} declined your request for {description}." },
+    so: { title: "Lacag-bixinta tooska ah waa la diiday", body: "{merchant} ayaa diiday codsigaaga {description}." },
+    ar: { title: "تم رفض الدفع المباشر", body: "رفض {merchant} طلبك مقابل {description}." },
+  },
 } as const satisfies Record<string, Translations>;
 
 export type PushTemplateKey = keyof typeof PUSH_TEMPLATES;

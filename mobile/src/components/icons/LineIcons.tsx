@@ -119,6 +119,16 @@ export function SendIcon(props: IconProps) {
   );
 }
 
+/** A bill: a receipt with a torn foot and two lines of text. */
+export function BillIcon(props: IconProps) {
+  return (
+    <Line {...props}>
+      <Path d="M6 3h12v18l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4L6 21z" />
+      <Path d="M9 8h6 M9 12h6 M9 16h3" />
+    </Line>
+  );
+}
+
 export function PinIcon(props: IconProps) {
   return (
     <Line {...props}>

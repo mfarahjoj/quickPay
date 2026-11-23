@@ -94,6 +94,7 @@ const RETURN_TYPES = new Set([
   "qr_payment",
   "customer_qr_payment",
   "online_payment",
+  "bill_payment",
   "agent_cashout",
   "payroll",
   "refund",

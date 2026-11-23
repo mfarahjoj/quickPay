@@ -416,6 +416,10 @@ export interface Transaction {
   lastRefundTransactionId?: string;
   /** Journal entry that moved the money (accounting source of truth). */
   journalEntryId?: string;
+  /** On a bill payment: the bill it paid (`bills/{billId}`). */
+  billId?: string;
+  /** On a bill payment: paid by auto-pay rather than by the customer's PIN. */
+  autopay?: boolean;
   /** Cash-out only: the entry that took the hold (journalEntryId is the settlement once completed). */
   holdEntryId?: string;
   /** Cash-out only: the entry that returned the hold to the customer. */
@@ -568,7 +572,9 @@ export interface Notification {
     /** Zapp Business: a request to link stores, or its acceptance (portal/groups.ts). */
     | "store_link"
     /** Staff access: an invite, a role change or a removal (staff/manage.ts). */
-    | "staff";
+    | "staff"
+    /** Bills: one arrived, was paid, declined, or auto-pay couldn't pay it (bills/). */
+    | "bill";
   title: string;
   body: string;
   data?: Record<string, string>;

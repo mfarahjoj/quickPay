@@ -23,6 +23,7 @@ import { hasDeviceCredential } from '../services/device.service';
 import { labelTrustedDevice, registerTrustedDevice, signOut } from '../services/auth.service';
 import { View, StyleSheet, ActivityIndicator, Linking, BackHandler, Platform } from 'react-native';
 import { parsePaymentLink, type PaymentLink } from '../services/paymentLink.service';
+import { takeOffer } from '../services/partnerSignup';
 import { makeStyles, useColors, useTheme } from '../theme';
 import OnboardingScreen from '../screens/onboarding/OnboardingScreen';
 import { Springs } from '../constants/springs';
@@ -102,6 +103,12 @@ type MainStackParamList = {
   // A partner (Ridy) asking to take payments, each approved in its own app.
   ApproveAgreement: { agreementId: string };
   LinkedApps: undefined;
+  // Bills from shops: pay, decline, auto-pay (functions/src/bills/).
+  Bills: undefined;
+  BillDetail: { billId: string };
+  // The receipt the "shop approved your direct payment" push opens.
+  DirectPaymentReceipt: { seriesId: string; requestId?: string };
+  RequestDirectPayment: { shops?: { merchantId: string; name: string }[] } | undefined;
   // `MobileMoney` and `SendRemittance` are intentionally unregistered: both
   // screens call callables that were deleted from prod on 2026-09-18 because
   // the Zaad/eDahab and Stripe stubs turned fake success into real balance.
@@ -396,6 +403,26 @@ function MainStackNavigator() {
         options={{ headerShown: false }}
       />
       <MainStack.Screen
+        name="Bills"
+        getComponent={() => require('../screens/bills/BillsScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="BillDetail"
+        getComponent={() => require('../screens/bills/BillDetailScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="DirectPaymentReceipt"
+        getComponent={() => require('../screens/bills/DirectPaymentReceiptScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="RequestDirectPayment"
+        getComponent={() => require('../screens/bills/RequestDirectPaymentScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
         name="MerchantOnboarding"
         getComponent={() => require('../screens/merchant/MerchantOnboardingScreen').default}
         options={{ title: t('nav.screen.becomeMerchant') }}
@@ -529,6 +556,18 @@ export default function AppNavigator() {
     });
     setPendingLink(null);
   }, [pendingLink, user, navReadyTick]);
+
+  // Joined from a partner's app (Ridy): its request to link, left before they
+  // had Zapp, opens once the app is up — after the PIN, terms and Zaad, since
+  // the navigation container only mounts behind those gates.
+  useEffect(() => {
+    if (!user || !navigationRef.isReady()) return;
+    takeOffer(user.uid)
+      .then((agreementId) => {
+        if (agreementId && navigationRef.isReady()) navigationRef.navigate('ApproveAgreement', { agreementId });
+      })
+      .catch(() => undefined);
+  }, [user, navReadyTick]);
 
   // The welcome screen is the logged-out home, not a one-time tour: this is
   // session state, so signing out lands you back on it with both entry points

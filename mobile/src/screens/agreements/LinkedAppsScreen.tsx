@@ -77,7 +77,9 @@ export default function LinkedAppsScreen({ navigation }: any) {
         ) : (
           rows.map((a) => (
             <View key={a.agreementId} style={styles.card}>
-              <Text style={styles.name}>{a.merchantName}</Text>
+              <Text style={styles.name}>
+                {a.role === 'worker' ? t('agreements.linked.worker', { merchant: a.merchantName }) : a.merchantName}
+              </Text>
               <Text style={styles.meta}>
                 {t('agreements.linked.limits', {
                   perPayment: formatMoney(a.maxChargeUsdCents, 'USD'),
