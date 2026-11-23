@@ -152,6 +152,11 @@ export function InAppBrowserHost() {
               }}
               onNavigationStateChange={(nav: WebViewNavigation) => {
                 if (nav.url) setCurrentUrl(nav.url);
+                // onLoadEnd keeps the first page's title after a link is
+                // followed, so take it from here once the new page is done.
+                if (!nav.loading && nav.title && !/^https?:/.test(nav.title)) {
+                  setTitle(nav.title);
+                }
               }}
               onError={() => {
                 setFailed(true);
