@@ -96,12 +96,17 @@ Harness state: emulators re-seeded 13:05 and running (scripts/qa/emulators.sh); 
 
 Changed this pass (uncommitted): merchant History, Dashboard, OTP, Login, LanguageSelector, ConfirmCashOut, ZaadTopups, BuyFloatZaad; customer PaymentConfirm, EnterAmount, utils/money (+test), useAppLock, KYCScreen, InviteScreen; functions getTransactionSummary (+test), submitKYC (+test); both apps' LaunchScreen.storyboard + SplashMark/SplashBackground assets. Nothing deployed.
 
-Needs an owner (not changed here):
-1. **manualTopup blank reference → INTERNAL** (functions/src/topup/manualTopup.ts:289). Money flow. Every manual top-up without a reference fails today.
-2. Agent cash-out has no preview of amount/customer before the PIN (top-up has one).
-3. Merchant History day total counts float movements and pending payouts as takings.
-4. Zaad "Top-ups" screen title vs content; Linked Accounts "Coming soon" vs the Zaad account row.
-5. KYC selfie from gallery.
-6. Locale-file items held back while other branches edit those files: Invite share text (no Arabic), hard-coded "$1" in invite strings, customer language-change confirmation (PR 44), Insights day names, English server descriptions as row titles in so/ar, device-locale dates.
-7. From the earlier pass: merge fix/qr-expires-at-iso; Arabic RTL (sibling session); scanner fallback without a camera.
-8. Not walked yet: merchant light-mode Somali beyond dashboard/History/Settings; customer app in so/ar this pass; dispute send with the on-screen keyboard up (needs a device or the simulator's hardware keyboard disconnected).
+Sorted out afterwards (commit 09918b8, not deployed):
+1. manualTopup blank reference: key omitted, regression test. Verified: $3 to Hodan with no reference → 200 (m75). Was 500.
+2. Agent cash-out preview: new `previewAgentCashOut` (read-only; code attempts count as for a confirm) + optional `expectedAmount`/`expectedCurrency` guard on `agentConfirmCashOut`. App: code → "Hand over this much cash $7.00 / Amina Warsame" → PIN "Pay $7.00 to Amina Warsame" → paid (m72–m74). Tests: cashOutPreview.test.ts. **Deploy previewAgentCashOut + agentConfirmCashOut before shipping the merchant build**, or Give cash fails on "not found".
+3. History day total = net takings (completed sales net, refunds given, commission): agent's Today reads "+$4.30 · +8,000 SLSH", matching the header (m76). getTransactionSummary now also counts cash-out commission.
+4. KYC selfie: front camera only (gallery kept when running on the emulators, which have no camera). Not verifiable on the simulator.
+5. Linked Accounts: shows the saved Zaad account with "Top-ups soon" and a one-line explanation (c90).
+6. Invite: share text in the locale files with an Arabic version; Home card "Earn when friends join Zapp Pay" (c89); unused `invite.subtitle` removed. New so/ar strings (cash-out review, linked accounts, share text) are my own wording: have a native speaker check them.
+Ledger after all flows: 21 entries, lines and projections net zero in USD and SLS. Functions suite 1415 passed (18 skipped); mobile jest 63 passed; tsc clean in all three.
+
+Seen while verifying, not fixed: once, after signing into an English account from an app set to Arabic, the merchant app closed to the home screen after the SMS code (no crash report; relaunch was fine). Customer "Spent · 7 days" counts a cash-out as spending ($41 → $48) — product call.
+
+Still open:
+- From the earlier pass: merge fix/qr-expires-at-iso; Arabic RTL (sibling session); scanner fallback without a camera.
+- Not walked yet: merchant light-mode Somali beyond dashboard/History/Settings; customer app in so/ar this pass; dispute send with the on-screen keyboard up (needs a device or the simulator's hardware keyboard disconnected).
