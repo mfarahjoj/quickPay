@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { TERMS_URL, PRIVACY_URL } from '../../utils/legal';
+import { openInAppBrowser } from '../../components/legal/InAppBrowser';
 import {
   View,
   Text,
@@ -8,7 +9,6 @@ import {
   StyleSheet,
   Animated,
   Easing,
-  Linking,
   FlatList,
 } from 'react-native';
 import Svg, { Polygon, Rect } from 'react-native-svg';
@@ -325,11 +325,11 @@ export default function LoginScreen({ navigation, intent = 'signup', onBack }: P
 
         <Text style={styles.footer}>
           {t('auth.login.termsFooter')}{' '}
-          <Text style={styles.link} onPress={() => Linking.openURL(TERMS_URL)}>
+          <Text style={styles.link} onPress={() => openInAppBrowser(TERMS_URL)}>
             {t('auth.login.termsOfService')}
           </Text>
           {' '}{t('common.and')}{' '}
-          <Text style={styles.link} onPress={() => Linking.openURL(PRIVACY_URL)}>
+          <Text style={styles.link} onPress={() => openInAppBrowser(PRIVACY_URL)}>
             {t('auth.login.privacyPolicy')}
           </Text>
         </Text>

@@ -1431,5 +1431,7 @@
   "payments.addMoney": "Add money",
   "payments.method.topUpTitle": "Top up at an agent",
   "payments.free": "Free",
-  "payments.youSend": "You send"
+  "payments.youSend": "You send",
+  "legal.openInBrowser": "Open in browser",
+  "legal.loadError": "Couldn't load this page. Check your connection and try again."
 }

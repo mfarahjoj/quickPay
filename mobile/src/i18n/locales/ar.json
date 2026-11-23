@@ -1431,5 +1431,7 @@
   "payments.addMoney": "أضف المال",
   "payments.method.topUpTitle": "اشحن لدى وكيل",
   "payments.free": "مجاني",
-  "payments.youSend": "أنت ترسل"
+  "payments.youSend": "أنت ترسل",
+  "legal.openInBrowser": "افتح في المتصفح",
+  "legal.loadError": "تعذّر تحميل هذه الصفحة. تحقق من اتصالك وحاول مرة أخرى."
 }

@@ -1431,5 +1431,7 @@
   "payments.addMoney": "Lacag ku dar",
   "payments.method.topUpTitle": "Kaga shubo wakiil",
   "payments.free": "Bilaash",
-  "payments.youSend": "Waxaad diraysaa"
+  "payments.youSend": "Waxaad diraysaa",
+  "legal.openInBrowser": "Ku fur biraawsarka",
+  "legal.loadError": "Boggan lama soo dejin karin. Hubi xiriirkaaga oo mar kale isku day."
 }
