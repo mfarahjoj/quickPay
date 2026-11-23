@@ -75,7 +75,8 @@ function ActionButton({ action, width, onPress }: { action: ActionDef; width: `$
       <View style={styles.actionCircle}>
         <Icon size={24} color="#FFFFFF" />
       </View>
-      <Text style={styles.actionLabel} numberOfLines={1}>{action.label}</Text>
+      {/* Two lines: Somali labels such as "Lacagtaada qaado" don't fit one. */}
+      <Text style={styles.actionLabel} numberOfLines={2}>{action.label}</Text>
     </TouchableOpacity>
   );
 }
@@ -92,9 +93,11 @@ function TxRow({ tx, onPress }: { tx: Transaction; onPress: () => void }) {
         <Text style={[styles.txAvatarGlyph, { color: tint.mark }]}>{incoming ? '↓' : '↑'}</Text>
       </View>
       <View style={styles.txInfo}>
-        <Text style={styles.txName} numberOfLines={1}>{tx.description}</Text>
-        <Text style={styles.txDate}>
-          {tx.createdAt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+        {/* Who, as History shows it: the server's description is written from the
+            customer's side ("Top-up from <this agent>") and only in English. */}
+        <Text style={styles.txName} numberOfLines={1}>{tx.counterpartyName || tx.description}</Text>
+        <Text style={styles.txDate} numberOfLines={1}>
+          {t(`transactions.kind.${tx.type}`)} · {tx.createdAt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
           {tx.status !== 'completed' ? ` · ${t(`transaction.status.${tx.status}`)}` : ''}
         </Text>
       </View>
@@ -135,6 +138,15 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
   const isAgentRole = accountType === 'topup_agent' || accountType === 'agent_merchant';
   // Agents hold float apart from their sales and earnings.
   const { floatCents, floatSls } = useFloat(isAgentRole, wallet?.lastTransactionAt?.getTime());
+  // The balance is live but the list is fetched, so after a top-up or cash-out
+  // it showed the old rows under the new balance. Refetch when the wallet moves.
+  const lastTxAt = wallet?.lastTransactionAt?.getTime();
+  const seenTxAt = React.useRef(lastTxAt);
+  React.useEffect(() => {
+    if (lastTxAt === undefined || lastTxAt === seenTxAt.current) return;
+    seenTxAt.current = lastTxAt;
+    refreshTx();
+  }, [lastTxAt, refreshTx]);
   // Buying float with Zaad, once the collection number is live.
   const zaadFloat = useZaadFloatOn();
 

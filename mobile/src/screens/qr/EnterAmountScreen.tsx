@@ -35,6 +35,7 @@ import {
   amountInputLabel,
   amountInputUnits,
   balanceIn,
+  confirmAmountSize,
   formatMoney,
   type Currency,
 } from '../../utils/money';
@@ -284,7 +285,7 @@ export default function EnterAmountScreen({ navigation, route }: Props) {
 
         <View style={styles.amountBox}>
           {currency === 'SLS' ? null : <Text style={styles.amountCurrencyLabel}>{currency}</Text>}
-          <Text style={styles.amountDisplay} numberOfLines={1} adjustsFontSizeToFit>
+          <Text style={[styles.amountDisplay, confirmAmountSize(amountLabel)]} numberOfLines={1}>
             {amountLabel}
           </Text>
         </View>

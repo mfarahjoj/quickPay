@@ -3,6 +3,21 @@ import { AppState, AppStateStatus, Keyboard } from 'react-native';
 import { pinSetupDoneFlag, useFlag } from '../services/signInFlags';
 
 /**
+ * While a system sheet the app opened itself is up (the photo picker), iOS
+ * can report the app as 'background'. Locking then put the PIN pad behind
+ * the picker and the picked photo never came back to the KYC form.
+ */
+let pausedFor = 0;
+export async function withAppLockPaused<T>(run: () => Promise<T>): Promise<T> {
+  pausedFor += 1;
+  try {
+    return await run();
+  } finally {
+    pausedFor -= 1;
+  }
+}
+
+/**
  * `locked` is null until the first read settles. The navigator treats null as
  * still loading: starting at false let the wallet show for a frame on a cold
  * start before the lock screen went over it, which flashed the balance.
@@ -26,7 +41,7 @@ export function useAppLock() {
   // succeeded.
   useEffect(() => {
     const handleAppStateChange = (nextState: AppStateStatus) => {
-      if (nextState !== 'background' || pinSetupDoneFlag.get() !== true) return;
+      if (nextState !== 'background' || pinSetupDoneFlag.get() !== true || pausedFor > 0) return;
       // The lock covers the app rather than replacing it, so a field that
       // had the keyboard up would bring it back over the PIN pad.
       Keyboard.dismiss();

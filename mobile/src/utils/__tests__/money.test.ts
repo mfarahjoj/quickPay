@@ -2,6 +2,7 @@ import {
   amountInputLabel,
   amountInputUnits,
   balanceIn,
+  confirmAmountSize,
   formatMajor,
   formatMoney,
   leadCurrency,
@@ -69,5 +70,15 @@ describe('money', () => {
     expect(amountInputLabel('', 'USD')).toBe('$0');
     expect(amountInputLabel('30000', 'SLS')).toBe('30,000 SLSH');
     expect(amountInputLabel('', 'SLS')).toBe('0 SLSH');
+  });
+});
+
+describe('confirmAmountSize', () => {
+  it('keeps everyday amounts at display size', () => {
+    expect(confirmAmountSize('$2.00').fontSize).toBe(32);
+    expect(confirmAmountSize('$1,000.00').fontSize).toBe(32);
+  });
+  it('steps long shilling amounts down so they fit the box', () => {
+    expect(confirmAmountSize('1,000,000 SLSH').fontSize).toBe(24);
   });
 });

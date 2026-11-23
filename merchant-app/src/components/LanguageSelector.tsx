@@ -51,7 +51,9 @@ export function LanguageSelector({ currentLanguage = 'en', compact = false, tone
       }
 
       setVisible(false);
-      Alert.alert(t('language.changedTitle'), t('language.changedMessage'));
+      // i18n.t, not the render's t: that one still speaks the old language,
+      // so switching to Somali confirmed it in English.
+      Alert.alert(i18n.t('language.changedTitle'), i18n.t('language.changedMessage'));
     } catch {
       Alert.alert(t('common.error'), t('language.changeFailed'));
     } finally {

@@ -323,7 +323,9 @@ export default function ConfirmCashOutScreen({ navigation }: Props) {
 }
 
 const useStyles = makeStyles((colors) => StyleSheet.create({
-  content: { flex: 1, paddingTop: 0 },
+  // flexGrow, not flex: flex pinned the scroll content to the screen, so the
+  // footer button sat on top of the how-to card and it couldn't scroll clear.
+  content: { flexGrow: 1, paddingTop: 0 },
   header: {
     flexDirection: 'row',
     alignItems: 'flex-start',

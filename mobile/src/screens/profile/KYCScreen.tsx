@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { Header } from '../../components/Header';
 import { Button } from '../../components/Button';
 import { useAuth } from '../../hooks/useAuth';
+import { withAppLockPaused } from '../../hooks/useAppLock';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import { functions, storage } from '../../services/firebase.config';
 import { typography, spacing, borderRadius, makeStyles, useColors, type Colors } from '../../theme';
@@ -21,7 +22,7 @@ import type { KycStatus } from '../../types';
 async function pickFromGallery(): Promise<string | null> {
   try {
     const { launchImageLibrary } = await import('react-native-image-picker');
-    const result = await launchImageLibrary({ mediaType: 'photo', quality: 0.8 });
+    const result = await withAppLockPaused(() => launchImageLibrary({ mediaType: 'photo', quality: 0.8 }));
     if (result.didCancel || !result.assets?.length) return null;
     return result.assets[0].uri ?? null;
   } catch {
@@ -32,7 +33,7 @@ async function pickFromGallery(): Promise<string | null> {
 async function pickFromCamera(): Promise<string | null> {
   try {
     const { launchCamera } = await import('react-native-image-picker');
-    const result = await launchCamera({ mediaType: 'photo', quality: 0.8 });
+    const result = await withAppLockPaused(() => launchCamera({ mediaType: 'photo', quality: 0.8 }));
     if (result.didCancel || !result.assets?.length) return null;
     return result.assets[0].uri ?? null;
   } catch {

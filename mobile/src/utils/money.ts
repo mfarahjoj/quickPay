@@ -95,3 +95,12 @@ export function amountInputLabel(text: string, currency: Currency): string {
  * nothing and are told to update instead.
  */
 export const READS_CURRENCIES = ['USD', 'SLS'];
+
+/**
+ * Font size for a confirm box's amount, chosen from its length.
+ * adjustsFontSizeToFit shrank these to a few pixels on iOS ("$2.00" showed as
+ * a dash), so the long labels ("1,000,000 SLSH") step down instead.
+ */
+export function confirmAmountSize(label: string): { fontSize: number; lineHeight: number } {
+  return label.length > 11 ? { fontSize: 24, lineHeight: 30 } : { fontSize: 32, lineHeight: 40 };
+}

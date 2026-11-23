@@ -216,7 +216,7 @@ export default function ZaadTopupsScreen() {
 
   if (done) {
     return (
-      <DarkScreen edges={[]} contentStyle={styles.centered}>
+      <DarkScreen contentStyle={styles.centered}>
         <SuccessCheckIcon size={72} />
         <Text style={styles.bigTitle}>{t('zaadTopups.done.title')}</Text>
         <Text style={styles.bigAmount}>{formatCents(done.amount)}</Text>
@@ -235,7 +235,7 @@ export default function ZaadTopupsScreen() {
   // A request ringing on this agent.
   if (mine?.status === 'offered' && mine.offeredTo === uid) {
     return (
-      <DarkScreen edges={[]} scroll contentStyle={styles.content}>
+      <DarkScreen scroll contentStyle={styles.content}>
         {header}
         <View style={styles.body}>
           {others}
@@ -255,7 +255,7 @@ export default function ZaadTopupsScreen() {
   // Accepted: the customer is sending.
   if (mine?.status === 'accepted' && mine.agentId === uid) {
     return (
-      <DarkScreen edges={[]} scroll contentStyle={styles.content}>
+      <DarkScreen scroll contentStyle={styles.content}>
         {header}
         <View style={styles.body}>
           {others}
@@ -287,7 +287,7 @@ export default function ZaadTopupsScreen() {
   // The customer says it's sent: check your own Zaad.
   if (mine?.status === 'customer_sent' && mine.agentId === uid) {
     return (
-      <DarkScreen edges={[]} scroll keyboard contentStyle={styles.content}>
+      <DarkScreen scroll keyboard contentStyle={styles.content}>
         {header}
         <View style={styles.body}>
           {others}
@@ -325,7 +325,7 @@ export default function ZaadTopupsScreen() {
   // A request this agent was on has ended, or waits on the customer or Zapp.
   if (mine && requestId) {
     return (
-      <DarkScreen edges={[]} contentStyle={styles.centered}>
+      <DarkScreen contentStyle={styles.centered}>
         <Text style={styles.bigTitle}>{t(`zaadTopups.ended.${mine.status}`, { defaultValue: t('zaadTopups.ended.other') })}</Text>
         <View style={styles.block}>
           <PillButton label={t('common.done')} onPress={leave} />
@@ -336,7 +336,7 @@ export default function ZaadTopupsScreen() {
 
   if (!status) {
     return (
-      <DarkScreen edges={[]} contentStyle={styles.centered}>
+      <DarkScreen contentStyle={styles.centered}>
         <ActivityIndicator color={colors.ui.text} />
         {errorLine}
       </DarkScreen>
@@ -346,7 +346,7 @@ export default function ZaadTopupsScreen() {
   const low = status.floatCents < status.floatLowCents;
   const online = agent?.online ?? status.online;
   return (
-    <DarkScreen edges={[]} scroll contentStyle={styles.content}>
+    <DarkScreen scroll contentStyle={styles.content}>
       {header}
       <View style={styles.body}>
         {!status.open ? (

@@ -73,7 +73,9 @@ export const submitKYC = https.onCall(
         idType,
         idNumber: sanitizeString(idNumber),
         frontPhotoUrl,
-        backPhotoUrl: backPhotoUrl || undefined,
+        // Omitted when there is none: Firestore rejects an undefined field, so
+        // every submission without the optional back photo failed (INTERNAL).
+        ...(backPhotoUrl ? { backPhotoUrl } : {}),
         selfieUrl,
         ...(frontPath ? { frontPhotoPath: frontPath } : {}),
         ...(backPath ? { backPhotoPath: backPath } : {}),

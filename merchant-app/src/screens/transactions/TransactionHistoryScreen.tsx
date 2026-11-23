@@ -17,6 +17,7 @@ import { DarkScreen, ScreenHeader } from '../../components';
 import { HistoryIcon } from '../../components/icons/AuthIcons';
 import { CURRENCY_SYMBOL } from '../../config/constants';
 import { makeStyles, useColors } from '../../theme';
+import { formatMajor, isShillings } from '../../utils/money';
 
 type FilterKey = 'all' | 'payments' | 'topups' | 'pending';
 const FILTERS: Array<{ key: FilterKey; labelKey: string }> = [
@@ -39,7 +40,7 @@ function isAgentCommission(tx: Transaction) {
   return tx.type === 'topup' && !tx.isIncoming && tx.commission > 0;
 }
 
-/** Signed effect of a transaction on the merchant's balance, in dollars. */
+/** Signed effect of a transaction on the merchant's balance, in its own currency's whole units. */
 function signedNet(tx: Transaction): number {
   if (isAgentCommission(tx)) return tx.commission;
   const base = tx.type === 'payment' || tx.type === 'refund' ? tx.net : tx.amount;
@@ -73,8 +74,18 @@ function dayLabel(d: Date, t: (k: string) => string) {
 interface Section {
   key: string;
   title: string;
-  subtotal: number;
+  /** Dollars and shillings kept apart: adding 400,000 shillings to $9 gives nonsense. */
+  subtotals: { USD: number; SLS: number };
   data: Transaction[];
+}
+
+/** "+$9.20 · +8,000 SLSH": one signed figure per currency the day moved. */
+function subtotalText(s: Section['subtotals']): string {
+  const parts: string[] = [];
+  const signed = (n: number, cur: string) => `${n >= 0 ? '+' : '−'}${formatMajor(Math.abs(n), cur)}`;
+  if (s.USD !== 0 || s.SLS === 0) parts.push(signed(s.USD, 'USD'));
+  if (s.SLS !== 0) parts.push(signed(s.SLS, 'SLS'));
+  return parts.join(' · ');
 }
 
 function buildSections(list: Transaction[], t: (k: string) => string): Section[] {
@@ -83,11 +94,11 @@ function buildSections(list: Transaction[], t: (k: string) => string): Section[]
   for (const tx of list) {
     const key = tx.createdAt.toDateString();
     if (!current || current.key !== key) {
-      current = { key, title: dayLabel(tx.createdAt, t), subtotal: 0, data: [] };
+      current = { key, title: dayLabel(tx.createdAt, t), subtotals: { USD: 0, SLS: 0 }, data: [] };
       sections.push(current);
     }
     current.data.push(tx);
-    current.subtotal += signedNet(tx);
+    current.subtotals[isShillings(tx.currency) ? 'SLS' : 'USD'] += signedNet(tx);
   }
   return sections;
 }
@@ -109,7 +120,7 @@ function TxRow({ tx, onPress }: { tx: Transaction; onPress: () => void }) {
   const time = tx.createdAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   const kind = t(`transactions.kind.${tx.type}`);
   const subtitle = commission
-    ? t('transactions.row.topupCommission', { amount: money(tx.amount) })
+    ? t('transactions.row.topupCommission', { amount: formatMajor(tx.amount, tx.currency) })
     : pending
     ? `${kind} · ${t('transaction.status.pending')}`
     : tx.refundedAt
@@ -135,7 +146,7 @@ function TxRow({ tx, onPress }: { tx: Transaction; onPress: () => void }) {
     : styles.avOut;
 
   const glyph = initials(title) ?? (incoming ? '↓' : '↑');
-  const displayAmount = `${net >= 0 ? '+' : '−'}${money(Math.abs(commission ? tx.commission : net))}`;
+  const displayAmount = `${net >= 0 ? '+' : '−'}${formatMajor(Math.abs(commission ? tx.commission : net), tx.currency)}`;
 
   return (
     <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.7}>
@@ -351,8 +362,8 @@ export default function TransactionHistoryScreen({ navigation }: { navigation: a
           renderSectionHeader={({ section }) => (
             <View style={styles.groupHeader}>
               <Text style={styles.groupTitle}>{section.title}</Text>
-              <Text style={[styles.groupSubtotal, { color: section.subtotal >= 0 ? colors.ui.incoming : colors.ui.error }]}>
-                {section.subtotal >= 0 ? '+' : '−'}{money(Math.abs(section.subtotal))}
+              <Text style={[styles.groupSubtotal, { color: section.subtotals.USD + section.subtotals.SLS >= 0 ? colors.ui.incoming : colors.ui.error }]}>
+                {subtotalText(section.subtotals)}
               </Text>
             </View>
           )}
@@ -441,11 +452,13 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
     marginBottom: 12,
   },
   searchIcon: { fontSize: 18, color: colors.ui.textFaint },
-  searchInput: { flex: 1, color: colors.ui.text, fontSize: 14, padding: 0 },
+  // Fill the 44pt row: a content-sized input clipped its placeholder's descenders.
+  searchInput: { flex: 1, alignSelf: 'stretch', color: colors.ui.text, fontSize: 14, padding: 0 },
   searchClear: { fontSize: 13, color: colors.ui.textFaint },
 
   // chips
-  chips: { flexDirection: 'row', gap: 8, marginBottom: 8 },
+  // Wrap: in Somali the fourth chip ran off the screen, out of reach.
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
   chip: {
     paddingHorizontal: 14,
     paddingVertical: 8,

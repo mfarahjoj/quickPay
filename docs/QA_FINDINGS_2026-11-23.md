@@ -50,17 +50,58 @@
 - M Zaad account gate: customer app prefills the name, merchant doesn't (minor).
 - Functions: full suite 1391 passed / 13 failed, all in pinResetSafety.test.ts during a run that overlapped Metro rebuilds; that file passes 18/18 on its own. Only functions change here is getDisputeOptions returning `currency` (+ its type).
 
-## Hand-over: where this stopped (2026-11-23 ~12:55)
+## Third pass (2026-11-23 afternoon): agent flows, re-checks, so/ar/dark, splash screens
 
-Harness state (may be gone by the time you read this — restart with docs/LOCAL_QA.md):
-- Simulator iPhone 16e 89DC611F-939A-4D42-8585-B15D1D9A2C3F has both apps, ZAPP_EMULATOR_HOST=127.0.0.1, RCT_jsLocation customer :8191, merchant :8192.
-- Merchant app signed in as the AGENT (Daallo Cash Point, +252634000004), on "Top up a customer → Enter the code" with phone 0634000001 and code 494317 typed, Check not yet pressed.
-- Open agent work for Amina (expires 13:22 UTC 23 Nov): top-up request code 494317 ($15), cash-out code 734474 ($5). If expired, recreate: as Amina call customerRequestAgentTopup {amount:1500,currency:'USD'} and customerCashOut {amount:500,pin,currency:'USD'} via scripts/qa/emulator-client.mts `call()`.
-- node_modules in this worktree were wiped once by a cleanup elsewhere; `npm ci` in functions/, mobile/, merchant-app/ restores them (no postinstall steps), then restart Metro.
+Screens m40–m71 and c70–c88 in the shared qa-screens folder.
 
-Still to do:
-1. Agent: press Check → confirm the $15 top-up (agentConfirmTopup); "Give cash" → confirm cash-out 734474 (agentConfirmCashOut); then "Find the customer by phone" → manual top-up with the reference left BLANK to confirm the server bug (manualTopup writes `reference: undefined` → INTERNAL). Agent screens: Top-ups list, Move to float, float desk views.
-2. Re-verify on the simulator: Charge Done → Receive resets; Send default currency; Payroll input clipping; Delete account / Remove colours; customer PaymentConfirm amount size, dispute "Send message" single tap, Cash Out PIN pad without ".".
-3. Merchant in so/ar (only English walked), merchant dark mode.
-4. Customer KYC submission (photo upload goes to the Storage emulator), Edit profile, Linked accounts/apps, Invite.
-5. Listed-not-fixed items above need owners: manualTopup blank reference (money flow), merge fix/qr-expires-at-iso, transaction row titles in so/ar (product rule), language-change confirmation in the old language (PR 44 lines), Insights day names, Arabic RTL (sibling session), scanner fallback without a camera (product).
+### Agent flows
+- M Agent code top-up (agentConfirmTopup) works end to end: preview shows "$15.00 / Amina Warsame", PIN, "Top-Up Confirmed", +$0.30 commission; float $805 → $790. m41–m44.
+- M Agent cash-out (agentConfirmCashOut) works: float $790 → $795. m45–m47. **The agent never sees the amount or customer before entering the PIN.** The form is phone + code → PIN → "Cash Out Confirmed $5.00"; the top-up flow has a preview step first (previewAgentTopup). An agent counting out cash learns the amount only after the money moved. Product/server: add a preview like top-up (listed, not changed).
+- **Server bug CONFIRMED: manualTopup with a blank reference fails.** `functions/src/topup/manualTopup.ts:289` writes `reference: reference || undefined` into the transaction doc; Firestore rejects it ("Cannot use undefined as a Firestore value (found in field reference)") → 500 INTERNAL → "Top-Up Failed". The app already omits a blank reference, so EVERY manual top-up without a reference fails. The Firestore transaction rolled back: Hodan still $45.00, no journal entry. Fix belongs to the money-flow owner (omit the key, or `null`). Not changed. m48, m50, m51.
+- M History: rows formatted every amount as dollars — SLS 400,000 top-up showed "$400,000.00", its 8,000 SLSH commission "+$8,000.00", and the day total added shillings into dollars ("+$4,009,009.20"). FIXED: rows use the row's currency (formatMajor), day totals are per currency ("+$1,009.20 · +4,008,000 SLSH"). m49.
+- M History day total counts float movements (float purchases, the cash-out credit to float) and pending payouts as if they were takings, so an agent's "Today" reads +$1,009.20 while net takings are $4.20. What the day total should mean is a product call — listed.
+- Server: getTransactionSummary added shilling commission (whole shillings, as cents) into its USD totals — an 8,000 SLSH commission would show as $80.00. FIXED (shilling rows skipped; `incomeCents` exported + `transactionSummaryIncome.test.ts`). Read-only reporting; NOT deployed. Verified on the emulator: summary reads $4.20.
+- M History search box: placeholder clipped at the bottom — FIXED (input stretches to the 44pt row). m49.
+- M Dashboard Recent Transactions: fetched once, so after a top-up or cash-out it showed the old list under the new balance and float — FIXED (refetch when wallet.lastTransactionAt moves, as the customer Home now does). Rows showed the server description, written from the customer's side ("Top-up from Daallo Cash Point" on the agent's own phone) and English-only — FIXED: counterparty name first, as History does, and the translated kind in the subtitle ("Payment · 23 Nov"). Verified: a $2 top-up run by script appeared live on the open dashboard. m54.
+- M Zaad "Top-ups" screen and Buy float with Zaad: header drawn under the status bar; the back chevron sits on the clock and taps there don't register (swipe-back is the only way out) — FIXED (default top safe area; both screens hide the nav header). m52. The screen is titled "Top-ups" but lists only Zaad requests, so an agent with cash top-ups sees an empty page — product/copy.
+- M Confirm Cash Out: "Confirm & Pay Cash" footer drawn over the how-to card, which couldn't scroll clear (scroll content `flex: 1`) — FIXED (flexGrow). m45.
+- M Top Up Customer by phone: title shown twice (nav bar + large title); amount placeholder slightly clipped at the top — minor, listed.
+
+### Splash screens
+- C/M: both apps still had the React Native template launch screen — customer "Zapp Pay" in black system text on white, merchant "Zapp Pay Merchant" + "Powered by React Native". Replaced in both with the brand mark (coral tile, white bolt; SVG in the asset catalog) centred on the app canvas, light #F1F1F4 / dark #000000 (named colour SplashBackground), no text, so nothing untranslated shows at launch. Native change: verified on fresh Debug builds of both apps, light and dark (m60, m61, c70, c71); the splash hands over to the app's loading view on the same colour. Needs a new build to reach testers.
+
+### Re-verified on the simulator (from the hand-over list)
+- M Charge → Done returns to Receive, reset to $0 (m56, m57). M Send opens on Dollars, "Available: $19.25" (m55). M Payroll inputs not clipped; remove × in red (m58). M Settings "Delete account" in red (m59).
+- C Cash Out PIN step has no "." key (c73). C dispute "Send message" sends on one tap (postDisputeMessage 200, c88); the simulator's hardware keyboard stops the on-screen keyboard appearing, so the keyboard-up case itself is still unverified.
+- C PaymentConfirm amount: **the earlier fix did not hold** — "$2.00" still rendered as a dash (c74). adjustsFontSizeToFit shrinks it even with a definite width. FIXED differently: no adjustsFontSizeToFit; `confirmAmountSize(label)` picks 32pt, or 24pt past 11 characters ("1,000,000 SLSH"). Same change on EnterAmount's PIN-confirm box. Test added (utils/__tests__/money.test.ts). Verified (c75).
+
+### Merchant dark mode, Somali, Arabic
+- Dark: lock, dashboard, History, Receive look right (m62–m65).
+- M OTP screen: title "Verify Your Number" and the phone number used colors.ui.onSolid (button text colour: white in light, black in dark) — invisible in BOTH themes. Same on the login country sheet's title and country names. FIXED (colors.ui.text).
+- M language switch confirmed in the previous language (Somali chosen, "Language Changed" in English) — FIXED in merchant LanguageSelector (i18n.t). Verified: Arabic chosen, confirmation in Arabic (m70). The customer app's copy of this bug stays listed (PR 44 lines).
+- M Somali: Withdraw action "Lacagtaada qaado" truncated to "Lacagtaada qaa…" — FIXED (action labels wrap to two lines, m67). History filter chips ran off-screen, "Sugitaan" (Pending) unreachable — FIXED (chips wrap). m68.
+- M so/ar: dates use the device locale, not the app language ("Nov 23" beside Arabic text) — listed. Arabic language row uses the Saudi flag — product. Settings shows the raw UID ("qa-cafe") — product. Role label truncates after a long business name — minor.
+
+### Customer screens (dark mode)
+- C KYC: **submitKYC failed for every submission without the optional back photo** — `backPhotoUrl: backPhotoUrl || undefined` → Firestore rejects → INTERNAL. FIXED in functions/src/auth/submitKYC.ts (key omitted when absent) + submitKYC.test.ts. Not money; NOT deployed. Verified: front + selfie only → "Under Review" (c86).
+- C KYC: opening the photo picker locked the app (iOS reported 'background'); the PIN pad went behind the picker and the picked photo never came back to the form (c84). FIXED: `withAppLockPaused()` in hooks/useAppLock.ts wraps the KYC picker/camera calls. Verified: photo returns to the form, no lock (c85).
+- C KYC selfie offers "Gallery" as well as Camera, so a stored photo passes as a selfie — compliance/product decision, listed.
+- C Invite: the WhatsApp/share message hard-coded "$1" whatever config/rates says — FIXED (bonus from getPricing; no bonus line when referrals are off). Still listed: the message lives in code, not the locale files, with no Arabic (Arabic users get English), and `profile.inviteSubtitle` / `invite.subtitle` hard-code "$1" in all three locale files.
+- C Linked Accounts lists Zaad as "Coming soon" directly under a "Zaad account 063 400 0001" row the user just filled in — product/copy.
+- C Edit Profile saves (updateProfile 200). Linked apps empty state fine. Date of birth is free text "YYYY-MM-DD" — product.
+
+## Hand-over: where this stopped (2026-11-23 ~14:00)
+
+Harness state: emulators re-seeded 13:05 and running (scripts/qa/emulators.sh); Metro customer :8191, merchant :8192. Simulator 89DC611F has **fresh Debug builds of both apps from this worktree** (built after `pod install` here; Podfile.lock changes from pod install were reverted). Merchant app signed in as Hargeisa Coffee House, language **Arabic** (switch back from the dashboard flag). Customer app signed in as Amina, KYC now "submitted". Simulator in light mode.
+
+Changed this pass (uncommitted): merchant History, Dashboard, OTP, Login, LanguageSelector, ConfirmCashOut, ZaadTopups, BuyFloatZaad; customer PaymentConfirm, EnterAmount, utils/money (+test), useAppLock, KYCScreen, InviteScreen; functions getTransactionSummary (+test), submitKYC (+test); both apps' LaunchScreen.storyboard + SplashMark/SplashBackground assets. Nothing deployed.
+
+Needs an owner (not changed here):
+1. **manualTopup blank reference → INTERNAL** (functions/src/topup/manualTopup.ts:289). Money flow. Every manual top-up without a reference fails today.
+2. Agent cash-out has no preview of amount/customer before the PIN (top-up has one).
+3. Merchant History day total counts float movements and pending payouts as takings.
+4. Zaad "Top-ups" screen title vs content; Linked Accounts "Coming soon" vs the Zaad account row.
+5. KYC selfie from gallery.
+6. Locale-file items held back while other branches edit those files: Invite share text (no Arabic), hard-coded "$1" in invite strings, customer language-change confirmation (PR 44), Insights day names, English server descriptions as row titles in so/ar, device-locale dates.
+7. From the earlier pass: merge fix/qr-expires-at-iso; Arabic RTL (sibling session); scanner fallback without a camera.
+8. Not walked yet: merchant light-mode Somali beyond dashboard/History/Settings; customer app in so/ar this pass; dispute send with the on-screen keyboard up (needs a device or the simulator's hardware keyboard disconnected).

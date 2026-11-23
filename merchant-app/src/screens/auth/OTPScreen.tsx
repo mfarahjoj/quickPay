@@ -141,7 +141,7 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
     fontSize: 40,
     fontWeight: '800',
     letterSpacing: -1.5,
-    color: colors.ui.onSolid,
+    color: colors.ui.text,
     marginBottom: 10,
   },
   subtitle: {
@@ -153,7 +153,7 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
   phoneHighlight: {
     fontSize: 17,
     fontWeight: '600',
-    color: colors.ui.onSolid,
+    color: colors.ui.text,
   },
   codeWrap: {
     marginBottom: spacing.xl,

@@ -45,8 +45,13 @@ function windowStart(period: Period, now: number, tzOffsetMinutes: number): numb
   return now - days * 24 * 60 * 60 * 1000;
 }
 
-/** Income (in cents) this transaction represents from the user's perspective. */
-function incomeCents(tx: Transaction, userId: string): number {
+/**
+ * Income (in cents) this transaction represents from the user's perspective.
+ * The summary is in dollars, so shilling rows count as nothing here: adding
+ * whole shillings to cents turned an 8,000 SLSH commission into $80.00.
+ */
+export function incomeCents(tx: Transaction, userId: string): number {
+  if (tx.currency === "SLS") return 0;
   if (tx.type === "payment" && tx.toUserId === userId && tx.fromUserId !== userId) {
     return tx.netCents ?? tx.amount;
   }

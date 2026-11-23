@@ -187,7 +187,7 @@ export default function BuyFloatZaadScreen() {
 
   if (step === 'loading') {
     return (
-      <DarkScreen edges={[]} contentStyle={styles.centered}>
+      <DarkScreen contentStyle={styles.centered}>
         <ActivityIndicator color={colors.ui.text} />
       </DarkScreen>
     );
@@ -195,7 +195,7 @@ export default function BuyFloatZaadScreen() {
 
   if (step === 'done') {
     return (
-      <DarkScreen edges={[]} contentStyle={styles.centered}>
+      <DarkScreen contentStyle={styles.centered}>
         <SuccessCheckIcon size={72} />
         <Text style={styles.bigTitle}>{t('buyFloat.doneTitle')}</Text>
         <Text style={styles.bigAmount}>{formatAmount(credited.amount, credited.currency)}</Text>
@@ -211,7 +211,7 @@ export default function BuyFloatZaadScreen() {
   if ((step === 'activate' || step === 'send') && pending) {
     const activating = step === 'activate';
     return (
-      <DarkScreen edges={[]} scroll contentStyle={styles.content}>
+      <DarkScreen scroll contentStyle={styles.content}>
         {header}
         <View style={styles.body}>
           <Text style={styles.sub}>
@@ -251,7 +251,7 @@ export default function BuyFloatZaadScreen() {
       setError('');
     };
     return (
-      <DarkScreen edges={[]} scroll keyboard contentStyle={styles.content}>
+      <DarkScreen scroll keyboard contentStyle={styles.content}>
         {header}
         <View style={styles.body}>
           <CurrencyToggle value={currency} onChange={pickCurrency} disabled={busy} />
@@ -284,7 +284,7 @@ export default function BuyFloatZaadScreen() {
 
   // link
   return (
-    <DarkScreen edges={[]} scroll keyboard contentStyle={styles.content}>
+    <DarkScreen scroll keyboard contentStyle={styles.content}>
       {header}
       <View style={styles.body}>
         <Text style={styles.sub}>{t('buyFloat.linkHint')}</Text>

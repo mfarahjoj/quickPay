@@ -20,7 +20,7 @@ import {
   prepareBiometricApproval,
 } from '../../services/biometric.service';
 import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
-import { formatMajor, toCurrency } from '../../utils/money';
+import { confirmAmountSize, formatMajor, toCurrency } from '../../utils/money';
 import { PinInput } from '../../components/PinInput';
 import { Header } from '../../components/Header';
 
@@ -136,7 +136,7 @@ export default function PaymentConfirmScreen({ navigation, route }: Props) {
 
         <View style={styles.amountBox}>
           {toCurrency(currency) === 'SLS' ? null : <Text style={styles.currencyLabel}>{currency}</Text>}
-          <Text style={styles.amount} numberOfLines={1} adjustsFontSizeToFit>
+          <Text style={[styles.amount, confirmAmountSize(formatMajor(amount, currency))]} numberOfLines={1}>
             {formatMajor(amount, currency)}
           </Text>
           {reference ? (
@@ -248,8 +248,7 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
     ...typography.display,
     color: colors.ui.incoming,
     fontWeight: '700',
-    // adjustsFontSizeToFit needs a definite width to fit into. Sized to its
-    // own text inside a centred box, iOS shrank "$3.75" to a few pixels.
+    // Sized by confirmAmountSize: adjustsFontSizeToFit shrank it to a dash.
     alignSelf: 'stretch',
     textAlign: 'center',
   },

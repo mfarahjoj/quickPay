@@ -65,13 +65,24 @@ export default function InviteScreen({ navigation: _navigation }: Props) {
 
   const referralCode = stats?.code ?? profile?.referralCode ?? '';
 
+  // The bonus comes from config/rates (getPricing), never a literal: the
+  // message said "$1" whatever the configured bonus was, or with none at all.
+  const bonus =
+    terms && terms.referralUnlock !== 'off' && terms.referralBonusCents > 0 ? money(terms.referralBonusCents) : null;
+
   const buildMessage = useCallback(() => {
     const lang = profile?.preferredLanguage ?? 'en';
     if (lang === 'so') {
-      return `💰 Waxaan isticmaalayaa Zapp Pay – hab ugu dhakhsaha badan ee lacagta lagu diro Hargeysa!\nKu biir adigoo isticmaalaya lambarkeyga *${referralCode}* midna waxaan heli doonnaa $1 bilaash ah 🎉\nSoo dajiso Zapp Pay oo geli lambarkeyga markaad is diiwaangaliso.`;
+      const join = bonus
+        ? `Ku biir adigoo isticmaalaya lambarkeyga *${referralCode}* midna waxaan heli doonnaa ${bonus} bilaash ah 🎉`
+        : `Ku biir adigoo isticmaalaya lambarkeyga *${referralCode}* 🎉`;
+      return `💰 Waxaan isticmaalayaa Zapp Pay – hab ugu dhakhsaha badan ee lacagta lagu diro Hargeysa!\n${join}\nSoo dajiso Zapp Pay oo geli lambarkeyga markaad is diiwaangaliso.`;
     }
-    return `💰 I use Zapp Pay – the fastest way to send & receive money in Hargeisa!\nJoin with my code *${referralCode}* and we both get $1 free 🎉\nDownload Zapp Pay and enter my code when you sign up.`;
-  }, [referralCode, profile?.preferredLanguage]);
+    const join = bonus
+      ? `Join with my code *${referralCode}* and we both get ${bonus} free 🎉`
+      : `Join with my code *${referralCode}* 🎉`;
+    return `💰 I use Zapp Pay – the fastest way to send & receive money in Hargeisa!\n${join}\nDownload Zapp Pay and enter my code when you sign up.`;
+  }, [referralCode, profile?.preferredLanguage, bonus]);
 
   const handleWhatsApp = () => {
     Linking.openURL(`https://wa.me/?text=${encodeURIComponent(buildMessage())}`).catch(() => {});
