@@ -27,11 +27,17 @@ export default function LinkedAccountsScreen({ navigation }: Props) {
   const zaadOpen = useZaadTopups();
   const zaad = profile?.linkedAccounts?.zaadPhone;
   const zaadVerified = profile?.linkedAccounts?.zaadVerified === true;
+  // The Zaad account given at sign-up (Profile → Zaad account). Not a linked
+  // top-up number, but this card read "Coming soon" right under it, as if
+  // the app had lost it. Show it, and say what's coming.
+  const savedZaad = !zaad && !zaadOpen ? profile?.zaad?.msisdn : undefined;
 
   const zaadStatus = !zaad
     ? zaadOpen
       ? t('profile.linkedAccounts.notLinked')
-      : t('profile.linkedAccounts.comingSoon')
+      : savedZaad
+        ? t('profile.linkedAccounts.topupsSoon')
+        : t('profile.linkedAccounts.comingSoon')
     : zaadVerified
       ? t('profile.linkedAccounts.verified')
       : t('profile.linkedAccounts.waitingActivation');
@@ -47,10 +53,11 @@ export default function LinkedAccountsScreen({ navigation }: Props) {
             <Text style={styles.providerIcon}>Z</Text>
             <View style={styles.providerText}>
               <Text style={styles.providerName}>{t('profile.linkedAccounts.zaad')}</Text>
-              {zaad ? <Text style={styles.number}>{formatLocal(zaad)}</Text> : null}
+              {zaad || savedZaad ? <Text style={styles.number}>{formatLocal((zaad ?? savedZaad)!)}</Text> : null}
             </View>
             <Text style={[styles.status, zaadVerified && styles.statusGood]}>{zaadStatus}</Text>
           </View>
+          {savedZaad ? <Text style={styles.hint}>{t('profile.linkedAccounts.savedZaadHint')}</Text> : null}
           {zaadOpen ? (
             <Button
               title={zaad ? t('profile.linkedAccounts.change') : t('profile.linkedAccounts.link')}
@@ -114,6 +121,7 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
     color: colors.ui.text,
   },
   number: { ...typography.body, color: colors.ui.textDim, marginTop: 2 },
+  hint: { ...typography.caption, color: colors.ui.textFaint },
   status: { ...typography.body, color: colors.ui.textDim },
   statusGood: { color: colors.ui.incoming },
 }));

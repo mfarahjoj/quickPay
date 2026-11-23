@@ -286,7 +286,9 @@ export const manualTopup = https.onCall(
           currency,
           status: "completed",
           description: `Manual top-up by agent (${paymentMethod})`,
-          reference: reference || undefined,
+          // Omitted when blank: Firestore rejects an undefined field, which
+          // failed every manual top-up sent without a reference (INTERNAL).
+          ...(reference ? { reference } : {}),
           journalEntryId: entryId,
           createdAt: now,
           completedAt: now,

@@ -47,6 +47,23 @@ function signedNet(tx: Transaction): number {
   return tx.isIncoming ? base : -base;
 }
 
+/**
+ * What a row adds to the day's net takings, the same measure as the "Net
+ * takings" header (getTransactionSummary): money received for sales (net),
+ * refunds given back, and agent commission. Float purchases, the cash an
+ * agent handed out at a cash-out (it returns as float), payouts and sends are
+ * not takings, and nothing counts until it has completed. Counting them made
+ * an agent's day read +$1,009.20 while takings were $4.20.
+ */
+function takings(tx: Transaction): number {
+  if (tx.status !== 'completed' || tx.kind === 'float') return 0;
+  if (isAgentCommission(tx)) return tx.commission;
+  if (tx.type === 'withdrawal' && tx.kind === 'cash_out' && tx.isIncoming) return tx.commission ?? 0;
+  if (tx.type === 'payment' && tx.isIncoming) return tx.net;
+  if (tx.type === 'refund' && !tx.isIncoming) return -tx.net;
+  return 0;
+}
+
 function initials(name?: string | null): string | null {
   if (!name) return null;
   const parts = name.trim().split(/\s+/);
@@ -74,7 +91,7 @@ function dayLabel(d: Date, t: (k: string) => string) {
 interface Section {
   key: string;
   title: string;
-  /** Dollars and shillings kept apart: adding 400,000 shillings to $9 gives nonsense. */
+  /** The day's net takings. Dollars and shillings kept apart: adding 400,000 shillings to $9 gives nonsense. */
   subtotals: { USD: number; SLS: number };
   data: Transaction[];
 }
@@ -98,7 +115,7 @@ function buildSections(list: Transaction[], t: (k: string) => string): Section[]
       sections.push(current);
     }
     current.data.push(tx);
-    current.subtotals[isShillings(tx.currency) ? 'SLS' : 'USD'] += signedNet(tx);
+    current.subtotals[isShillings(tx.currency) ? 'SLS' : 'USD'] += takings(tx);
   }
   return sections;
 }

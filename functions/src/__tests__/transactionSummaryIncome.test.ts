@@ -17,4 +17,10 @@ describe("getTransactionSummary incomeCents", () => {
       incomeCents({ type: "payment", toUserId: agent, fromUserId: "c", amount: 25000, currency: "SLS" } as Transaction, agent)
     ).toBe(0);
   });
+
+  it("counts an agent's cash-out commission, not the cash handed over", () => {
+    const cashOut = { type: "withdrawal", kind: "cash_out", fromUserId: "cust-1", toUserId: agent, amount: 500, commissionCents: 5, currency: "USD" } as Transaction;
+    expect(incomeCents(cashOut, agent)).toBe(5);
+    expect(incomeCents({ ...cashOut, commissionCents: 0 } as Transaction, agent)).toBe(0);
+  });
 });

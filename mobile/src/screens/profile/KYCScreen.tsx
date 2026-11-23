@@ -14,6 +14,7 @@ import { Header } from '../../components/Header';
 import { Button } from '../../components/Button';
 import { useAuth } from '../../hooks/useAuth';
 import { withAppLockPaused } from '../../hooks/useAppLock';
+import { USING_EMULATORS } from '../../services/emulator';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import { functions, storage } from '../../services/firebase.config';
 import { typography, spacing, borderRadius, makeStyles, useColors, type Colors } from '../../theme';
@@ -30,10 +31,10 @@ async function pickFromGallery(): Promise<string | null> {
   }
 }
 
-async function pickFromCamera(): Promise<string | null> {
+async function pickFromCamera(cameraType: 'back' | 'front' = 'back'): Promise<string | null> {
   try {
     const { launchCamera } = await import('react-native-image-picker');
-    const result = await withAppLockPaused(() => launchCamera({ mediaType: 'photo', quality: 0.8 }));
+    const result = await withAppLockPaused(() => launchCamera({ mediaType: 'photo', quality: 0.8, cameraType }));
     if (result.didCancel || !result.assets?.length) return null;
     return result.assets[0].uri ?? null;
   } catch {
@@ -111,6 +112,18 @@ export default function KYCScreen({ navigation }: Props) {
       },
       { text: t('common.cancel'), style: 'cancel' },
     ]);
+  };
+
+  // The selfie is taken now, with the front camera: from the gallery, any
+  // stored photo of the ID holder would pass as one. The local QA build on
+  // the emulators keeps the choice, since the simulator has no camera.
+  const takeSelfie = async () => {
+    if (USING_EMULATORS) {
+      pickImage(setSelfie);
+      return;
+    }
+    const uri = await pickFromCamera('front');
+    if (uri) setSelfie(uri);
   };
 
   const uploadFile = async (localUri: string, path: string): Promise<string> => {
@@ -251,7 +264,7 @@ export default function KYCScreen({ navigation }: Props) {
             <Text style={styles.label}>{t('profile.kyc.selfie')}</Text>
             <TouchableOpacity
               style={styles.photoBox}
-              onPress={() => pickImage(setSelfie)}
+              onPress={takeSelfie}
             >
               {selfie ? (
                 <Image source={{ uri: selfie }} style={styles.photoPreview} />

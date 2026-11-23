@@ -50,12 +50,21 @@ function windowStart(period: Period, now: number, tzOffsetMinutes: number): numb
  * The summary is in dollars, so shilling rows count as nothing here: adding
  * whole shillings to cents turned an 8,000 SLSH commission into $80.00.
  */
+function isCashOutCommission(tx: Transaction, userId: string): boolean {
+  return tx.type === "withdrawal" && tx.kind === "cash_out" && tx.toUserId === userId && (tx.commissionCents ?? 0) > 0;
+}
+
 export function incomeCents(tx: Transaction, userId: string): number {
   if (tx.currency === "SLS") return 0;
   if (tx.type === "payment" && tx.toUserId === userId && tx.fromUserId !== userId) {
     return tx.netCents ?? tx.amount;
   }
   if (tx.type === "topup" && tx.fromUserId === userId && (tx.commissionCents ?? 0) > 0) {
+    return tx.commissionCents ?? 0;
+  }
+  // An agent's cash-out commission is earnings too; the cash they handed over
+  // came back as float, which is not takings.
+  if (isCashOutCommission(tx, userId)) {
     return tx.commissionCents ?? 0;
   }
   // A refund the merchant issued reduces takings by the net they gave back.
@@ -112,7 +121,7 @@ export const getTransactionSummary = https.onCall(
         const tx = doc.data() as Transaction;
         const income = incomeCents(tx, userId);
         if (income === 0) return;
-        if (tx.type === "topup") {
+        if (tx.type === "topup" || isCashOutCommission(tx, userId)) {
           commissionCents += income;
           count += 1;
         } else if (tx.type === "refund") {

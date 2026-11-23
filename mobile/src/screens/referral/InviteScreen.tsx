@@ -70,19 +70,14 @@ export default function InviteScreen({ navigation: _navigation }: Props) {
   const bonus =
     terms && terms.referralUnlock !== 'off' && terms.referralBonusCents > 0 ? money(terms.referralBonusCents) : null;
 
-  const buildMessage = useCallback(() => {
-    const lang = profile?.preferredLanguage ?? 'en';
-    if (lang === 'so') {
-      const join = bonus
-        ? `Ku biir adigoo isticmaalaya lambarkeyga *${referralCode}* midna waxaan heli doonnaa ${bonus} bilaash ah 🎉`
-        : `Ku biir adigoo isticmaalaya lambarkeyga *${referralCode}* 🎉`;
-      return `💰 Waxaan isticmaalayaa Zapp Pay – hab ugu dhakhsaha badan ee lacagta lagu diro Hargeysa!\n${join}\nSoo dajiso Zapp Pay oo geli lambarkeyga markaad is diiwaangaliso.`;
-    }
-    const join = bonus
-      ? `Join with my code *${referralCode}* and we both get ${bonus} free 🎉`
-      : `Join with my code *${referralCode}* 🎉`;
-    return `💰 I use Zapp Pay – the fastest way to send & receive money in Hargeisa!\n${join}\nDownload Zapp Pay and enter my code when you sign up.`;
-  }, [referralCode, profile?.preferredLanguage, bonus]);
+  // In the app's language (Arabic had none), from the locale files.
+  const buildMessage = useCallback(
+    () =>
+      bonus
+        ? t('invite.shareMessage', { code: referralCode, amount: bonus })
+        : t('invite.shareMessageNoBonus', { code: referralCode }),
+    [referralCode, bonus, t],
+  );
 
   const handleWhatsApp = () => {
     Linking.openURL(`https://wa.me/?text=${encodeURIComponent(buildMessage())}`).catch(() => {});

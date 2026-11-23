@@ -47,6 +47,25 @@ interface AgentConfirmCashOutRequest {
    * shillings as cents never gets a shilling cash-out (agentCurrency.ts).
    */
   currencies?: string[];
+  /**
+   * The amount the agent was shown by previewAgentCashOut, in the request's
+   * smallest unit. When sent, the cash-out is refused unless it matches, so
+   * the agent only ever hands over what their screen said. Optional: builds
+   * from before the preview send none.
+   */
+  expectedAmount?: number;
+  /** The currency shown with it. */
+  expectedCurrency?: string;
+}
+
+type CashOutTarget = Pick<AgentConfirmCashOutRequest, "otpCode" | "cashOutId" | "customerPhone" | "currencies">;
+
+interface PreviewAgentCashOutResponse {
+  cashOutId: string;
+  /** The cash to hand over, in the currency's smallest unit. */
+  amount: number;
+  currency: string;
+  customerName: string;
 }
 
 interface AgentConfirmCashOutResponse {
@@ -96,6 +115,157 @@ export async function cashedInWithAgentSince(
   });
 }
 
+/**
+ * The checks both the preview and the confirm run, in the same order: the
+ * caller is an active agent, and the code is right for the ONE request named.
+ * Every attempt counts against the request and the agent, preview included,
+ * so previewing can't become a free way to guess codes.
+ */
+async function checkCashOutCode(
+  db: FirebaseFirestore.Firestore,
+  agentId: string,
+  target: CashOutTarget,
+  confirmPin?: () => Promise<void>
+): Promise<{ cashOutRef: FirebaseFirestore.DocumentReference; cashOut: CashOutRequest; agentData: User }> {
+  const { otpCode, cashOutId, customerPhone } = target;
+  if (!isSixDigitCode(otpCode)) {
+    throw new https.HttpsError("invalid-argument", "6-digit code required");
+  }
+  if (!cashOutId && !customerPhone) {
+    // A bare code is what made pooled guessing possible; older merchant
+    // builds that send only the code must update.
+    throw new https.HttpsError(
+      "failed-precondition",
+      "Scan the customer's cash-out QR, or enter their phone number with the code. Update Zapp Merchant if you can't."
+    );
+  }
+
+  // Only vetted agents, who hold float, pay out cash.
+  const agentDoc = await db.collection("users").doc(agentId).get();
+  if (!agentDoc.exists) {
+    throw new https.HttpsError("not-found", "Agent not found");
+  }
+  const agentData = agentDoc.data() as User;
+  if (agentData.accountType !== "topup_agent" && agentData.accountType !== "agent_merchant") {
+    throw new https.HttpsError("permission-denied", "Only agents can confirm cash-outs");
+  }
+  assertAccountActive(agentData);
+
+  if (confirmPin) await confirmPin();
+
+  // Per-agent backstop on top of the per-request limit below, counted
+  // before the lookup so parallel calls can't each slip a guess in.
+  await reserveOtpAttempt(agentId);
+
+  // Resolve the ONE request this attempt is about.
+  const cashOutRef = await findPendingRequest(db, "cashOutRequests", {
+    requestId: cashOutId,
+    customerPhone,
+  });
+  const cashOutSnap = cashOutRef ? await cashOutRef.get() : null;
+  const cashOut = cashOutSnap?.exists ? (cashOutSnap.data() as CashOutRequest) : null;
+  if (!cashOutRef || !cashOut || cashOut.status !== "pending") {
+    throw new https.HttpsError("not-found", INVALID_CODE);
+  }
+
+  // Count this attempt against the request *before* comparing. Counting
+  // after let a burst of parallel guesses all compare before any of them
+  // was recorded; reserved in a transaction, at most
+  // MAX_CODE_ATTEMPTS_PER_REQUEST attempts ever reach the comparison, from
+  // however many agents, and at most MAX_CODE_ATTEMPTS_PER_AGENT of them
+  // from this one. Each is logged with who made it.
+  const attempt = await db.runTransaction(async (tx) => {
+    const fresh = (await tx.get(cashOutRef!)).data() as CashOutRequest | undefined;
+    if (!fresh || fresh.status !== "pending") return { n: 0, agentLimit: false };
+    const mine = (fresh.attemptsBy?.[agentId] ?? 0) + 1;
+    if (mine > MAX_CODE_ATTEMPTS_PER_AGENT) return { n: 0, agentLimit: true };
+    const n = (fresh.failedAttempts ?? 0) + 1;
+    if (n > MAX_CODE_ATTEMPTS_PER_REQUEST) return { n: 0, agentLimit: false };
+    tx.update(cashOutRef!, {
+      failedAttempts: n,
+      attemptsBy: { ...(fresh.attemptsBy ?? {}), [agentId]: mine },
+      attemptLog: [...(fresh.attemptLog ?? []), { agentId, at: admin.firestore.Timestamp.now() }],
+    });
+    return { n, agentLimit: false };
+  });
+  if (attempt.agentLimit) {
+    // This agent has had their tries at this cash-out; it stays open for
+    // the customer to use elsewhere, or to cancel and start again.
+    throw new https.HttpsError(
+      "resource-exhausted",
+      "Too many wrong codes for this cash-out. Ask the customer to cancel it and make a new one.",
+      { reason: "agent_code_attempts" }
+    );
+  }
+  if (attempt.n === 0) {
+    throw new https.HttpsError("not-found", INVALID_CODE);
+  }
+
+  if (!codesMatch(otpCode, cashOut.otpCode)) {
+    // The last allowed attempt was wrong: the money goes back.
+    if (attempt.n >= MAX_CODE_ATTEMPTS_PER_REQUEST) {
+      await releaseCashOutHold(cashOutRef.id, "too_many_attempts", "system");
+    }
+    throw new https.HttpsError("not-found", INVALID_CODE);
+  }
+  await clearOtpFailures(agentId);
+  // A right code was not a guess. Give the attempt back, so an agent who
+  // has to retry (a dropped connection after this point) can't run out of
+  // tries, or use up the request's, with the correct code in hand.
+  await db.runTransaction(async (tx) => {
+    const fresh = (await tx.get(cashOutRef)).data() as CashOutRequest | undefined;
+    if (!fresh || fresh.status !== "pending") return;
+    const mine = fresh.attemptsBy?.[agentId] ?? 0;
+    tx.update(cashOutRef, {
+      failedAttempts: Math.max(0, (fresh.failedAttempts ?? 0) - 1),
+      attemptsBy: { ...(fresh.attemptsBy ?? {}), [agentId]: Math.max(0, mine - 1) },
+    });
+  });
+
+  if (agentId === cashOut.customerId) {
+    throw new https.HttpsError("permission-denied", "You cannot confirm your own cash-out");
+  }
+
+  if (new Date() > cashOut.expiresAt.toDate()) {
+    await releaseCashOutHold(cashOutRef.id, "expired", "system");
+    throw new https.HttpsError("failed-precondition", "This code has expired. The money has gone back to the customer.");
+  }
+
+  return { cashOutRef, cashOut, agentData };
+}
+
+/**
+ * What the agent is about to hand over, before they enter their PIN: the
+ * amount, currency and customer of the ONE cash-out named by QR or phone +
+ * code. Read-only. The code check counts like a confirm attempt, so this is
+ * no cheaper a way to guess codes. The money stays in the hold.
+ */
+export const previewAgentCashOut = https.onCall(
+  { enforceAppCheck: true },
+  async (request: https.CallableRequest<CashOutTarget>): Promise<ApiResponse<PreviewAgentCashOutResponse>> => {
+    requireAuth(request);
+    const agentId = request.auth!.uid;
+    const target = request.data ?? ({} as CashOutTarget);
+    const db = admin.firestore();
+    const { cashOutRef, cashOut } = await checkCashOutCode(db, agentId, target);
+
+    const customerDoc = await db.collection("users").doc(cashOut.customerId).get();
+    assertAccountActive(customerDoc.data(), "counterparty");
+    const currency = storedCurrency(cashOut.currency);
+    assertAgentAppReads(currency, target.currencies);
+
+    return {
+      success: true,
+      data: {
+        cashOutId: cashOutRef.id,
+        amount: cashOut.amount,
+        currency,
+        customerName: customerDoc.data()?.fullName || "Customer",
+      },
+    };
+  }
+);
+
 export const agentConfirmCashOut = https.onCall(
   { enforceAppCheck: true },
   async (
@@ -103,119 +273,25 @@ export const agentConfirmCashOut = https.onCall(
   ): Promise<ApiResponse<AgentConfirmCashOutResponse>> => {
     requireAuth(request);
     const agentId = request.auth!.uid;
-    const { otpCode, agentPin, cashOutId, customerPhone, currencies } =
+    const { otpCode, agentPin, cashOutId, customerPhone, currencies, expectedAmount, expectedCurrency } =
       request.data ?? ({} as AgentConfirmCashOutRequest);
 
-    if (!isSixDigitCode(otpCode)) {
-      throw new https.HttpsError("invalid-argument", "6-digit code required");
-    }
     if (!agentPin) {
       throw new https.HttpsError("invalid-argument", "Agent PIN is required");
     }
-    if (!cashOutId && !customerPhone) {
-      // A bare code is what made pooled guessing possible; older merchant
-      // builds that send only the code must update.
-      throw new https.HttpsError(
-        "failed-precondition",
-        "Scan the customer's cash-out QR, or enter their phone number with the code. Update Zapp Merchant if you can't."
-      );
-    }
-
     const db = admin.firestore();
-
-    // Only vetted agents, who hold float, pay out cash.
-    const agentDoc = await db.collection("users").doc(agentId).get();
-    if (!agentDoc.exists) {
-      throw new https.HttpsError("not-found", "Agent not found");
-    }
-    const agentData = agentDoc.data() as User;
-    if (agentData.accountType !== "topup_agent" && agentData.accountType !== "agent_merchant") {
-      throw new https.HttpsError("permission-denied", "Only agents can confirm cash-outs");
-    }
-    assertAccountActive(agentData);
-
-    // The agent is claiming money: PIN, as on the top-up side.
-    const pinValid = await verifyUserPin(agentId, agentPin);
-    if (!pinValid) {
-      throw new https.HttpsError("permission-denied", "Invalid PIN");
-    }
-    // Per-agent backstop on top of the per-request limit below, counted
-    // before the lookup so parallel calls can't each slip a guess in.
-    await reserveOtpAttempt(agentId);
-
-    // Resolve the ONE request this attempt is about.
-    const cashOutRef = await findPendingRequest(db, "cashOutRequests", {
-      requestId: cashOutId,
-      customerPhone,
-    });
-    const cashOutSnap = cashOutRef ? await cashOutRef.get() : null;
-    const cashOut = cashOutSnap?.exists ? (cashOutSnap.data() as CashOutRequest) : null;
-    if (!cashOutRef || !cashOut || cashOut.status !== "pending") {
-      throw new https.HttpsError("not-found", INVALID_CODE);
-    }
-
-    // Count this attempt against the request *before* comparing. Counting
-    // after let a burst of parallel guesses all compare before any of them
-    // was recorded; reserved in a transaction, at most
-    // MAX_CODE_ATTEMPTS_PER_REQUEST attempts ever reach the comparison, from
-    // however many agents, and at most MAX_CODE_ATTEMPTS_PER_AGENT of them
-    // from this one. Each is logged with who made it.
-    const attempt = await db.runTransaction(async (tx) => {
-      const fresh = (await tx.get(cashOutRef!)).data() as CashOutRequest | undefined;
-      if (!fresh || fresh.status !== "pending") return { n: 0, agentLimit: false };
-      const mine = (fresh.attemptsBy?.[agentId] ?? 0) + 1;
-      if (mine > MAX_CODE_ATTEMPTS_PER_AGENT) return { n: 0, agentLimit: true };
-      const n = (fresh.failedAttempts ?? 0) + 1;
-      if (n > MAX_CODE_ATTEMPTS_PER_REQUEST) return { n: 0, agentLimit: false };
-      tx.update(cashOutRef!, {
-        failedAttempts: n,
-        attemptsBy: { ...(fresh.attemptsBy ?? {}), [agentId]: mine },
-        attemptLog: [...(fresh.attemptLog ?? []), { agentId, at: admin.firestore.Timestamp.now() }],
-      });
-      return { n, agentLimit: false };
-    });
-    if (attempt.agentLimit) {
-      // This agent has had their tries at this cash-out; it stays open for
-      // the customer to use elsewhere, or to cancel and start again.
-      throw new https.HttpsError(
-        "resource-exhausted",
-        "Too many wrong codes for this cash-out. Ask the customer to cancel it and make a new one.",
-        { reason: "agent_code_attempts" }
-      );
-    }
-    if (attempt.n === 0) {
-      throw new https.HttpsError("not-found", INVALID_CODE);
-    }
-
-    if (!codesMatch(otpCode, cashOut.otpCode)) {
-      // The last allowed attempt was wrong: the money goes back.
-      if (attempt.n >= MAX_CODE_ATTEMPTS_PER_REQUEST) {
-        await releaseCashOutHold(cashOutRef.id, "too_many_attempts", "system");
+    const { cashOutRef, cashOut, agentData } = await checkCashOutCode(
+      db,
+      agentId,
+      { otpCode, cashOutId, customerPhone, currencies },
+      async () => {
+        // The agent is claiming money: PIN, as on the top-up side.
+        const pinValid = await verifyUserPin(agentId, agentPin);
+        if (!pinValid) {
+          throw new https.HttpsError("permission-denied", "Invalid PIN");
+        }
       }
-      throw new https.HttpsError("not-found", INVALID_CODE);
-    }
-    await clearOtpFailures(agentId);
-    // A right code was not a guess. Give the attempt back, so an agent who
-    // has to retry (a dropped connection after this point) can't run out of
-    // tries, or use up the request's, with the correct code in hand.
-    await db.runTransaction(async (tx) => {
-      const fresh = (await tx.get(cashOutRef)).data() as CashOutRequest | undefined;
-      if (!fresh || fresh.status !== "pending") return;
-      const mine = fresh.attemptsBy?.[agentId] ?? 0;
-      tx.update(cashOutRef, {
-        failedAttempts: Math.max(0, (fresh.failedAttempts ?? 0) - 1),
-        attemptsBy: { ...(fresh.attemptsBy ?? {}), [agentId]: Math.max(0, mine - 1) },
-      });
-    });
-
-    if (agentId === cashOut.customerId) {
-      throw new https.HttpsError("permission-denied", "You cannot confirm your own cash-out");
-    }
-
-    if (new Date() > cashOut.expiresAt.toDate()) {
-      await releaseCashOutHold(cashOutRef.id, "expired", "system");
-      throw new https.HttpsError("failed-precondition", "This code has expired. The money has gone back to the customer.");
-    }
+    );
 
     const customerDoc = await db.collection("users").doc(cashOut.customerId).get();
     // The funds already sit in the hold, so the debit here is against the hold,
@@ -230,6 +306,18 @@ export const agentConfirmCashOut = https.onCall(
     // cancel or expiry.
     const currency = storedCurrency(cashOut.currency);
     assertAgentAppReads(currency, currencies);
+    // The agent counts out cash from what previewAgentCashOut showed. If the
+    // request isn't that any more, stop before any money moves.
+    if (expectedAmount !== undefined) {
+      const shownCurrency = expectedCurrency === undefined ? "USD" : storedCurrency(expectedCurrency);
+      if (!Number.isInteger(expectedAmount) || expectedAmount !== cashOut.amount || shownCurrency !== currency) {
+        throw new https.HttpsError(
+          "failed-precondition",
+          "This cash-out has changed since you checked it. Check the code again before handing over cash.",
+          { reason: "amount_changed" }
+        );
+      }
+    }
 
     const { cashOutCommissionRate, roundTripWindowHours } = await getRates();
     const feeCents = cashOut.feeCents ?? 0;

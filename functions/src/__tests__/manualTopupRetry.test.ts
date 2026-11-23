@@ -207,6 +207,17 @@ describe("manualTopup is safe to retry", () => {
     });
   });
 
+  // Writing `reference: undefined` made Firestore reject the whole top-up
+  // (INTERNAL), so every top-up sent without a reference failed.
+  it("leaves the reference off a top-up sent without one", async () => {
+    const db = seed();
+    const res = await topup();
+    const row = db.get(`transactions/${res.data.transactionId}`)!;
+    expect(Object.keys(row)).not.toContain("reference");
+    expect(Object.values(row)).not.toContain(undefined);
+    expect(journalEntries(db)).toHaveLength(1);
+  });
+
   it("caps the reference and notes an agent can attach", async () => {
     const db = seed();
     await expect(topup({ reference: "x".repeat(65) })).rejects.toThrow(/reference/);

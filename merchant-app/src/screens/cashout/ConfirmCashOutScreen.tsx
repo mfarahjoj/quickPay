@@ -19,7 +19,7 @@ import { isWrongPin, pinActionErrorKey } from '../../utils/errors';
 import { useExitGuard } from '../../hooks/useExitGuard';
 import { makeStyles, useColors } from '../../theme';
 
-type Step = 'enter' | 'pin' | 'processing' | 'success' | 'error';
+type Step = 'enter' | 'checking' | 'review' | 'pin' | 'processing' | 'success' | 'error';
 
 interface Props {
   navigation: any;
@@ -82,28 +82,43 @@ export default function ConfirmCashOutScreen({ navigation }: Props) {
     customerName: string;
     commission: number;
   } | null>(null);
+  // What previewAgentCashOut said: the cash to count out and who for, shown
+  // before the PIN and sent back with it so nothing else can be paid.
+  const [preview, setPreview] = useState<{ amount: number; currency: string; customerName: string } | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [pinError, setPinError] = useState('');
 
   const cancelPin = () => {
     setPin('');
     setPinError('');
+    setPreview(null);
     setStep('enter');
   };
 
   // Confirming moves the customer's held money into the agent's float: while
   // that runs nothing leaves, and back from the PIN step returns to the code.
   useExitGuard(navigation, {
-    blocked: step === 'processing',
-    onExit: step === 'pin' ? cancelPin : undefined,
+    blocked: step === 'processing' || step === 'checking',
+    onExit: step === 'pin' || step === 'review' ? cancelPin : undefined,
   });
 
-  const askForPin = useCallback((next: Target) => {
+  // Check the code first and show the agent what they are paying out. The
+  // agent used to see the amount only after the money had moved.
+  const checkTarget = useCallback(async (next: Target) => {
     setTarget(next);
     setPin('');
     setPinError('');
-    setStep('pin');
-  }, []);
+    setStep('checking');
+    try {
+      const fn = functions().httpsCallable('previewAgentCashOut');
+      const res = await fn({ ...next, currencies: READS_CURRENCIES });
+      setPreview((res.data as any).data);
+      setStep('review');
+    } catch (e: any) {
+      setErrorMsg(t(pinActionErrorKey(e)));
+      setStep('error');
+    }
+  }, [t]);
 
   const handleScan = useCallback(
     (value: string) => {
@@ -113,9 +128,9 @@ export default function ConfirmCashOutScreen({ navigation }: Props) {
         return;
       }
       triggerHaptic('medium');
-      askForPin(scanned);
+      checkTarget(scanned);
     },
-    [askForPin, t],
+    [checkTarget, t],
   );
 
   const handleConfirm = () => {
@@ -127,15 +142,21 @@ export default function ConfirmCashOutScreen({ navigation }: Props) {
       Alert.alert(t('cashout.confirm.phoneRequiredTitle'), t('cashout.confirm.phoneRequired'));
       return;
     }
-    askForPin({ otpCode: otp, customerPhone: phone.trim() });
+    checkTarget({ otpCode: otp, customerPhone: phone.trim() });
   };
 
   const submit = async (agentPin: string) => {
-    if (!target) return;
+    if (!target || !preview) return;
     setStep('processing');
     try {
       const fn = functions().httpsCallable('agentConfirmCashOut');
-      const res = await fn({ ...target, agentPin, currencies: READS_CURRENCIES });
+      const res = await fn({
+        ...target,
+        agentPin,
+        currencies: READS_CURRENCIES,
+        expectedAmount: preview.amount,
+        expectedCurrency: preview.currency,
+      });
       const data = (res.data as any).data;
       setResult(data);
       setStep('success');
@@ -204,11 +225,43 @@ export default function ConfirmCashOutScreen({ navigation }: Props) {
     );
   }
 
-  if (step === 'processing') {
+  if (step === 'processing' || step === 'checking') {
     return (
       <DarkScreen edges={[]} contentStyle={styles.resultWrap}>
         <ActivityIndicator size="large" color={colors.ui.accent} />
-        <Text style={styles.processingText}>{t('cashout.confirm.processing')}</Text>
+        <Text style={styles.processingText}>
+          {t(step === 'checking' ? 'topup.confirm.checking' : 'cashout.confirm.processing')}
+        </Text>
+      </DarkScreen>
+    );
+  }
+
+  // ── Review: how much cash, and for whom, before the PIN ──
+  if (step === 'review' && preview) {
+    const amountText = formatAmount(preview.amount, preview.currency);
+    return (
+      <DarkScreen edges={[]} contentStyle={styles.resultWrap}>
+        <Text style={styles.reviewLabel}>{t('cashout.confirm.reviewLabel')}</Text>
+        <Text style={[styles.reviewAmount, longAmount(amountText)]} numberOfLines={1}>
+          {amountText}
+        </Text>
+        <Text style={styles.reviewName}>{preview.customerName}</Text>
+        <GlassCard style={styles.reviewCard}>
+          <Text style={styles.reviewHint}>
+            {t('cashout.confirm.reviewHint', { amount: amountText, name: preview.customerName })}
+          </Text>
+        </GlassCard>
+        <View style={styles.resultBtn}>
+          <PillButton
+            label={t('cashout.confirm.countedOut', { amount: amountText })}
+            onPress={() => {
+              setPin('');
+              setPinError('');
+              setStep('pin');
+            }}
+          />
+          <PillButton label={t('common.cancel')} variant="glass" onPress={cancelPin} style={styles.secondBtn} />
+        </View>
       </DarkScreen>
     );
   }
@@ -217,7 +270,11 @@ export default function ConfirmCashOutScreen({ navigation }: Props) {
     return (
       <DarkScreen edges={[]} contentStyle={styles.resultWrap}>
         <Text style={styles.resultTitle}>{t('cashout.confirm.pinTitle')}</Text>
-        <Text style={styles.resultSub}>{t('cashout.confirm.pinSubtitle')}</Text>
+        <Text style={styles.resultSub}>
+          {preview
+            ? t('cashout.confirm.pinFor', { amount: formatAmount(preview.amount, preview.currency), name: preview.customerName })
+            : t('cashout.confirm.pinSubtitle')}
+        </Text>
         <PinInput
           autoFocus
           value={pin}
@@ -391,4 +448,10 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
   pinInput: { marginTop: 28 },
   pinError: { fontSize: 14, color: colors.ui.error, textAlign: 'center', marginTop: 16 },
   processingText: { fontSize: 16, color: colors.ui.textDim, marginTop: 20 },
+  // Review: as ConfirmTopupScreen's, so both agent flows read the same.
+  reviewLabel: { fontSize: 12, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: colors.ui.textFaint },
+  reviewAmount: { fontSize: 52, fontWeight: '800', color: colors.ui.text, letterSpacing: -2, marginTop: 8 },
+  reviewName: { fontSize: 20, fontWeight: '700', color: colors.ui.text, marginTop: 4, textAlign: 'center' },
+  reviewCard: { marginTop: 24, padding: 16, width: '100%' },
+  reviewHint: { fontSize: 15, lineHeight: 21, color: colors.ui.textDim, textAlign: 'center' },
 }));
