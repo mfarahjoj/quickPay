@@ -12,6 +12,12 @@
  * `awaiting_funds`, `owedCents` is reserved in their wallet so they can't
  * spend it, and `disputeHousekeeping` posts the remedy as soon as their
  * balance allows. The customer is never paid from money that isn't there.
+ *
+ * A remedy is paid in the disputed movement's currency (SHILLINGS.md). The
+ * reserve is per currency (`wallets.reservedCents` for dollars,
+ * `wallets.sls.reservedCents` for shillings), so a
+ * shilling dispute the other party can't cover is refused rather than
+ * parked: ops pay it from Zapp or try again once they can.
  */
 
 import * as admin from "firebase-admin";
@@ -24,7 +30,9 @@ import { prepareAdjustment } from "../admin/adjustments";
 import { prepareRefund } from "../qr-payments/refundCore";
 import { getRates } from "../config/rates";
 import { notifyUser } from "../utils/notifications";
+import { PushMessage } from "../utils/pushTemplates";
 import { reviewAgentStanding } from "../agents/standing";
+import { Currency, formatAmount, parseCurrency, toLimitCents } from "../utils/money";
 import {
   userAccount,
   PLATFORM_FEES,
@@ -102,6 +110,7 @@ async function prepareRemedy(
     debitAccount: payFrom === "platform" ? PLATFORM_FEES : userAccount(d.against!),
     creditAccount: userAccount(d.raisedBy),
     amountCents,
+    currency: disputeCurrency(d),
     reason: `Dispute ${disputeId} upheld`,
     postedBy,
     disputeId,
@@ -111,18 +120,26 @@ async function prepareRemedy(
   return { journalEntryId: adjustment.journalEntryId, write: adjustment.write };
 }
 
-function notifyBoth(d: DisputeDoc, disputeId: string, raiserBody: string, againstBody: string) {
-  const send = (uid: string | null, body: string) =>
+function notifyBoth(d: DisputeDoc, disputeId: string, toRaiser: PushMessage, toAgainst: PushMessage) {
+  const send = (uid: string | null, message: PushMessage) =>
     uid &&
-    notifyUser(uid, "dispute_resolved", "Dispute decided", body, {
+    notifyUser(uid, "dispute_resolved", message, {
       type: "dispute_resolved",
       disputeId,
     }).catch((err) => console.error("Failed to notify dispute outcome:", err));
-  send(d.raisedBy, raiserBody);
-  send(d.against, againstBody);
+  send(d.raisedBy, toRaiser);
+  send(d.against, toAgainst);
 }
 
-const dollars = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+/** The disputed movement's currency; disputes from before shillings are dollars. */
+function disputeCurrency(d: Pick<DisputeDoc, "currency">): Currency {
+  return parseCurrency(d.currency) ?? "USD";
+}
+
+/** Where a wallet's reserve in [currency] lives (D8). */
+function reserveField(currency: Currency): string {
+  return currency === "USD" ? "reservedCents" : "sls.reservedCents";
+}
 
 interface ResolveRequest {
   disputeId: string;
@@ -158,12 +175,13 @@ export const adminResolveDispute = https.onCall(
 
     const db = admin.firestore();
     const ref = db.collection(DISPUTES_COLLECTION).doc(disputeId);
-    const { floatApprovalThresholdCents } = await getRates();
+    const { floatApprovalThresholdCents, slsPerUsd } = await getRates();
 
     // Validation that needs the dispute, outside the money transaction.
     const pre = await ref.get();
     if (!pre.exists) throw new https.HttpsError("not-found", "Dispute not found");
     const preDoc = pre.data() as DisputeDoc;
+    const currency = disputeCurrency(preDoc);
     const payFrom: PayFrom = request.data?.payFrom ?? "counterparty";
     const amountCents = request.data?.amountCents ?? preDoc.amountCents;
     if (outcome === "upheld") {
@@ -180,7 +198,8 @@ export const adminResolveDispute = https.onCall(
       if (!Number.isInteger(amountCents) || amountCents <= 0 || amountCents > preDoc.transactionAmountCents) {
         throw new https.HttpsError("invalid-argument", "amountCents must be between 1 and the transaction amount");
       }
-      if (amountCents >= floatApprovalThresholdCents && !actor.roles.includes("super")) {
+      // The threshold is in dollars; a shilling remedy counts at the limits rate.
+      if (toLimitCents(amountCents, currency, slsPerUsd) >= floatApprovalThresholdCents && !actor.roles.includes("super")) {
         throw new https.HttpsError("permission-denied", "Upholding this much needs a senior admin", {
           reason: "needs_super",
         });
@@ -252,13 +271,13 @@ export const adminResolveDispute = https.onCall(
       });
 
       if (outcome === "rejected") {
-        notifyBoth(result.d, disputeId, "Your dispute was reviewed and not upheld.", "A dispute against you was not upheld.");
+        notifyBoth(result.d, disputeId, { key: "dispute.not_upheld" }, { key: "dispute.not_upheld_against" });
       } else {
         notifyBoth(
           result.d,
           disputeId,
-          `Your dispute was upheld. ${dollars(amountCents)} is back in your wallet.`,
-          `A dispute against you was upheld and ${dollars(amountCents)} was returned to the customer.`
+          { key: "dispute.upheld", params: { amount: formatAmount(amountCents, currency) } },
+          { key: "dispute.upheld_against", params: { amount: formatAmount(amountCents, currency) } }
         );
         // Upheld against an agent counts towards their standing (2.6).
         if (payFrom === "counterparty") await reviewAgentStanding(result.d.against);
@@ -293,8 +312,9 @@ export const adminResolveDispute = https.onCall(
             decidedAt: now,
           };
           t.update(ref, { status: "awaiting_funds", owedCents: payerDebitCents, resolution, updatedAt: now });
+          // Reserved in the dispute's own currency, never converted.
           t.update(db.collection("wallets").doc(d.against!), {
-            reservedCents: admin.firestore.FieldValue.increment(payerDebitCents),
+            [reserveField(disputeCurrency(d))]: admin.firestore.FieldValue.increment(payerDebitCents),
           });
           const auditId = stageAuditEntry(t, {
             actor,
@@ -309,8 +329,8 @@ export const adminResolveDispute = https.onCall(
         notifyBoth(
           parked.d,
           disputeId,
-          `Your dispute was upheld. ${dollars(amountCents)} will reach your wallet as soon as the other party has it.`,
-          `A dispute against you was upheld. ${dollars(parked.payerDebitCents)} is owed and will be taken from your next payments.`
+          { key: "dispute.upheld_awaiting_funds", params: { amount: formatAmount(amountCents, currency) } },
+          { key: "dispute.upheld_awaiting_funds_against", params: { amount: formatAmount(parked.payerDebitCents, currency) } }
         );
         return {
           success: true,
@@ -355,7 +375,9 @@ export async function collectAwaitingDisputes(limit = 50): Promise<number> {
         if (d.status !== "awaiting_funds" || !d.resolution || !d.against || !d.owedCents) return null;
         const walletRef = db.collection("wallets").doc(d.against);
         const wallet = (await t.get(walletRef)).data();
-        if (!wallet || wallet.balance < d.owedCents) return null;
+        const owedIn = disputeCurrency(d);
+        const held = owedIn === "USD" ? wallet?.balance : wallet?.sls?.balance;
+        if (!wallet || (held ?? 0) < d.owedCents) return null;
 
         const remedy = d.resolution.remedy === "refund" ? "refund" : "adjustment";
         const prepared = await prepareRemedy(
@@ -370,7 +392,7 @@ export async function collectAwaitingDisputes(limit = 50): Promise<number> {
         );
         prepared.write(t);
         const now = admin.firestore.Timestamp.now();
-        t.update(walletRef, { reservedCents: admin.firestore.FieldValue.increment(-d.owedCents) });
+        t.update(walletRef, { [reserveField(owedIn)]: admin.firestore.FieldValue.increment(-d.owedCents) });
         const resolution: DisputeResolution = {
           ...d.resolution,
           settledAt: now,
@@ -390,8 +412,8 @@ export async function collectAwaitingDisputes(limit = 50): Promise<number> {
         notifyBoth(
           done,
           doc.id,
-          `${dollars(done.resolution!.amountCents)} from your upheld dispute is now in your wallet.`,
-          `${dollars(done.owedCents!)} owed on a dispute has now been paid.`
+          { key: "dispute.collected", params: { amount: formatAmount(done.resolution!.amountCents, disputeCurrency(done)) } },
+          { key: "dispute.collected_against", params: { amount: formatAmount(done.owedCents!, disputeCurrency(done)) } }
         );
       }
     } catch (err) {

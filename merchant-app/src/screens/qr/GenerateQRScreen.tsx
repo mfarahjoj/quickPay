@@ -1,46 +1,60 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Share,
+  ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { useNavigation } from '@react-navigation/native';
 import NetInfo from '@react-native-community/netinfo';
 import QRCode from 'react-native-qrcode-svg';
 import { firestore } from '../../services/firebase.config';
-import {
-  generateQRCode,
-  generateMerchantSticker,
-  cancelQRCode,
-} from '../../services/qr.service';
+import { generateQRCode, cancelQRCode } from '../../services/qr.service';
+import { listMyDisplays } from '../../services/counterDisplay.service';
+import { useCounterDisplayOn } from '../../hooks/useCounterDisplayOn';
 import { triggerHaptic } from '../../services/haptics.service';
-import { QRCodeData, MerchantStickerData, QRSettlement } from '../../types';
-import { toCents, formatCents, sanitizeAmountInput } from '../../utils/money';
+import { QRCodeData, QRSettlement } from '../../types';
+import { formatAmount, toAmount } from '../../utils/money';
+import { REFERENCE_MAX_LENGTH } from '../../utils/receiptParser';
 import { callableErrorKey } from '../../utils/errors';
 import {
-  DarkScreen,
-  ScreenHeader,
-  GlassCard,
-  PillButton,
-  ACCENT,
-  TEXT_DIM,
-  TEXT_FAINT,
-} from '../../components';
-import { SuccessCheckIcon } from '../../components/icons/AuthIcons';
-import CounterIncomingFeed from './CounterIncomingFeed';
+  PriorPayment,
+  priorPaymentFromError,
+  shouldCheckPaidReference,
+} from '../../utils/paidReference';
+import { DarkScreen, ScreenHeader, GlassCard, PillButton, AmountKeypad, ReceiptScanner, PaidReferenceSheet, CurrencyToggle } from '../../components';
+import type { ReceiptDetails } from '../../components/ReceiptScanner';
+import type { FloatCurrency } from '../../components/CurrencyToggle';
+import { ScanIcon, SuccessCheckIcon, ReceiptIcon, CloseIcon, QrIcon } from '../../components/icons/AuthIcons';
+import { makeStyles, useColors } from '../../theme';
 
-type Mode = 'charge' | 'counter';
 type Phase = 'entry' | 'showing' | 'paid' | 'expired';
 
-const QR_SIZE = 260;
+const TICKET_QR_SIZE = 232;
+// Flat, solid surfaces rather than bordered glass.
 
+/**
+ * The Receive tab. The sale comes first: the amount, and an invoice number
+ * or note. Then the shopkeeper picks how to collect it: show a QR for the
+ * customer to scan, or scan the customer's own code. Either way the amount
+ * and note carry through, and a link under the QR switches to scanning.
+ *
+ * The shop's own QR, where the customer types the amount, has its own
+ * screen (CounterCodeScreen, "My QR"), reached from the top right.
+ */
 export default function GenerateQRScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
+  const { height: screenHeight } = useWindowDimensions();
+  const navigation = useNavigation<any>();
 
-  const [mode, setMode] = useState<Mode>('charge');
+  // Shillings or dollars: a sale is in one, never converted (SHILLINGS.md).
+  const [currency, setCurrency] = useState<FloatCurrency>('USD');
   const [amount, setAmount] = useState('');
   const [reference, setReference] = useState('');
   const [qrData, setQrData] = useState<QRCodeData | null>(null);
@@ -49,16 +63,44 @@ export default function GenerateQRScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [timeRemaining, setTimeRemaining] = useState(0);
-  const [focused, setFocused] = useState(false);
-  const [refFocused, setRefFocused] = useState(false);
   const [offline, setOffline] = useState(false);
 
-  // Counter-code mode
-  const [sticker, setSticker] = useState<MerchantStickerData | null>(null);
-  const [stickerLoading, setStickerLoading] = useState(false);
-  const stickerRef = useRef<any>(null);
+  // Reference + receipt
+  const [refEditing, setRefEditing] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  // True while the amount on screen came off a photographed receipt and the
+  // merchant hasn't touched it: they are asked to check it before charging.
+  const [fromReceipt, setFromReceipt] = useState(false);
+  // Kind of the scanned identifier the reference came from ("invoice",
+  // "kot"…), or null when it was typed. Decides whether to check it was paid.
+  const [referenceKind, setReferenceKind] = useState<string | null>(null);
+  // The earlier payment of this reference, while the warning is up.
+  const [prior, setPrior] = useState<PriorPayment | null>(null);
+  // A reference the merchant chose to charge again for this sale, so showing
+  // a fresh code after the first expires doesn't ask a second time.
+  const [confirmedReference, setConfirmedReference] = useState<string | null>(null);
 
-  const amountCents = toCents(amount);
+  // In the currency's smallest unit: cents, or whole shillings.
+  const amountCents = toAmount(amount, currency);
+  const show = (n: number) => formatAmount(n, currency);
+  const trimmedReference = reference.trim();
+
+  // ── Counter display ─────────────────────────────
+  // Whether a tablet on the counter is showing this sale too.
+  const counterDisplay = useCounterDisplayOn();
+  const [onCounter, setOnCounter] = useState(false);
+  useEffect(() => {
+    if (!counterDisplay.on || phase !== 'showing') return;
+    let cancelled = false;
+    listMyDisplays()
+      .then((displays) => {
+        if (!cancelled) setOnCounter(displays.some((d) => d.online));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [counterDisplay.on, phase]);
 
   // ── Connectivity ────────────────────────────────
   useEffect(() => {
@@ -113,9 +155,27 @@ export default function GenerateQRScreen() {
               netCents: data.netCents,
               transactionId: data.transactionId,
               reference: data.reference,
+              receiptNumber: data.receiptNumber,
             });
             triggerHaptic('payment');
             setPhase('paid');
+          } else if (data.status === 'expired' && typeof data.supersededBy === 'string') {
+            // The customer scanned their own code at the counter display: the
+            // tablet voided this QR and raised a request for the same sale.
+            // Wait on that request, as if the phone had scanned them.
+            triggerHaptic('medium');
+            setQrData(null);
+            setTimeRemaining(0);
+            setPhase('entry');
+            navigation.navigate('Charge', {
+              requestId: data.supersededBy,
+              tokenId: data.supersededBy,
+              customerName: '',
+              customerId: '',
+              amountCents: data.amount,
+              currency: data.currency === 'SLS' ? 'SLS' : 'USD',
+              reference: data.reference,
+            });
           } else if (data.status === 'expired') {
             setPhase('expired');
           }
@@ -128,65 +188,45 @@ export default function GenerateQRScreen() {
       );
 
     return unsub;
-  }, [phase, qrData, t]);
-
-  // ── Counter code ────────────────────────────────
-  const loadSticker = useCallback(async () => {
-    if (sticker || stickerLoading) return;
-    try {
-      setStickerLoading(true);
-      setError(null);
-      setSticker(await generateMerchantSticker());
-    } catch (e: any) {
-      setError(t(callableErrorKey(e)));
-    } finally {
-      setStickerLoading(false);
-    }
-  }, [sticker, stickerLoading, t]);
-
-  useEffect(() => {
-    if (mode === 'counter') loadSticker();
-  }, [mode, loadSticker]);
-
-  const handleShareSticker = async () => {
-    if (!sticker) return;
-    const message = t('qr.counter.shareMessage', { name: sticker.merchantName });
-    try {
-      const dataUrl: string | null = await new Promise((resolve) => {
-        if (!stickerRef.current?.toDataURL) return resolve(null);
-        stickerRef.current.toDataURL((data: string) => resolve(data));
-      });
-      if (dataUrl) {
-        await Share.share({ url: `data:image/png;base64,${dataUrl}`, message });
-        return;
-      }
-    } catch {
-      // Fall through to a plain text share below.
-    }
-    try {
-      await Share.share({ message });
-    } catch {
-      // User dismissed the sheet.
-    }
-  };
+  }, [phase, qrData, t, navigation]);
 
   // ── Charge flow ─────────────────────────────────
-  const handleGenerate = async () => {
+  const handleGenerate = async (chargeAgain = false) => {
     if (amountCents <= 0) {
       setError(t('common.invalidAmountMessage'));
       return;
     }
+    const ref = trimmedReference || undefined;
     try {
       setLoading(true);
       setError(null);
-      const result = await generateQRCode(amountCents, 'USD', reference.trim() || undefined);
+      setRefEditing(false);
+      const result = await generateQRCode(amountCents, currency, ref, {
+        checkPaidReference: !!ref && shouldCheckPaidReference(ref, referenceKind),
+        confirmPaidReference: chargeAgain || (!!ref && ref === confirmedReference),
+      });
+      if (chargeAgain && ref) setConfirmedReference(ref);
+      setPrior(null);
       setQrData(result);
       setPhase('showing');
     } catch (e: any) {
-      setError(t(callableErrorKey(e)));
+      const earlier = priorPaymentFromError(e);
+      if (earlier) {
+        triggerHaptic('medium');
+        setPrior(earlier);
+      } else {
+        setPrior(null);
+        setError(t(callableErrorKey(e)));
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleReferenceChange = (next: string) => {
+    setReference(next);
+    // Typed by hand now, whatever it started as.
+    setReferenceKind(null);
   };
 
   const handleNewSale = () => {
@@ -196,6 +236,11 @@ export default function GenerateQRScreen() {
     setSettlement(null);
     setAmount('');
     setReference('');
+    setReferenceKind(null);
+    setConfirmedReference(null);
+    setPrior(null);
+    setRefEditing(false);
+    setFromReceipt(false);
     setTimeRemaining(0);
     setError(null);
     setPhase('entry');
@@ -207,6 +252,59 @@ export default function GenerateQRScreen() {
     setError(null);
     setPhase('entry');
   };
+
+  // The customer can't scan: scan them instead, for the same sale. The code
+  // on screen is voided first, so one sale can't be paid both ways.
+  const handleScanInstead = () => {
+    if (qrData) cancelQRCode(qrData.qrCodeId);
+    setQrData(null);
+    setTimeRemaining(0);
+    setError(null);
+    setPhase('entry');
+    navigation.navigate('ScanCharge', {
+      amountCents,
+      currency,
+      reference: trimmedReference || undefined,
+    });
+  };
+
+  const handleAmountChange = (next: string) => {
+    setAmount(next);
+    setFromReceipt(false);
+    if (error) setError(null);
+  };
+
+  // ── Receipt ─────────────────────────────────────
+  // The receipt only fills the form in. The merchant still presses the button
+  // that shows the code, with the amount in front of them.
+  const handleReceipt = (details: ReceiptDetails) => {
+    setScannerOpen(false);
+    setError(null);
+    if (details.amountCents !== null) {
+      // The receipt reader reads cents; a shilling sale is whole shillings.
+      setAmount(
+        currency === 'SLS'
+          ? String(Math.round(details.amountCents / 100))
+          : (details.amountCents / 100).toFixed(2)
+      );
+      setFromReceipt(true);
+    }
+    if (details.reference) {
+      setReference(details.reference);
+      setReferenceKind(details.referenceKind);
+    }
+  };
+
+  const paidReferenceSheet = (
+    <PaidReferenceSheet
+      prior={prior}
+      amountCents={amountCents}
+      currency={currency}
+      loading={loading}
+      onCancel={() => setPrior(null)}
+      onChargeAgain={() => handleGenerate(true)}
+    />
+  );
 
   const formatTime = (s: number) =>
     `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
@@ -226,28 +324,39 @@ export default function GenerateQRScreen() {
           <SuccessCheckIcon size={76} />
         </View>
         <Text style={styles.paidTitle}>{t('qr.paid.title')}</Text>
-        <Text style={styles.paidAmount}>{formatCents(gross)}</Text>
+        <Text style={styles.paidAmount}>{show(gross)}</Text>
         {settlement.paidByName ? (
           <Text style={styles.paidFrom}>
             {t('qr.paid.from', { name: settlement.paidByName })}
           </Text>
         ) : null}
 
-        <GlassCard style={styles.breakdown}>
+        <View style={styles.breakdown}>
+          {settlement.receiptNumber ? (
+            <>
+              <View style={styles.breakdownRow}>
+                <Text style={styles.breakdownLabel}>{t('qr.paid.receipt')}</Text>
+                <Text style={styles.receiptValue} selectable>
+                  {settlement.receiptNumber}
+                </Text>
+              </View>
+              <View style={styles.breakdownDivider} />
+            </>
+          ) : null}
           <View style={styles.breakdownRow}>
             <Text style={styles.breakdownLabel}>{t('qr.paid.gross')}</Text>
-            <Text style={styles.breakdownValue}>{formatCents(gross)}</Text>
+            <Text style={styles.breakdownValue}>{show(gross)}</Text>
           </View>
           {hasSplit ? (
             <>
               <View style={styles.breakdownRow}>
                 <Text style={styles.breakdownLabel}>{t('qr.paid.fee')}</Text>
-                <Text style={styles.breakdownValue}>−{formatCents(fee!)}</Text>
+                <Text style={styles.breakdownValue}>−{show(fee!)}</Text>
               </View>
               <View style={styles.breakdownDivider} />
               <View style={styles.breakdownRow}>
                 <Text style={styles.breakdownLabelStrong}>{t('qr.paid.net')}</Text>
-                <Text style={styles.breakdownNet}>{formatCents(net!)}</Text>
+                <Text style={styles.breakdownNet}>{show(net!)}</Text>
               </View>
             </>
           ) : null}
@@ -260,7 +369,7 @@ export default function GenerateQRScreen() {
               </View>
             </>
           ) : null}
-        </GlassCard>
+        </View>
 
         <View style={styles.resultFooter}>
           <PillButton label={t('qr.paid.newSale')} onPress={handleNewSale} />
@@ -275,13 +384,14 @@ export default function GenerateQRScreen() {
       <DarkScreen scroll contentStyle={styles.resultContent}>
         <ScreenHeader title={t('qr.expired.title')} subtitle={t('qr.expired.message')} />
         <View style={styles.expiredAmount}>
-          <Text style={styles.amountBadgeLabel}>{t('qr.display.amount')}</Text>
-          <Text style={styles.amountBadgeValue}>{formatCents(amountCents)}</Text>
+          <Text style={styles.expiredLabel}>{t('qr.display.amount')}</Text>
+          <Text style={styles.expiredValue}>{show(amountCents)}</Text>
+          {trimmedReference ? <Text style={styles.expiredRef}>{trimmedReference}</Text> : null}
         </View>
         <View style={styles.resultFooter}>
           <PillButton
             label={t('qr.expired.regenerate')}
-            onPress={handleGenerate}
+            onPress={() => handleGenerate()}
             loading={loading}
             disabled={offline}
           />
@@ -291,74 +401,116 @@ export default function GenerateQRScreen() {
             onPress={handleEditAmount}
           />
         </View>
+        {paidReferenceSheet}
       </DarkScreen>
     );
   }
 
   // ── QR displayed, waiting for the customer ──────
+  // One white ticket the merchant turns to the customer: who is being paid,
+  // how much, what for, and the code — everything the customer will see again
+  // on their own phone before they enter their PIN.
   if (phase === 'showing' && qrData) {
     const warning = timeRemaining < 60;
     return (
-      <DarkScreen scroll contentStyle={styles.resultContent}>
-        <ScreenHeader title={t('qr.display.readyTitle')} subtitle={t('qr.display.scanSubtitle')} />
+      <DarkScreen scroll contentStyle={styles.showingContent}>
+        <View style={styles.showingHeader}>
+          <TouchableOpacity
+            style={styles.roundBtn}
+            onPress={handleNewSale}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={t('qr.display.cancelSale')}
+          >
+            <CloseIcon size={14} color={colors.ui.text} />
+          </TouchableOpacity>
+          <Text style={styles.showingTitle}>{t('qr.display.scanSubtitle')}</Text>
+          <View style={styles.roundSpacer} />
+        </View>
 
-        <View style={styles.amountBadge}>
-          <Text style={styles.amountBadgeLabel}>{t('qr.display.amount')}</Text>
-          <Text style={styles.amountBadgeValue}>{formatCents(amountCents)}</Text>
-          {reference.trim() ? (
-            <Text style={styles.amountBadgeRef}>{reference.trim()}</Text>
+        <View style={styles.ticket}>
+          {qrData.merchantName ? (
+            <>
+              <Text style={styles.ticketPayTo}>{t('qr.display.payTo')}</Text>
+              <Text style={styles.ticketMerchant} numberOfLines={1}>
+                {qrData.merchantName}
+              </Text>
+            </>
           ) : null}
-          <Text style={styles.netLine}>
-            {t('qr.display.youReceive', { amount: formatCents(qrData.netCents) })}
+          <Text style={styles.ticketAmount} numberOfLines={1} adjustsFontSizeToFit>
+            {show(amountCents)}
           </Text>
+          {trimmedReference ? (
+            <View style={styles.ticketRef}>
+              <Text style={styles.ticketRefText} numberOfLines={1}>
+                {trimmedReference}
+              </Text>
+            </View>
+          ) : null}
+
+          <View style={styles.ticketPerforation} />
+
+          <QRCode
+            value={qrData.qrData}
+            size={TICKET_QR_SIZE}
+            backgroundColor="#FFFFFF"
+            color={colors.ui.onSolid}
+          />
+          <Text style={styles.ticketHint}>{t('qr.display.payHint')}</Text>
         </View>
 
-        <View style={styles.qrFrame}>
-          <QRCode value={qrData.qrData} size={QR_SIZE} backgroundColor="#FFFFFF" color="#000000" />
-        </View>
+        {error ? (
+          <View style={[styles.errorBanner, styles.showingBanner]}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
 
-        <View style={[styles.timer, warning && styles.timerWarn]}>
-          <Text style={[styles.timerValue, warning && styles.timerValueWarn]}>
+        <View style={styles.statusCard}>
+          <ActivityIndicator color={warning ? colors.ui.error : colors.ui.accent} />
+          <View style={styles.statusBody}>
+            <Text style={styles.statusText}>{t('qr.display.waiting')}</Text>
+            <Text style={styles.statusSub}>
+              {t('qr.display.youReceive', { amount: show(qrData.netCents) })}
+            </Text>
+            {onCounter ? <Text style={styles.statusSub}>{t('qr.display.alsoOnCounter')}</Text> : null}
+          </View>
+          <Text style={[styles.statusTime, warning && styles.statusTimeWarn]}>
             {formatTime(timeRemaining)}
           </Text>
-          <Text style={styles.timerLabel}>{t('qr.display.expiresIn')}</Text>
         </View>
 
-        <View style={styles.resultFooter}>
-          <View style={styles.waitingRow}>
-            <View style={styles.waitingDot} />
-            <Text style={styles.waitingText}>{t('qr.display.waiting')}</Text>
-          </View>
-          <PillButton label={t('qr.display.cancelSale')} variant="glass" onPress={handleNewSale} />
-        </View>
+        <View style={styles.showingSpacer} />
+
+        <TouchableOpacity
+          style={styles.cantScan}
+          onPress={handleScanInstead}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+        >
+          <ScanIcon size={18} color={colors.ui.text} />
+          <Text style={styles.cantScanText}>{t('qr.display.cantScan')}</Text>
+        </TouchableOpacity>
       </DarkScreen>
     );
   }
 
-  // ── Entry / counter code ────────────────────────
+  // ── Entry ───────────────────────────────────────
+  const keyHeight = screenHeight < 700 ? 50 : screenHeight < 820 ? 58 : 66;
+  const amountEmpty = amount === '';
+
   return (
     <DarkScreen scroll keyboard contentStyle={styles.content}>
-      <ScreenHeader
-        title={t('qr.receive.title')}
-        subtitle={mode === 'charge' ? t('qr.receive.subtitle') : t('qr.counter.subtitle')}
-      />
-
-      <View style={styles.segment}>
-        {(['charge', 'counter'] as Mode[]).map((m) => (
-          <TouchableOpacity
-            key={m}
-            style={[styles.segmentBtn, mode === m && styles.segmentBtnActive]}
-            onPress={() => {
-              setError(null);
-              setMode(m);
-            }}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.segmentText, mode === m && styles.segmentTextActive]}>
-              {t(`qr.mode.${m}`)}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      <View style={styles.topRow}>
+        <Text style={styles.title}>{t('navigation.tabs.receive')}</Text>
+        <TouchableOpacity
+          style={styles.counterBtn}
+          onPress={() => navigation.navigate('CounterCode')}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+        >
+          <QrIcon size={16} color={colors.ui.text} />
+          <Text style={styles.counterBtnText}>{t('qr.myQr.title')}</Text>
+        </TouchableOpacity>
       </View>
 
       {offline ? (
@@ -373,139 +525,196 @@ export default function GenerateQRScreen() {
         </View>
       ) : null}
 
-      {mode === 'counter' ? (
-        <View style={styles.counterBody}>
-          {sticker ? (
-            <>
-              <View style={styles.qrFrame}>
-                <QRCode
-                  value={sticker.qrData}
-                  size={QR_SIZE}
-                  backgroundColor="#FFFFFF"
-                  color="#000000"
-                  getRef={(c) => {
-                    stickerRef.current = c;
-                  }}
-                />
-              </View>
-              <Text style={styles.counterName}>{sticker.merchantName}</Text>
-              <Text style={styles.counterAddress}>{sticker.businessAddress}</Text>
-              <View style={styles.counterFooter}>
-                <PillButton label={t('qr.counter.share')} onPress={handleShareSticker} />
-                <Text style={styles.infoText}>{t('qr.counter.hint')}</Text>
-              </View>
-              <CounterIncomingFeed />
-            </>
-          ) : (
-            <Text style={styles.infoText}>
-              {stickerLoading ? t('qr.counter.loading') : t('qr.counter.unavailable')}
-            </Text>
-          )}
-        </View>
-      ) : (
-        <>
-          <View style={styles.body}>
-            <Text style={styles.label}>{t('qr.receive.referenceLabel')}</Text>
-            <GlassCard style={[styles.refInputCard, refFocused && styles.amountInputCardFocused]}>
-              <TextInput
-                style={styles.refInput}
-                placeholder={t('qr.receive.referencePlaceholder')}
-                placeholderTextColor="rgba(255,255,255,0.25)"
-                value={reference}
-                onChangeText={setReference}
-                returnKeyType="next"
-                maxLength={40}
-                onFocus={() => setRefFocused(true)}
-                onBlur={() => setRefFocused(false)}
-              />
-            </GlassCard>
+      <>
+          <CurrencyToggle
+            value={currency}
+            onChange={(next) => {
+              if (next === currency) return;
+              setCurrency(next);
+              setAmount('');
+              setFromReceipt(false);
+              setPrior(null);
+            }}
+            disabled={loading}
+            style={styles.currencyToggle}
+          />
 
-            <Text style={[styles.label, { marginTop: 20 }]}>{t('qr.receive.amountLabel')}</Text>
-            <GlassCard style={[styles.amountInputCard, focused && styles.amountInputCardFocused]}>
-              <Text style={styles.currency}>$</Text>
-              <TextInput
-                style={styles.amountInput}
-                placeholder="0.00"
-                placeholderTextColor="rgba(255,255,255,0.25)"
-                value={amount}
-                onChangeText={(v) => setAmount(sanitizeAmountInput(v))}
-                keyboardType="decimal-pad"
-                autoFocus
-                onFocus={() => setFocused(true)}
-                onBlur={() => setFocused(false)}
-              />
-            </GlassCard>
-            <Text style={styles.hint}>{t('qr.receive.amountHint')}</Text>
+          {/* Amount */}
+          <View style={styles.amountBlock}>
+            <Text
+              style={[styles.amountText, amountEmpty && styles.amountTextEmpty]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              accessibilityLabel={`${t('qr.receive.amountLabel')} ${show(amountCents)}`}
+            >
+              {currency === 'SLS'
+                ? `${amountEmpty ? '0' : Number(amount).toLocaleString('en-US')} SLSH`
+                : `$${amountEmpty ? '0' : amount}`}
+            </Text>
+            <Text style={[styles.amountNote, fromReceipt && styles.amountNoteWarn]}>
+              {fromReceipt ? t('qr.receive.checkAmount') : t('qr.receive.amountHint')}
+            </Text>
           </View>
 
+          {/* Reference */}
+          <View style={styles.refRow}>
+            {refEditing ? (
+              <GlassCard style={styles.refInputCard}>
+                <TextInput
+                  style={styles.refInput}
+                  placeholder={t('qr.receive.referencePlaceholder')}
+                  placeholderTextColor={colors.ui.ink(0.3)}
+                  value={reference}
+                  onChangeText={handleReferenceChange}
+                  returnKeyType="done"
+                  maxLength={REFERENCE_MAX_LENGTH}
+                  autoFocus
+                  onSubmitEditing={() => setRefEditing(false)}
+                  onBlur={() => setRefEditing(false)}
+                />
+                <TouchableOpacity
+                  onPress={() => setRefEditing(false)}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                >
+                  <Text style={styles.refDone}>{t('qr.receive.referenceDone')}</Text>
+                </TouchableOpacity>
+              </GlassCard>
+            ) : trimmedReference ? (
+              <View style={styles.refChip}>
+                <TouchableOpacity
+                  style={styles.refChipMain}
+                  onPress={() => setRefEditing(true)}
+                  activeOpacity={0.7}
+                >
+                  <ReceiptIcon size={16} color={colors.ui.ink(0.7)} />
+                  <Text style={styles.refChipText} numberOfLines={1}>
+                    {trimmedReference}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.refClear}
+                  onPress={() => handleReferenceChange('')}
+                  hitSlop={{ top: 12, bottom: 12, left: 8, right: 12 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('qr.receive.clearReference')}
+                >
+                  <CloseIcon size={10} color={colors.ui.text} />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.refAdd}
+                onPress={() => setRefEditing(true)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.refAddText}>{t('qr.receive.addReference')}</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Fills the amount and the reference from a photographed receipt.
+                Icon only once a reference is showing, so the two share the row. */}
+            {!refEditing ? (
+              <TouchableOpacity
+                style={[styles.receiptBtn, trimmedReference ? styles.receiptBtnIcon : null]}
+                onPress={() => setScannerOpen(true)}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={t('qr.receive.scanReceipt')}
+              >
+                <ReceiptIcon size={18} color={colors.ui.text} />
+                {trimmedReference ? null : (
+                  <Text style={styles.receiptBtnText}>{t('qr.receive.scanReceipt')}</Text>
+                )}
+              </TouchableOpacity>
+            ) : null}
+          </View>
+
+          {/* Keypad gives way to the system keyboard while a reference is typed */}
+          {refEditing ? (
+            <View style={styles.keypadSpacer} />
+          ) : (
+            <View style={styles.keypadWrap}>
+              <AmountKeypad
+                value={amount}
+                onChange={handleAmountChange}
+                keyHeight={keyHeight}
+                deleteLabel={t('qr.receive.delete')}
+                wholeOnly={currency === 'SLS'}
+              />
+            </View>
+          )}
+
           <View style={styles.footer}>
+            {/* The sale is typed; now how to collect it. */}
             <PillButton
-              label={t('qr.receive.generateButton')}
-              onPress={handleGenerate}
+              label={t('qr.receive.scanCustomer')}
+              variant="glass"
+              style={styles.footerBtn}
+              onPress={handleScanInstead}
+              disabled={amountCents <= 0 || offline || loading}
+            />
+            <PillButton
+              label={t('qr.receive.showQr')}
+              style={styles.footerBtn}
+              onPress={() => handleGenerate()}
               loading={loading}
               disabled={amountCents <= 0 || offline}
             />
-            <Text style={styles.infoText}>{t('qr.receive.validityHint')}</Text>
           </View>
-        </>
-      )}
+      </>
+
+      <ReceiptScanner
+        visible={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onApply={handleReceipt}
+      />
+      {paidReferenceSheet}
     </DarkScreen>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
+  currencyToggle: { marginHorizontal: 24, marginTop: 4 },
   content: {
-    paddingBottom: 24,
+    paddingBottom: 16,
   },
   resultContent: {
     paddingBottom: 40,
     alignItems: 'center',
   },
-  body: {
-    paddingHorizontal: 24,
+  showingContent: {
     paddingTop: 12,
-    flex: 1,
-  },
-  counterBody: {
-    paddingHorizontal: 24,
-    paddingTop: 12,
+    paddingBottom: 28,
     alignItems: 'center',
-    flex: 1,
-  },
-  footer: {
-    paddingHorizontal: 24,
-    gap: 14,
   },
 
-  // segmented mode switch
-  segment: {
+  // top row
+  topRow: {
     flexDirection: 'row',
-    marginHorizontal: 24,
-    marginTop: 8,
-    padding: 4,
-    borderRadius: 9999,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  segmentBtn: {
-    flex: 1,
-    height: 40,
-    borderRadius: 9999,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    paddingTop: 10,
+    paddingBottom: 12,
+    gap: 12,
   },
-  segmentBtnActive: {
-    backgroundColor: '#FFFFFF',
-  },
-  segmentText: {
-    fontSize: 14,
+  title: {
+    flex: 1,
+    fontSize: 34,
     fontWeight: '700',
-    color: 'rgba(255,255,255,0.6)',
+    letterSpacing: -0.6,
+    color: colors.ui.text,
   },
-  segmentTextActive: {
-    color: '#000000',
+  counterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    height: 44,
+    paddingHorizontal: 16,
+    borderRadius: 22,
+    backgroundColor: colors.ui.surface,
   },
+  counterBtnText: { fontSize: 15, fontWeight: '600', color: colors.ui.text },
 
   offlineBanner: {
     marginHorizontal: 24,
@@ -513,14 +722,14 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,176,32,0.14)',
+    backgroundColor: colors.ui.warningSoft,
     borderWidth: 1,
-    borderColor: 'rgba(255,176,32,0.35)',
+    borderColor: colors.ui.warningSoft,
   },
   offlineText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#FFB020',
+    color: colors.ui.warning,
     textAlign: 'center',
   },
   errorBanner: {
@@ -529,151 +738,295 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,59,48,0.12)',
+    backgroundColor: colors.ui.errorSoft,
     borderWidth: 1,
-    borderColor: 'rgba(255,59,48,0.35)',
+    borderColor: colors.ui.errorSoft,
+  },
+  showingBanner: {
+    alignSelf: 'stretch',
+    marginTop: 0,
+    marginBottom: 16,
   },
   errorText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#FF6961',
+    color: colors.ui.error,
     textAlign: 'center',
   },
 
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-    color: 'rgba(255,255,255,0.4)',
-    marginBottom: 12,
-  },
-  amountInputCard: {
-    flexDirection: 'row',
+  // amount
+  amountBlock: {
+    flexGrow: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    height: 76,
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 12,
+    minHeight: 112,
   },
-  amountInputCardFocused: {
-    borderColor: ACCENT,
-  },
-  currency: {
-    fontSize: 36,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginRight: 8,
-  },
-  amountInput: {
-    flex: 1,
-    fontSize: 40,
+  amountText: {
+    fontSize: 64,
     fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: -1,
-    padding: 0,
+    letterSpacing: -2.5,
+    color: colors.ui.text,
+    fontVariant: ['tabular-nums'],
   },
-  hint: {
+  amountTextEmpty: {
+    color: colors.ui.ink(0.28),
+  },
+  amountNote: {
     fontSize: 13,
-    color: TEXT_FAINT,
-    marginTop: 12,
+    color: colors.ui.textFaint,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  amountNoteWarn: {
+    color: colors.ui.warning,
+    fontWeight: '600',
   },
 
-  // result
-  amountBadge: {
-    alignItems: 'center',
-    marginTop: 4,
-    marginBottom: 24,
-  },
-  expiredAmount: {
-    alignItems: 'center',
-    marginTop: 24,
-    marginBottom: 32,
-  },
-  amountBadgeLabel: {
-    fontSize: 13,
-    color: TEXT_FAINT,
-    marginBottom: 4,
-  },
-  amountBadgeValue: {
-    fontSize: 44,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: -2,
-  },
-  amountBadgeRef: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.5)',
-    marginTop: 6,
-    letterSpacing: 0.2,
-  },
-  netLine: {
-    fontSize: 13,
-    color: TEXT_DIM,
-    marginTop: 8,
-  },
-  refInputCard: {
+  // reference
+  refRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    height: 52,
+    paddingHorizontal: 24,
+    minHeight: 48,
+    justifyContent: 'center',
+    gap: 10,
+  },
+  receiptBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 40,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: colors.ui.surface,
+  },
+  receiptBtnIcon: {
+    width: 40,
+    paddingHorizontal: 0,
+  },
+  receiptBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.ui.text,
+  },
+  refAdd: {
+    height: 40,
+    paddingHorizontal: 18,
+    borderRadius: 20,
+    justifyContent: 'center',
+    backgroundColor: colors.ui.surface,
+  },
+  refAddText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.ui.ink(0.7),
+  },
+  refChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1,
+    height: 40,
+    paddingLeft: 14,
+    paddingRight: 10,
+    borderRadius: 20,
+    backgroundColor: colors.ui.surface,
+    gap: 10,
+  },
+  refChipMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexShrink: 1,
+  },
+  refChipText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.ui.text,
+    flexShrink: 1,
+  },
+  refClear: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.ui.glassBorderStrong,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  refInputCard: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    height: 48,
+    gap: 12,
+    borderColor: colors.ui.accent,
   },
   refInput: {
     flex: 1,
     fontSize: 16,
     fontWeight: '500',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     padding: 0,
   },
-  qrFrame: {
+  refDone: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.ui.text,
+  },
+
+  // keypad
+  keypadWrap: {
+    paddingTop: 8,
+  },
+  keypadSpacer: {
+    height: 24,
+  },
+  footer: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+  },
+  footerBtn: { flex: 1 },
+
+  // ticket (customer-facing): white with black ink in both themes, like a
+  // printed slip, so the QR scans the same either way.
+  ticket: {
+    alignSelf: 'stretch',
+    marginHorizontal: 20,
+    marginBottom: 16,
+    paddingTop: 24,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    borderRadius: 32,
     backgroundColor: '#FFFFFF',
-    padding: 22,
-    borderRadius: 28,
-    marginBottom: 24,
-  },
-  timer: {
     alignItems: 'center',
-    backgroundColor: 'rgba(52,199,123,0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(52,199,123,0.35)',
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 32,
-    marginBottom: 24,
   },
-  timerWarn: {
-    backgroundColor: 'rgba(255,59,48,0.12)',
-    borderColor: 'rgba(255,59,48,0.35)',
+  ticketPayTo: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: 'rgba(0,0,0,0.5)',
   },
-  timerValue: {
-    fontSize: 28,
+  ticketMerchant: {
+    fontSize: 20,
     fontWeight: '800',
-    color: '#34C77B',
-    letterSpacing: -0.5,
-    fontVariant: ['tabular-nums'],
-  },
-  timerValueWarn: {
-    color: '#FF6961',
-  },
-  timerLabel: {
-    fontSize: 12,
-    color: TEXT_FAINT,
+    letterSpacing: -0.4,
+    color: '#000000',
     marginTop: 2,
   },
-  waitingRow: {
+  ticketAmount: {
+    fontSize: 52,
+    fontWeight: '800',
+    letterSpacing: -2,
+    color: '#000000',
+    marginTop: 6,
+    fontVariant: ['tabular-nums'],
+  },
+  ticketRef: {
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.06)',
+    maxWidth: '100%',
+  },
+  ticketRefText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'rgba(0,0,0,0.7)',
+  },
+  ticketPerforation: {
+    alignSelf: 'stretch',
+    marginTop: 18,
+    marginBottom: 18,
+    borderTopWidth: 1.5,
+    borderColor: 'rgba(0,0,0,0.14)',
+    borderStyle: 'dashed',
+  },
+  ticketHint: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'rgba(0,0,0,0.6)',
+    textAlign: 'center',
+    marginTop: 16,
+  },
+  showingHeader: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    marginBottom: 18,
+  },
+  showingTitle: { fontSize: 17, fontWeight: '600', color: colors.ui.text },
+  roundBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.ui.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  roundSpacer: { width: 44, height: 44 },
+  statusCard: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginHorizontal: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: colors.ui.surface,
+  },
+  statusBody: { flex: 1, gap: 2 },
+  statusText: { fontSize: 16, fontWeight: '600', color: colors.ui.text },
+  statusSub: { fontSize: 13, color: colors.ui.textDim },
+  statusTime: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.ui.textDim,
+    fontVariant: ['tabular-nums'],
+  },
+  statusTimeWarn: {
+    color: colors.ui.error,
+  },
+  showingSpacer: { flexGrow: 1, minHeight: 12 },
+  cantScan: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    minHeight: 48,
+    paddingHorizontal: 20,
+  },
+  cantScanText: { fontSize: 16, fontWeight: '600', color: colors.ui.text },
+
+  // expired
+  expiredAmount: {
+    alignItems: 'center',
+    marginTop: 24,
+    marginBottom: 32,
+  },
+  expiredLabel: {
+    fontSize: 13,
+    color: colors.ui.textFaint,
     marginBottom: 4,
   },
-  waitingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#34C77B',
+  expiredValue: {
+    fontSize: 44,
+    fontWeight: '800',
+    color: colors.ui.text,
+    letterSpacing: -2,
   },
-  waitingText: {
+  expiredRef: {
     fontSize: 14,
-    color: TEXT_DIM,
+    color: colors.ui.ink(0.5),
+    marginTop: 6,
   },
   resultFooter: {
     alignSelf: 'stretch',
@@ -687,28 +1040,38 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   paidTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '600',
+    color: colors.ui.incoming,
   },
   paidAmount: {
-    fontSize: 52,
-    fontWeight: '800',
-    color: '#34C77B',
-    letterSpacing: -2,
-    marginTop: 8,
+    fontSize: 64,
+    fontWeight: '700',
+    color: colors.ui.text,
+    letterSpacing: -2.5,
+    marginTop: 6,
+    fontVariant: ['tabular-nums'],
   },
   paidFrom: {
-    fontSize: 15,
-    color: TEXT_DIM,
-    marginTop: 6,
+    fontSize: 17,
+    color: colors.ui.textDim,
+    marginTop: 4,
     marginBottom: 28,
+  },
+  receiptValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.ui.text,
+    fontVariant: ['tabular-nums'],
   },
   breakdown: {
     alignSelf: 'stretch',
-    marginHorizontal: 24,
-    padding: 18,
-    marginBottom: 28,
+    marginHorizontal: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: colors.ui.surface,
+    marginBottom: 24,
   },
   breakdownRow: {
     flexDirection: 'row',
@@ -718,53 +1081,27 @@ const styles = StyleSheet.create({
   },
   breakdownLabel: {
     fontSize: 14,
-    color: TEXT_DIM,
+    color: colors.ui.textDim,
   },
   breakdownLabelStrong: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.ui.text,
   },
   breakdownValue: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: colors.ui.text,
   },
   breakdownNet: {
     fontSize: 18,
-    fontWeight: '800',
-    color: '#34C77B',
+    fontWeight: '700',
+    color: colors.ui.incoming,
   },
   breakdownDivider: {
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.ui.glassBorder,
     marginVertical: 8,
   },
 
-  // counter code
-  counterName: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: -0.5,
-    textAlign: 'center',
-  },
-  counterAddress: {
-    fontSize: 14,
-    color: TEXT_DIM,
-    marginTop: 4,
-    marginBottom: 28,
-    textAlign: 'center',
-  },
-  counterFooter: {
-    alignSelf: 'stretch',
-    gap: 14,
-  },
-
-  infoText: {
-    fontSize: 13,
-    color: TEXT_DIM,
-    textAlign: 'center',
-    lineHeight: 19,
-  },
-});
+}));

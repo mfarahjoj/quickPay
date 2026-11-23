@@ -57,7 +57,12 @@ describe("adminAllowPinReset", () => {
 
     const audit = [...db.store.entries()].find(([p]) => p.startsWith("admin_audit/"))![1];
     expect(audit).toMatchObject({ action: "user.allowPinReset", target: { type: "user", id: UID } });
-    expect(notifyUser).toHaveBeenCalledWith(UID, "pin_reset", expect.any(String), expect.any(String), expect.any(Object));
+    expect(notifyUser).toHaveBeenCalledWith(
+      UID,
+      "pin_reset",
+      { key: "security.staff_pin_reset", params: { minutes: "30" } },
+      expect.any(Object)
+    );
   });
 
   it("refuses unless staff confirm they checked the ID", async () => {

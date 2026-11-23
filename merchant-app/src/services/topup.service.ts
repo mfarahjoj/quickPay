@@ -10,34 +10,22 @@ export interface CustomerLookupResult {
 
 export interface TopupRequest {
   userId: string;
+  /** Whole units: dollars (12.5), or whole shillings (30000). */
   amount: number;
+  /** "USD" or "SLS": paid from the agent's float in it, never converted. */
+  currency?: 'USD' | 'SLS';
   agentPin: string;
   paymentMethod: 'cash' | 'zaad' | 'edahab';
   reference?: string;
   notes?: string;
+  /** One per top-up, sent again on every retry of it (utils/idempotency.ts). */
+  idempotencyKey: string;
 }
 
 export interface TopupResult {
   transactionId: string;
   userId: string;
   amount: number;
-  newBalance: number;
-}
-
-export interface TopupRecord {
-  id: string;
-  userId: string;
-  agentId: string;
-  amount: number;
-  amountDollars: number;
-  currency: string;
-  paymentMethod: string;
-  reference: string;
-  notes: string;
-  status: string;
-  transactionId: string;
-  createdAt: Date;
-  completedAt?: Date;
 }
 
 export async function lookupCustomer(phoneNumber: string): Promise<CustomerLookupResult> {
@@ -70,23 +58,8 @@ export async function topupCustomer(request: TopupRequest): Promise<TopupResult>
     return data.data;
   } catch (error: any) {
     logger.error('Top-up customer error:', error);
-    throw new Error(error.message || 'Failed to top up customer');
-  }
-}
-
-export async function getTopupHistory(limit: number = 50): Promise<TopupRecord[]> {
-  try {
-    const fn = functions().httpsCallable('getAgentTopupHistory');
-    const result = await fn({ limit });
-    const data = result.data as { success: boolean; error?: string; data: TopupRecord[] };
-
-    if (!data.success) {
-      throw new Error(data.error || 'Failed to load history');
-    }
-
-    return data.data;
-  } catch (error: any) {
-    logger.error('Get topup history error:', error);
-    throw new Error(error.message || 'Failed to load top-up history');
+    // Rethrown untouched: the screen reads its code to word it, and sends
+    // a wrong PIN back to the keypad.
+    throw error;
   }
 }

@@ -6,11 +6,12 @@ import {
   enforceAggregateLimits,
   enforcePerTransactionLimit,
 } from "../utils/limits";
-import { requireAuth, validateCurrency } from "../utils/validation";
+import { requireAuth } from "../utils/validation";
 import { verifyUserPin } from "../auth/validatePin";
 import { notifyPaymentReceived } from "../utils/notifications";
 import { ApiResponse, Wallet, Transaction } from "../types";
 import { prepareJournalEntry, userAccount } from "../ledger";
+import { parseCurrency } from "../utils/money";
 
 interface PayrollEmployee {
   phone: string;
@@ -52,7 +53,10 @@ export const payrollPayout = https.onCall(
     requireAuth(request);
     const merchantId = request.auth!.uid;
 
-    const { employees, currency, pin, payrollLabel } = request.data;
+    const { employees, pin, payrollLabel } = request.data;
+    // A run is in one currency: shillings come out of the shop's shilling
+    // balance and reach each employee as shillings, never converted.
+    const currency = parseCurrency(request.data.currency);
 
     if (!Array.isArray(employees) || employees.length === 0) {
       throw new https.HttpsError("invalid-argument", "employees list is required");
@@ -63,8 +67,8 @@ export const payrollPayout = https.onCall(
         `Maximum ${MAX_EMPLOYEES} employees per payroll run`
       );
     }
-    if (!validateCurrency(currency)) {
-      throw new https.HttpsError("invalid-argument", "Currency must be USD");
+    if (!currency) {
+      throw new https.HttpsError("invalid-argument", "Currency must be USD or SLS");
     }
     if (!pin) {
       throw new https.HttpsError("invalid-argument", "PIN is required");
@@ -98,22 +102,23 @@ export const payrollPayout = https.onCall(
       if (!Number.isInteger(emp.amount) || emp.amount <= 0) {
         throw new https.HttpsError(
           "invalid-argument",
-          `Invalid amount for ${emp.phone}: must be a positive integer in cents`
+          `Invalid amount for ${emp.phone}: must be a positive integer in the currency's smallest unit`
         );
       }
-      await enforcePerTransactionLimit(emp.amount, merchant);
+      await enforcePerTransactionLimit(emp.amount, merchant, currency);
     }
 
     const totalAmount = employees.reduce((sum, e) => sum + e.amount, 0);
 
     // The daily and monthly caps apply to the run as a whole, checked once —
     // per-employee aggregation queries would be hundreds of reads per payroll.
-    await enforceAggregateLimits(merchantId, totalAmount, merchant);
+    await enforceAggregateLimits(merchantId, totalAmount, merchant, undefined, currency);
 
     // Check merchant balance covers the full payroll
     const merchantWalletRef = db.collection("wallets").doc(merchantId);
     const merchantWallet = (await merchantWalletRef.get()).data() as Wallet | undefined;
-    if (!merchantWallet || merchantWallet.balance < totalAmount) {
+    const held = currency === "SLS" ? merchantWallet?.sls?.balance ?? 0 : merchantWallet?.balance ?? 0;
+    if (!merchantWallet || held < totalAmount) {
       throw new https.HttpsError(
         "failed-precondition",
         "Insufficient balance for payroll"
@@ -170,7 +175,7 @@ export const payrollPayout = https.onCall(
           const pending = await prepareJournalEntry(tx, {
             entryId: `payroll_${transactionId}`,
             type: "payroll",
-            currency: currency as "USD" | "SLS",
+            currency,
             lines: [
               { account: userAccount(merchantId), debit: emp.amount, credit: 0 },
               { account: userAccount(recipientId), debit: 0, credit: emp.amount },

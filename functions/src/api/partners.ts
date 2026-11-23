@@ -1,0 +1,97 @@
+/**
+ * Partners: merchants ops lets pay people out of their own wallet by API.
+ *
+ * A partner (Ridy) collects from its customers through charges and pays its
+ * workers (drivers) by transfer, with no PIN on either side of the call — the
+ * API key is the credential. So two things must both be true before a
+ * transfer moves money: ops has made the merchant a partner
+ * (`api_partners/{merchantId}`), and the key carries the `transfers` scope,
+ * which only the console grants. A key the merchant made for their till can
+ * never transfer, whatever the merchant's partner status.
+ */
+
+import * as admin from "firebase-admin";
+import { ApiError } from "./http";
+import { ApiCaller } from "./keys";
+import { API_PARTNERS_COLLECTION, ApiPartner } from "./types";
+
+export const DEFAULT_MAX_TRANSFER_USD_CENTS = 10_000; // $100
+export const DEFAULT_DAILY_TRANSFER_USD_CENTS = 200_000; // $2,000
+/** Fee rates a partner may be given; above this is a typo, not a deal. */
+export const MAX_PARTNER_FEE_RATE = 0.1;
+/** Agreement caps when ops have not set them: $20 a payment, $60 a day. */
+export const DEFAULT_AGREEMENT_MAX_CHARGE_USD_CENTS = 2_000;
+export const DEFAULT_AGREEMENT_DAILY_USD_CENTS = 6_000;
+/** Test numbers a partner may list. */
+export const MAX_TEST_PHONE_NUMBERS = 50;
+/** Any country's number in E.164: a + and 8 to 15 digits. */
+export const E164_PATTERN = /^\+[1-9][0-9]{7,14}$/;
+
+/**
+ * The partner's test numbers, or none. Read only for a number that isn't
+ * +252, so a merchant charging Somaliland numbers pays no extra read.
+ */
+export async function testPhoneNumbersFor(merchantId: string, phone: unknown): Promise<string[]> {
+  if (typeof phone !== "string" || !E164_PATTERN.test(phone.trim()) || phone.trim().startsWith("+252")) {
+    return [];
+  }
+  const list = (await getPartner(merchantId))?.testPhoneNumbers;
+  return Array.isArray(list) ? list.filter((p) => typeof p === "string") : [];
+}
+
+export async function getPartner(merchantId: string): Promise<ApiPartner | undefined> {
+  const snap = await admin.firestore().collection(API_PARTNERS_COLLECTION).doc(merchantId).get();
+  return snap.exists ? (snap.data() as ApiPartner) : undefined;
+}
+
+/**
+ * Refuse a caller that may not transfer or look up accounts. Both failures
+ * read the same, so a till key learns nothing about the merchant's status.
+ */
+export async function requireTransferPartner(caller: ApiCaller): Promise<ApiPartner> {
+  const partner = caller.scopes.includes("transfers") ? await getPartner(caller.merchantId) : undefined;
+  if (!partner?.transfersEnabled) {
+    throw new ApiError(
+      403,
+      "permission_error",
+      "transfers_not_enabled",
+      "This key cannot make transfers. Transfers are for Zapp partners; contact Zapp to apply."
+    );
+  }
+  return partner;
+}
+
+/**
+ * Refuse a caller that may not use agreements: the partner must have them on
+ * and the key must carry the `agreements` scope. Both failures read the same.
+ */
+export async function requireAgreementPartner(caller: ApiCaller): Promise<ApiPartner> {
+  const partner = caller.scopes.includes("agreements") ? await getPartner(caller.merchantId) : undefined;
+  if (!partner?.agreementsEnabled) {
+    throw new ApiError(
+      403,
+      "permission_error",
+      "agreements_not_enabled",
+      "This key cannot use agreements. They are for Zapp partners; contact Zapp to apply."
+    );
+  }
+  return partner;
+}
+
+/** The caps a partner's agreements get when approved now. US cents. */
+export function agreementCapsOf(partner: ApiPartner): { maxChargeUsdCents: number; dailyUsdCents: number } {
+  return {
+    maxChargeUsdCents: partner.agreementMaxChargeUsdCents ?? DEFAULT_AGREEMENT_MAX_CHARGE_USD_CENTS,
+    dailyUsdCents: partner.agreementDailyUsdCents ?? DEFAULT_AGREEMENT_DAILY_USD_CENTS,
+  };
+}
+
+/**
+ * Zapp's fee rate on a merchant's charges: the partner's own rate when ops set
+ * one, otherwise the standard rate.
+ */
+export async function chargeFeeRateFor(merchantId: string, standardRate: number): Promise<number> {
+  const partner = await getPartner(merchantId);
+  const rate = partner?.chargeFeeRate;
+  return typeof rate === "number" && rate >= 0 && rate <= MAX_PARTNER_FEE_RATE ? rate : standardRate;
+}

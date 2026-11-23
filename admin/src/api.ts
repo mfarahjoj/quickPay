@@ -40,6 +40,8 @@ export interface PayoutRow {
   merchantName?: string;
   businessName?: string;
   amountCents: number;
+  /** Absent on payouts from before shillings: dollars. */
+  currency?: FloatCurrency;
   route: "cash" | "zaad" | "edahab" | "bank";
   destinationName: string;
   destinationRef: string;
@@ -50,6 +52,44 @@ export interface PayoutRow {
   auto?: boolean;
   externalReference?: string;
   createdAt?: { _seconds?: number; seconds?: number };
+}
+
+export interface HeldPayment {
+  receiptId: string;
+  provider: "zaad" | "edahab";
+  operatorTxnId: string;
+  amountCents: number;
+  currency: string;
+  senderMsisdn: string;
+  senderName: string | null;
+  /** unknown_sender | below_min | above_max | currency | no_wallet */
+  reason: string;
+  suggestedUid: string | null;
+  receivedAt: number | null;
+}
+
+export interface ListenerPhone {
+  deviceId: string;
+  provider: "zaad" | "edahab";
+  label: string;
+  active: boolean;
+  lastSeenAt: number | null;
+  createdAt: number | null;
+}
+
+export interface ListenerSms {
+  id: string;
+  provider: "zaad" | "edahab";
+  from: string;
+  body: string;
+  status: "unparsed" | "failed" | "ignored";
+  receivedAt: number | null;
+}
+
+export interface CollectionEntry {
+  number: string | null;
+  active: boolean;
+  senderIds: string[];
 }
 
 export interface UserSummary {
@@ -71,6 +111,8 @@ export interface TransactionRow {
   fromUserId?: string;
   toUserId?: string;
   journalEntryId?: string;
+  receiptNumber?: string;
+  reference?: string;
   createdAt?: { _seconds?: number; seconds?: number };
 }
 
@@ -84,7 +126,7 @@ export interface UserDetail {
   pinFailedAttempts?: number;
   /** When an open staff PIN reset expires (ISO), if one is open. */
   pinResetGrantUntil?: string | null;
-  wallet: { balance?: number; currency?: string; frozen?: boolean } | null;
+  wallet: { balance?: number; currency?: string; frozen?: boolean; sls?: { balance?: number } } | null;
   kyc: Record<string, unknown> | null;
   trustedDeviceCount: number;
   transactions: TransactionRow[];
@@ -97,8 +139,43 @@ export interface ApiKeyRow {
   hint: string;
   revoked: boolean;
   createdAt: string;
+  mode?: "live" | "test";
+  /** "transfers" on a partner's payout key. */
+  scopes?: string[];
   lastUsedAt?: string;
   revokedAt?: string;
+}
+
+/** A merchant's partner settings: may it pay Zapp accounts by API, and its caps and fee. */
+export interface ApiPartnerRow {
+  transfersEnabled: boolean;
+  maxTransferUsdCents: number;
+  dailyTransferUsdCents: number;
+  /** null: the standard online payment fee. */
+  chargeFeeRate: number | null;
+  /** Numbers outside +252 it may charge, pay and look up: Firebase test numbers. */
+  testPhoneNumbers: string[];
+  /** Linked payments: customers link once, then approve each payment in the merchant's app on their phone. */
+  agreementsEnabled: boolean;
+  agreementMaxChargeUsdCents: number;
+  agreementDailyUsdCents: number;
+  updatedAt: string | null;
+}
+
+/** One customer's link to a merchant (functions/src/admin/apiAgreements.ts). */
+export interface ApiAgreementRow {
+  id: string;
+  /** Last four digits only. */
+  customerPhone: string;
+  status: string;
+  deviceLabel: string | null;
+  maxChargeUsdCents: number | null;
+  dailyUsdCents: number | null;
+  livemode: boolean;
+  createdAt: string | null;
+  approvedAt: string | null;
+  revokedAt: string | null;
+  revokedBy: string | null;
 }
 
 export interface RoleRequestRow {
@@ -113,6 +190,37 @@ export interface RoleRequestRow {
   applicantName?: string;
   applicantPhone?: string;
   currentAccountType?: string;
+  /** Sent the full application from the merchant app (business, payout, ID). */
+  applicationSubmitted?: boolean;
+  createdAt?: { _seconds?: number; seconds?: number };
+}
+
+export interface RoleApplicationDetail {
+  requestId: string;
+  userId: string;
+  requestedRole: string;
+  status: string;
+  createdAt: number | null;
+  applicant: {
+    fullName: string | null;
+    phoneNumber: string | null;
+    accountType: string;
+    accountStatus: string;
+    kycStatus: string | null;
+  };
+  application: {
+    businessName: string;
+    businessType: string;
+    businessAddress: string;
+    area: string;
+    location: { lat: number; lng: number; accuracyM?: number } | null;
+    payout?: { provider: "zaad" | "edahab"; number: string };
+    agent?: { openHours: string; services: string[]; zaadReceiveNumber?: string };
+    includesId: boolean;
+    submittedAt: number | null;
+  } | null;
+  kyc: { idType: string; idNumber: string; status: string; fromApplication: boolean } | null;
+  images: { label: "shop" | "front" | "back" | "selfie"; url?: string; error?: string }[];
 }
 
 export interface KycQueueRow {
@@ -148,7 +256,7 @@ export interface KycSubmission {
     kycStatus?: string;
     dateOfBirth?: string | null;
   };
-  wallet: { balance?: number; currency?: string } | null;
+  wallet: { balance?: number; currency?: string; sls?: { balance?: number } } | null;
 }
 
 export type FloatRoute = "cash" | "zaad" | "edahab" | "bank";
@@ -160,8 +268,10 @@ export interface AgentPosition {
   phoneNumber?: string;
   accountType?: string;
   accountStatus: string;
-  /** Float, in agent:{uid}. */
+  /** Dollar float, in cents, in agent:{uid}. */
   balanceCents: number;
+  /** Shilling float, in whole shillings, in agent:{uid}@SLS. Absent from older servers. */
+  slsBalance?: number;
   /** Their own wallet: commission and, for an agent-merchant, sales. */
   walletCents?: number;
 }
@@ -185,12 +295,43 @@ export interface FloatMigrationRow {
   shortfallCents: number;
 }
 
+/** Float is issued and held in dollars or shillings, never converted. */
+export type FloatCurrency = "USD" | "SLS";
+
+/** Where the money for a console top-up arrived. */
+export type TopupSource = "zaad" | "edahab" | "bank";
+
+export interface TopupRow {
+  id: string;
+  uid: string;
+  name?: string;
+  /** In the currency's smallest unit: cents, or whole shillings. */
+  amountCents: number;
+  currency: FloatCurrency;
+  source: TopupSource;
+  reference: string;
+  reason: string;
+  postedBy: string;
+  postedByEmail?: string;
+  journalEntryId: string;
+  createdAtMs: number;
+}
+
+/** Cents as "$12.50", whole shillings as "30,000 SLSH". */
+export function formatFloat(amount: number, currency: FloatCurrency | undefined): string {
+  if (currency === "SLS") return `${Math.round(amount).toLocaleString("en-US")} SLSH`;
+  return `$${(amount / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 export interface FloatIssuanceRow {
   issuanceId: string;
   agentId: string;
   agentName?: string;
   direction: FloatDirection;
+  /** In the currency's smallest unit: cents, or whole shillings. */
   amountCents: number;
+  /** Absent on requests from before shillings: dollars. */
+  currency?: FloatCurrency;
   route: FloatRoute;
   externalReference?: string;
   status: string;
@@ -348,6 +489,8 @@ export interface DisputeRow {
   status: DisputeStatus;
   raisedBy: string;
   against: string | null;
+  /** The disputed movement's currency; absent on old disputes: dollars. */
+  currency?: FloatCurrency;
   amountCents: number;
   transactionAmountCents: number;
   messages: DisputeMessage[];
@@ -402,7 +545,105 @@ export interface RateRow {
   overridden: boolean;
 }
 
+// Zaad top-ups through agents (functions/src/zaadAgent/admin.ts).
+export type ZaadTopupStatus =
+  | "offered"
+  | "no_agent"
+  | "accepted"
+  | "customer_sent"
+  | "declined"
+  | "disputed"
+  | "completed"
+  | "released"
+  | "expired"
+  | "cancelled";
+
+export interface ZaadTopupRow {
+  id: string;
+  status: ZaadTopupStatus;
+  meeting: "in_person" | "remote";
+  amountCents: number;
+  customerId: string;
+  customerName: string;
+  customerPhone: string | null;
+  agentId: string | null;
+  agentName: string | null;
+  agentReceiveNumber: string | null;
+  allowedSenders: string[];
+  /** Zapp's reference, e.g. "ZP-4F7K2" (D31); null on requests made before it. */
+  reference: string | null;
+  customerZaadTxnId: string | null;
+  /** Zaad's ID the agent gave on "Received". */
+  agentZaadTxnId: string | null;
+  agentAnswer: "received" | "not_received" | "different_amount" | null;
+  disputedBy: "customer" | "timeout" | null;
+  disputeReason: string | null;
+  offers: number;
+  createdAt: number | null;
+  acceptedAt: number | null;
+  customerSentAt: number | null;
+  agentAnsweredAt: number | null;
+  disputedAt: number | null;
+  completedAt: number | null;
+  releasedAt: number | null;
+  resolution: { outcome: "customer" | "agent"; reason: string; at: number | null } | null;
+  reversal: {
+    status: "reported" | "confirmed" | "rejected";
+    note: string;
+    agentZaadTxnId: string | null;
+    reportedAt: number | null;
+    fromCustomerCents: number | null;
+    fromZappCents: number | null;
+  } | null;
+}
+
+export interface ZaadAgentRow {
+  id: string;
+  name: string;
+  phone: string | null;
+  receiveNumber: string | null;
+  enabled: boolean;
+  online: boolean;
+  lastSeenAt: number | null;
+  pausedUntil: number | null;
+  openRequestId: string | null;
+  floatCents: number;
+  flagged: boolean;
+  verifiedAt: number | null;
+}
+
 export const api = {
+  // Zaad / eDahab top-ups through the collection number (functions/src/mobileMoney/).
+  listHeldMobileMoney: () => call<undefined, HeldPayment[]>("adminListHeldMobileMoney"),
+  assignMobileMoney: (receiptId: string, uid: string, reason: string) =>
+    call<{ receiptId: string; uid: string; reason: string }, unknown>("adminAssignMobileMoney", {
+      receiptId,
+      uid,
+      reason,
+    }),
+  refundMobileMoney: (receiptId: string, reference: string, reason: string) =>
+    call<{ receiptId: string; reference: string; reason: string }, unknown>("adminRefundMobileMoney", {
+      receiptId,
+      reference,
+      reason,
+    }),
+  listListeners: () => call<undefined, ListenerPhone[]>("adminListListeners"),
+  registerListener: (provider: "zaad" | "edahab", label: string) =>
+    call<{ provider: string; label: string }, { deviceId: string; key: string; provider: string; label: string }>(
+      "adminRegisterListener",
+      { provider, label }
+    ),
+  listListenerSms: (status: ListenerSms["status"]) =>
+    call<{ status: string }, ListenerSms[]>("adminListListenerSms", { status }),
+  getCollection: () =>
+    call<undefined, { zaad: CollectionEntry; edahab: CollectionEntry }>("adminGetCollection"),
+  updateCollection: (
+    provider: "zaad" | "edahab",
+    entry: { number: string; active: boolean; senderIds: string[] },
+    reason: string
+  ) =>
+    call<Record<string, unknown>, CollectionEntry>("adminUpdateCollection", { provider, ...entry, reason }),
+
   searchUsers: (query: string) =>
     call<{ query: string }, UserSummary[]>("adminSearchUsers", { query }),
 
@@ -439,11 +680,35 @@ export const api = {
     }).then((body) => body.keys),
 
   /** Returns the full key exactly once; it cannot be fetched again. */
-  issueApiKey: (merchantId: string, label: string, reason: string) =>
+  issueApiKey: (
+    merchantId: string,
+    label: string,
+    reason: string,
+    opts: { mode?: "live" | "test"; transfers?: boolean; agreements?: boolean } = {}
+  ) =>
     call<
-      { merchantId: string; label: string; reason: string },
+      { merchantId: string; label: string; reason: string; mode?: "live" | "test"; transfers?: boolean; agreements?: boolean },
       ApiKeyRow & { apiKey: string }
-    >("adminIssueApiKey", { merchantId, label, reason }),
+    >("adminIssueApiKey", { merchantId, label, reason, ...opts }),
+
+  getApiPartner: (merchantId: string) =>
+    call<{ merchantId: string }, ApiPartnerRow>("adminGetApiPartner", { merchantId }),
+
+  setApiPartner: (
+    merchantId: string,
+    settings: Omit<ApiPartnerRow, "updatedAt">,
+    reason: string
+  ) =>
+    call<Omit<ApiPartnerRow, "updatedAt"> & { merchantId: string; reason: string }, ApiPartnerRow>(
+      "adminSetApiPartner",
+      { merchantId, reason, ...settings }
+    ),
+
+  listAgreements: (merchantId: string) =>
+    call<{ merchantId: string }, ApiAgreementRow[]>("adminListAgreements", { merchantId }),
+
+  revokeAgreement: (agreementId: string, reason: string) =>
+    call<{ agreementId: string; reason: string }, ApiAgreementRow>("adminRevokeAgreement", { agreementId, reason }),
 
   revokeApiKey: (keyId: string, reason: string) =>
     call<{ keyId: string; reason: string }, ApiKeyRow>("adminRevokeApiKey", {
@@ -466,6 +731,9 @@ export const api = {
     ),
 
   ledgerHealth: () => call<void, LedgerHealth>("adminGetLedgerHealth"),
+
+  getRoleApplication: (requestId: string) =>
+    call<{ requestId: string }, RoleApplicationDetail>("adminGetRoleApplication", { requestId }),
 
   listKycQueue: (status = "submitted") =>
     call<{ status: string }, KycQueueRow[]>("adminListKycQueue", { status }),
@@ -490,6 +758,7 @@ export const api = {
     agentId: string;
     direction: FloatDirection;
     amountCents: number;
+    currency: FloatCurrency;
     route: FloatRoute;
     externalReference?: string;
     reason: string;
@@ -590,9 +859,29 @@ export const api = {
     debitAccount: string;
     creditAccount: string;
     amountCents: number;
+    /** "USD" (the default) or "SLS": both accounts move in it. */
+    currency?: FloatCurrency;
     reason: string;
     idempotencyKey: string;
   }) => call<typeof payload, AdjustmentResult>("adminPostAdjustment", payload),
+
+  /** `idempotencyKey` must stay the same across retries of one top-up. */
+  topupWallet: (payload: {
+    uid: string;
+    amountCents: number;
+    currency: FloatCurrency;
+    source: TopupSource;
+    reference: string;
+    reason: string;
+    idempotencyKey: string;
+  }) =>
+    call<typeof payload, { topupId: string; journalEntryId: string; alreadyPosted: boolean }>(
+      "adminTopupWallet",
+      payload
+    ),
+
+  listTopups: async () =>
+    (await call<{ limit: number }, { topups: TopupRow[] }>("adminListTopups", { limit: 30 })).topups,
 
   // A full journal replay can outlast the SDK's 70s default.
   runLedgerCheck: (reason: string) =>
@@ -606,4 +895,30 @@ export const api = {
         activityFindingCount: number;
       }
     >("adminRunLedgerCheck", { reason }, 9 * 60 * 1000),
+
+  // Zaad top-ups through agents.
+  listZaadTopups: (view: "attention" | "open" | "recent") =>
+    call<{ view: string }, { topups: ZaadTopupRow[]; heldCents: number; reversalLossCents: number }>(
+      "adminListZaadTopups",
+      { view }
+    ),
+  listZaadAgents: () => call<void, { agents: ZaadAgentRow[] }>("adminListZaadAgents"),
+  setZaadAgent: (payload: { agentId: string; receiveMsisdn: string; enabled: boolean; reason: string }) =>
+    call<typeof payload, { receiveNumber: string; enabled: boolean; pausedUntil: string | null }>(
+      "adminSetZaadAgent",
+      payload
+    ),
+  resolveZaadTopup: (requestId: string, outcome: "customer" | "agent", reason: string) =>
+    call<{ requestId: string; outcome: string; reason: string }, unknown>("adminResolveZaadTopup", {
+      requestId,
+      outcome,
+      reason,
+    }),
+  decideZaadReversal: (requestId: string, confirm: boolean, reason: string) =>
+    call<
+      { requestId: string; confirm: boolean; reason: string },
+      { fromCustomerCents: number; fromZappCents: number } | { rejected: true }
+    >("adminDecideZaadReversal", { requestId, confirm, reason }),
+  clearZaadCustomer: (userId: string, reason: string) =>
+    call<{ userId: string; reason: string }, unknown>("adminClearZaadCustomer", { userId, reason }),
 };

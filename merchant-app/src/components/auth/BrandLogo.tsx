@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, View, Text } from 'react-native';
 import Svg, { Defs, RadialGradient, Stop, Rect } from 'react-native-svg';
 import { BrandMarkIcon } from '../icons/AuthIcons';
-import { colors, typography, spacing, shadows, borderRadius } from '../../theme';
+import { typography, spacing, shadows, borderRadius, makeStyles, useColors } from '../../theme';
 
 type LogoTheme = 'light' | 'dark';
 
@@ -23,6 +23,7 @@ export function BrandLogo({
   variant = 'customer',
   theme = 'light',
 }: BrandLogoProps) {
+  const styles = useStyles();
   const scale = useRef(new Animated.Value(animated ? 0.85 : 1)).current;
   const opacity = useRef(new Animated.Value(animated ? 0 : 1)).current;
 
@@ -58,6 +59,7 @@ export function BrandLogo({
 
 /** Soft ambient radial glow behind the splash logo (Apple "Pro" page feel) */
 function AmbientGlow({ size = 480 }: { size?: number }) {
+  const colors = useColors();
   return (
     <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
       <Defs>
@@ -82,6 +84,7 @@ export function BrandSplash({
   message?: string;
   variant?: 'customer' | 'merchant';
 }) {
+  const styles = useStyles();
   const pulse = useRef(new Animated.Value(1)).current;
   const fade = useRef(new Animated.Value(0)).current;
 
@@ -115,7 +118,7 @@ export function BrandSplash({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   wrap: {
     alignItems: 'center',
   },
@@ -169,4 +172,4 @@ const styles = StyleSheet.create({
     color: colors.hero.textSecondary,
     marginTop: spacing.md,
   },
-});
+}));

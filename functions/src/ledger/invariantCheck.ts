@@ -17,6 +17,7 @@ import * as admin from "firebase-admin";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { JournalEntryDoc } from "./types";
 import { isUserAccount, userIdOf } from "./accounts";
+import { balanceKey, parseBalanceKey } from "./currency";
 import { JOURNAL_COLLECTION, LEDGER_BALANCES_COLLECTION } from "./post";
 import { probeSpendIndex } from "../utils/limits";
 import { ActivityReport, runActivityMonitor } from "./activityMonitor";
@@ -35,7 +36,10 @@ interface Drift {
 
 interface ReplayResult {
   entryCount: number;
-  /** account -> journal-derived balance (credit − debit), in cents. */
+  /**
+   * Balance key (account, or account@currency for non-dollar balances) ->
+   * journal-derived balance (credit − debit), in the currency's smallest unit.
+   */
   balances: Map<string, number>;
   /** Entries whose lines do not sum to zero (should be impossible). */
   corruptEntries: string[];
@@ -61,12 +65,12 @@ async function replayJournal(db: FirebaseFirestore.Firestore): Promise<ReplayRes
       const entry = doc.data() as JournalEntryDoc;
       entryCount++;
       let net = 0;
+      // Entries written before currencies were checked are all USD.
+      const currency = entry.currency ?? "USD";
       for (const line of entry.lines) {
         net += line.credit - line.debit;
-        balances.set(
-          line.account,
-          (balances.get(line.account) ?? 0) + line.credit - line.debit
-        );
+        const key = balanceKey(line.account, currency);
+        balances.set(key, (balances.get(key) ?? 0) + line.credit - line.debit);
       }
       if (net !== 0) corruptEntries.push(doc.id);
     }
@@ -107,54 +111,67 @@ export async function runInvariantCheck(
     });
   }
 
-  // The journal must itself net to zero across all accounts.
-  let globalNet = 0;
-  balances.forEach((v) => (globalNet += v));
-  if (globalNet !== 0) {
-    drifts.push({
-      account: "(global)",
-      expected: 0,
-      actual: globalNet,
-      detail: "Journal does not net to zero across all accounts",
-    });
-  }
-
-  // Journal-derived user balances vs wallet projections.
-  const walletsSnap = await db.collection("wallets").get();
-  const walletBalances = new Map<string, number>();
-  walletsSnap.forEach((doc) => {
-    if (doc.id !== LEGACY_PLATFORM_WALLET) {
-      walletBalances.set(doc.id, doc.data().balance ?? 0);
+  // The journal must itself net to zero across all accounts, in each currency.
+  const netByCurrency = new Map<string, number>();
+  balances.forEach((v, key) => {
+    const { currency } = parseBalanceKey(key);
+    netByCurrency.set(currency, (netByCurrency.get(currency) ?? 0) + v);
+  });
+  netByCurrency.forEach((net, currency) => {
+    if (net !== 0) {
+      drifts.push({
+        account: `(global ${currency})`,
+        expected: 0,
+        actual: net,
+        detail: `Journal does not net to zero across all ${currency} accounts`,
+      });
     }
   });
 
-  balances.forEach((expected, account) => {
+  // Journal-derived user balances vs wallet projections.
+  // Keyed like the replay: user:{uid} for dollars, user:{uid}@SLS for shillings.
+  const walletsSnap = await db.collection("wallets").get();
+  const walletBalances = new Map<string, number>();
+  const walletIds = new Set<string>();
+  walletsSnap.forEach((doc) => {
+    if (doc.id === LEGACY_PLATFORM_WALLET) return;
+    walletIds.add(doc.id);
+    const data = doc.data();
+    walletBalances.set(balanceKey(`user:${doc.id}`, "USD"), data.balance ?? 0);
+    if (data.sls) walletBalances.set(balanceKey(`user:${doc.id}`, "SLS"), data.sls.balance ?? 0);
+  });
+
+  balances.forEach((expected, key) => {
+    const { account, currency } = parseBalanceKey(key);
     if (!isUserAccount(account)) return;
     const uid = userIdOf(account);
-    const actual = walletBalances.get(uid);
-    if (actual === undefined) {
+    if (!walletIds.has(uid)) {
       drifts.push({
-        account,
+        account: key,
         expected,
         actual: NaN,
         detail: "Journal references this account but wallets doc is missing",
       });
-    } else if (actual !== expected) {
+      return;
+    }
+    // A wallet that never held this currency has no pocket: zero.
+    const actual = walletBalances.get(key) ?? 0;
+    if (actual !== expected) {
       drifts.push({
-        account,
+        account: key,
         expected,
         actual,
-        detail: "Wallet balance does not match journal",
+        detail: `Wallet ${currency} balance does not match journal`,
       });
     }
-    walletBalances.delete(uid);
+    walletBalances.delete(key);
   });
 
   // Wallets the journal knows nothing about must be empty.
-  walletBalances.forEach((actual, uid) => {
+  walletBalances.forEach((actual, key) => {
     if (actual !== 0) {
       drifts.push({
-        account: `user:${uid}`,
+        account: key,
         expected: 0,
         actual,
         detail: "Wallet has a balance with no journal entries explaining it",
@@ -168,7 +185,7 @@ export async function runInvariantCheck(
   ledgerBalSnap.forEach((doc) => projected.set(doc.id, doc.data().balance ?? 0));
 
   balances.forEach((expected, account) => {
-    if (isUserAccount(account)) return;
+    if (isUserAccount(parseBalanceKey(account).account)) return;
     const actual = projected.get(account) ?? 0;
     if (actual !== expected) {
       drifts.push({

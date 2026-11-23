@@ -21,19 +21,21 @@ export interface BiometricAvailability {
   biometryType?: string;
 }
 
-// In-memory handoff of the PIN the user just created in SetupPinScreen so
-// BiometricSetupScreen can store it in the keychain without asking the user
-// to retype it seconds later. Never persisted; consumed once.
-let _pendingSetupPin: string | null = null;
+// In-memory handoff of the PIN the user just created (SetupPinScreen) or
+// just signed in with (PinLoginScreen), so BiometricSetupScreen can store it
+// in the keychain without asking for it again seconds later. Never
+// persisted; consumed once, and dropped after a few minutes.
+const PENDING_PIN_MS = 5 * 60 * 1000;
+let _pendingSetupPin: { pin: string; at: number } | null = null;
 
 export function setPendingSetupPin(pin: string): void {
-  _pendingSetupPin = pin;
+  _pendingSetupPin = { pin, at: Date.now() };
 }
 
 export function consumePendingSetupPin(): string | null {
-  const pin = _pendingSetupPin;
+  const held = _pendingSetupPin;
   _pendingSetupPin = null;
-  return pin;
+  return held && Date.now() - held.at < PENDING_PIN_MS ? held.pin : null;
 }
 
 export async function isBiometricAvailable(): Promise<BiometricAvailability> {
@@ -114,11 +116,13 @@ async function dropLegacyKeychainPin(): Promise<void> {
  * nothing if this phone already has a key. Throws if the server refuses.
  */
 export async function enableBiometricKey(pin: string): Promise<void> {
-  if (await storedKeyId()) {
+  const rn = getRnBiometrics();
+  // Keep a key that still works; one whose hardware half is gone (Face ID
+  // re-enrolled) is replaced, or Face ID would look on and never work.
+  if ((await storedKeyId()) && (await rn.biometricKeysExist().catch(() => ({ keysExist: false }))).keysExist) {
     await dropLegacyKeychainPin();
     return;
   }
-  const rn = getRnBiometrics();
   // A fresh pair each time: an old one may belong to a key the server forgot.
   await rn.deleteKeys().catch(() => undefined);
   const { publicKey } = await rn.createKeys();
@@ -133,6 +137,77 @@ export async function enableBiometricKey(pin: string): Promise<void> {
   await dropLegacyKeychainPin();
 }
 
+export type BiometricUnlock = 'ok' | 'cancelled' | 'unavailable';
+
+/**
+ * Face ID to open the app, checked on the phone: the hardware key signs
+ * only after Face ID passes, so no server round trip is needed just to show
+ * the wallet. Moving money still goes through getBiometricCredential, which
+ * the server checks. 'unavailable' means the key is gone (Face ID was
+ * re-enrolled, or the phone was restored): Face ID is turned off here and
+ * the person uses the PIN.
+ */
+export async function unlockWithBiometrics(promptMessage: string): Promise<BiometricUnlock> {
+  const keyId = await storedKeyId();
+  if (!keyId) {
+    // Pre-key installs: the Keychain PIN is what Face ID unlocks.
+    return (await legacyKeychainPin(promptMessage)) ? 'ok' : 'cancelled';
+  }
+  const rn = getRnBiometrics();
+  try {
+    const { keysExist } = await rn.biometricKeysExist();
+    if (!keysExist) {
+      await turnOffHere();
+      return 'unavailable';
+    }
+    const { success, signature } = await rn.createSignature({
+      promptMessage,
+      payload: `zapp-unlock:${Date.now()}`,
+      cancelButtonText: 'Cancel',
+    });
+    return success && signature ? 'ok' : 'cancelled';
+  } catch (error) {
+    logger.warn('Biometric unlock failed:', error);
+    return 'cancelled';
+  }
+}
+
+async function turnOffHere(): Promise<void> {
+  await AsyncStorage.multiRemove([BIOMETRIC_KEY_ID, BIOMETRIC_ENABLED_KEY]).catch(() => {});
+  await getRnBiometrics().deleteKeys().catch(() => undefined);
+}
+
+type Challenge = { challengeId: string; payload: string };
+const PREPARED_CHALLENGE_MS = 90 * 1000; // the server allows two minutes
+let _prepared: { at: number; challenge: Promise<Challenge> } | null = null;
+
+/**
+ * Fetch the server's challenge while the person is still looking at the
+ * payment screen, so pressing Face ID waits on one call instead of two.
+ * Does nothing when Face ID is off.
+ */
+export function prepareBiometricApproval(): void {
+  storedKeyId().then((keyId) => {
+    if (!keyId) return;
+    const challenge = fetchChallenge().then((r) => (r.data as { data: Challenge }).data);
+    challenge.catch(() => undefined);
+    _prepared = { at: Date.now(), challenge };
+  });
+}
+
+async function takeChallenge(): Promise<Challenge> {
+  const held = _prepared;
+  _prepared = null;
+  if (held && Date.now() - held.at < PREPARED_CHALLENGE_MS) {
+    try {
+      return await held.challenge;
+    } catch {
+      // fetch a fresh one below
+    }
+  }
+  return ((await fetchChallenge()).data as { data: Challenge }).data;
+}
+
 /**
  * Face ID in place of the PIN: returns what to send as `pin` (a one-time
  * token), or null when the person cancelled or this phone has no key any
@@ -144,8 +219,7 @@ export async function getBiometricCredential(
   const keyId = await storedKeyId();
   if (!keyId) return legacyKeychainPin(promptMessage);
   try {
-    const challenge = await fetchChallenge();
-    const { challengeId, payload } = (challenge.data as { data: { challengeId: string; payload: string } }).data;
+    const { challengeId, payload } = await takeChallenge();
     const { success, signature } = await getRnBiometrics().createSignature({
       promptMessage,
       payload,
@@ -157,8 +231,7 @@ export async function getBiometricCredential(
   } catch (error: any) {
     if (error?.details?.reason === 'biometric_key_gone') {
       // Removed on the server (another phone, support): stop offering it.
-      await AsyncStorage.multiRemove([BIOMETRIC_KEY_ID, BIOMETRIC_ENABLED_KEY]).catch(() => {});
-      await getRnBiometrics().deleteKeys().catch(() => undefined);
+      await turnOffHere();
     } else {
       logger.warn('Biometric approval failed:', error);
     }
@@ -202,12 +275,15 @@ async function legacyKeychainPin(promptMessage: string): Promise<string | null> 
  */
 export async function disableBiometricKey(): Promise<void> {
   const keyId = await storedKeyId();
-  if (keyId) {
-    await functions()
-      .httpsCallable('removeBiometricKey')({ keyId })
-      .catch(() => undefined);
-  }
+  // The phone's half goes whatever the network does (signOut stops waiting
+  // after a moment), so the server call runs alongside, not first.
+  const removedOnServer = keyId
+    ? functions()
+        .httpsCallable('removeBiometricKey')({ keyId })
+        .catch(() => undefined)
+    : undefined;
   await AsyncStorage.removeItem(BIOMETRIC_KEY_ID).catch(() => {});
   await getRnBiometrics().deleteKeys().catch(() => undefined);
   await dropLegacyKeychainPin();
+  await removedOnServer;
 }

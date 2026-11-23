@@ -1,6 +1,6 @@
 import React from 'react';
 import Svg, { Path, Circle, Rect, G, Line, Ellipse } from 'react-native-svg';
-import { colors } from '../../theme';
+import { useColors } from '../../theme';
 
 interface IconProps {
   size?: number;
@@ -9,7 +9,9 @@ interface IconProps {
 
 // ─── Menu Icons ──────────────────────────────────────────────
 
-export function IDCardIcon({ size = 24, color = colors.dark.textDim }: IconProps) {
+export function IDCardIcon({ size = 24, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.ui.textDim;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Rect x="2" y="5" width="20" height="14" rx="2" stroke={color} strokeWidth={1.8} />
@@ -19,7 +21,9 @@ export function IDCardIcon({ size = 24, color = colors.dark.textDim }: IconProps
   );
 }
 
-export function LinkIcon({ size = 24, color = colors.dark.textDim }: IconProps) {
+export function LinkIcon({ size = 24, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.ui.textDim;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path
@@ -40,7 +44,9 @@ export function LinkIcon({ size = 24, color = colors.dark.textDim }: IconProps) 
   );
 }
 
-export function BellIcon({ size = 24, color = colors.dark.textDim }: IconProps) {
+export function BellIcon({ size = 24, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.ui.textDim;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path
@@ -54,7 +60,20 @@ export function BellIcon({ size = 24, color = colors.dark.textDim }: IconProps) 
   );
 }
 
-export function InfoIcon({ size = 24, color = colors.dark.textDim }: IconProps) {
+export function ContrastIcon({ size = 24, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.ui.textDim;
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx="12" cy="12" r="9" stroke={color} strokeWidth={1.8} />
+      <Path d="M12 3a9 9 0 010 18z" fill={color} />
+    </Svg>
+  );
+}
+
+export function InfoIcon({ size = 24, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.ui.textDim;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Circle cx="12" cy="12" r="10" stroke={color} strokeWidth={1.8} />
@@ -63,7 +82,9 @@ export function InfoIcon({ size = 24, color = colors.dark.textDim }: IconProps) 
   );
 }
 
-export function QRSquareIcon({ size = 24, color = colors.dark.textDim }: IconProps) {
+export function QRSquareIcon({ size = 24, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.ui.textDim;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Rect x="3" y="3" width="7" height="7" rx="1.5" stroke={color} strokeWidth={1.8} />
@@ -83,7 +104,9 @@ export function QRSquareIcon({ size = 24, color = colors.dark.textDim }: IconPro
 
 // ─── Notification Type Icons ─────────────────────────────────
 
-export function MoneyInIcon({ size = 24, color = colors.dark.incoming }: IconProps) {
+export function MoneyInIcon({ size = 24, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.ui.incoming;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       {/* Wallet */}
@@ -96,7 +119,9 @@ export function MoneyInIcon({ size = 24, color = colors.dark.incoming }: IconPro
   );
 }
 
-export function MoneyOutIcon({ size = 24, color = colors.dark.textDim }: IconProps) {
+export function MoneyOutIcon({ size = 24, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.ui.textDim;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       {/* Wallet */}
@@ -109,7 +134,9 @@ export function MoneyOutIcon({ size = 24, color = colors.dark.textDim }: IconPro
   );
 }
 
-export function CardIcon({ size = 24, color = colors.dark.textDim }: IconProps) {
+export function CardIcon({ size = 24, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.ui.textDim;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Rect x="2" y="5" width="20" height="14" rx="2" stroke={color} strokeWidth={1.8} />
@@ -121,7 +148,9 @@ export function CardIcon({ size = 24, color = colors.dark.textDim }: IconProps) 
   );
 }
 
-export function BankIcon({ size = 24, color = colors.dark.textDim }: IconProps) {
+export function BankIcon({ size = 24, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.ui.textDim;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       {/* Roof / triangle top */}
@@ -135,7 +164,9 @@ export function BankIcon({ size = 24, color = colors.dark.textDim }: IconProps) 
   );
 }
 
-export function GiftIcon({ size = 24, color = colors.dark.textDim }: IconProps) {
+export function GiftIcon({ size = 24, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.ui.textDim;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Rect x="3" y="10" width="18" height="12" rx="2" stroke={color} strokeWidth={1.8} />
@@ -150,7 +181,9 @@ export function GiftIcon({ size = 24, color = colors.dark.textDim }: IconProps) 
 
 // ─── Empty State Illustrations (120×120) ─────────────────────
 
-export function EmptyTransactionsIcon({ size = 120, color = colors.dark.textFaint }: IconProps) {
+export function EmptyTransactionsIcon({ size = 120, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.ui.textFaint;
   return (
     <Svg width={size} height={size} viewBox="0 0 120 120" fill="none">
       {/* Receipt paper */}
@@ -169,7 +202,9 @@ export function EmptyTransactionsIcon({ size = 120, color = colors.dark.textFain
   );
 }
 
-export function EmptyNotificationsIcon({ size = 120, color = colors.dark.textFaint }: IconProps) {
+export function EmptyNotificationsIcon({ size = 120, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.ui.textFaint;
   return (
     <Svg width={size} height={size} viewBox="0 0 120 120" fill="none">
       {/* Bell body */}
@@ -188,7 +223,9 @@ export function EmptyNotificationsIcon({ size = 120, color = colors.dark.textFai
   );
 }
 
-export function EmptyRequestsIcon({ size = 120, color = colors.dark.textFaint }: IconProps) {
+export function EmptyRequestsIcon({ size = 120, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.ui.textFaint;
   return (
     <Svg width={size} height={size} viewBox="0 0 120 120" fill="none">
       {/* Document */}

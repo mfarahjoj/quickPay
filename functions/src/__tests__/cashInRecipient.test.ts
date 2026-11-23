@@ -170,7 +170,10 @@ describe("cash-in recipient rules", () => {
     });
 
     const confirm = () =>
-      agentConfirmTopup({ data: { otpCode: "123456", agentPin: "123456" }, auth: { uid: AGENT } });
+      agentConfirmTopup({
+        data: { otpCode: "123456", agentPin: "123456", requestId: "req-1", expectedAmount: 5_000 },
+        auth: { uid: AGENT },
+      });
 
     it("refuses confirming a request raised by another agent", async () => {
       const db = seed(request(AGENT_2));

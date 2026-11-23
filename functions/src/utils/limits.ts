@@ -14,7 +14,9 @@ import * as admin from "firebase-admin";
 import { AggregateField } from "firebase-admin/firestore";
 import { https } from "firebase-functions/v2";
 import { limitsFor, type TierLimits } from "../config/limits";
+import { getRates } from "../config/rates";
 import { centsToDollars } from "./validation";
+import { Currency, toLimitCents } from "./money";
 
 /**
  * Transaction types that count as value leaving an account.
@@ -60,24 +62,31 @@ export function startOfLocalMonth(now: Date = new Date()): Date {
 }
 
 /**
- * Total value this account has sent since `since`, in cents.
+ * Total value this account has sent since `since`, in US cents.
  *
- * Uses a Firestore sum aggregation so the cost does not grow with the number
- * of transactions — the previous implementation in `getAccountLimits` read
- * every matching document.
+ * Shilling transactions count at `slsPerUsd` (config/rates), since every
+ * limit is in dollars. Two Firestore sum aggregations, so the cost does not
+ * grow with the number of transactions: everything, and the shilling part,
+ * which is taken back out and added again converted. Rows from before
+ * shillings have no `currency` and count as dollars.
  */
 export async function sumSpendSince(userId: string, since: Date): Promise<number> {
-  const snap = await admin
+  const base = admin
     .firestore()
     .collection("transactions")
     .where("fromUserId", "==", userId)
     .where("type", "in", SPEND_TX_TYPES as unknown as string[])
-    .where("createdAt", ">=", admin.firestore.Timestamp.fromDate(since))
-    .aggregate({ total: AggregateField.sum("amount") })
-    .get();
+    .where("createdAt", ">=", admin.firestore.Timestamp.fromDate(since));
+  const [allSnap, slsSnap, rates] = await Promise.all([
+    base.aggregate({ total: AggregateField.sum("amount") }).get(),
+    base.where("currency", "==", "SLS").aggregate({ total: AggregateField.sum("amount") }).get(),
+    getRates(),
+  ]);
 
-  const total = snap.data().total;
-  return typeof total === "number" ? total : 0;
+  const sum = (v: unknown) => (typeof v === "number" ? v : 0);
+  const all = sum(allSnap.data().total);
+  const shillings = sum(slsSnap.data().total);
+  return all - shillings + toLimitCents(shillings, "SLS", rates.slsPerUsd);
 }
 
 /**
@@ -161,10 +170,12 @@ export interface Account {
  * cap per employee while checking the aggregate once for the whole run.
  */
 export async function enforcePerTransactionLimit(
-  amountCents: number,
-  account: Account
+  amount: number,
+  account: Account,
+  currency: Currency = "USD"
 ): Promise<void> {
   const { limits } = await limitsFor(account.kycStatus, account.accountType);
+  const amountCents = await limitCents(amount, currency);
   if (amountCents > limits.perTransaction) {
     throw new https.HttpsError(
       "permission-denied",
@@ -175,7 +186,8 @@ export async function enforcePerTransactionLimit(
 }
 
 /**
- * Assert `amountCents` more spending still fits today's and this month's caps.
+ * Assert `amount` (of `currency`) more spending still fits today's and this
+ * month's caps, which are in US cents.
  *
  * Note the check is not inside the posting transaction — a Firestore
  * aggregation cannot be. Two payments racing each other could therefore both
@@ -186,11 +198,13 @@ export async function enforcePerTransactionLimit(
  */
 export async function enforceAggregateLimits(
   userId: string,
-  amountCents: number,
+  amount: number,
   account: Account,
-  now: Date = new Date()
+  now: Date = new Date(),
+  currency: Currency = "USD"
 ): Promise<void> {
   const { limits } = await limitsFor(account.kycStatus, account.accountType);
+  const amountCents = await limitCents(amount, currency);
   const { dailyUsed, monthlyUsed } = await getSpendUsage(userId, now);
 
   if (dailyUsed + amountCents > limits.daily) {
@@ -204,12 +218,20 @@ export async function enforceAggregateLimits(
 /** The usual case: one outbound transaction, checked against every limit. */
 export async function enforceTransactionLimits(
   userId: string,
-  amountCents: number,
+  amount: number,
   account: Account,
-  now: Date = new Date()
+  now: Date = new Date(),
+  currency: Currency = "USD"
 ): Promise<void> {
-  await enforcePerTransactionLimit(amountCents, account);
-  await enforceAggregateLimits(userId, amountCents, account, now);
+  await enforcePerTransactionLimit(amount, account, currency);
+  await enforceAggregateLimits(userId, amount, account, now, currency);
+}
+
+/** [amount] of [currency] in US cents, at the current limits rate. */
+async function limitCents(amount: number, currency: Currency): Promise<number> {
+  if (currency === "USD") return amount;
+  const { slsPerUsd } = await getRates();
+  return toLimitCents(amount, currency, slsPerUsd);
 }
 
 /** Shape used by `getAccountLimits` so advertised and enforced cannot drift. */

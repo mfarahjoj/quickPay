@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import QRCode from 'react-native-qrcode-svg';
-import { colors, spacing, borderRadius } from '../../theme';
+import { spacing, borderRadius, makeStyles, useColors } from '../../theme';
 import {
   resolveReceiveToken,
   TokenResponse,
@@ -24,6 +24,8 @@ import { formatCountdown } from '../../utils/time';
 const REFRESH_AT_MS = BACKOFF_SECONDS_ON_FAILURE * 1000;
 
 export default function MyQRScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const [token, setToken] = useState<TokenResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -190,10 +192,10 @@ export default function MyQRScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
     alignItems: 'center',
     paddingTop: spacing.xxl,
     paddingHorizontal: spacing.lg,
@@ -202,18 +204,18 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
     paddingHorizontal: spacing.lg,
   },
   title: {
     fontSize: 24,
     fontWeight: '700',
-    color: colors.dark.text,
+    color: colors.ui.text,
     marginBottom: spacing.xs,
   },
   subtitle: {
     fontSize: 14,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     marginBottom: spacing.xl,
   },
   qrCard: {
@@ -223,27 +225,27 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   timerPill: {
-    backgroundColor: colors.dark.accentSoft,
+    backgroundColor: colors.ui.accentSoft,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.full,
     marginBottom: spacing.lg,
   },
   timerPillWarning: {
-    backgroundColor: colors.dark.errorSoft,
+    backgroundColor: colors.ui.errorSoft,
   },
   timerText: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
   },
   timerTextWarning: {
-    color: colors.dark.error,
+    color: colors.ui.error,
   },
   refreshButton: {
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
-    backgroundColor: colors.dark.glass,
+    borderColor: colors.ui.glassBorder,
+    backgroundColor: colors.ui.glass,
     borderRadius: borderRadius.lg,
     paddingVertical: spacing.smPlus,
     paddingHorizontal: spacing.lg,
@@ -252,26 +254,26 @@ const styles = StyleSheet.create({
   refreshText: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
   hint: {
     fontSize: 12,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
     textAlign: 'center',
   },
   loadingText: {
     marginTop: spacing.md,
     fontSize: 14,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
   },
   errorText: {
     fontSize: 16,
-    color: colors.dark.error,
+    color: colors.ui.error,
     textAlign: 'center',
     marginBottom: spacing.md,
   },
   retryButton: {
-    backgroundColor: colors.dark.accent,
+    backgroundColor: colors.ui.accent,
     paddingVertical: spacing.smPlus,
     paddingHorizontal: spacing.xl,
     borderRadius: borderRadius.lg,
@@ -281,4 +283,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-});
+}));

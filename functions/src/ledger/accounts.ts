@@ -24,6 +24,13 @@ export const FLOAT_ZAAD = "float:zaad";
 /** Value in the company's own eDahab account (none yet — future rail). */
 export const FLOAT_EDAHAB = "float:edahab";
 
+/**
+ * Money that reached a Zaad/eDahab collection number but couldn't be matched
+ * to a customer, held until an admin assigns it or sends it back. Must trend
+ * to zero: a balance here is real money someone sent and hasn't got yet.
+ */
+export const MOBILE_MONEY_SUSPENSE = "platform:mm_suspense";
+
 /** Float account for a mobile-money rail. */
 export function mobileMoneyFloat(method: "zaad" | "edahab"): string {
   return method === "zaad" ? FLOAT_ZAAD : FLOAT_EDAHAB;
@@ -80,6 +87,23 @@ export const CASHOUT_HOLD = "platform:cashout_hold";
  * is money owed to merchants that nobody has sent yet.
  */
 export const SETTLEMENT_HOLD = "platform:settlement_hold";
+
+/**
+ * An agent's float held for a Zaad top-up they accepted (zaadAgent/): taken
+ * from agent:{uid} when they accept, paid to the customer when they confirm,
+ * returned to the agent when the request ends unpaid. Must trend to zero: it
+ * equals the sum of accepted, sent, declined and disputed requests.
+ */
+export const ZAAD_AGENT_HOLD = "platform:zaad_agent_hold";
+
+/**
+ * What Zaad reversals cost Zapp. When Telesom reverses a customer's payment
+ * to an agent after the wallet was credited, Zapp repays the agent's float:
+ * from the customer's wallet as far as it goes, the rest from here. Like
+ * platform:promo it goes negative: its balance is minus what reversals
+ * have cost Zapp.
+ */
+export const ZAAD_REVERSAL_LOSSES = "platform:zaad_reversal_losses";
 
 /** Ledger account for a user/merchant/agent wallet. */
 export function userAccount(uid: string): string {

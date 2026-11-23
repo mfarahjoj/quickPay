@@ -16,6 +16,27 @@ interface StickerResponse {
   businessAddress: string;
 }
 
+/**
+ * The shop's own QR ("My QR"), where the customer types the amount. Shared
+ * with the counter display (counterDisplay/state.ts), so the code on the
+ * tablet is byte-for-byte the one on the phone.
+ */
+export function buildStickerPayload(
+  merchantId: string,
+  merchantName: string,
+  businessAddress: string,
+  amount?: number
+): string {
+  const qrPayload: Record<string, any> = {
+    type: "quickpay_merchant",
+    merchantId,
+    merchantName,
+    address: businessAddress,
+  };
+  if (amount && amount > 0) qrPayload.amount = amount;
+  return JSON.stringify(qrPayload);
+}
+
 export const generateMerchantSticker = https.onCall(
   { enforceAppCheck: true },
   async (
@@ -59,18 +80,12 @@ export const generateMerchantSticker = https.onCall(
 
       const { includeAmount, amount } = request.data;
 
-      const qrPayload: Record<string, any> = {
-        type: "quickpay_merchant",
-        merchantId: userId,
+      const qrData = buildStickerPayload(
+        userId,
         merchantName,
-        address: businessAddress,
-      };
-
-      if (includeAmount && amount && amount > 0) {
-        qrPayload.amount = amount;
-      }
-
-      const qrData = JSON.stringify(qrPayload);
+        businessAddress,
+        includeAmount && amount && amount > 0 ? amount : undefined
+      );
 
       return {
         success: true,

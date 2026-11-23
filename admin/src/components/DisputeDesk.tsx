@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, type DisputeDetail, type DisputeRow, type DisputeStatus } from "../api";
+import { api, formatFloat, type DisputeDetail, type DisputeRow, type DisputeStatus, type FloatCurrency } from "../api";
 import { Icon } from "./Icon";
 import { ReasonPrompt } from "./ReasonPrompt";
+import { AccountLink } from "./AccountLink";
 import { EmptyState, Loading } from "./ui";
 
-const money = (cents?: number | null) =>
-  cents === undefined || cents === null ? "—" : `$${(cents / 100).toFixed(2)}`;
+/** In the dispute's own currency: "$12.50" or "30,000 SLSH". */
+const money = (amount?: number | null, currency?: FloatCurrency) =>
+  amount === undefined || amount === null ? "—" : formatFloat(amount, currency);
 
 const when = (ms?: number | null) => (ms ? new Date(ms).toLocaleString() : "—");
 
@@ -17,7 +19,7 @@ const VIEWS: { status: DisputeStatus; label: string }[] = [
   { status: "withdrawn", label: "Withdrawn" },
 ];
 
-const KIND_LABEL: Record<string, string> = {
+export const KIND_LABEL: Record<string, string> = {
   not_received: "Paid, didn't receive",
   wrong_amount: "Wrong amount",
   unauthorised: "Didn't make this payment",
@@ -115,7 +117,7 @@ export function DisputeDesk() {
                   >
                     <div className="item-text">
                       <div className="name">
-                        {money(d.amountCents)} · {KIND_LABEL[d.kind] ?? d.kind}
+                        {money(d.amountCents, d.currency)} · {KIND_LABEL[d.kind] ?? d.kind}
                       </div>
                       <div className="sub">
                         {d.disputedKind.replace(/_/g, " ")} · {when(d.createdAt)}
@@ -156,7 +158,7 @@ export function DisputeDesk() {
   );
 }
 
-function DisputeDetailPanel({
+export function DisputeDetailPanel({
   disputeId,
   onDecided,
 }: {
@@ -174,7 +176,11 @@ function DisputeDetailPanel({
       .getDispute(disputeId)
       .then((d) => {
         setDetail(d);
-        setAmount((d.dispute.amountCents / 100).toFixed(2));
+        setAmount(
+          d.dispute.currency === "SLS"
+            ? String(d.dispute.amountCents)
+            : (d.dispute.amountCents / 100).toFixed(2)
+        );
         setPayFrom(d.dispute.against ? "counterparty" : "platform");
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load dispute"));
@@ -190,7 +196,10 @@ function DisputeDetailPanel({
 
   const d = detail.dispute;
   const decidable = d.status === "open" || d.status === "under_review";
-  const amountCents = Math.round(parseFloat(amount || "0") * 100);
+  const cur = d.currency;
+  // A remedy is in the disputed movement's currency: cents, or whole shillings.
+  const amountCents =
+    cur === "SLS" ? Math.floor(Number(amount || "0")) : Math.round(parseFloat(amount || "0") * 100);
   const amountValid = amountCents > 0 && amountCents <= d.transactionAmountCents;
   const fullRefund =
     payFrom === "counterparty" && d.disputedKind === "shop_payment" && amountCents === d.transactionAmountCents;
@@ -209,7 +218,7 @@ function DisputeDetailPanel({
         ? "Dispute rejected. Both sides have been told."
         : res.status === "awaiting_funds"
           ? `Upheld. The other party is short, so ${money(res.owedCents)} is reserved in their wallet and pays out when they have it.`
-          : `Upheld: ${money(amountCents)} returned by ${res.remedy}.`
+          : `Upheld: ${money(amountCents, cur)} returned by ${res.remedy}.`
     );
   };
 
@@ -219,7 +228,7 @@ function DisputeDetailPanel({
       <dd>
         {p ? (
           <>
-            {p.fullName || "(no name)"} · {p.accountType || "customer"}
+            <AccountLink uid={p.uid}>{p.fullName || "(no name)"}</AccountLink> · {p.accountType || "customer"}
             <div className="muted">
               {p.phoneNumber || p.uid} · balance {money(p.balanceCents)}
               {p.reservedCents > 0 && ` · ${money(p.reservedCents)} reserved`}
@@ -237,7 +246,7 @@ function DisputeDetailPanel({
       <div className="panel">
         <div className="panel-head">
           <h2>
-            {money(d.amountCents)} · {KIND_LABEL[d.kind] ?? d.kind}
+            {money(d.amountCents, d.currency)} · {KIND_LABEL[d.kind] ?? d.kind}
           </h2>
           <div className="spacer" />
           <span className={`badge ${d.status === "resolved" ? "ok" : d.status === "withdrawn" ? "" : "warn"}`}>
@@ -250,7 +259,7 @@ function DisputeDetailPanel({
           {party("Against", detail.against)}
           <dt>Movement</dt>
           <dd>
-            {d.disputedKind.replace(/_/g, " ")} of {money(d.transactionAmountCents)}
+            {d.disputedKind.replace(/_/g, " ")} of {money(d.transactionAmountCents, d.currency)}
             <div className="muted">
               {d.transactionId ? `transaction ${d.transactionId}` : `top-up request ${d.agentTopupRequestId}`}
               {detail.transaction?.createdAt ? ` · ${when(detail.transaction.createdAt)}` : ""}
@@ -272,7 +281,7 @@ function DisputeDetailPanel({
             <>
               <dt>Decision</dt>
               <dd>
-                {d.resolution.outcome} · {money(d.resolution.amountCents)} by {d.resolution.remedy}
+                {d.resolution.outcome} · {money(d.resolution.amountCents, d.currency)} by {d.resolution.remedy}
                 {d.resolution.payFrom === "platform" ? " (Zapp paid)" : ""}
                 <div className="muted">
                   {d.resolution.reason} · {when(d.resolution.decidedAt)}
@@ -325,7 +334,7 @@ function DisputeDetailPanel({
 
       {deciding === "upheld" && (
         <ReasonPrompt
-          title={`Uphold: return ${money(amountValid ? amountCents : 0)}`}
+          title={`Uphold: return ${money(amountValid ? amountCents : 0, cur)}`}
           description={
             fullRefund
               ? "The whole payment is refunded exactly: the merchant returns their net, Zapp returns its fee. Both sides see the reason."
@@ -339,8 +348,8 @@ function DisputeDetailPanel({
           onCancel={() => setDeciding(null)}
         >
           <label className="stack">
-            <span className="muted">Amount to return (up to {money(d.transactionAmountCents)})</span>
-            <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            <span className="muted">Amount to return (up to {money(d.transactionAmountCents, d.currency)})</span>
+            <input inputMode={cur === "SLS" ? "numeric" : "decimal"} value={amount} onChange={(e) => setAmount(e.target.value)} />
           </label>
           <label className="stack" style={{ marginTop: 12 }}>
             <span className="muted">Who pays</span>

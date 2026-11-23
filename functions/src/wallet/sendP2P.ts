@@ -1,7 +1,8 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { assertResetCooldownAllows } from "../utils/resetCooldown";
-import { requireAuth, validateCurrency } from "../utils/validation";
+import { requireAuth } from "../utils/validation";
+import { parseCurrency } from "../utils/money";
 import { enforceTransactionLimits } from "../utils/limits";
 import { assertAccountActive } from "../utils/accountStatus";
 import { verifyUserPin } from "../auth/validatePin";
@@ -53,14 +54,16 @@ export const sendP2P = https.onCall(
     if (!Number.isInteger(amount) || amount <= 0) {
       throw new https.HttpsError(
         "invalid-argument",
-        "Amount must be a positive integer in cents"
+        "Amount must be a positive integer in the currency's smallest unit"
       );
     }
 
-    if (!validateCurrency(currency)) {
+    // Dollars from the dollar balance, shillings from the shilling one.
+    const ledgerCurrency = parseCurrency(currency);
+    if (!ledgerCurrency) {
       throw new https.HttpsError(
         "invalid-argument",
-        "Currency must be USD"
+        "Currency must be USD or SLS"
       );
     }
 
@@ -124,7 +127,7 @@ export const sendP2P = https.onCall(
 
       assertAccountActive(senderData);
 
-      await enforceTransactionLimits(senderId, amount, senderData);
+      await enforceTransactionLimits(senderId, amount, senderData, undefined, ledgerCurrency);
 
       const transactionId = db.collection("transactions").doc().id;
 
@@ -136,7 +139,7 @@ export const sendP2P = https.onCall(
         const pending = await prepareJournalEntry(transaction, {
           entryId: journalEntryId,
           type: "p2p",
-          currency: currency as "USD" | "SLS",
+          currency: ledgerCurrency,
           lines: [
             { account: userAccount(senderId), debit: amount, credit: 0 },
             { account: userAccount(recipientId), debit: 0, credit: amount },
@@ -155,7 +158,7 @@ export const sendP2P = https.onCall(
           toUserId: recipientId,
           participants: [senderId, recipientId],
           amount,
-          currency,
+          currency: ledgerCurrency,
           status: "completed",
           description: note || "P2P Transfer",
           journalEntryId,
@@ -170,14 +173,14 @@ export const sendP2P = https.onCall(
       notifyPaymentReceived(
         recipientId,
         amount,
-        currency,
+        ledgerCurrency,
         senderId
       ).catch((err) => console.error("Failed to notify recipient:", err));
 
       notifyPaymentSent(
         senderId,
         amount,
-        currency,
+        ledgerCurrency,
         recipientId
       ).catch((err) => console.error("Failed to notify sender:", err));
 

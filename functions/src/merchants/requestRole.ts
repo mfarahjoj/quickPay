@@ -52,11 +52,13 @@ export async function ensureRoleRequest(
   const ref = db.collection(ROLE_REQUESTS_COLLECTION).doc(requestId);
   const existing = await ref.get();
 
+  let previous: RoleRequest | undefined;
   if (existing.exists) {
     const current = existing.data() as RoleRequest;
     if (current.status === "pending" || current.status === "approved") {
       return { requestId, status: current.status, created: false };
     }
+    previous = current;
   }
 
   const now = admin.firestore.Timestamp.now();
@@ -70,6 +72,10 @@ export async function ensureRoleRequest(
     reviewedBy: admin.firestore.FieldValue.delete(),
     reviewedAt: admin.firestore.FieldValue.delete(),
     reason: admin.firestore.FieldValue.delete(),
+    // A re-application starts empty: the rejected one is kept only so the app
+    // can prefill the form, and the console doesn't mistake it for a new one.
+    application: admin.firestore.FieldValue.delete(),
+    ...(previous?.application ? { previousApplication: previous.application } : {}),
   };
 
   if (details.businessName) payload.businessName = sanitizeString(details.businessName);
@@ -89,6 +95,7 @@ export async function ensureRoleRequest(
       roleRequestStatus: "pending",
       roleRequestedRole: role,
       roleRequestReason: admin.firestore.FieldValue.delete(),
+      roleApplicationSubmittedAt: admin.firestore.FieldValue.delete(),
       updatedAt: now,
     },
     { merge: true }

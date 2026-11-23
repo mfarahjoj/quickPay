@@ -17,6 +17,8 @@ import * as admin from "firebase-admin";
 import { CashOutRequest, CashOutReleaseReason } from "../types";
 import { prepareJournalEntry, userAccount, CASHOUT_HOLD } from "../ledger";
 import { notifyUser } from "../utils/notifications";
+import { pushAmount } from "../utils/money";
+import { storedCurrency } from "./agentCurrency";
 
 const RELEASE_COPY: Record<CashOutReleaseReason, string> = {
   cancelled: "Cash-out cancelled — money returned",
@@ -54,7 +56,8 @@ export async function releaseCashOutHold(
     const pending = await prepareJournalEntry(tx, {
       entryId,
       type: "adjustment",
-      currency: cashOut.currency as "USD" | "SLS",
+      // Back to the balance it was held from: dollars or shillings.
+      currency: storedCurrency(cashOut.currency),
       lines: [
         { account: CASHOUT_HOLD, debit: cashOut.amount + (cashOut.feeCents ?? 0), credit: 0 },
         { account: userAccount(cashOut.customerId), debit: 0, credit: cashOut.amount + (cashOut.feeCents ?? 0) },
@@ -85,12 +88,11 @@ export async function releaseCashOutHold(
 
   const done = released as CashOutRequest | null;
   if (done && reason !== "replaced") {
-    const amount = `${done.currency} ${(done.amount / 100).toFixed(2)}`;
+    const amount = pushAmount(done.amount, storedCurrency(done.currency));
     notifyUser(
       done.customerId,
       "cashout_returned",
-      "Cash-out money returned",
-      `${amount} is back in your wallet. ${RELEASE_COPY[reason].split(" — ")[0]}.`,
+      { key: `cashout.returned.${reason}`, params: { amount } },
       { type: "cashout_returned", cashOutId, reason }
     ).catch((err) => console.error("Failed to notify customer:", err));
   }

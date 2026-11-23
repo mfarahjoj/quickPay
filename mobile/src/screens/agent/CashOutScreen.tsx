@@ -22,18 +22,18 @@ import { useTranslation } from 'react-i18next';
 import { cooldownMessage } from '../../utils/cooldownMessage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth, functions } from '../../services/firebase.config';
-import { appendAmountKey } from '../../utils/amountInput';
 import { triggerHaptic } from '../../services/haptics.service';
-import { colors } from '../../theme';
-import { CURRENCY_SYMBOL } from '../../config/constants';
+import { makeStyles, useColors } from '../../theme';
 import { Springs } from '../../constants/springs';
+import { useWallet } from '../../hooks/useWallet';
+import { useHomeCurrency } from '../../hooks/useHomeCurrency';
+import { useBiometricApproval } from '../../hooks/useBiometricApproval';
+import { amountInputUnits, balanceIn, formatMoney, type Currency } from '../../utils/money';
 import { SuccessCheckIcon } from '../../components/icons/AuthIcons';
 import { AnimatedXMark } from '../../components/icons/StatusIcons';
 
 type Step = 'amount' | 'pin' | 'processing' | 'success' | 'error';
 
-const ACCENT = '#FF8A7A';
-const INCOMING = '#34C77B';
 const KEYPAD = ['1','2','3','4','5','6','7','8','9','.','0','⌫'];
 // A PIN has no decimal point; the blank keeps the grid aligned.
 const PIN_KEYPAD = ['1','2','3','4','5','6','7','8','9','','0','⌫'];
@@ -44,6 +44,8 @@ interface SavedCashOut {
   cashOutId: string;
   otpCode: string;
   amountText: string;
+  /** Codes saved before shilling cash-outs carry no currency: those were dollars. */
+  currency?: Currency;
   expiresAt: string;
 }
 const savedKey = () => `@zapp/pendingCashOut/${auth().currentUser?.uid ?? 'anon'}`;
@@ -59,6 +61,7 @@ const qrPayload = (id: string, code: string) =>
 // Dots must own their animation hooks: calling useAnimatedStyle inside the
 // pin-step JSX changes the hook count between renders and crashes React.
 function CashOutPinDot({ filled }: { filled: boolean }) {
+  const styles = useStyles();
   const scale = useSharedValue(1);
 
   useEffect(() => {
@@ -82,6 +85,8 @@ function CashOutPinDot({ filled }: { filled: boolean }) {
 }
 
 export default function CashOutScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const navigation = useNavigation();
   const [step, setStep] = useState<Step>('amount');
@@ -110,6 +115,7 @@ export default function CashOutScreen() {
         const saved = JSON.parse(raw) as SavedCashOut;
         const exp = new Date(saved.expiresAt);
         if (exp.getTime() <= Date.now()) { void clearSavedCashOut(); return; }
+        setPickedCurrency(saved.currency ?? 'USD');
         setAmountText(saved.amountText);
         setOtpCode(saved.otpCode);
         setCashOutId(saved.cashOutId);
@@ -131,7 +137,26 @@ export default function CashOutScreen() {
   // Countdown pulse
   const timerGlow = useSharedValue(0);
 
-  const amount = parseFloat(amountText || '0');
+  // Dollars or shillings: the cash comes out of that balance, and the agent
+  // pays it in that currency. Starts on the currency Home shows.
+  const { wallet } = useWallet();
+  const { currency: homeCurrency } = useHomeCurrency(wallet?.balanceCents ?? 0, wallet?.slsBalance ?? 0);
+  const [pickedCurrency, setPickedCurrency] = useState<Currency | null>(null);
+  const currency = pickedCurrency ?? homeCurrency;
+
+  /** Cents or whole shillings: what the server takes. */
+  const amount = amountInputUnits(amountText, currency);
+  const amountLabel = formatMoney(amount, currency);
+  // The server rounds the fee the same way (computePaymentFee).
+  const feeUnits = Math.min(Math.round(amount * feeRate), amount);
+
+  const pickCurrency = (next: Currency) => {
+    if (next === currency) return;
+    triggerHaptic('light');
+    setPickedCurrency(next);
+    // 4.70 dollars is not 4.70 shillings: start the amount again.
+    setAmountText('');
+  };
 
   // Countdown timer for OTP expiry
   useEffect(() => {
@@ -163,28 +188,35 @@ export default function CashOutScreen() {
       }
       return;
     }
-    if (!key) return;
-    setAmountText((p) => appendAmountKey(p, key));
+    if (key === '⌫') { setAmountText((p) => p.slice(0, -1)); return; }
+    // Shillings are whole; dollars take two decimals.
+    if (key === '.' && (currency === 'SLS' || amountText.includes('.'))) return;
+    const decimals = amountText.split('.')[1];
+    if (decimals !== undefined && decimals.length >= 2) return;
+    if (amountText.replace('.', '').length >= 9) return;
+    const next = amountText === '0' && key !== '.' ? key : amountText + key;
+    setAmountText(next);
     amountScale.value = withSequence(
       withSpring(1.06, Springs.feedback),
       withSpring(1, { damping: 18, stiffness: 300 }),
     );
   };
 
-  const handleContinue = () => {
-    if (!amountText || amount <= 0) return;
-    triggerHaptic('medium');
-    setStep('pin');
-  };
+  // Face ID, when it's on, stands in for the PIN keypad; cancelled, the keypad.
+  const biometric = useBiometricApproval();
+  const { prepare: prepareBiometric } = biometric;
+  useEffect(() => {
+    prepareBiometric();
+  }, [prepareBiometric]);
 
-  const handleSubmit = useCallback(async () => {
-    if (pin.length < 6) return;
+  /** `credential` is the typed PIN, or Face ID's one-time token. */
+  const submitWith = useCallback(async (credential: string) => {
     triggerHaptic('medium');
     setStep('processing');
 
     try {
       const fn = functions().httpsCallable('customerCashOut');
-      const result = await fn({ amount: Math.round(amount * 100), pin });
+      const result = await fn({ amount, pin: credential, currency });
       const data = (result.data as any)?.data;
       if (!data?.otpCode || !data?.expiresAt) {
         throw new Error((result.data as any)?.error || t('cashout.failedTitle'));
@@ -196,6 +228,7 @@ export default function CashOutScreen() {
           cashOutId: data.cashOutId,
           otpCode: data.otpCode,
           amountText,
+          currency,
           expiresAt: data.expiresAt,
         });
       }
@@ -208,11 +241,24 @@ export default function CashOutScreen() {
       setErrorMsg(cooldownMessage(e, t) ?? (e.message || t('cashout.genericError')));
       setStep('error');
     }
-  }, [pin, amount, amountText, otpOpacity, otpScale, t]);
+  }, [amount, amountText, currency, otpOpacity, otpScale, t]);
+
+  const handleContinue = async () => {
+    if (amount <= 0) return;
+    triggerHaptic('medium');
+    if (biometric.available) {
+      const token = await biometric.approve(t('common.confirmPaymentAmount', { amount: amountLabel }));
+      if (token) {
+        await submitWith(token);
+        return;
+      }
+    }
+    setStep('pin');
+  };
 
   useEffect(() => {
-    if (pin.length === 6) handleSubmit();
-  }, [pin, handleSubmit]);
+    if (step === 'pin' && pin.length === 6) submitWith(pin);
+  }, [step, pin, submitWith]);
 
   // The money is held, not gone: cancelling returns it to the wallet at once.
   const doCancel = useCallback(async () => {
@@ -292,7 +338,7 @@ export default function CashOutScreen() {
               ))}
             </View>
             <Text style={styles.otpAmount}>
-              {t('cashout.willBePaid', { amount: `${CURRENCY_SYMBOL}${amount.toFixed(2)}` })}
+              {t('cashout.willBePaid', { amount: amountLabel })}
             </Text>
           </Animated.View>
 
@@ -322,7 +368,7 @@ export default function CashOutScreen() {
               disabled={cancelling}
             >
               {cancelling ? (
-                <ActivityIndicator color="#FF6B6B" />
+                <ActivityIndicator color={colors.ui.error} />
               ) : (
                 <Text style={styles.cancelText}>{t('cashout.cancelCta')}</Text>
               )}
@@ -362,7 +408,7 @@ export default function CashOutScreen() {
   if (step === 'processing') {
     return (
       <View style={[styles.container, styles.resultCenter]}>
-        <ActivityIndicator size="large" color={ACCENT} />
+        <ActivityIndicator size="large" color={colors.ui.accentText} />
         <Text style={styles.processingText}>{t('cashout.generating')}</Text>
       </View>
     );
@@ -380,12 +426,12 @@ export default function CashOutScreen() {
         </View>
         <View style={styles.pinSection}>
           <Text style={styles.pinAmountLabel}>{t('cashout.withdrawing')}</Text>
-          <Text style={styles.pinAmount}>{CURRENCY_SYMBOL}{amount.toFixed(2)}</Text>
+          <Text style={styles.pinAmount} numberOfLines={1}>{amountLabel}</Text>
           <Text style={styles.feeLine}>
             {feeRate > 0
               ? t('cashout.feeLine', {
-                  fee: `${CURRENCY_SYMBOL}${(Math.round(amount * 100 * feeRate) / 100).toFixed(2)}`,
-                  total: `${CURRENCY_SYMBOL}${(amount + Math.round(amount * 100 * feeRate) / 100).toFixed(2)}`,
+                  fee: formatMoney(feeUnits, currency),
+                  total: formatMoney(amount + feeUnits, currency),
                 })
               : t('cashout.free')}
           </Text>
@@ -426,45 +472,75 @@ export default function CashOutScreen() {
       </View>
 
       <View style={styles.amountSection}>
+        <View style={styles.segment} accessibilityRole="tablist">
+          {(['SLS', 'USD'] as Currency[]).map((c) => (
+            <TouchableOpacity
+              key={c}
+              style={[styles.segmentItem, currency === c && styles.segmentItemOn]}
+              onPress={() => pickCurrency(c)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: currency === c }}
+            >
+              <Text style={[styles.segmentText, currency === c && styles.segmentTextOn]}>
+                {c === 'SLS' ? t('topup.zaad.shillings') : t('topup.zaad.dollars')}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
         <Text style={styles.amountLabel}>{t('cashout.amountLabel')}</Text>
         <Animated.View style={[styles.amountRow, amountStyle]}>
-          <Text style={styles.amountCurrency}>{CURRENCY_SYMBOL}</Text>
-          <Text style={[styles.amountDisplay, !amountText && styles.amountPlaceholder]}>
-            {amountText || '0.00'}
+          {currency === 'USD' && <Text style={styles.amountCurrency}>$</Text>}
+          <Text
+            style={[styles.amountDisplay, !amountText && styles.amountPlaceholder]}
+            numberOfLines={1}
+          >
+            {currency === 'SLS'
+              ? formatMoney(amount, 'SLS').replace(' SLSH', '')
+              : amountText || '0.00'}
           </Text>
+          {currency === 'SLS' && <Text style={styles.amountSuffix}>SLSH</Text>}
         </Animated.View>
-        <Text style={styles.amountHint}>{t('cashout.amountHint')}</Text>
+        <Text style={styles.amountHint}>
+          {t('payments.available', { amount: formatMoney(balanceIn(wallet, currency), currency) })}
+        </Text>
       </View>
 
       <View style={styles.keypad}>
-        {KEYPAD.map((key) => (
-          <TouchableOpacity
-            key={key}
-            style={[styles.key, key === '⌫' && styles.keyDelete]}
-            onPress={() => appendDigit(key)}
-            activeOpacity={0.6}
-          >
-            <Text style={[styles.keyText, key === '⌫' && styles.keyDeleteText]}>{key}</Text>
-          </TouchableOpacity>
-        ))}
+        {KEYPAD.map((key) => {
+          // Shillings have no smaller unit, so no decimal point.
+          const hidden = key === '.' && currency === 'SLS';
+          return (
+            <TouchableOpacity
+              key={key}
+              style={[styles.key, key === '⌫' && styles.keyDelete, hidden && styles.keyHidden]}
+              onPress={() => appendDigit(key)}
+              disabled={hidden}
+              activeOpacity={0.6}
+            >
+              <Text style={[styles.keyText, key === '⌫' && styles.keyDeleteText]}>{key}</Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       <View style={styles.footer}>
         <TouchableOpacity
-          style={[styles.continueBtn, (!amountText || amount <= 0) && styles.continueBtnDisabled]}
+          style={[styles.continueBtn, amount <= 0 && styles.continueBtnDisabled]}
           onPress={handleContinue}
-          disabled={!amountText || amount <= 0}
+          disabled={amount <= 0}
           activeOpacity={0.8}
         >
-          <Text style={styles.continueBtnText}>{t('common.continue')}</Text>
+          <Text style={styles.continueBtnText}>
+            {biometric.available ? t('common.continueWith', { label: biometric.label }) : t('common.continue')}
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.dark.canvas },
+const useStyles = makeStyles((colors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.ui.canvas },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -477,70 +553,80 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.ui.ink(0.06),
     alignItems: 'center',
     justifyContent: 'center',
   },
-  backArrow: { fontSize: 24, color: '#FFFFFF', lineHeight: 28 },
-  headerTitle: { fontSize: 22, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.5 },
-  headerSub: { fontSize: 13, color: 'rgba(255,255,255,0.4)', marginTop: 2 },
+  backArrow: { fontSize: 24, color: colors.ui.text, lineHeight: 28 },
+  headerTitle: { fontSize: 22, fontWeight: '800', color: colors.ui.text, letterSpacing: -0.5 },
+  headerSub: { fontSize: 13, color: colors.ui.ink(0.4), marginTop: 2 },
 
   // Amount entry
   amountSection: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
-  amountLabel: { fontSize: 13, fontWeight: '600', letterSpacing: 0.5, textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', marginBottom: 16 },
+  amountLabel: { fontSize: 13, fontWeight: '600', letterSpacing: 0.5, textTransform: 'uppercase', color: colors.ui.ink(0.4), marginBottom: 16 },
   amountRow: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 10 },
-  amountCurrency: { fontSize: 36, fontWeight: '700', color: '#FFFFFF', marginBottom: 6, marginRight: 4 },
-  amountDisplay: { fontSize: 64, fontWeight: '800', color: '#FFFFFF', letterSpacing: -2 },
-  amountPlaceholder: { color: 'rgba(255,255,255,0.2)' },
-  amountHint: { fontSize: 13, color: 'rgba(255,255,255,0.35)' },
+  amountCurrency: { fontSize: 36, fontWeight: '700', color: colors.ui.text, marginBottom: 6, marginRight: 4 },
+  amountDisplay: { fontSize: 56, fontWeight: '800', color: colors.ui.text, letterSpacing: -2, flexShrink: 1 },
+  amountSuffix: { fontSize: 24, fontWeight: '700', color: colors.ui.text, marginBottom: 10, marginLeft: 8 },
+  segment: {
+    flexDirection: 'row', alignSelf: 'center', padding: 4, borderRadius: 14,
+    backgroundColor: colors.ui.ink(0.06), marginBottom: 24,
+  },
+  segmentItem: { paddingVertical: 8, paddingHorizontal: 18, borderRadius: 10 },
+  segmentItemOn: { backgroundColor: colors.ui.accentText },
+  segmentText: { fontSize: 14, fontWeight: '700', color: colors.ui.ink(0.6) },
+  segmentTextOn: { color: colors.ui.onSolid },
+  keyHidden: { opacity: 0 },
+  amountPlaceholder: { color: colors.ui.ink(0.2) },
+  amountHint: { fontSize: 13, color: colors.ui.ink(0.35) },
 
   // PIN
   pinSection: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  pinAmountLabel: { fontSize: 13, fontWeight: '600', letterSpacing: 0.5, textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', marginBottom: 8 },
-  pinAmount: { fontSize: 36, fontWeight: '800', color: '#FFFFFF', letterSpacing: -1, marginBottom: 8 },
-  feeLine: { fontSize: 14, color: 'rgba(255,255,255,0.6)', marginBottom: 28, textAlign: 'center' },
+  pinAmountLabel: { fontSize: 13, fontWeight: '600', letterSpacing: 0.5, textTransform: 'uppercase', color: colors.ui.ink(0.4), marginBottom: 8 },
+  pinAmount: { fontSize: 36, fontWeight: '800', color: colors.ui.text, letterSpacing: -1, marginBottom: 8 },
+  feeLine: { fontSize: 14, color: colors.ui.ink(0.6), marginBottom: 28, textAlign: 'center' },
   pinDots: { flexDirection: 'row', gap: 14 },
-  pinDot: { width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)', backgroundColor: 'transparent' },
-  pinDotFilled: { backgroundColor: ACCENT, borderColor: ACCENT },
+  pinDot: { width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: colors.ui.ink(0.3), backgroundColor: 'transparent' },
+  pinDotFilled: { backgroundColor: colors.ui.accentText, borderColor: colors.ui.accentText },
 
   // Keypad
   keypad: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 24, gap: 12, justifyContent: 'center', paddingBottom: 24 },
   keyBlank: { backgroundColor: 'transparent' },
-  key: { width: 88, height: 56, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.07)', alignItems: 'center', justifyContent: 'center' },
+  key: { width: 88, height: 56, borderRadius: 14, backgroundColor: colors.ui.ink(0.07), alignItems: 'center', justifyContent: 'center' },
   keyDelete: { backgroundColor: 'transparent' },
-  keyText: { fontSize: 22, fontWeight: '600', color: '#FFFFFF' },
-  keyDeleteText: { fontSize: 20, color: 'rgba(255,255,255,0.6)' },
+  keyText: { fontSize: 22, fontWeight: '600', color: colors.ui.text },
+  keyDeleteText: { fontSize: 20, color: colors.ui.ink(0.6) },
 
   footer: { paddingHorizontal: 24, paddingBottom: 36 },
-  continueBtn: { height: 56, borderRadius: 28, backgroundColor: ACCENT, alignItems: 'center', justifyContent: 'center' },
+  continueBtn: { height: 56, borderRadius: 28, backgroundColor: colors.ui.accentText, alignItems: 'center', justifyContent: 'center' },
   continueBtnDisabled: { opacity: 0.35 },
   continueBtnText: { fontSize: 17, fontWeight: '700', color: '#FFFFFF' },
 
   // Success / OTP
   otpContainer: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 24, gap: 20 },
   qrCard: { padding: 14, borderRadius: 20, backgroundColor: '#FFFFFF' },
-  heldNote: { fontSize: 13, lineHeight: 19, color: 'rgba(255,255,255,0.5)', textAlign: 'center' },
+  heldNote: { fontSize: 13, lineHeight: 19, color: colors.ui.ink(0.5), textAlign: 'center' },
   cancelBtn: { minWidth: 200, alignItems: 'center', paddingHorizontal: 32, paddingVertical: 14, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(255,107,107,0.4)' },
-  cancelText: { fontSize: 16, fontWeight: '600', color: '#FF6B6B' },
-  otpBox: { width: '100%', backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', borderRadius: 20, padding: 24, alignItems: 'center', gap: 16 },
-  otpLabel: { fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, color: 'rgba(255,255,255,0.45)' },
+  cancelText: { fontSize: 16, fontWeight: '600', color: colors.ui.error },
+  otpBox: { width: '100%', backgroundColor: colors.ui.ink(0.05), borderWidth: 1, borderColor: colors.ui.ink(0.1), borderRadius: 20, padding: 24, alignItems: 'center', gap: 16 },
+  otpLabel: { fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, color: colors.ui.ink(0.45) },
   otpDigits: { flexDirection: 'row', gap: 8 },
   otpDigitBox: { width: 44, height: 54, borderRadius: 10, backgroundColor: 'rgba(111,155,255,0.12)', borderWidth: 1, borderColor: 'rgba(111,155,255,0.35)', alignItems: 'center', justifyContent: 'center' },
-  otpDigitText: { fontSize: 28, fontWeight: '800', color: ACCENT, letterSpacing: -0.5 },
-  otpAmount: { fontSize: 14, color: 'rgba(255,255,255,0.5)' },
+  otpDigitText: { fontSize: 28, fontWeight: '800', color: colors.ui.accentText, letterSpacing: -0.5 },
+  otpAmount: { fontSize: 14, color: colors.ui.ink(0.5) },
   timerRow: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, backgroundColor: 'rgba(52,199,123,0.1)', borderWidth: 1, borderColor: 'rgba(52,199,123,0.3)' },
   timerWarn: { backgroundColor: 'rgba(255,92,92,0.1)', borderColor: 'rgba(255,92,92,0.3)' },
-  timerText: { fontSize: 14, fontWeight: '600', color: INCOMING },
-  timerTextWarn: { color: '#FF6961' },
-  instructionCard: { width: '100%', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 16, padding: 18, gap: 8 },
-  instructionTitle: { fontSize: 13, fontWeight: '700', color: 'rgba(255,255,255,0.6)', marginBottom: 4 },
-  instructionStep: { fontSize: 13, color: 'rgba(255,255,255,0.45)', lineHeight: 20 },
+  timerText: { fontSize: 14, fontWeight: '600', color: colors.ui.incoming },
+  timerTextWarn: { color: colors.ui.error },
+  instructionCard: { width: '100%', backgroundColor: colors.ui.ink(0.03), borderRadius: 16, padding: 18, gap: 8 },
+  instructionTitle: { fontSize: 13, fontWeight: '700', color: colors.ui.ink(0.6), marginBottom: 4 },
+  instructionStep: { fontSize: 13, color: colors.ui.ink(0.45), lineHeight: 20 },
 
   // Error
   resultCenter: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  errorTitle: { fontSize: 22, fontWeight: '800', color: '#FFFFFF', marginTop: 20, marginBottom: 10 },
-  errorSub: { fontSize: 14, color: 'rgba(255,255,255,0.45)', textAlign: 'center', lineHeight: 21 },
-  retryBtn: { marginTop: 28, paddingHorizontal: 32, paddingVertical: 14, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.08)' },
-  retryText: { fontSize: 16, fontWeight: '600', color: '#FFFFFF' },
-  processingText: { fontSize: 16, color: 'rgba(255,255,255,0.5)', marginTop: 20 },
-});
+  errorTitle: { fontSize: 22, fontWeight: '800', color: colors.ui.text, marginTop: 20, marginBottom: 10 },
+  errorSub: { fontSize: 14, color: colors.ui.ink(0.45), textAlign: 'center', lineHeight: 21 },
+  retryBtn: { marginTop: 28, paddingHorizontal: 32, paddingVertical: 14, borderRadius: 24, backgroundColor: colors.ui.ink(0.08) },
+  retryText: { fontSize: 16, fontWeight: '600', color: colors.ui.text },
+  processingText: { fontSize: 16, color: colors.ui.ink(0.5), marginTop: 20 },
+}));

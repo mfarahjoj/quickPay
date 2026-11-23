@@ -12,6 +12,7 @@ import { getRates } from "../config/rates";
 import { isAccountActive } from "../utils/accountStatus";
 import { validatePhoneNumber } from "../utils/validation";
 import { sendPushNotification } from "../utils/notifications";
+import { PushMessage } from "../utils/pushTemplates";
 import { ApiCaller } from "./keys";
 import { ApiError, badRequest, conflict, notFound } from "./http";
 import {
@@ -27,6 +28,10 @@ import {
   ApiIdempotencyRecord,
   isLiveObject,
 } from "./types";
+import { API_CURRENCY_CODES, Currency, currencyFromApiCode, pushAmount } from "../utils/money";
+import { requireAgreementPartner, testPhoneNumbersFor } from "./partners";
+import { chargeConfirmationPayload } from "./agreementSignature";
+import { initialAutoPay } from "./agreements";
 
 export const CHARGE_ID_PATTERN = /^ch_[A-Za-z0-9_-]{16,64}$/;
 export const DEEP_LINK_SCHEME = "zapppay";
@@ -81,7 +86,7 @@ export function serializeCharge(id: string, charge: ApiCharge, now = Date.now())
     id,
     object: "charge",
     amount: charge.amount,
-    currency: charge.currency,
+    currency: API_CURRENCY_CODES[charge.currency] ?? charge.currency,
     status: effectiveStatus(charge, now),
     reference: charge.reference ?? null,
     metadata: charge.metadata ?? {},
@@ -101,6 +106,35 @@ export function serializeCharge(id: string, charge: ApiCharge, now = Date.now())
     canceled_at: iso(charge.canceledAt),
     expired_at: iso(charge.expiredAt) ?? (isLapsed(charge, now) ? iso(charge.expiresAt) : null),
     livemode: isLiveObject(charge),
+    ...serializeAutoPay(id, charge, now),
+  };
+}
+
+/**
+ * For a charge raised on an agreement (agreements.ts): the agreement, and how
+ * far paying it on the customer's phone got. `payload` is what the phone must
+ * sign, present while the charge waits for that.
+ */
+export function serializeAutoPay(id: string, charge: ApiCharge, now = Date.now()) {
+  if (!charge.agreementId || !charge.autoPay) return {};
+  const ap = charge.autoPay;
+  const waiting = ap.status === "requires_confirmation" && charge.status === "pending" && !isLapsed(charge, now);
+  return {
+    agreement: charge.agreementId,
+    auto_pay: {
+      status: charge.status === "succeeded" ? "paid" : ap.status,
+      ...(ap.status === "declined" && ap.declinedCode ? { declined_code: ap.declinedCode } : {}),
+      ...(waiting
+        ? {
+          payload: chargeConfirmationPayload({
+            chargeId: id,
+            agreementId: charge.agreementId,
+            amount: charge.amount,
+            currency: charge.currency,
+          }),
+        }
+        : {}),
+    },
   };
 }
 
@@ -115,7 +149,7 @@ export function serializePublicCharge(id: string, charge: ApiCharge, now = Date.
     object: "public_charge",
     status: effectiveStatus(charge, now),
     amount: charge.amount,
-    currency: charge.currency,
+    currency: API_CURRENCY_CODES[charge.currency] ?? charge.currency,
     merchant_name: charge.merchantName,
     reference: charge.reference ?? null,
     expires_at: iso(charge.expiresAt),
@@ -134,14 +168,14 @@ export function parseAmount(value: unknown, param = "amount"): number {
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
     throw badRequest(
       "amount_invalid",
-      "amount must be a positive integer number of cents (e.g. 1250 for $12.50)",
+      "amount must be a positive integer in the currency's smallest unit: cents (1250 for $12.50) or whole shillings (30000 for 30,000 SLSH)",
       param
     );
   }
   return value;
 }
 
-function parseOptionalString(value: unknown, param: string, max: number): string | undefined {
+export function parseOptionalString(value: unknown, param: string, max: number): string | undefined {
   if (value === undefined || value === null || value === "") return undefined;
   if (typeof value !== "string" || value.trim().length === 0 || value.length > max) {
     throw badRequest("parameter_invalid", `${param} must be a string of at most ${max} characters`, param);
@@ -149,7 +183,7 @@ function parseOptionalString(value: unknown, param: string, max: number): string
   return value.trim();
 }
 
-function parseMetadata(value: unknown): Record<string, string> | undefined {
+export function parseMetadata(value: unknown): Record<string, string> | undefined {
   if (value === undefined || value === null) return undefined;
   if (typeof value !== "object" || Array.isArray(value)) {
     throw badRequest("parameter_invalid", "metadata must be an object of string values", "metadata");
@@ -189,25 +223,35 @@ function parseRedirectUrl(value: unknown, param: string): string | undefined {
 
 export interface NormalisedChargeInput {
   amount: number;
-  currency: "USD";
+  currency: Currency;
   reference?: string;
   metadata?: Record<string, string>;
   customerPhone?: string;
   successUrl?: string;
   cancelUrl?: string;
   expiresIn?: number;
+  /** An agreement (agreements.ts) the customer will approve this charge under, on their phone. */
+  agreement?: string;
 }
 
-export function parseChargeInput(body: Record<string, unknown>): NormalisedChargeInput {
+/**
+ * [testPhoneNumbers]: numbers outside +252 the merchant may address, its
+ * partner test numbers (partners.ts). Every other number must be +252.
+ */
+export function parseChargeInput(
+  body: Record<string, unknown>,
+  testPhoneNumbers: readonly string[] = []
+): NormalisedChargeInput {
   const amount = parseAmount(body.amount);
 
-  const currency = body.currency === undefined ? "USD" : body.currency;
-  if (typeof currency !== "string" || currency.toUpperCase() !== "USD") {
-    throw badRequest("currency_unsupported", "currency must be USD", "currency");
+  const currency =
+    body.currency === undefined ? "USD" : currencyFromApiCode(String(body.currency).toUpperCase());
+  if (!currency) {
+    throw badRequest("currency_unsupported", "currency must be USD or SLSH", "currency");
   }
 
   const customerPhone = parseOptionalString(body.customer_phone, "customer_phone", 20);
-  if (customerPhone && !validatePhoneNumber(customerPhone)) {
+  if (customerPhone && !validatePhoneNumber(customerPhone) && !testPhoneNumbers.includes(customerPhone)) {
     throw badRequest(
       "phone_invalid",
       "customer_phone must be in international format, e.g. +252634123456",
@@ -228,15 +272,21 @@ export function parseChargeInput(body: Record<string, unknown>): NormalisedCharg
     expiresIn = v;
   }
 
+  const agreement = parseOptionalString(body.agreement, "agreement", 80);
+  if (agreement && !customerPhone) {
+    throw badRequest("parameter_missing", "customer_phone is required with agreement", "customer_phone");
+  }
+
   return {
     amount,
-    currency: "USD",
+    currency,
     reference: parseOptionalString(body.reference, "reference", MAX_REFERENCE),
     metadata: parseMetadata(body.metadata),
     customerPhone,
     successUrl: parseRedirectUrl(body.success_url, "success_url"),
     cancelUrl: parseRedirectUrl(body.cancel_url, "cancel_url"),
     expiresIn,
+    ...(agreement ? { agreement } : {}),
   };
 }
 
@@ -277,7 +327,9 @@ export async function createCharge(
   body: Record<string, unknown>,
   idempotencyKey: string
 ): Promise<CreateChargeResult> {
-  const input = parseChargeInput(body);
+  const input = parseChargeInput(body, await testPhoneNumbersFor(caller.merchantId, body.customer_phone));
+  // Charging on an agreement is a partner power, like transfers.
+  if (input.agreement) await requireAgreementPartner(caller);
   const db = admin.firestore();
   const idemRef = db
     .collection(API_IDEMPOTENCY_COLLECTION)
@@ -301,6 +353,15 @@ export async function createCharge(
     getRates(),
   ]);
 
+  // Before the charge is written, so its first state says whether the phone can approve it.
+  const autoPay = input.agreement
+    ? await initialAutoPay(caller, input.agreement, {
+      amount: input.amount,
+      currency: input.currency,
+      customerPhone: input.customerPhone,
+    })
+    : undefined;
+
   const now = admin.firestore.Timestamp.now();
   const ttlSeconds = input.expiresIn ?? rates.apiChargeTtlSeconds;
   const chargeRef = db.collection(API_CHARGES_COLLECTION).doc(newChargeId());
@@ -312,7 +373,7 @@ export async function createCharge(
     merchantName,
     keyId: caller.keyId,
     amount: input.amount,
-    currency: "USD",
+    currency: input.currency,
     status: "pending",
     ...(input.reference ? { reference: input.reference } : {}),
     ...(input.metadata ? { metadata: input.metadata } : {}),
@@ -320,6 +381,7 @@ export async function createCharge(
     ...(customerId ? { customerId } : {}),
     ...(input.successUrl ? { successUrl: input.successUrl } : {}),
     ...(input.cancelUrl ? { cancelUrl: input.cancelUrl } : {}),
+    ...(input.agreement ? { agreementId: input.agreement, autoPay } : {}),
     createdAt: now,
     expiresAt: admin.firestore.Timestamp.fromMillis(now.toMillis() + ttlSeconds * 1000),
     amountRefunded: 0,
@@ -350,17 +412,19 @@ export async function createCharge(
     return replayCharge(outcome.record, requestHash);
   }
 
-  if (customerId) {
-    const amount = (input.amount / 100).toFixed(2);
-    const body = input.reference
-      ? `${merchantName} is requesting USD ${amount} — ${input.reference}`
-      : `${merchantName} is requesting USD ${amount}`;
-    sendPushNotification(customerId, "Payment Request", body, {
+  // A charge the customer is about to approve in the partner's app gets no
+  // "approve in Zapp" push: two prompts at once would confuse them.
+  if (customerId && autoPay?.status !== "requires_confirmation") {
+    const amount = pushAmount(input.amount, input.currency);
+    const message: PushMessage = input.reference
+      ? { key: "payment.request_with_reference", params: { merchant: merchantName, amount, reference: input.reference } }
+      : { key: "payment.request", params: { merchant: merchantName, amount } };
+    sendPushNotification(customerId, message, {
       type: "api_charge",
       chargeId: chargeRef.id,
       merchantName,
       amount: input.amount.toString(),
-      currency: "USD",
+      currency: input.currency,
       expiresAt: charge.expiresAt.toDate().toISOString(),
       ...(input.reference ? { reference: input.reference } : {}),
     }).catch((err) => console.error("Failed to notify customer of API charge:", err));

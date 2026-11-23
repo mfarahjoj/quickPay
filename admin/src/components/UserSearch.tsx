@@ -1,28 +1,32 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api, type UserSummary } from "../api";
 import { Avatar, EmptyState } from "./ui";
 
 interface Props {
   selectedId?: string;
   onSelect: (userId: string) => void;
+  /** A search started elsewhere (the sidebar's quick find); runs on each new nonce. */
+  autoQuery?: { text: string; nonce: number };
 }
 
-export function UserSearch({ selectedId, onSelect }: Props) {
-  const [query, setQuery] = useState("");
+export function UserSearch({ selectedId, onSelect, autoQuery }: Props) {
+  const [query, setQuery] = useState(autoQuery?.text ?? "");
   const [results, setResults] = useState<UserSummary[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const search = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (query.trim().length < 3) {
+  const runSearch = async (text: string) => {
+    if (text.trim().length < 3) {
       setError("Enter at least 3 characters");
       return;
     }
     setBusy(true);
     setError(null);
     try {
-      setResults(await api.searchUsers(query.trim()));
+      const found = await api.searchUsers(text.trim());
+      setResults(found);
+      // One match is the person you meant: open them without another click.
+      if (found.length === 1) onSelect(found[0].userId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Search failed");
       setResults(null);
@@ -30,6 +34,19 @@ export function UserSearch({ selectedId, onSelect }: Props) {
       setBusy(false);
     }
   };
+
+  const search = (e: React.FormEvent) => {
+    e.preventDefault();
+    void runSearch(query);
+  };
+
+  useEffect(() => {
+    if (!autoQuery?.text) return;
+    setQuery(autoQuery.text);
+    void runSearch(autoQuery.text);
+    // Only a new quick-find request should search again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoQuery?.nonce]);
 
   return (
     <div className="panel">
@@ -42,8 +59,9 @@ export function UserSearch({ selectedId, onSelect }: Props) {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="+252… , uid, or name"
+            placeholder="+252… , uid, receipt (ZP-…), or name"
             aria-label="Search customers"
+            autoFocus={!autoQuery}
           />
         </div>
         <button className="primary" type="submit" disabled={busy}>

@@ -34,6 +34,9 @@ target 'QuickPayMerchant' do
   # Ensure AsyncStorage native module is linked for iOS startup flags/hooks.
   pod 'RNCAsyncStorage', :path => '../node_modules/@react-native-async-storage/async-storage'
 
+  # On-device receipt reading (Apple Vision) for Receive → Scan receipt.
+  pod 'ZappReceiptOCR', :path => '../native/ZappReceiptOCR'
+
   target 'QuickPayMerchantTests' do
     inherit! :complete
   end

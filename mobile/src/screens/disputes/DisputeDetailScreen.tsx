@@ -18,7 +18,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Header, Button, Card } from '../../components';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
 import { useAuth } from '../../hooks/useAuth';
 import {
   Dispute,
@@ -53,6 +53,8 @@ function nextStep(d: Dispute, t: (k: string, o?: any) => string): string {
 }
 
 export default function DisputeDetailScreen({ navigation, route }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const { user } = useAuth();
   const { dispute, loading } = useDispute(route.params.disputeId);
@@ -64,7 +66,7 @@ export default function DisputeDetailScreen({ navigation, route }: Props) {
       <View style={styles.container}>
         <Header title={t('disputes.detail.title')} onBack={() => navigation.goBack()} />
         {loading ? (
-          <ActivityIndicator style={styles.loader} color={colors.dark.accent} />
+          <ActivityIndicator style={styles.loader} color={colors.ui.accent} />
         ) : (
           <Text style={styles.muted}>{t('disputes.error.generic')}</Text>
         )}
@@ -143,7 +145,7 @@ export default function DisputeDetailScreen({ navigation, route }: Props) {
               value={reply}
               onChangeText={setReply}
               placeholder={t('disputes.detail.replyPlaceholder')}
-              placeholderTextColor={colors.dark.textFaint}
+              placeholderTextColor={colors.ui.textFaint}
               multiline
               maxLength={1000}
               textAlignVertical="top"
@@ -168,53 +170,53 @@ export default function DisputeDetailScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.dark.canvas },
+const useStyles = makeStyles((colors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.ui.canvas },
   content: { padding: spacing.md, paddingBottom: spacing.xxl },
   loader: { marginTop: spacing.xl },
-  muted: { ...typography.body, color: colors.dark.textDim, textAlign: 'center', marginTop: spacing.xl },
+  muted: { ...typography.body, color: colors.ui.textDim, textAlign: 'center', marginTop: spacing.xl },
   sent: {
     ...typography.bodySemibold,
-    color: colors.dark.incoming,
-    backgroundColor: colors.dark.incomingSoft,
+    color: colors.ui.incoming,
+    backgroundColor: colors.ui.incomingSoft,
     padding: spacing.smPlus,
     borderRadius: borderRadius.md,
     marginBottom: spacing.md,
   },
   summary: { marginBottom: spacing.lg },
   summaryTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  kind: { ...typography.bodySemibold, color: colors.dark.text, flex: 1, marginRight: spacing.sm },
-  amount: { ...typography.display, color: colors.dark.text, marginVertical: spacing.sm },
-  next: { ...typography.body, color: colors.dark.textDim },
-  reason: { ...typography.caption, color: colors.dark.textFaint, marginTop: spacing.sm },
+  kind: { ...typography.bodySemibold, color: colors.ui.text, flex: 1, marginRight: spacing.sm },
+  amount: { ...typography.display, color: colors.ui.text, marginVertical: spacing.sm },
+  next: { ...typography.body, color: colors.ui.textDim },
+  reason: { ...typography.caption, color: colors.ui.textFaint, marginTop: spacing.sm },
   sectionLabel: {
     ...typography.captionBold,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     marginBottom: spacing.sm,
     textTransform: 'uppercase',
   },
   message: {
     padding: spacing.smPlus,
     borderRadius: borderRadius.md,
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     marginBottom: spacing.sm,
     marginRight: spacing.xl,
   },
-  messageMine: { backgroundColor: colors.dark.glassRaised, marginRight: 0, marginLeft: spacing.xl },
-  messageWho: { ...typography.caption, color: colors.dark.textFaint, marginBottom: 2 },
-  messageText: { ...typography.body, color: colors.dark.text },
+  messageMine: { backgroundColor: colors.ui.glassRaised, marginRight: 0, marginLeft: spacing.xl },
+  messageWho: { ...typography.caption, color: colors.ui.textFaint, marginBottom: 2 },
+  messageText: { ...typography.body, color: colors.ui.text },
   reply: {
     ...typography.body,
-    color: colors.dark.text,
+    color: colors.ui.text,
     minHeight: 80,
     padding: spacing.smPlus,
     borderRadius: borderRadius.md,
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     marginTop: spacing.md,
     marginBottom: spacing.sm,
   },
   withdraw: { alignSelf: 'center', marginTop: spacing.lg, padding: spacing.sm },
-  withdrawText: { ...typography.bodySemibold, color: colors.dark.error },
-});
+  withdrawText: { ...typography.bodySemibold, color: colors.ui.error },
+}));

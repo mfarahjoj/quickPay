@@ -18,6 +18,8 @@ import {
   JournalEntryType,
   PLATFORM_FEES,
 } from "../ledger";
+import { claimReceiptNumber, reserveReceiptNumber } from "../utils/receiptNumber";
+import { formatAmount, parseCurrency } from "../utils/money";
 
 /**
  * The entries a merchant may refund from the app: payments a customer made
@@ -55,6 +57,11 @@ export interface PreparedRefund {
   /** True if this exact partial refund was already posted; write() is a no-op. */
   alreadyPosted: boolean;
   refundTransactionId: string;
+  /**
+   * Zapp receipt number of this refund. Absent only when replaying a refund
+   * posted before receipt numbers existed.
+   */
+  receiptNumber?: string;
   journalEntryId: string;
   merchantId: string;
   customerId: string;
@@ -97,11 +104,13 @@ export async function prepareRefund(
     throw new https.HttpsError("failed-precondition", "This payment has already been refunded");
   }
 
+  // In the payment's own currency: cents, or whole shillings.
+  const refundCurrency = parseCurrency(original.currency) ?? "USD";
   const amount = opts.amountCents ?? remaining;
   if (!Number.isInteger(amount) || amount <= 0 || amount > remaining) {
     throw new https.HttpsError(
       "invalid-argument",
-      `You can refund between $0.01 and $${(remaining / 100).toFixed(2)}`,
+      `You can refund between ${formatAmount(1, refundCurrency)} and ${formatAmount(remaining, refundCurrency)}`,
       { reason: "refund_amount", remainingCents: remaining }
     );
   }
@@ -123,6 +132,9 @@ export async function prepareRefund(
   const entryId = whole ? `refund_${transactionId}` : `refund_${transactionId}_${opts.partKey}`;
   const refundTransactionId = whole ? db.collection("transactions").doc().id : entryId;
 
+  // A read, so it goes with the others, before anything is written.
+  const claimed = await claimReceiptNumber(tx, db);
+
   const lines: JournalLine[] = [
     { account: userAccount(customerId), debit: 0, credit: amount },
   ];
@@ -137,6 +149,7 @@ export async function prepareRefund(
     refs: {
       transactionId: refundTransactionId,
       refundOfEntryId: original.journalEntryId,
+      receiptNumber: claimed,
       ...(opts.disputeId ? { disputeId: opts.disputeId } : {}),
     },
     description: completes && !whole ? "Final refund" : whole ? "Refund" : "Partial refund",
@@ -145,9 +158,17 @@ export async function prepareRefund(
     ...(opts.allowFrozenDebit ? { allowFrozenDebit: true } : {}),
   });
 
+  // A replay answers with the number the first attempt issued, not the one
+  // just claimed (which is never written).
+  const receiptNumber = pending.alreadyPosted
+    ? ((await tx.get(db.collection("journal_entries").doc(entryId))).data()?.refs
+        ?.receiptNumber as string | undefined)
+    : claimed;
+
   return {
     alreadyPosted: pending.alreadyPosted,
     refundTransactionId,
+    ...(receiptNumber ? { receiptNumber } : {}),
     journalEntryId: entryId,
     merchantId,
     customerId,
@@ -172,6 +193,7 @@ export async function prepareRefund(
         status: "completed",
         description: whole ? "Refund" : "Partial refund",
         ...(original.reference ? { reference: original.reference } : {}),
+        receiptNumber: claimed,
         refundOfTransactionId: transactionId,
         journalEntryId: entryId,
         ...(opts.disputeId ? { disputeId: opts.disputeId } : {}),
@@ -179,6 +201,13 @@ export async function prepareRefund(
         completedAt: now,
       };
       t.set(db.collection("transactions").doc(refundTransactionId), refundRecord);
+      reserveReceiptNumber(t, db, claimed, {
+        transactionId: refundTransactionId,
+        type: "refund",
+        participants: [merchantId, customerId],
+        amount,
+        currency,
+      });
       t.update(originalRef, {
         refundedCents: refundedSoFar + amount,
         refundedFeeCents: feeRefundedSoFar + feePart,

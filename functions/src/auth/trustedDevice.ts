@@ -9,6 +9,7 @@ import { readAuth } from "./pinStore";
 import { ApiResponse } from "../types";
 import { getRates } from "../config/rates";
 import { notifyUser } from "../utils/notifications";
+import { UNNAMED_PHONE } from "../utils/pushTemplates";
 
 /**
  * Trusted-device PIN login.
@@ -47,6 +48,37 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export function isDeviceExpired(device: FirebaseFirestore.DocumentData, idleDays: number, nowMs: number): boolean {
   const last = (device.lastUsedAt ?? device.createdAt) as admin.firestore.Timestamp | undefined;
   return !!last && nowMs - last.toMillis() > idleDays * DAY_MS;
+}
+
+/**
+ * The secret is 256 random bits, so a plain SHA-256 keeps it as safe as bcrypt
+ * does (there's nothing to guess) and takes microseconds where bcrypt took a
+ * quarter of a second of every PIN sign-in. Same as API keys (api/keys.ts).
+ */
+export function hashDeviceSecret(secret: string): string {
+  return crypto.createHash("sha256").update(secret, "utf8").digest("hex");
+}
+
+/**
+ * Whether `secret` is this device's. Phones trusted before the plain hash
+ * have only the bcrypt one, and `addPlainHash` says to store it once they've
+ * matched. New phones keep both: resetPin still checks bcrypt.
+ */
+async function checkDeviceSecret(
+  device: FirebaseFirestore.DocumentData,
+  secret: string
+): Promise<{ ok: boolean; addPlainHash: boolean }> {
+  if (typeof device.secretSha256 === "string") {
+    const given = Buffer.from(hashDeviceSecret(secret), "hex");
+    const stored = Buffer.from(device.secretSha256, "hex");
+    if (given.length === stored.length && crypto.timingSafeEqual(given, stored)) {
+      return { ok: true, addPlainHash: false };
+    }
+  }
+  // Older phones; also a wrong secret, so guessing still costs a bcrypt.
+  if (typeof device.secretHash !== "string") return { ok: false, addPlainHash: false };
+  const ok = await bcrypt.compare(secret, device.secretHash);
+  return { ok, addPlainHash: ok };
 }
 
 interface LoginRequest {
@@ -119,6 +151,7 @@ export const registerTrustedDevice = https.onCall(
     batch.set(db.collection(DEVICES).doc(deviceId), {
       uid,
       secretHash,
+      secretSha256: hashDeviceSecret(deviceSecret),
       platform,
       name,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -133,8 +166,10 @@ export const registerTrustedDevice = https.onCall(
     notifyUser(
       uid,
       "new_device",
-      "A new phone can now sign in",
-      `${name ?? (platform === "ios" ? "An iPhone" : "A phone")} was trusted for PIN sign-in. If this wasn't you, remove it in Security and change your PIN.`,
+      {
+        key: "security.new_device",
+        params: { device: name ?? (platform === "ios" ? UNNAMED_PHONE.ios : UNNAMED_PHONE.other) },
+      },
       { type: "new_device", deviceId }
     ).catch((err) => console.error("Failed to send new-device alert:", err));
 
@@ -200,8 +235,8 @@ export const loginWithPin = https.onCall(
       throw denied();
     }
 
-    const secretOk = await bcrypt.compare(deviceSecret, device.secretHash);
-    if (!secretOk) {
+    const secret = await checkDeviceSecret(device, deviceSecret);
+    if (!secret.ok) {
       const attempts = (device.secretFailedAttempts ?? 0) + 1;
       const updates: Record<string, unknown> = {
         secretFailedAttempts: admin.firestore.FieldValue.increment(1),
@@ -243,6 +278,8 @@ export const loginWithPin = https.onCall(
       lastUsedAt: admin.firestore.FieldValue.serverTimestamp(),
       secretFailedAttempts: 0,
       secretLockedUntil: null,
+      // From the next sign-in on, this phone skips bcrypt.
+      ...(secret.addPlainHash ? { secretSha256: hashDeviceSecret(deviceSecret) } : {}),
     });
 
     return { success: true, data: { token } };

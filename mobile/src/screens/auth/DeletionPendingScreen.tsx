@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from '../../components/SafeAreaView';
 import { useTranslation } from 'react-i18next';
 import { PinKeypad } from '../../components/PinKeypad';
 import { functions } from '../../services/firebase.config';
 import { signOut } from '../../services/auth.service';
-import { colors, typography, spacing } from '../../theme';
+import { typography, spacing, makeStyles } from '../../theme';
 
 interface Props {
   dueAt: Date;
@@ -18,6 +19,7 @@ interface Props {
  * the date shown.
  */
 export default function DeletionPendingScreen({ dueAt, onKept }: Props) {
+  const styles = useStyles();
   const { t, i18n } = useTranslation();
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
@@ -63,9 +65,9 @@ export default function DeletionPendingScreen({ dueAt, onKept }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  fullScreen: { flex: 1, backgroundColor: colors.dark.canvas },
+const useStyles = makeStyles((colors) => StyleSheet.create({
+  fullScreen: { flex: 1, backgroundColor: colors.ui.canvas },
   footer: { alignItems: 'center', paddingBottom: spacing.xl },
   link: { padding: spacing.sm },
-  linkText: { ...typography.body, color: colors.dark.textDim },
-});
+  linkText: { ...typography.body, color: colors.ui.textDim },
+}));

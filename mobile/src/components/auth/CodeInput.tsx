@@ -7,7 +7,7 @@ import {
   Text,
   Platform,
 } from 'react-native';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles } from '../../theme';
 
 const CODE_LENGTH = 6;
 
@@ -31,6 +31,7 @@ export function CodeInput({
   autoFocus = true,
   otpMode = false,
 }: CodeInputProps) {
+  const styles = useStyles();
   const inputRefs = useRef<Array<TextInput | null>>([]);
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const [focusedIndex, setFocusedIndex] = useState<number | null>(autoFocus ? 0 : null);
@@ -132,7 +133,7 @@ export function CodeInput({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -142,11 +143,11 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 60,
     borderRadius: borderRadius.md,
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     overflow: 'hidden',
   },
   cellError: {
-    backgroundColor: colors.dark.errorSoft,
+    backgroundColor: colors.ui.errorSoft,
   },
   digit: {
     flex: 1,
@@ -154,7 +155,7 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '600',
     textAlign: 'center',
-    color: colors.dark.text,
+    color: colors.ui.text,
     padding: 0,
   },
   underline: {
@@ -167,18 +168,18 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   underlineFocused: {
-    backgroundColor: colors.dark.accent,
+    backgroundColor: colors.ui.accent,
   },
   underlineError: {
-    backgroundColor: colors.dark.error,
+    backgroundColor: colors.ui.error,
   },
   errorText: {
     ...typography.caption,
-    color: colors.dark.error,
+    color: colors.ui.error,
     marginTop: spacing.sm,
     textAlign: 'center',
   },
-});
+}));
 
 /**
  * Same rules as functions/src/utils/weakPin.ts, which is the authority: the

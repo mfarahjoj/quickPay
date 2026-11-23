@@ -41,6 +41,11 @@ export interface User {
 export interface Wallet {
   balance: number;
   balanceCents: number;
+  /** Shillings, in whole shillings (wallets/{uid}.sls.balance); 0 when none. */
+  slsBalance: number;
+  /** Whole shillings received and sent (wallets/{uid}.sls); 0 when none. */
+  slsTotalReceived: number;
+  slsTotalSent: number;
   currency: string;
   totalReceived: number;
   totalSent: number;
@@ -61,6 +66,8 @@ export interface Transaction {
   status: TransactionStatus;
   description: string;
   reference?: string;
+  /** Zapp receipt number, e.g. "ZP-7K3M-9QX2". Absent on older payments. */
+  receiptNumber?: string;
   createdAt: Date;
   completedAt?: Date;
   isIncoming: boolean;
@@ -92,6 +99,7 @@ export type TransactionKind =
   | 'card_topup'
   | 'mobile_money_topup'
   | 'mobile_money_cashout'
+  | 'bank_topup'
   | 'remittance';
 
 export type SummaryPeriod = 'today' | 'week' | 'month';
@@ -133,6 +141,8 @@ export interface QRSettlement {
   netCents?: number;
   transactionId?: string;
   reference?: string;
+  /** Zapp receipt number, e.g. "ZP-7K3M-9QX2". */
+  receiptNumber?: string;
 }
 
 export interface PaymentResult {
@@ -155,19 +165,4 @@ export interface CustomerLookupResult {
   phoneNumber: string;
   fullName: string;
   accountType: string;
-}
-
-export interface TopupRecord {
-  id: string;
-  userId: string;
-  agentId: string;
-  amount: number;
-  amountDollars: number;
-  currency: string;
-  paymentMethod: string;
-  reference: string;
-  status: string;
-  transactionId: string;
-  createdAt: Date;
-  completedAt?: Date;
 }

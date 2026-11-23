@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles } from '../../theme';
 
 interface StepProgressProps {
   currentStep: number;
@@ -9,6 +9,7 @@ interface StepProgressProps {
 }
 
 export function StepProgress({ currentStep, totalSteps }: StepProgressProps) {
+  const styles = useStyles();
   const { t } = useTranslation();
   const widthAnim = useRef(new Animated.Value(0)).current;
   const progress = currentStep / totalSteps;
@@ -38,26 +39,26 @@ export function StepProgress({ currentStep, totalSteps }: StepProgressProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     marginBottom: spacing.lg,
   },
   label: {
     ...typography.captionBold,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
     marginBottom: spacing.sm,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   track: {
     height: 4,
-    backgroundColor: colors.dark.glassBorder,
+    backgroundColor: colors.ui.glassBorder,
     borderRadius: borderRadius.full,
     overflow: 'hidden',
   },
   fill: {
     height: '100%',
-    backgroundColor: colors.dark.accent,
+    backgroundColor: colors.ui.accent,
     borderRadius: borderRadius.full,
   },
-});
+}));

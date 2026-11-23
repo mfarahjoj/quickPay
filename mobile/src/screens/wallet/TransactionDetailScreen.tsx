@@ -2,8 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Share, TouchableOpacity } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Header, Button, Card } from '../../components';
-import { colors, typography, spacing, borderRadius } from '../../theme';
-import { CURRENCY_SYMBOL } from '../../config/constants';
+import { typography, spacing, borderRadius, makeStyles } from '../../theme';
+import { formatMajor, toCurrency } from '../../utils/money';
 import { Transaction } from '../../types';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -13,6 +13,7 @@ interface Props {
 }
 
 export default function TransactionDetailScreen({ navigation, route }: Props) {
+  const styles = useStyles();
   const { t } = useTranslation();
   const transaction = route.params?.transaction;
   const { user } = useAuth();
@@ -32,12 +33,17 @@ export default function TransactionDetailScreen({ navigation, route }: Props) {
     const receiptText = [
       t('wallet.detail.receiptTitle'),
       '----------------',
-      `Amount: ${transaction.isIncoming ? '+' : '-'}${CURRENCY_SYMBOL}${transaction.amount.toFixed(2)}`,
+      `Amount: ${transaction.isIncoming ? '+' : '-'}${formatMajor(transaction.amount, transaction.currency)}`,
       `Status: ${transaction.status}`,
       `Date: ${transaction.createdAt.toLocaleDateString()} ${transaction.createdAt.toLocaleTimeString()}`,
-      `Reference: ${transaction.id}`,
+      transaction.reference ? `${t('common.reference')}: ${transaction.reference}` : '',
+      transaction.receiptNumber
+        ? `${t('wallet.detail.receiptNumber')}: ${transaction.receiptNumber}`
+        : `Reference: ${transaction.id}`,
       '----------------',
-    ].join('\n');
+    ]
+      .filter(Boolean)
+      .join('\n');
     await Share.share({ message: receiptText, title: t('wallet.detail.receiptTitle') });
   };
 
@@ -73,14 +79,13 @@ export default function TransactionDetailScreen({ navigation, route }: Props) {
         <Card style={styles.amountCard}>
           <Text style={[styles.amount, transaction.isIncoming ? styles.amountIncoming : styles.amountOutgoing]}>
             {transaction.isIncoming ? '+' : '-'}
-            {CURRENCY_SYMBOL}
-            {transaction.amount.toFixed(2)}
+            {formatMajor(transaction.amount, transaction.currency)}
           </Text>
           <Text style={styles.status}>{statusLabel}</Text>
           {transaction.refundedAt ? (
             <Text style={styles.refunded}>{t('wallet.detail.refunded')}</Text>
           ) : null}
-          <Text style={styles.currency}>{transaction.currency}</Text>
+          <Text style={styles.currency}>{toCurrency(transaction.currency) === 'SLS' ? 'SLSH' : transaction.currency}</Text>
         </Card>
 
         <Card style={styles.detailsCard}>
@@ -106,6 +111,28 @@ export default function TransactionDetailScreen({ navigation, route }: Props) {
             <Text style={styles.detailKey}>{t('wallet.detail.paymentMethod')}</Text>
             <Text style={styles.detailValue}>{t('wallet.detail.walletBalance')}</Text>
           </View>
+          {transaction.reference ? (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailKey}>{t('common.reference')}</Text>
+              <Text style={styles.detailValue}>{transaction.reference}</Text>
+            </View>
+          ) : null}
+          {transaction.approvedVia === 'partner_device' ? (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailKey}>{t('wallet.detail.approvedIn')}</Text>
+              <Text style={styles.detailValue}>
+                {t('wallet.detail.approvedInApp', { merchant: transaction.counterpartyName ?? '' })}
+              </Text>
+            </View>
+          ) : null}
+          {transaction.receiptNumber ? (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailKey}>{t('wallet.detail.receiptNumber')}</Text>
+              <Text style={styles.detailValue} selectable>
+                {transaction.receiptNumber}
+              </Text>
+            </View>
+          ) : null}
           <View style={styles.detailRow}>
             <Text style={styles.detailKey}>{t('wallet.detail.transactionId')}</Text>
             <Text style={styles.detailValue}>{transaction.id}</Text>
@@ -132,10 +159,10 @@ export default function TransactionDetailScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   scroll: {
     flex: 1,
@@ -186,7 +213,7 @@ const styles = StyleSheet.create({
   },
   refunded: {
     ...typography.captionBold,
-    color: colors.dark.incoming,
+    color: colors.ui.incoming,
     marginBottom: spacing.xs,
   },
   helpRow: {
@@ -196,17 +223,17 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     padding: spacing.md,
     borderRadius: borderRadius.md,
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
   },
   helpText: {
     ...typography.bodySemibold,
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
   helpArrow: {
     ...typography.bodySemibold,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
   },
   detailsCard: {
     marginBottom: spacing.lg,
@@ -233,4 +260,4 @@ const styles = StyleSheet.create({
   shareButton: {
     marginTop: spacing.md,
   },
-});
+}));

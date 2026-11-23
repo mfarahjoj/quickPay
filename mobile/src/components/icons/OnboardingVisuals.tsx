@@ -10,7 +10,7 @@ import Svg, {
   Circle,
   G,
 } from 'react-native-svg';
-import { colors } from '../../theme';
+import { useColors } from '../../theme';
 
 /** Slow vertical float used to give hero visuals a weightless, premium feel. */
 function FloatWrap({ children, range = 10 }: { children: React.ReactNode; range?: number }) {
@@ -33,6 +33,7 @@ function FloatWrap({ children, range = 10 }: { children: React.ReactNode; range?
 }
 
 function Glow({ size }: { size: number }) {
+  const colors = useColors();
   return (
     <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
       <Defs>

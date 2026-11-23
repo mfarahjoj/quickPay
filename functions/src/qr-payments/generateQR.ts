@@ -1,16 +1,28 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { assertAccountActive } from "../utils/accountStatus";
-import { requireAuth, validateAmount, validateCurrency } from "../utils/validation";
+import { requireAuth, validateAmount } from "../utils/validation";
+import { parseCurrency } from "../utils/money";
 import { generateSecureId } from "../utils/encryption";
 import { generateEmvQRPayload } from "../utils/emvqr";
 import { getRates, computePaymentFee } from "../config/rates";
 import { ApiResponse, QRCode, GenerateQRResponse } from "../types";
+import { cleanReference, guardPaidReference } from "../utils/paidReferences";
+import { syncCounterStateQuietly } from "../counterDisplay/state";
 
 interface GenerateQRRequest {
-  amount: number; // In cents
+  /** In the currency's smallest unit: cents, or whole shillings. */
+  amount: number;
+  /** "USD" or "SLS" (also "SLSH"). Shillings are never converted. */
   currency: string;
   reference?: string;
+  /**
+   * Set by the merchant app when the reference names one sale (an invoice
+   * number, not "Table 4"): refuse with `already-exists` if it's been paid.
+   */
+  checkPaidReference?: boolean;
+  /** The merchant saw that warning and wants to charge again anyway. */
+  confirmPaidReference?: boolean;
 }
 
 const QR_CODE_EXPIRY_MINUTES = 10;
@@ -39,20 +51,22 @@ export const generateQRCode = https.onCall(
     requireAuth(request);
     const merchantId = request.auth!.uid;
 
-    const { amount, currency, reference } = request.data;
+    const { amount } = request.data;
+    const currency = parseCurrency(request.data.currency, "USD");
+    const reference = cleanReference(request.data.reference);
 
     // Validate inputs
     if (!validateAmount(amount)) {
       throw new https.HttpsError(
         "invalid-argument",
-        "Amount must be a positive integer (in cents)"
+        "Amount must be a positive integer in the currency's smallest unit"
       );
     }
 
-    if (!validateCurrency(currency)) {
+    if (!currency) {
       throw new https.HttpsError(
         "invalid-argument",
-        "Invalid currency. Supported: USD"
+        "Invalid currency. Supported: USD, SLS"
       );
     }
 
@@ -77,6 +91,12 @@ export const generateQRCode = https.onCall(
       }
       // Stop a frozen merchant issuing new payment codes to collect against.
       assertAccountActive(userData);
+
+      // Before any code exists: a warning is cheaper than a refund.
+      await guardPaidReference(db, merchantId, reference, {
+        check: request.data.checkPaidReference,
+        confirmed: request.data.confirmPaidReference,
+      });
 
       // Generate QR code ID
       const qrCodeId = generateSecureId(16);
@@ -104,8 +124,12 @@ export const generateQRCode = https.onCall(
         merchantId,
         qrCodeId,
         merchantCategoryCode: userData?.merchantCategoryCode || "5999",
-        currencyCode: "840",
-        amount: amount / 100,
+        // The payload only routes to this code; the amount Zapp charges is read
+        // from the qrCodes doc. Somaliland shillings have no ISO 4217 code, so a
+        // shilling code carries no amount for other wallets to misread: 706 is
+        // the Somali shilling, a different currency.
+        currencyCode: currency === "USD" ? "840" : "706",
+        ...(currency === "USD" ? { amount: amount / 100 } : {}),
         countryCode: "SO",
         merchantName: merchantName.slice(0, EMV_NAME_MAX),
         merchantCity: "Hargeisa",
@@ -124,6 +148,10 @@ export const generateQRCode = https.onCall(
       };
 
       await db.collection("qrCodes").doc(qrCodeId).set(qrCode);
+
+      // Put the sale on the shop's counter display before the phone shows
+      // it, rather than after a trigger's cold start. Never fails the sale.
+      await syncCounterStateQuietly(merchantId);
 
       console.log(`Generated QR code ${qrCodeId} for merchant ${merchantId}`);
 

@@ -12,7 +12,7 @@ import { BottomSheet } from './BottomSheet';
 import { SUPPORTED_LANGUAGES } from '../i18n/languages';
 import { applyLanguage } from '../i18n';
 import { functions } from '../services/firebase.config';
-import { colors, typography, spacing, borderRadius } from '../theme';
+import { typography, spacing, borderRadius, makeStyles, useColors, wallpaper } from '../theme';
 import type { PreferredLanguage } from '../types';
 
 interface LanguageSelectorProps {
@@ -20,9 +20,13 @@ interface LanguageSelectorProps {
   compact?: boolean;
   /** For dark screens such as onboarding. */
   dark?: boolean;
+  /** 'onColor': smoked glass with white marks, for the coral wallpaper. */
+  tone?: 'default' | 'onColor';
 }
 
-export function LanguageSelector({ currentLanguage = 'en', compact = false, dark = false }: LanguageSelectorProps) {
+export function LanguageSelector({ currentLanguage = 'en', compact = false, dark = false, tone = 'default' }: LanguageSelectorProps) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t, i18n } = useTranslation();
   const [visible, setVisible] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -63,14 +67,19 @@ export function LanguageSelector({ currentLanguage = 'en', compact = false, dark
   return (
     <>
       <TouchableOpacity
-        style={[styles.trigger, compact && styles.triggerCompact, dark && styles.triggerDark]}
+        style={[
+          styles.trigger,
+          compact && styles.triggerCompact,
+          dark && styles.triggerDark,
+          tone === 'onColor' && styles.triggerOnColor,
+        ]}
         onPress={() => setVisible(true)}
         accessibilityLabel={t('language.selectLanguage')}
         activeOpacity={0.7}
       >
         <Text style={styles.triggerFlag}>{current.flag}</Text>
         {!compact && <Text style={[styles.triggerLabel, dark && styles.triggerTextDark]}>{current.nativeName}</Text>}
-        <Text style={[styles.triggerChevron, dark && styles.triggerTextDark]}>▾</Text>
+        <Text style={[styles.triggerChevron, dark && styles.triggerTextDark, tone === 'onColor' && styles.triggerChevronOnColor]}>▾</Text>
       </TouchableOpacity>
 
       <BottomSheet visible={visible} onClose={() => setVisible(false)} height="45%">
@@ -104,7 +113,7 @@ export function LanguageSelector({ currentLanguage = 'en', compact = false, dark
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   trigger: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -125,6 +134,16 @@ const styles = StyleSheet.create({
   },
   triggerCompact: {
     paddingHorizontal: spacing.sm,
+  },
+  triggerOnColor: {
+    height: 40,
+    paddingVertical: 0,
+    paddingHorizontal: 12,
+    backgroundColor: wallpaper.glass,
+    borderColor: wallpaper.glassBorder,
+  },
+  triggerChevronOnColor: {
+    color: '#FFFFFF',
   },
   triggerFlag: {
     fontSize: 18,
@@ -183,4 +202,4 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '700',
   },
-});
+}));

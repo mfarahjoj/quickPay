@@ -11,7 +11,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import QRCode from 'react-native-qrcode-svg';
 import { getMerchantSticker, MerchantStickerData } from '../../services/merchant.service';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
 import { Header } from '../../components/Header';
 
 interface Props {
@@ -19,6 +19,8 @@ interface Props {
 }
 
 export default function MerchantQRScreen({ navigation }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const [sticker, setSticker] = useState<MerchantStickerData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -119,16 +121,16 @@ export default function MerchantQRScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   centered: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
     paddingHorizontal: spacing.lg,
   },
   body: {
@@ -137,9 +139,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   qrCard: {
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderRadius: borderRadius.xxl,
     padding: spacing.xl,
     alignItems: 'center',
@@ -149,24 +151,24 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: colors.dark.accentSoft,
+    backgroundColor: colors.ui.accentSoft,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: spacing.smPlus,
   },
   badgeInitial: {
     ...typography.h1,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
   },
   businessName: {
     ...typography.h2,
-    color: colors.dark.text,
+    color: colors.ui.text,
     textAlign: 'center',
     marginBottom: spacing.xs,
   },
   address: {
     ...typography.caption,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
     textAlign: 'center',
     marginBottom: spacing.lg,
   },
@@ -178,12 +180,12 @@ const styles = StyleSheet.create({
   },
   scanHint: {
     ...typography.body,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
     textAlign: 'center',
   },
   infoCard: {
     flexDirection: 'row',
-    backgroundColor: colors.dark.accentSoft,
+    backgroundColor: colors.ui.accentSoft,
     borderRadius: borderRadius.lg,
     padding: spacing.md,
     marginTop: spacing.lg,
@@ -197,12 +199,12 @@ const styles = StyleSheet.create({
   },
   infoText: {
     ...typography.body,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
     flex: 1,
   },
   shareButton: {
     marginTop: spacing.lg,
-    backgroundColor: colors.dark.accent,
+    backgroundColor: colors.ui.accent,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.xxl,
     borderRadius: borderRadius.lg,
@@ -214,16 +216,16 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: spacing.md,
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
   },
   errorText: {
     ...typography.body,
-    color: colors.dark.error,
+    color: colors.ui.error,
     textAlign: 'center',
     marginBottom: spacing.md,
   },
   retryButton: {
-    backgroundColor: colors.dark.accent,
+    backgroundColor: colors.ui.accent,
     paddingVertical: spacing.smPlus,
     paddingHorizontal: spacing.xl,
     borderRadius: borderRadius.lg,
@@ -232,4 +234,4 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     ...typography.bodySemibold,
   },
-});
+}));

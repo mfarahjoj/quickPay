@@ -21,6 +21,7 @@ export {
   renameMyDevice,
 } from "./auth/trustedDevice";
 export { updateProfile } from "./auth/updateProfile";
+export { setZaadAccount } from "./auth/zaadAccount";
 export { submitKYC } from "./auth/submitKYC";
 export {
   requestAccountDeletion,
@@ -66,7 +67,34 @@ export { cancelCashOut } from "./topup/cancelCashOut";
 // Returns unclaimed cash-out holds and closes stale top-up codes, every 5 minutes
 export { expireAgentRequests } from "./topup/expireAgentRequests";
 export { customerRequestAgentTopup } from "./topup/customerRequestAgentTopup";
-export { agentConfirmTopup } from "./topup/agentConfirmTopup";
+export { customerCancelAgentTopup } from "./topup/customerCancelAgentTopup";
+export { agentConfirmTopup, previewAgentTopup } from "./topup/agentConfirmTopup";
+
+// Zaad top-ups through agents: the customer pays an online agent's Zaad and
+// the agent's float credits the wallet (zaadAgent/types.ts).
+export {
+  customerRequestZaadAgentTopup,
+  customerCancelZaadTopup,
+  customerMarkZaadSent,
+  customerDisputeZaadTopup,
+} from "./zaadAgent/customer";
+export {
+  agentGetZaadStatus,
+  agentSetZaadOnline,
+  agentAnswerZaadOffer,
+  agentConfirmZaadTopup,
+  agentReportZaadReversal,
+} from "./zaadAgent/agent";
+export { agentStartZaadInPerson } from "./zaadAgent/inPerson";
+export {
+  adminSetZaadAgent,
+  adminResolveZaadTopup,
+  adminDecideZaadReversal,
+  adminClearZaadCustomer,
+  adminListZaadTopups,
+  adminListZaadAgents,
+} from "./zaadAgent/admin";
+export { zaadAgentTopupSweep } from "./zaadAgent/sweep";
 
 // Mobile money top-up & cash-out (Zaad/eDahab)
 //
@@ -82,6 +110,19 @@ export { agentConfirmTopup } from "./topup/agentConfirmTopup";
 // Do not re-export either until the stubs refuse to run in prod and a real
 // Telesom/Somtel rail is connected — see BACKLOG.md item 3b.
 export { mobileMoneyWebhook } from "./topup/mobileMoneyWebhook";
+// Zaad/eDahab top-ups through Zapp's collection number (mobileMoney/core.ts).
+export { startNumberLink, getTopupInstructions } from "./mobileMoney/linking";
+export {
+  adminListHeldMobileMoney,
+  adminAssignMobileMoney,
+  adminRefundMobileMoney,
+  adminRegisterListener,
+  adminListListeners,
+  adminListListenerSms,
+  adminGetCollection,
+  adminUpdateCollection,
+} from "./mobileMoney/adminDesk";
+export { mobileMoneyListener } from "./mobileMoney/listener";
 
 // User lookup (for agents)
 export { lookupUserByPhone } from "./users/lookupUser";
@@ -106,6 +147,21 @@ export { cancelPaymentRequest } from "./customer-qr/cancelPayment";
 export { registerMerchant } from "./merchants/registerMerchant";
 export { getMerchantProfile } from "./merchants/getMerchantProfile";
 export { generateMerchantSticker } from "./merchants/generateMerchantSticker";
+// Counter display: a customer-facing tablet on the shop counter (COUNTER_DISPLAY.md).
+export {
+  startDisplayPairing,
+  pollDisplayPairing,
+  confirmDisplayPairing,
+  linkDisplay,
+} from "./counterDisplay/pairing";
+export { listMyDisplays, renameDisplay, unlinkDisplay, displaySignOut } from "./counterDisplay/manage";
+export { displayHeartbeat } from "./counterDisplay/heartbeat";
+export { displayScanCustomer } from "./counterDisplay/scan";
+export {
+  counterDisplayOnQrCode,
+  counterDisplayOnPaymentRequest,
+  counterDisplayOnTransaction,
+} from "./counterDisplay/triggers";
 export { setupAgentProfile } from "./merchants/setupAgentProfile";
 
 // Referral functions
@@ -132,6 +188,28 @@ export { stripeWebhook } from "./remittance/stripeWebhook";
 // Ledger integrity (LEDGER_ARCHITECTURE.md §3.5)
 export { ledgerInvariantCheck } from "./ledger/invariantCheck";
 
+// Merchant insights read model (MERCHANT_INSIGHTS.md): a projection of
+// `transactions`, never read by a money flow.
+export { merchantStatsOnTransaction } from "./merchantStats/triggers";
+export { merchantStatsNightly } from "./merchantStats/nightly";
+export { merchantInsightAlerts } from "./insights/alerts";
+
+// Zapp Business on the web (portal/): sign in by scanning a QR with the
+// merchant app; a read-only session that requireAuth refuses everywhere else.
+export { startPortalLogin, describePortalLogin, approvePortalLogin, pollPortalLogin } from "./portal/login";
+export { listPortalSessions, revokePortalSession, expirePortalSessions } from "./portal/sessions";
+export {
+  portalGetStore,
+  portalGetCustomers,
+  portalGetCustomer,
+  portalListTransactions,
+  portalExportStatement,
+} from "./portal/data";
+export { portalInviteStore, portalRespondLink, portalUnlinkStore } from "./portal/groups";
+
+// Staff access: owner-granted roles for a shop (STAFF_ACCESS.md).
+export { staffInvite, staffRespond, staffLeave, staffUpdate, staffRemove } from "./staff/manage";
+
 // Admin console (see ADMIN_CONSOLE_PLAN.md). Every callable here is gated by
 // custom claims in admin/guard.ts and writes to the admin_audit log.
 export { adminSetAccountStatus } from "./admin/setAccountStatus";
@@ -140,6 +218,7 @@ export { adminRenameMerchant } from "./admin/renameMerchant";
 export {
   adminListRoleRequests,
   adminReviewRoleRequest,
+  adminGetRoleApplication,
 } from "./admin/reviewRoleRequest";
 export {
   adminSearchUsers,
@@ -173,6 +252,8 @@ export {
 export { adminGetRates, adminUpdateRates, getPricing } from "./admin/pricing";
 // Corrections: a balanced `adjustment` entry, never a balance edit
 export { adminPostAdjustment, adminListAdjustments } from "./admin/adjustments";
+// Top-up desk: ops credit a wallet with money a float account received
+export { adminTopupWallet, adminListTopups } from "./admin/topups";
 
 // Disputes (WALLET_READINESS_PLAN.md 2.2): raised in the apps, decided by ops.
 export {
@@ -201,12 +282,25 @@ export {
 
 // Role applications (privileged roles are granted by admins, not chosen)
 export { requestRole, getMyRoleRequests } from "./merchants/requestRole";
+export { submitRoleApplication } from "./merchants/roleApplication";
+// Parked until the GOOGLE_MAPS_API_KEY secret exists (a deploy needs every
+// exported function's secrets): see merchants/places.ts.
+// export { placesSearch, placesReverseGeocode } from "./merchants/places";
 
 // Merchant Payments API (docs/MERCHANT_API.md). `api` serves /v1/... behind a
 // Hosting rewrite; money moves only in approveApiCharge, under the customer's
 // PIN, and in API refunds, which only ever return a customer's own payment.
 export { api } from "./api/app";
 export { getApiCharge, approveApiCharge } from "./api/approveApiCharge";
+// Linked payments: the customer links a partner once here, then approves each
+// payment on their phone in the partner's app (api/agreements.ts).
+export {
+  getApiAgreement,
+  approveApiAgreement,
+  listMyAgreements,
+  revokeMyAgreement,
+} from "./api/approveApiAgreement";
+export { adminListAgreements, adminRevokeAgreement } from "./admin/apiAgreements";
 export { expireApiCharges } from "./api/expireCharges";
 export { onApiChargeWritten, retryWebhookDeliveries } from "./api/webhooks";
 export {
@@ -214,5 +308,7 @@ export {
   adminIssueApiKey,
   adminRevokeApiKey,
 } from "./admin/apiKeys";
+// Partners: merchants allowed to pay Zapp accounts by API (Ridy paying drivers).
+export { adminGetApiPartner, adminSetApiPartner } from "./admin/apiPartners";
 // Merchants' own keys (live and test), from the merchant app's Developers screen.
 export { listMyApiKeys, createMyApiKey, revokeMyApiKey } from "./merchants/apiKeys";

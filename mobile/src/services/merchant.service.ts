@@ -28,11 +28,12 @@ export async function getMerchantSticker(
 
 /**
  * Pay a merchant directly by merchantId (used for permanent sticker QR).
- * Amount should be in dollars — the function converts to cents for the backend.
+ * `amountUnits` is in the currency's smallest unit: cents, or whole
+ * shillings. Shillings must never go through a *100.
  */
 export async function payMerchant(
   merchantId: string,
-  amountDollars: number,
+  amountUnits: number,
   currency: string,
   pin: string,
   /**
@@ -44,7 +45,7 @@ export async function payMerchant(
   const fn = functions().httpsCallable('payMerchant');
   const result = await fn({
     merchantId,
-    amount: Math.round(amountDollars * 100),
+    amount: amountUnits,
     currency,
     pin,
     ...(idempotencyKey ? { idempotencyKey } : {}),

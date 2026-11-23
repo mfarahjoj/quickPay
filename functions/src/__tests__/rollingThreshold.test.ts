@@ -125,7 +125,11 @@ describe("maker-checker over a rolling 24 hours", () => {
 
     const seed = () =>
       use({
-        [`users/${MERCHANT}`]: { accountType: "merchant", fullName: "Hooyo Shop" },
+        [`users/${MERCHANT}`]: {
+          accountType: "merchant",
+          fullName: "Hooyo Shop",
+          zaad: { msisdn: "+252634000000", name: "Hooyo Xasan", updatedAt: admin.firestore.Timestamp.now() },
+        },
         [`wallets/${MERCHANT}`]: wallet(100_000),
         // $400 standing today…
         "payoutRequests/p1": payout(20_000, ago(2)),

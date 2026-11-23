@@ -13,7 +13,7 @@ import { useTranslation } from 'react-i18next';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { functions } from '../../services/firebase.config';
 import { useUserProfile } from '../../hooks/useUserProfile';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
 import { GiftIcon } from '../../components/icons/UIIcons';
 
 interface Stats {
@@ -27,6 +27,8 @@ interface Props {
 }
 
 export default function InviteScreen({ navigation: _navigation }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const { profile } = useUserProfile();
   const [stats, setStats] = useState<Stats | null>(null);
@@ -91,7 +93,7 @@ export default function InviteScreen({ navigation: _navigation }: Props) {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.illustrationWrap}>
-        <GiftIcon size={64} color={colors.dark.accent} />
+        <GiftIcon size={64} color={colors.ui.accent} />
       </View>
 
       <Text style={styles.title}>{t('invite.title')}</Text>
@@ -120,7 +122,7 @@ export default function InviteScreen({ navigation: _navigation }: Props) {
       <View style={styles.statsCard}>
         <Text style={styles.statsTitle}>{t('invite.statsTitle')}</Text>
         {loading ? (
-          <ActivityIndicator color={colors.dark.accent} style={{ marginTop: spacing.md }} />
+          <ActivityIndicator color={colors.ui.accent} style={{ marginTop: spacing.md }} />
         ) : (
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
@@ -139,10 +141,10 @@ export default function InviteScreen({ navigation: _navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   content: {
     padding: spacing.lg,
@@ -153,7 +155,7 @@ const styles = StyleSheet.create({
     width: 112,
     height: 112,
     borderRadius: 56,
-    backgroundColor: colors.dark.accentSoft,
+    backgroundColor: colors.ui.accentSoft,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: spacing.xl,
@@ -161,22 +163,22 @@ const styles = StyleSheet.create({
   },
   title: {
     ...typography.h1,
-    color: colors.dark.text,
+    color: colors.ui.text,
     textAlign: 'center',
     marginBottom: spacing.sm,
   },
   subtitle: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     textAlign: 'center',
     marginBottom: spacing.xl,
     paddingHorizontal: spacing.lg,
   },
   codeCard: {
     width: '100%',
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderRadius: borderRadius.lg,
     padding: spacing.xl,
     alignItems: 'center',
@@ -184,7 +186,7 @@ const styles = StyleSheet.create({
   },
   codeLabel: {
     ...typography.caption,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
     marginBottom: spacing.sm,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -193,12 +195,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Courier',
     fontSize: 28,
     fontWeight: '700',
-    color: colors.dark.text,
+    color: colors.ui.text,
     letterSpacing: 5,
     marginBottom: spacing.md,
   },
   copyPill: {
-    backgroundColor: colors.dark.accentSoft,
+    backgroundColor: colors.ui.accentSoft,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.full,
@@ -208,7 +210,7 @@ const styles = StyleSheet.create({
   },
   copyPillText: {
     ...typography.captionBold,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
   },
   whatsappBtn: {
     width: '100%',
@@ -226,7 +228,7 @@ const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderRadius: borderRadius.lg,
     paddingVertical: spacing.lg,
     alignItems: 'center',
@@ -234,19 +236,19 @@ const styles = StyleSheet.create({
   },
   shareBtnText: {
     ...typography.bodySemibold,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
   },
   statsCard: {
     width: '100%',
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
   },
   statsTitle: {
     ...typography.captionBold,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
     textTransform: 'uppercase',
     letterSpacing: 1,
     textAlign: 'center',
@@ -263,17 +265,17 @@ const styles = StyleSheet.create({
   },
   statValue: {
     ...typography.h1,
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
   statLabel: {
     ...typography.caption,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     textAlign: 'center',
     marginTop: spacing.xs,
   },
   statDivider: {
     width: 1,
     height: 48,
-    backgroundColor: colors.dark.divider,
+    backgroundColor: colors.ui.divider,
   },
-});
+}));

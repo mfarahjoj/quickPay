@@ -10,7 +10,7 @@ import {
   Easing,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
-import { colors, typography, borderRadius, gradients, shadows } from '../theme';
+import { typography, borderRadius, gradients, shadows, makeStyles, useColors } from '../theme';
 import { triggerHaptic, HapticType } from '../services/haptics.service';
 
 type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'gradient' | 'darkGhost';
@@ -38,6 +38,8 @@ export function Button({
   textStyle,
   haptic = 'light',
 }: ButtonProps) {
+  const colors = useColors();
+  const styles = useStyles();
   const isDisabled = disabled || loading;
   const scale = useRef(new Animated.Value(1)).current;
 
@@ -149,7 +151,7 @@ export function Button({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   base: {
     height: 56,
     borderRadius: borderRadius.full,
@@ -177,10 +179,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     width: '100%',
   },
+  // Theme colours: a fixed pale fill left the theme's white text unreadable in dark mode.
   secondary: {
-    backgroundColor: '#F0F4FF',
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: '#C2CEFF',
+    borderColor: colors.ui.glassBorderStrong,
   },
   secondaryText: {
     fontSize: 17,
@@ -196,9 +199,9 @@ const styles = StyleSheet.create({
     color: colors.text.tertiary,
   },
   darkGhost: {
-    backgroundColor: 'rgba(255, 255, 255, 0.13)',
+    backgroundColor: colors.ui.ink(0.13),
     borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.22)',
+    borderColor: colors.ui.ink(0.22),
   },
   darkGhostText: {
     fontSize: 17,
@@ -229,4 +232,4 @@ const styles = StyleSheet.create({
     shadowOpacity: 0,
     elevation: 0,
   },
-});
+}));

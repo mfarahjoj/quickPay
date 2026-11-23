@@ -19,12 +19,13 @@ import { useTranslation } from 'react-i18next';
 import { cooldownMessage } from '../../utils/cooldownMessage';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { PinInput } from '../../components/PinInput';
+import { useBiometricApproval } from '../../hooks/useBiometricApproval';
 import { approvePayment, rejectPayment } from '../../services/customerToken.service';
 import { approveApiCharge, getApiCharge } from '../../services/apiCharge.service';
 import { firestore } from '../../services/firebase.config';
 import { triggerHaptic } from '../../services/haptics.service';
-import { colors, typography, spacing, borderRadius } from '../../theme';
-import { CURRENCY_SYMBOL } from '../../config/constants';
+import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
+import { formatMoney, toCurrency } from '../../utils/money';
 import { Springs } from '../../constants/springs';
 import { SuccessCheckIcon } from '../../components/icons/AuthIcons';
 import { AnimatedXMark, AnimatedWarning } from '../../components/icons/StatusIcons';
@@ -63,6 +64,8 @@ const formatClock = (seconds: number) =>
   `${Math.floor(seconds / 60)}:${(seconds % 60).toString().padStart(2, '0')}`;
 
 export default function ApprovePaymentScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const navigation = useNavigation();
   const route = useRoute<RouteProp<ApprovePaymentParams, 'ApprovePayment'>>();
@@ -79,9 +82,17 @@ export default function ApprovePaymentScreen() {
   const [step, setStep] = useState<Step>('review');
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
+  // Face ID is the PIN when it's on: Accept, look, paid. Cancel it for the PIN.
+  const biometric = useBiometricApproval();
+  const [askingBiometric, setAskingBiometric] = useState(false);
+  const { prepare: prepareBiometric } = biometric;
+  useEffect(() => {
+    prepareBiometric();
+  }, [prepareBiometric]);
   const [rejecting, setRejecting] = useState(false);
   const [resultKind, setResultKind] = useState<ResultKind>('approved');
   const [resultMessage, setResultMessage] = useState('');
+  const [receiptNumber, setReceiptNumber] = useState<string | null>(null);
   const [transactionAmount, setTransactionAmount] = useState('');
   const [closedTitle, setClosedTitle] = useState('');
 
@@ -136,9 +147,11 @@ export default function ApprovePaymentScreen() {
   }, [step, resultRingScale, resultRingOpacity, resultTitleOp, resultTitleY, resultAmountOp, resultDetailsOp, resultBtnOp]);
 
   const shownAmount = liveAmount ?? amount;
-  const amountFormatted = (shownAmount / 100).toFixed(2);
-  const feeFormatted = (feeCents / 100).toFixed(2);
-  const totalFormatted = ((shownAmount + feeCents) / 100).toFixed(2);
+  // Each amount in the charge's own currency: "$12.50" or "30,000 SLSH".
+  const amountFormatted = formatMoney(shownAmount, currency);
+  const feeFormatted = formatMoney(feeCents, currency);
+  const totalFormatted = formatMoney(shownAmount + feeCents, currency);
+  const isShillings = toCurrency(currency) === 'SLS';
 
   const showResult = (kind: ResultKind, message: string, title = '') => {
     resultShown.current = true;
@@ -176,7 +189,7 @@ export default function ApprovePaymentScreen() {
           else if (c.status === 'expired') showClosed('expired');
           else if (c.status === 'succeeded') {
             if (c.paidByYou) {
-              setTransactionAmount(`${CURRENCY_SYMBOL}${(c.amount / 100).toFixed(2)}`);
+              setTransactionAmount(formatMoney(c.amount, c.currency));
               showResult('approved', t('payments.approve.alreadyPaid'));
             } else {
               showResult('closed', t('payments.approve.paidElsewhere'), t('payments.approve.unavailableTitle'));
@@ -237,7 +250,7 @@ export default function ApprovePaymentScreen() {
           if (d.status === 'cancelled') showClosed('cancelled');
           else if (d.status === 'expired') showClosed('expired');
           else if (d.status === 'approved') {
-            setTransactionAmount(`${CURRENCY_SYMBOL}${(d.amount / 100).toFixed(2)}`);
+            setTransactionAmount(formatMoney(d.amount, d.currency ?? currency));
             showResult('approved', t('payments.approve.alreadyPaid'));
           } else if (d.status === 'rejected') {
             showResult('declined', t('payments.approve.declinedMessage'));
@@ -281,9 +294,26 @@ export default function ApprovePaymentScreen() {
       ? `${chargeKey.slice(0, 6)}...${chargeKey.slice(-4)}`
       : chargeKey);
 
-  const handleAccept = () => {
+  const handleAccept = async () => {
+    if (loading || askingBiometric) return;
     triggerHaptic('medium');
-    setStep('pin');
+    if (!biometric.available) {
+      setStep('pin');
+      return;
+    }
+    setAskingBiometric(true);
+    try {
+      const token = await biometric.approve(
+        t('common.confirmPaymentAmount', { amount: amountFormatted })
+      );
+      if (token) {
+        await handleApprove(token);
+      } else {
+        setStep('pin');
+      }
+    } finally {
+      setAskingBiometric(false);
+    }
   };
 
   const handleApprove = async (submittedPin: string) => {
@@ -294,14 +324,15 @@ export default function ApprovePaymentScreen() {
       if (chargeId) {
         await approveApiCharge(chargeId, submittedPin, shownAmount);
       } else {
-        await approvePayment(requestId as string, submittedPin, shownAmount);
+        const approved = await approvePayment(requestId as string, submittedPin, shownAmount);
+        setReceiptNumber(approved.receiptNumber ?? null);
       }
       triggerHaptic('success');
-      setTransactionAmount(`${CURRENCY_SYMBOL}${amountFormatted}`);
+      setTransactionAmount(amountFormatted);
       setResultKind('approved');
       setResultMessage(
         t(isCashOut ? 'payments.approve.cashOutSuccess' : 'payments.approve.successMessage', {
-          amount: `${CURRENCY_SYMBOL}${amountFormatted}`,
+          amount: amountFormatted,
           merchant: merchantName,
         })
       );
@@ -387,7 +418,7 @@ export default function ApprovePaymentScreen() {
   if (!chargeLoaded) {
     return (
       <View style={[styles.container, styles.resultContainer]}>
-        <ActivityIndicator size="large" color={colors.dark.accent} />
+        <ActivityIndicator size="large" color={colors.ui.accent} />
         <Text style={[styles.requestLabel, styles.loadingLabel]}>
           {t('payments.approve.loadingCharge')}
         </Text>
@@ -422,9 +453,9 @@ export default function ApprovePaymentScreen() {
             {t(isCashOut ? 'payments.approve.cashYouReceive' : 'payments.approve.totalAmount')}
           </Text>
           <Text style={styles.amountCardValue}>
-            {CURRENCY_SYMBOL}{amountFormatted}
+            {amountFormatted}
           </Text>
-          <Text style={styles.amountCardCurrency}>{currency}</Text>
+          {isShillings ? null : <Text style={styles.amountCardCurrency}>{currency}</Text>}
           {countdown}
         </View>
 
@@ -437,13 +468,13 @@ export default function ApprovePaymentScreen() {
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>{t('common.amount')}</Text>
             <Text style={styles.detailValue}>
-              {CURRENCY_SYMBOL}{amountFormatted}
+              {amountFormatted}
             </Text>
           </View>
           <View style={styles.divider} />
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>{t('common.fee')}</Text>
-            <Text style={styles.detailValue}>{CURRENCY_SYMBOL}{isCashOut ? feeFormatted : '0.00'}</Text>
+            <Text style={styles.detailValue}>{isCashOut ? feeFormatted : formatMoney(0, currency)}</Text>
           </View>
           <View style={styles.divider} />
           <View style={styles.detailRow}>
@@ -451,7 +482,7 @@ export default function ApprovePaymentScreen() {
               {isCashOut ? t('payments.approve.fromYourBalance') : t('common.total')}
             </Text>
             <Text style={[styles.detailValue, styles.detailValueBold]}>
-              {CURRENCY_SYMBOL}{isCashOut ? totalFormatted : amountFormatted}
+              {isCashOut ? totalFormatted : amountFormatted}
             </Text>
           </View>
           <View style={styles.divider} />
@@ -476,14 +507,18 @@ export default function ApprovePaymentScreen() {
         <TouchableOpacity
           style={[styles.acceptButton, lapsed && styles.acceptButtonDisabled]}
           onPress={handleAccept}
-          disabled={lapsed}
+          disabled={lapsed || askingBiometric || loading}
           activeOpacity={0.8}
           accessibilityLabel={`Accept and pay ${amountFormatted} ${currency} to ${merchantName}`}
           accessibilityRole="button"
         >
-          <Text style={styles.acceptButtonText}>
-            {t(isCashOut ? 'payments.approve.acceptCashOut' : 'payments.approve.acceptPay')}
-          </Text>
+          {askingBiometric || loading ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.acceptButtonText}>
+              {t(isCashOut ? 'payments.approve.acceptCashOut' : 'payments.approve.acceptPay')}
+            </Text>
+          )}
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -513,7 +548,7 @@ export default function ApprovePaymentScreen() {
           <Text style={styles.pinTitle}>{t('payments.approve.confirmPayment')}</Text>
           <Text style={styles.pinSubtitle}>
             {t('payments.approve.payTo', {
-              amount: `${CURRENCY_SYMBOL}${amountFormatted}`,
+              amount: amountFormatted,
               merchant: merchantName,
             })}
           </Text>
@@ -526,6 +561,7 @@ export default function ApprovePaymentScreen() {
           onChange={setPin}
           onComplete={handleApprove}
           secure
+          autoFocus
           style={styles.pinInput}
         />
 
@@ -551,7 +587,7 @@ export default function ApprovePaymentScreen() {
   const isSuccess = resultKind === 'approved';
   const isDeclined = resultKind === 'declined';
   const isClosed = resultKind === 'closed';
-  const ringColor = isSuccess ? colors.dark.incoming : isDeclined ? colors.dark.error : colors.dark.warning;
+  const ringColor = isSuccess ? colors.ui.incoming : isDeclined ? colors.ui.error : colors.ui.warning;
 
   return (
     <View style={[styles.container, styles.resultContainer]}>
@@ -600,6 +636,17 @@ export default function ApprovePaymentScreen() {
               {shortRef}
             </Text>
           </View>
+          {receiptNumber ? (
+            <>
+              <View style={styles.divider} />
+              <View style={styles.resultDetailRow}>
+                <Text style={styles.resultDetailLabel}>{t('qr.success.receipt')}</Text>
+                <Text style={[styles.resultDetailValue, styles.detailValueMono]} selectable>
+                  {receiptNumber}
+                </Text>
+              </View>
+            </>
+          ) : null}
         </Animated.View>
       )}
 
@@ -625,10 +672,10 @@ export default function ApprovePaymentScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xxl,
   },
@@ -644,33 +691,33 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: colors.dark.accentSoft,
+    backgroundColor: colors.ui.accentSoft,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: spacing.sm,
   },
   merchantAvatarText: {
     ...typography.h1,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
   },
   merchantNameLarge: {
     ...typography.h1,
-    color: colors.dark.text,
+    color: colors.ui.text,
     textAlign: 'center',
     marginBottom: spacing.xs,
   },
   requestLabel: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
   },
   loadingLabel: {
     marginTop: spacing.md,
   },
 
   amountCard: {
-    backgroundColor: colors.dark.accentSoft,
+    backgroundColor: colors.ui.accentSoft,
     borderWidth: 1,
-    borderColor: colors.dark.accentBorder,
+    borderColor: colors.ui.accentBorder,
     borderRadius: borderRadius.xxl,
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.xl,
@@ -679,33 +726,33 @@ const styles = StyleSheet.create({
   },
   amountCardLabel: {
     ...typography.overline,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
     marginBottom: spacing.xs,
   },
   amountCardValue: {
     ...typography.balanceNumber,
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
   amountCardCurrency: {
     ...typography.caption,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
     marginTop: spacing.xs,
   },
   countdown: {
     ...typography.caption,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     marginTop: spacing.sm,
     textAlign: 'center',
     fontVariant: ['tabular-nums'],
   },
   countdownLapsed: {
-    color: colors.dark.error,
+    color: colors.ui.error,
   },
 
   detailsCard: {
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderRadius: borderRadius.xxl,
     padding: spacing.lg,
     marginBottom: spacing.lg,
@@ -718,11 +765,11 @@ const styles = StyleSheet.create({
   },
   detailLabel: {
     ...typography.body,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
   },
   detailValue: {
     ...typography.bodySemibold,
-    color: colors.dark.text,
+    color: colors.ui.text,
     textAlign: 'right',
     maxWidth: '60%',
   },
@@ -737,11 +784,11 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: colors.dark.divider,
+    backgroundColor: colors.ui.divider,
   },
 
   acceptButton: {
-    backgroundColor: colors.dark.accent,
+    backgroundColor: colors.ui.accent,
     borderRadius: borderRadius.lg,
     paddingVertical: spacing.md,
     alignItems: 'center',
@@ -756,7 +803,7 @@ const styles = StyleSheet.create({
   },
   declineButton: {
     borderWidth: 1,
-    borderColor: colors.dark.error,
+    borderColor: colors.ui.error,
     borderRadius: borderRadius.lg,
     paddingVertical: spacing.md,
     alignItems: 'center',
@@ -765,7 +812,7 @@ const styles = StyleSheet.create({
   },
   declineButtonText: {
     ...typography.h3,
-    color: colors.dark.error,
+    color: colors.ui.error,
   },
 
   pinHeader: {
@@ -774,17 +821,17 @@ const styles = StyleSheet.create({
   },
   pinTitle: {
     ...typography.h1,
-    color: colors.dark.text,
+    color: colors.ui.text,
     marginBottom: spacing.xs,
   },
   pinSubtitle: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     textAlign: 'center',
   },
   pinLabel: {
     ...typography.bodySemibold,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     textAlign: 'center',
     marginBottom: spacing.md,
   },
@@ -802,7 +849,7 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     ...typography.bodySemibold,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
   },
 
   resultContainer: {
@@ -825,27 +872,27 @@ const styles = StyleSheet.create({
   },
   resultTitle: {
     ...typography.h1,
-    color: colors.dark.text,
+    color: colors.ui.text,
     textAlign: 'center',
     marginBottom: spacing.xs,
   },
   resultAmount: {
     ...typography.balanceNumber,
-    color: colors.dark.text,
+    color: colors.ui.text,
     marginBottom: spacing.sm,
   },
   resultMessage: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     textAlign: 'center',
     paddingHorizontal: spacing.md,
     marginBottom: spacing.lg,
   },
   resultDetails: {
     width: '100%',
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderRadius: borderRadius.xxl,
     padding: spacing.lg,
     marginBottom: spacing.md,
@@ -858,11 +905,11 @@ const styles = StyleSheet.create({
   },
   resultDetailLabel: {
     ...typography.body,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
   },
   resultDetailValue: {
     ...typography.bodySemibold,
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
   retryLink: {
     marginTop: spacing.md,
@@ -870,6 +917,6 @@ const styles = StyleSheet.create({
   },
   retryLinkText: {
     ...typography.bodySemibold,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
   },
-});
+}));

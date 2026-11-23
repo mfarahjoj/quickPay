@@ -12,8 +12,13 @@
  * value into an agent wallet alone.
  *
  * Journal templates (LEDGER_ARCHITECTURE.md §3.4):
- *   issue    — debit float:{route}, credit user:{agent}
- *   withdraw — debit user:{agent}, credit float:{route}
+ *   issue    — debit float:{route}, credit agent:{agent}
+ *   withdraw — debit agent:{agent}, credit float:{route}
+ *
+ * Float is issued in dollars or shillings (SHILLINGS.md). Each movement is in
+ * one currency and lands in the agent's float in that currency; the cap and
+ * the second-approver threshold stay in dollars, with shillings counted at
+ * `slsPerUsd`.
  */
 
 import * as admin from "firebase-admin";
@@ -33,6 +38,7 @@ import { isAgentRole } from "../utils/roles";
 import { resolveAccountStatus } from "../utils/accountStatus";
 import { notifyUser } from "../utils/notifications";
 import { floatRef } from "../agents/float";
+import { Currency, formatAmount, parseCurrency, toLimitCents } from "../utils/money";
 import {
   prepareJournalEntry,
   userAccount,
@@ -48,13 +54,24 @@ export const FLOAT_ISSUANCES_COLLECTION = "floatIssuances";
 /** Routes where a bare "trust me" is not good enough. */
 const REFERENCE_REQUIRED: FloatRoute[] = ["zaad", "edahab", "bank"];
 
-/** Ceiling on a single movement — a typo should not become a $1M entry. */
+/**
+ * Ceiling on a single movement — a typo should not become a $1M entry. In
+ * dollars; a shilling movement is compared at slsPerUsd.
+ */
 const MAX_AMOUNT_CENTS = 100_000_00;
+
+/** A float movement's currency: dollars unless it says otherwise. */
+function issuanceCurrency(value: unknown): Currency {
+  return parseCurrency(value) ?? "USD";
+}
 
 interface RequestFloatRequest {
   agentId: string;
   direction: FloatDirection;
+  /** In the currency's smallest unit: cents, or whole shillings. */
   amountCents: number;
+  /** "USD" (the default) or "SLS". */
+  currency?: string;
   route: FloatRoute;
   externalReference?: string;
   reason: string;
@@ -96,7 +113,13 @@ export const adminRequestFloat = https.onCall(
         "amountCents must be a positive integer"
       );
     }
-    if (amountCents > MAX_AMOUNT_CENTS) {
+    const currency = parseCurrency(request.data?.currency);
+    if (!currency) {
+      throw new https.HttpsError("invalid-argument", "currency must be USD or SLS");
+    }
+    // A dollar amount is checked against the cap here; a shilling one once
+    // the rate is read, below.
+    if (currency === "USD" && amountCents > MAX_AMOUNT_CENTS) {
       throw new https.HttpsError(
         "invalid-argument",
         `Single movement is capped at $${MAX_AMOUNT_CENTS / 100}`
@@ -139,16 +162,28 @@ export const adminRequestFloat = https.onCall(
 
     // Counted per agent and direction over the last 24 hours, whoever asked,
     // so splitting a large movement into small requests still needs a second
-    // admin once the total crosses the threshold.
-    const { floatApprovalThresholdCents } = await getRates();
+    // admin once the total crosses the threshold. Dollars and shillings count
+    // together, shillings at the limits rate, so switching currency doesn't
+    // reset the total either.
+    const { floatApprovalThresholdCents, slsPerUsd } = await getRates();
+    if (toLimitCents(amountCents, currency, slsPerUsd) > MAX_AMOUNT_CENTS) {
+      throw new https.HttpsError(
+        "invalid-argument",
+        `Single movement is capped at $${MAX_AMOUNT_CENTS / 100}`
+      );
+    }
     const recent = await db
       .collection(FLOAT_ISSUANCES_COLLECTION)
       .where("agentId", "==", agentId)
       .where("createdAt", ">=", rollingWindowStart())
       .get();
-    const recentCents = sumStandingCents(recent.docs, (d) => d.direction === direction);
+    const recentCents = sumStandingCents(
+      recent.docs,
+      (d) => d.direction === direction,
+      (d) => toLimitCents(d.amountCents, issuanceCurrency(d.currency), slsPerUsd)
+    );
     const requiresSecondApprover =
-      recentCents + amountCents >= floatApprovalThresholdCents;
+      recentCents + toLimitCents(amountCents, currency, slsPerUsd) >= floatApprovalThresholdCents;
 
     const ref = db.collection(FLOAT_ISSUANCES_COLLECTION).doc();
     const issuance: FloatIssuance = {
@@ -156,6 +191,7 @@ export const adminRequestFloat = https.onCall(
       agentName: agentData.fullName,
       direction,
       amountCents,
+      currency,
       route,
       status: "pending",
       requestedBy: actor.uid,
@@ -173,7 +209,7 @@ export const adminRequestFloat = https.onCall(
         action: "float.request",
         target: { type: "float_issuance", id: ref.id },
         reason,
-        after: { agentId, direction, amountCents, route, requiresSecondApprover },
+        after: { agentId, direction, amountCents, currency, route, requiresSecondApprover },
       });
     });
 
@@ -249,8 +285,10 @@ export const adminApproveFloat = https.onCall(
       const transactionId = journalEntryId;
       const floatAccount = floatAccountForRoute(issuance.route as FloatRoute);
       // Float is issued into, and withdrawn from, the agent's float account,
-      // never their own wallet (AGENT_FLOAT_SEPARATION.md).
+      // never their own wallet (AGENT_FLOAT_SEPARATION.md), in the currency
+      // the request was raised in. Requests from before shillings are dollars.
       const agentLedgerAccount = agentAccount(issuance.agentId);
+      const currency = issuanceCurrency(issuance.currency);
 
       const lines =
         issuance.direction === "issue"
@@ -266,7 +304,7 @@ export const adminApproveFloat = https.onCall(
       const prepared = await prepareJournalEntry(tx, {
         entryId: journalEntryId,
         type: issuance.direction === "issue" ? "float_issue" : "float_withdraw",
-        currency: "USD",
+        currency,
         lines,
         refs: { transactionId },
         description:
@@ -291,7 +329,7 @@ export const adminApproveFloat = https.onCall(
         toUserId: issuance.direction === "issue" ? issuance.agentId : "system",
         participants: [issuance.agentId],
         amount: issuance.amountCents,
-        currency: "USD",
+        currency,
         status: "completed",
         description:
           issuance.direction === "issue"
@@ -324,6 +362,7 @@ export const adminApproveFloat = https.onCall(
           agentId: issuance.agentId,
           direction: issuance.direction,
           amountCents: issuance.amountCents,
+          currency,
           route: issuance.route,
         },
         journalEntryId,
@@ -336,21 +375,22 @@ export const adminApproveFloat = https.onCall(
         agentId: issuance.agentId,
         direction: issuance.direction,
         amountCents: issuance.amountCents,
+        currency,
       };
     });
 
     notifyUser(
       result.agentId,
       result.direction === "issue" ? "float_issued" : "float_withdrawn",
-      result.direction === "issue" ? "Float added" : "Float withdrawn",
-      `${result.direction === "issue" ? "+" : "-"}$${(result.amountCents / 100).toFixed(
-        2
-      )} float`,
+      {
+        key: result.direction === "issue" ? "float.issued" : "float.withdrawn",
+        params: { amount: formatAmount(result.amountCents, result.currency) },
+      },
       { transactionId: result.transactionId }
     ).catch((err) => console.error("Failed to notify agent:", err));
 
     console.log(
-      `Float ${result.direction} ${result.amountCents}c for ${result.agentId} approved by ${actor.uid}`
+      `Float ${result.direction} ${formatAmount(result.amountCents, result.currency)} for ${result.agentId} approved by ${actor.uid}`
     );
 
     return {
@@ -458,7 +498,10 @@ interface AgentPosition {
   phoneNumber?: string;
   accountType?: string;
   accountStatus: string;
+  /** Dollar float, in cents. */
   balanceCents: number;
+  /** Shilling float, in whole shillings. */
+  slsBalance: number;
   /** The agent's own wallet: commission and, for an agent-merchant, sales. */
   walletCents: number;
 }
@@ -485,13 +528,18 @@ export const adminListAgentFloat = https.onCall(
 
     if (agentsSnap.empty) return { success: true, data: [] };
 
-    const [wallets, floats] = await Promise.all([
+    const [wallets, floats, slsFloats] = await Promise.all([
       db.getAll(...agentsSnap.docs.map((d) => db.collection("wallets").doc(d.id))),
       db.getAll(...agentsSnap.docs.map((d) => floatRef(d.id))),
+      db.getAll(...agentsSnap.docs.map((d) => floatRef(d.id, "SLS"))),
     ]);
     const walletById = new Map(wallets.map((w) => [w.id, (w.data()?.balance as number) ?? 0]));
-    // Float docs are keyed agent:{uid}; map them back to the uid.
+    // Float docs are keyed agent:{uid}; map them back to the uid. getAll
+    // returns docs in the order asked, so the shilling ones line up by index.
     const floatById = new Map(floats.map((f) => [agentIdOf(f.id), (f.data()?.balance as number) ?? 0]));
+    const slsFloatById = new Map(
+      slsFloats.map((f, i) => [agentsSnap.docs[i].id, (f.data()?.balance as number) ?? 0])
+    );
 
     const positions: AgentPosition[] = agentsSnap.docs.map((doc) => {
       const data = doc.data();
@@ -502,6 +550,7 @@ export const adminListAgentFloat = https.onCall(
         accountType: data.accountType,
         accountStatus: resolveAccountStatus(data),
         balanceCents: floatById.get(doc.id) ?? 0,
+        slsBalance: slsFloatById.get(doc.id) ?? 0,
         walletCents: walletById.get(doc.id) ?? 0,
       };
     });

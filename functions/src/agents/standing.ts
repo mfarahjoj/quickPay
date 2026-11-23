@@ -42,10 +42,18 @@ export async function countUpheldAgainst(uid: string, windowDays: number, nowMs 
     .limit(500)
     .get();
   const since = nowMs - windowDays * DAY_MS;
-  return snap.docs.filter((d) => {
+  const disputes = snap.docs.filter((d) => {
     const r = (d.data() as DisputeDoc).resolution;
     return r?.outcome === "upheld" && (r.decidedAt?.toMillis?.() ?? 0) >= since;
   }).length;
+  // Zaad top-ups through agents are decided on the request itself
+  // (zaadAgent/admin.ts): ops crediting the customer is a ruling against the agent.
+  const zaad = await admin.firestore().collection("zaadAgentTopups").where("agentId", "==", uid).limit(500).get();
+  const zaadRulings = zaad.docs.filter((d) => {
+    const r = d.get("resolution");
+    return r?.outcome === "customer" && (r.at?.toMillis?.() ?? 0) >= since;
+  }).length;
+  return disputes + zaadRulings;
 }
 
 /**
@@ -75,8 +83,7 @@ export async function reviewAgentStanding(uid: string | null | undefined): Promi
     notifyUser(
       uid,
       "agent_flagged",
-      "Your agent listing is paused",
-      "Several disputes against you were upheld recently, so customers won't see you in Find Agent until Zapp Pay has reviewed them.",
+      { key: "agent.listing_paused" },
       { type: "agent_flagged" }
     ).catch((err) => console.error("Failed to notify agent flag:", err));
     return true;

@@ -11,16 +11,31 @@ import * as admin from "firebase-admin";
 
 type Data = Record<string, any>;
 
-function applyTransforms(base: Data | undefined, patch: Data): Data {
+function applyTransforms(base: Data | undefined, patch: Data, dotted = false): Data {
   const out: Data = { ...(base ?? {}) };
   for (const [key, value] of Object.entries(patch)) {
+    // update() reads "a.b" as the field b inside map a, as Firestore does;
+    // set() and create() take keys literally.
+    let target = out;
+    let field = key;
+    if (dotted && key.includes(".")) {
+      const parts = key.split(".");
+      field = parts.pop()!;
+      for (const part of parts) {
+        target[part] = target[part] && typeof target[part] === "object" ? { ...target[part] } : {};
+        target = target[part];
+      }
+    }
     const kind = value?.constructor?.name;
     if (kind === "NumericIncrementTransform") {
-      out[key] = (typeof out[key] === "number" ? out[key] : 0) + value.operand;
+      target[field] = (typeof target[field] === "number" ? target[field] : 0) + value.operand;
+    } else if (kind === "ArrayUnionTransform") {
+      const have: any[] = Array.isArray(target[field]) ? target[field] : [];
+      target[field] = [...have, ...value.elements.filter((e: any) => !have.includes(e))];
     } else if (kind === "DeleteTransform") {
-      delete out[key];
+      delete target[field];
     } else {
-      out[key] = value;
+      target[field] = value;
     }
   }
   return out;
@@ -45,6 +60,7 @@ function matches(doc: Data, field: string, op: string, value: any): boolean {
     case ">": return a > b;
     case ">=": return a >= b;
     case "in": return (value as any[]).includes(a);
+    case "array-contains": return Array.isArray(fieldAt(doc, field)) && fieldAt(doc, field).includes(value);
     default: throw new Error(`fakeFirestore: unsupported op ${op}`);
   }
 }
@@ -53,6 +69,8 @@ export interface FakeDb {
   store: Map<string, Data>;
   get(path: string): Data | undefined;
   collection(name: string): any;
+  /** A document by its full path, "config/collection". */
+  doc(path: string): any;
   runTransaction: jest.Mock;
   batch(): any;
 }
@@ -66,6 +84,7 @@ export function fakeFirestore(seed: Record<string, Data> = {}): FakeDb {
     id: path.split("/").pop()!,
     ref: ref(path.split("/").slice(0, -1).join("/"), path.split("/").pop()),
     data: () => (store.has(path) ? { ...store.get(path) } : undefined),
+    get: (field: string) => (store.has(path) ? fieldAt(store.get(path)!, field) : undefined),
   });
 
   const write = {
@@ -77,7 +96,7 @@ export function fakeFirestore(seed: Record<string, Data> = {}): FakeDb {
     },
     update: (path: string, d: Data) => {
       if (!store.has(path)) throw new Error(`NOT_FOUND ${path}`);
-      store.set(path, applyTransforms(store.get(path), d));
+      store.set(path, applyTransforms(store.get(path), d, true));
     },
     delete: (path: string) => {
       store.delete(path);
@@ -150,6 +169,11 @@ export function fakeFirestore(seed: Record<string, Data> = {}): FakeDb {
   function collection(name: string): any {
     return {
       doc: (id?: string) => ref(name, id),
+      add: async (d: Data) => {
+        const r = ref(name);
+        await r.set(d);
+        return r;
+      },
       ...query(name, { filters: [], max: Infinity }),
     };
   }
@@ -194,6 +218,10 @@ export function fakeFirestore(seed: Record<string, Data> = {}): FakeDb {
     store,
     get: (path: string) => store.get(path),
     collection,
+    doc: (path: string) => {
+      const parts = path.split("/");
+      return ref(parts.slice(0, -1).join("/"), parts[parts.length - 1]);
+    },
     runTransaction,
     batch,
   };

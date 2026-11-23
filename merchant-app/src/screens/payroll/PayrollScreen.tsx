@@ -13,9 +13,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { functions } from '../../services/firebase.config';
-import { GlassCard, PillButton, ACCENT, TEXT_DIM, TEXT_FAINT } from '../../components';
+import { GlassCard, PillButton } from '../../components';
 import { pinActionErrorKey } from '../../utils/errors';
 import { useExitGuard } from '../../hooks/useExitGuard';
+import { CurrencyToggle, type FloatCurrency } from '../../components/CurrencyToggle';
+import { formatAmount, sanitizeAmountFor, toAmount } from '../../utils/money';
+import { makeStyles, useColors } from '../../theme';
 
 type Step = 'build' | 'review' | 'pin' | 'processing' | 'result';
 
@@ -23,7 +26,7 @@ interface Employee {
   id: string;
   name: string;
   phone: string;
-  amount: string; // display string, e.g. "50.00"
+  amount: string; // as typed: "50.00" dollars, or "300000" shillings
 }
 
 interface PayrollResult {
@@ -34,16 +37,11 @@ interface PayrollResult {
   reason?: string;
 }
 
-const CURRENCY = 'USD';
-
-function formatUsd(cents: number) {
-  return `$${(cents / 100).toFixed(2)}`;
-}
-
-function parseCents(val: string): number {
-  const n = parseFloat(val.replace(/[^0-9.]/g, ''));
-  return isNaN(n) ? 0 : Math.round(n * 100);
-}
+/**
+ * A run is in one currency, paid from the shop's balance in it and received
+ * in it, never converted (SHILLINGS.md). Amounts are in its smallest unit:
+ * cents, or whole shillings.
+ */
 
 function newEmployee(): Employee {
   return { id: Math.random().toString(36).slice(2), name: '', phone: '', amount: '' };
@@ -61,8 +59,13 @@ interface Props {
 }
 
 export default function PayrollScreen({ navigation }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const [step, setStep] = useState<Step>('build');
+  const [currency, setCurrency] = useState<FloatCurrency>('USD');
+  const formatUsd = (units: number) => formatAmount(units, currency);
+  const parseCents = (val: string) => toAmount(val, currency);
   const [employees, setEmployees] = useState<Employee[]>([newEmployee()]);
   const [label, setLabel] = useState('');
   const [pin, setPin] = useState('');
@@ -132,7 +135,7 @@ export default function PayrollScreen({ navigation }: Props) {
           amount: parseCents(e.amount),
           name: e.name.trim() || undefined,
         })),
-        currency: CURRENCY,
+        currency,
         pin: enteredPin,
         payrollLabel: label.trim() || undefined,
       });
@@ -200,10 +203,21 @@ export default function PayrollScreen({ navigation }: Props) {
                   value={label}
                   onChangeText={setLabel}
                   placeholder={t('payroll.labelPlaceholder')}
-                  placeholderTextColor="rgba(255,255,255,0.2)"
+                  placeholderTextColor={colors.ui.ink(0.2)}
                 />
               </View>
             </View>
+
+            <CurrencyToggle
+              value={currency}
+              onChange={(next) => {
+                if (next === currency) return;
+                setCurrency(next);
+                // 50 dollars is not 50 shillings: amounts start again.
+                setEmployees((list) => list.map((e) => ({ ...e, amount: '' })));
+              }}
+              style={styles.currencyToggle}
+            />
 
             {/* Employee rows */}
             {employees.map((emp, index) => (
@@ -224,7 +238,7 @@ export default function PayrollScreen({ navigation }: Props) {
                       value={emp.name}
                       onChangeText={(v) => updateEmployee(emp.id, 'name', v)}
                       placeholder={t('payroll.namePlaceholder')}
-                      placeholderTextColor="rgba(255,255,255,0.2)"
+                      placeholderTextColor={colors.ui.ink(0.2)}
                       autoCapitalize="words"
                     />
                   </View>
@@ -237,19 +251,19 @@ export default function PayrollScreen({ navigation }: Props) {
                       value={emp.phone}
                       onChangeText={(v) => updateEmployee(emp.id, 'phone', v)}
                       placeholder="+252 63 000 0000"
-                      placeholderTextColor="rgba(255,255,255,0.2)"
+                      placeholderTextColor={colors.ui.ink(0.2)}
                       keyboardType="phone-pad"
                     />
                   </View>
                   <View style={[styles.inputBox, { width: 100, flexDirection: 'row', alignItems: 'center', paddingLeft: 10 }]}>
-                    <Text style={{ color: 'rgba(255,255,255,0.35)', fontSize: 14, marginRight: 2 }}>$</Text>
+                    <Text style={{ color: colors.ui.ink(0.35), fontSize: 14, marginRight: 2 }}>$</Text>
                     <TextInput
                       style={[styles.input, { flex: 1 }]}
                       value={emp.amount}
-                      onChangeText={(v) => updateEmployee(emp.id, 'amount', v)}
-                      placeholder="0.00"
-                      placeholderTextColor="rgba(255,255,255,0.2)"
-                      keyboardType="decimal-pad"
+                      onChangeText={(v) => updateEmployee(emp.id, 'amount', sanitizeAmountFor(v, currency))}
+                      placeholder={currency === 'SLS' ? '0,000' : '0.00'}
+                      placeholderTextColor={colors.ui.ink(0.2)}
+                      keyboardType={currency === 'SLS' ? 'number-pad' : 'decimal-pad'}
                     />
                   </View>
                 </View>
@@ -357,7 +371,7 @@ export default function PayrollScreen({ navigation }: Props) {
         {/* ── PROCESSING ──────────────────────────────── */}
         {step === 'processing' && (
           <View style={styles.centerContent}>
-            <ActivityIndicator size="large" color={ACCENT} />
+            <ActivityIndicator size="large" color={colors.ui.accent} />
             <Text style={styles.processingText}>{t('payroll.processing')}</Text>
             <Text style={styles.processingSubtext}>{t('payroll.processingSub')}</Text>
           </View>
@@ -407,78 +421,79 @@ export default function PayrollScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#000000' },
+const useStyles = makeStyles((colors) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.ui.canvas },
 
   header: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 20, paddingVertical: 12,
   },
   backBtn: { width: 32, justifyContent: 'center' },
-  backChevron: { fontSize: 34, color: '#fff', fontWeight: '300', lineHeight: 38 },
-  headerTitle: { flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '700', color: '#fff', letterSpacing: -0.3 },
+  backChevron: { fontSize: 34, color: colors.ui.text, fontWeight: '300', lineHeight: 38 },
+  headerTitle: { flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '700', color: colors.ui.text, letterSpacing: -0.3 },
   headerRight: { width: 32 },
 
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 20, paddingBottom: 48 },
 
-  stepTitle: { fontSize: 28, fontWeight: '800', color: '#fff', letterSpacing: -1, marginBottom: 8 },
-  stepSubtitle: { fontSize: 14, color: TEXT_DIM, lineHeight: 21, marginBottom: 24 },
+  stepTitle: { fontSize: 28, fontWeight: '800', color: colors.ui.text, letterSpacing: -1, marginBottom: 8 },
+  stepSubtitle: { fontSize: 14, color: colors.ui.textDim, lineHeight: 21, marginBottom: 24 },
   labelBadge: {
-    alignSelf: 'flex-start', fontSize: 12, fontWeight: '700', color: '#FF8A7A',
-    backgroundColor: 'rgba(26,86,255,0.15)', borderRadius: 8,
+    alignSelf: 'flex-start', fontSize: 12, fontWeight: '700', color: colors.ui.accentText,
+    backgroundColor: colors.ui.accentSoft, borderRadius: 8,
     paddingHorizontal: 10, paddingVertical: 4, marginBottom: 10,
   },
 
   field: { marginBottom: 20 },
-  fieldLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.7, textTransform: 'uppercase', color: TEXT_FAINT, marginBottom: 8 },
+  fieldLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.7, textTransform: 'uppercase', color: colors.ui.textFaint, marginBottom: 8 },
 
   inputBox: {
-    backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 14,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.ui.glass, borderRadius: 14,
+    borderWidth: 1, borderColor: colors.ui.glassBorder,
     paddingHorizontal: 14, height: 48, justifyContent: 'center',
   },
-  input: { fontSize: 15, color: '#fff', padding: 0 },
+  input: { fontSize: 15, color: colors.ui.text, padding: 0 },
 
   empCard: { padding: 16, marginBottom: 12 },
   empCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  empIndex: { fontSize: 13, fontWeight: '700', color: TEXT_FAINT },
-  removeBtn: { fontSize: 14, color: 'rgba(255,59,48,0.7)', fontWeight: '600' },
+  empIndex: { fontSize: 13, fontWeight: '700', color: colors.ui.textFaint },
+  removeBtn: { fontSize: 14, color: colors.ui.errorSoft, fontWeight: '600' },
   empRow: { flexDirection: 'row' },
 
   addRow: {
-    borderRadius: 14, borderWidth: 1.5, borderColor: 'rgba(26,86,255,0.3)',
+    borderRadius: 14, borderWidth: 1.5, borderColor: colors.ui.accentBorder,
     borderStyle: 'dashed', padding: 14, alignItems: 'center', marginBottom: 20,
   },
-  addRowText: { fontSize: 14, fontWeight: '600', color: '#5B8AFF' },
+  addRowText: { fontSize: 14, fontWeight: '600', color: colors.ui.accentText },
 
   totalCard: { padding: 20, alignItems: 'center', marginBottom: 8 },
-  totalLabel: { fontSize: 12, color: TEXT_FAINT, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 },
-  totalAmount: { fontSize: 32, fontWeight: '800', color: '#fff', letterSpacing: -1 },
-  totalSub: { fontSize: 13, color: TEXT_DIM, marginTop: 4 },
+  currencyToggle: { marginBottom: 16 },
+  totalLabel: { fontSize: 12, color: colors.ui.textFaint, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 },
+  totalAmount: { fontSize: 32, fontWeight: '800', color: colors.ui.text, letterSpacing: -1 },
+  totalSub: { fontSize: 13, color: colors.ui.textDim, marginTop: 4 },
 
   reviewRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, marginBottom: 8 },
-  reviewRowFailed: { borderColor: 'rgba(255,69,58,0.3)', backgroundColor: 'rgba(255,69,58,0.06)' },
+  reviewRowFailed: { borderColor: colors.ui.errorSoft, backgroundColor: colors.ui.errorSoft },
   reviewLeft: { flex: 1, marginRight: 12 },
-  reviewName: { fontSize: 15, fontWeight: '600', color: '#fff' },
-  reviewPhone: { fontSize: 12, color: TEXT_FAINT, marginTop: 2 },
-  reviewAmount: { fontSize: 17, fontWeight: '700', color: '#fff' },
+  reviewName: { fontSize: 15, fontWeight: '600', color: colors.ui.text },
+  reviewPhone: { fontSize: 12, color: colors.ui.textFaint, marginTop: 2 },
+  reviewAmount: { fontSize: 17, fontWeight: '700', color: colors.ui.text },
   resultRight: { alignItems: 'flex-end', gap: 2 },
-  amountFailed: { color: 'rgba(255,255,255,0.3)' },
-  errorReason: { fontSize: 12, color: '#FF6961', marginTop: 3 },
-  statusOk: { fontSize: 13, color: '#30D158', fontWeight: '700' },
-  statusFail: { fontSize: 13, color: '#FF453A', fontWeight: '700' },
+  amountFailed: { color: colors.ui.ink(0.3) },
+  errorReason: { fontSize: 12, color: colors.ui.error, marginTop: 3 },
+  statusOk: { fontSize: 13, color: colors.ui.incoming, fontWeight: '700' },
+  statusFail: { fontSize: 13, color: colors.ui.error, fontWeight: '700' },
 
   resultBanner: { padding: 20, alignItems: 'center', marginBottom: 16 },
-  resultBannerSuccess: { borderColor: 'rgba(48,209,88,0.3)', backgroundColor: 'rgba(48,209,88,0.08)' },
+  resultBannerSuccess: { borderColor: colors.ui.incomingSoft, backgroundColor: colors.ui.incomingSoft },
   resultEmoji: { fontSize: 32, marginBottom: 8 },
-  resultBannerTitle: { fontSize: 22, fontWeight: '800', color: '#fff', letterSpacing: -0.5, marginBottom: 6 },
-  resultBannerSub: { fontSize: 14, color: TEXT_DIM },
+  resultBannerTitle: { fontSize: 22, fontWeight: '800', color: colors.ui.text, letterSpacing: -0.5, marginBottom: 6 },
+  resultBannerSub: { fontSize: 14, color: colors.ui.textDim },
 
   pinContainer: { flex: 1, paddingHorizontal: 24, paddingTop: 20, alignItems: 'center' },
   pinDots: { flexDirection: 'row', gap: 14, marginVertical: 32 },
-  pinDot: { width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: 'rgba(255,255,255,0.25)' },
-  pinDotFilled: { backgroundColor: '#fff', borderColor: '#fff' },
+  pinDot: { width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: colors.ui.ink(0.25) },
+  pinDotFilled: { backgroundColor: colors.ui.solid, borderColor: colors.ui.solid },
 
   numpad: { flexDirection: 'row', flexWrap: 'wrap', width: 280, gap: 0 },
   numKey: {
@@ -486,9 +501,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
   },
   numKeyBlank: { opacity: 0 },
-  numKeyText: { fontSize: 24, fontWeight: '400', color: '#fff' },
+  numKeyText: { fontSize: 24, fontWeight: '400', color: colors.ui.text },
 
   centerContent: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 16 },
-  processingText: { fontSize: 18, fontWeight: '700', color: '#fff', marginTop: 16 },
-  processingSubtext: { fontSize: 14, color: TEXT_DIM },
-});
+  processingText: { fontSize: 18, fontWeight: '700', color: colors.ui.text, marginTop: 16 },
+  processingSubtext: { fontSize: 14, color: colors.ui.textDim },
+}));

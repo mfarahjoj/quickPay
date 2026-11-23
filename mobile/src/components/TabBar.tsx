@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { colors, typography } from '../theme';
+import { typography, useColors } from '../theme';
 
 export const TAB_ICONS = {
   home: '⌂',
@@ -15,6 +15,7 @@ interface TabIconProps {
 }
 
 export function TabIcon({ name, focused, color }: TabIconProps) {
+  const colors = useColors();
   const iconColor = color ?? (focused ? colors.primary : colors.border.dark);
   return (
     <View style={styles.container}>

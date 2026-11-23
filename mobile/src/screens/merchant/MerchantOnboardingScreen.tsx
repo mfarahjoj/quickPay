@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Card, Button } from '../../components';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
 import { PHONE_PREFIX } from '../../config/constants';
 import { functions } from '../../services/firebase.config';
 import { triggerHaptic } from '../../services/haptics.service';
@@ -30,6 +30,8 @@ const BUSINESS_TYPES = [
 ];
 
 export default function MerchantOnboardingScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const [step, setStep] = useState<Step>('business');
   const [businessName, setBusinessName] = useState('');
@@ -286,10 +288,10 @@ export default function MerchantOnboardingScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   content: {
     padding: spacing.md,
@@ -297,29 +299,29 @@ const styles = StyleSheet.create({
   },
   title: {
     ...typography.h1,
-    color: colors.dark.text,
+    color: colors.ui.text,
     marginBottom: spacing.md,
     marginTop: spacing.sm,
   },
   stepTitle: {
     ...typography.bodyLarge,
-    color: colors.dark.text,
+    color: colors.ui.text,
     fontWeight: '600',
     marginBottom: spacing.sm,
   },
   hint: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     marginBottom: spacing.md,
   },
   input: {
     height: 44,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderRadius: borderRadius.md,
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     paddingHorizontal: spacing.md,
-    color: colors.dark.text,
+    color: colors.ui.text,
     ...typography.body,
   },
   typeGrid: {
@@ -333,16 +335,16 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.smPlus,
     borderRadius: borderRadius.md,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
-    backgroundColor: colors.dark.glass,
+    borderColor: colors.ui.glassBorder,
+    backgroundColor: colors.ui.glass,
   },
   typeChipActive: {
-    borderColor: colors.dark.accent,
-    backgroundColor: colors.dark.accent,
+    borderColor: colors.ui.accent,
+    backgroundColor: colors.ui.accent,
   },
   typeChipText: {
     ...typography.body,
-    color: colors.dark.text,
+    color: colors.ui.text,
     fontWeight: '500',
   },
   typeChipTextActive: {
@@ -357,10 +359,10 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: spacing.md,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderRadius: borderRadius.lg,
     alignItems: 'center',
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
   },
   providerCardZaad: {
     borderColor: 'rgba(52,199,123,0.4)',
@@ -384,12 +386,12 @@ const styles = StyleSheet.create({
   },
   providerName: {
     ...typography.bodyLarge,
-    color: colors.dark.text,
+    color: colors.ui.text,
     fontWeight: '600',
   },
   providerSub: {
     ...typography.caption,
-    color: colors.dark.textFaint,
+    color: colors.ui.textFaint,
     marginTop: spacing.xs,
   },
   providerCheck: {
@@ -412,7 +414,7 @@ const styles = StyleSheet.create({
   },
   phoneHint: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     marginBottom: spacing.md,
   },
   phoneRow: {
@@ -423,15 +425,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.dark.glassRaised,
+    backgroundColor: colors.ui.glassRaised,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderTopLeftRadius: borderRadius.md,
     borderBottomLeftRadius: borderRadius.md,
   },
   prefixText: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     fontWeight: '600',
   },
   phoneInput: {
@@ -439,12 +441,12 @@ const styles = StyleSheet.create({
     height: 44,
     borderWidth: 1,
     borderLeftWidth: 0,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderTopRightRadius: borderRadius.md,
     borderBottomRightRadius: borderRadius.md,
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     paddingHorizontal: spacing.md,
-    color: colors.dark.text,
+    color: colors.ui.text,
     ...typography.body,
   },
   primaryCta: {
@@ -459,7 +461,7 @@ const styles = StyleSheet.create({
   },
   processingText: {
     ...typography.bodyLarge,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     marginTop: spacing.md,
   },
   successCard: {
@@ -467,22 +469,22 @@ const styles = StyleSheet.create({
   },
   successIcon: {
     fontSize: 42,
-    color: colors.dark.incoming,
+    color: colors.ui.incoming,
   },
   successTitle: {
     ...typography.h2,
-    color: colors.dark.text,
+    color: colors.ui.text,
     marginTop: spacing.sm,
   },
   successSubtitle: {
     ...typography.bodyLarge,
-    color: colors.dark.text,
+    color: colors.ui.text,
     fontWeight: '600',
     marginTop: spacing.sm,
   },
   successDetail: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     marginTop: spacing.xs,
   },
-});
+}));

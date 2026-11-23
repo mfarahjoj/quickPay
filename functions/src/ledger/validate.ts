@@ -5,6 +5,7 @@
 
 import { JournalEntryInput, JournalLine } from "./types";
 import { isValidAccount } from "./accounts";
+import { isLedgerCurrency } from "./currency";
 
 export class LedgerValidationError extends Error {
   constructor(message: string) {
@@ -25,6 +26,9 @@ function isPositiveIntCents(n: number): boolean {
 export function validateEntry(input: JournalEntryInput): void {
   if (!input.entryId || !/^[A-Za-z0-9_-]{1,200}$/.test(input.entryId)) {
     throw new LedgerValidationError("Invalid entryId");
+  }
+  if (!isLedgerCurrency(input.currency)) {
+    throw new LedgerValidationError(`Invalid currency: ${String(input.currency)}`);
   }
   if (!Array.isArray(input.lines) || input.lines.length < 2) {
     throw new LedgerValidationError("An entry needs at least two lines");

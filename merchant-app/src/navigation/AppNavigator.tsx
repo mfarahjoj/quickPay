@@ -1,5 +1,11 @@
-import React from 'react';
-import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
+import React, { useMemo } from 'react';
+import {
+  NavigationContainer,
+  createNavigationContainerRef,
+  DarkTheme,
+  DefaultTheme,
+  type Theme,
+} from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useTranslation } from 'react-i18next';
@@ -14,11 +20,12 @@ import { useDeletionPending } from '../hooks/useDeletionPending';
 import { useIdleSignOut } from '../hooks/useIdleSignOut';
 import { useDeviceIntegrity } from '../hooks/useDeviceIntegrity';
 import { ConsentGate } from '../components/legal/ConsentGate';
+import { ZaadGate } from '../screens/settings/ZaadAccountScreen';
+import { ZaadOfferWatcher } from '../components/ZaadOfferWatcher';
 import { View, StyleSheet, ActivityIndicator } from 'react-native';
-import { colors } from '../theme';
+import { makeStyles, useColors, useTheme } from '../theme';
 import {
   HomeTabIcon,
-  ScanTabIcon,
   ReceiveTabIcon,
   HistoryTabIcon,
   SettingsTabIcon,
@@ -26,6 +33,30 @@ import {
 import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
 
 export const navigationRef = createNavigationContainerRef<MerchantStackParamList>();
+
+// For ZaadOfferWatcher, which sits beside the navigator rather than in it.
+const zaadScreenShowing = () => navigationRef.isReady() && navigationRef.getCurrentRoute()?.name === 'ZaadTopups';
+const openZaadScreen = () => {
+  if (navigationRef.isReady()) navigationRef.navigate('ZaadTopups' as never);
+};
+
+/**
+ * A Zaad top-up push was tapped (D32): open that request. On a cold start the
+ * navigator isn't there until sign-in and the app lock are through, so wait
+ * for it (up to 2 minutes).
+ */
+export function openZaadRequest(requestId: string): void {
+  const started = Date.now();
+  const tryOpen = () => {
+    const ready = navigationRef.isReady() && navigationRef.getRootState()?.routes?.[0]?.name === 'Main';
+    if (ready) {
+      (navigationRef.navigate as (name: string, params: object) => void)('ZaadTopups', { requestId });
+    } else if (Date.now() - started < 120_000) {
+      setTimeout(tryOpen, 500);
+    }
+  };
+  tryOpen();
+}
 
 type AuthStackParamList = {
   Welcome: undefined;
@@ -44,11 +75,19 @@ type MerchantStackParamList = {
     customerId: string;
     /** "cash_out": the agent hands over cash once the customer approves. */
     purpose?: 'payment' | 'cash_out';
+    /** The sale typed on Receive, when the customer couldn't scan its code. */
+    amountCents?: number;
+    /** Its currency: "USD" (the default) or "SLS"; a cash-out too. */
+    currency?: 'USD' | 'SLS';
+    reference?: string;
+    /** A request already raised (a scan at the counter display): wait on it. */
+    requestId?: string;
   };
+  ScanCharge: { amountCents?: number; currency?: 'USD' | 'SLS'; reference?: string } | undefined;
+  CounterCode: undefined;
   ScanCashOut: { purpose: 'cash_out' };
   TransactionDetail: { transaction: any };
   TopupCustomer: undefined;
-  TopupHistory: undefined;
   ConfirmCashOut: undefined;
   ConfirmTopup: undefined;
   AgentProfileEdit: undefined;
@@ -62,16 +101,36 @@ type MerchantStackParamList = {
   AutoPayout: undefined;
   Statement: undefined;
   MoveToFloat: undefined;
+  Send: undefined;
+  BuyFloatZaad: undefined;
+  ZaadTopups: { requestId?: string } | undefined;
   Security: undefined;
   Devices: undefined;
   ChangePhone: undefined;
   ChangePin: undefined;
   ResetPin: undefined;
+  ZaadAccount: undefined;
+  CounterDisplays: undefined;
+  LinkDisplay: undefined;
+  ZappBusiness: undefined;
+  PortalSignIn: undefined;
+  Staff: undefined;
+};
+
+/**
+ * Staff mode (STAFF_ACCESS.md): a person working for a shop on their own
+ * account. Only what a role can use is here: no balance, payouts, refunds or
+ * settings of the shop's. The server checks every call anyway.
+ */
+type StaffStackParamList = {
+  StaffHome: undefined;
+  ScanCharge: MerchantStackParamList['ScanCharge'];
+  Charge: MerchantStackParamList['Charge'];
+  PortalSignIn: undefined;
 };
 
 type TabParamList = {
   Dashboard: undefined;
-  ScanCharge: undefined;
   GenerateQR: undefined;
   History: undefined;
   Settings: undefined;
@@ -80,17 +139,47 @@ type TabParamList = {
 const RootStack = createStackNavigator();
 const AuthStack = createStackNavigator<AuthStackParamList>();
 const MainStack = createStackNavigator<MerchantStackParamList>();
+const StaffStack = createStackNavigator<StaffStackParamList>();
+
+function StaffNavigator() {
+  const { t } = useTranslation();
+  const colors = useColors();
+  return (
+    <StaffStack.Navigator
+      screenOptions={{
+        headerShown: false,
+        animationEnabled: true,
+        cardStyle: { backgroundColor: colors.ui.canvas },
+        headerStyle: { backgroundColor: colors.ui.canvas, elevation: 0, shadowOpacity: 0 },
+        headerTitleStyle: { fontWeight: '700', color: colors.ui.text },
+        headerTintColor: colors.ui.text,
+        headerShadowVisible: false,
+        headerBackTitleVisible: false,
+      }}
+    >
+      <StaffStack.Screen name="StaffHome" getComponent={() => require('../screens/staff/StaffHomeScreen').default} />
+      <StaffStack.Screen name="ScanCharge" getComponent={() => require('../screens/scan/ScanCustomerScreen').default} />
+      <StaffStack.Screen
+        name="Charge"
+        getComponent={() => require('../screens/scan/ChargeScreen').default}
+        options={{ headerShown: true, title: t('navigation.headers.chargeCustomer'), presentation: 'modal' }}
+      />
+      <StaffStack.Screen name="PortalSignIn" getComponent={() => require('../screens/settings/PortalSignInScreen').default} />
+    </StaffStack.Navigator>
+  );
+}
 const Tab = createBottomTabNavigator<TabParamList>();
 
 type TabIconArgs = { color: string; focused: boolean };
 
 const DashboardIcon = ({ color, focused }: TabIconArgs) => <HomeTabIcon color={color} focused={focused} />;
-const ScanIcon = ({ color, focused }: TabIconArgs) => <ScanTabIcon color={color} focused={focused} />;
 const HistoryIcon = ({ color, focused }: TabIconArgs) => <HistoryTabIcon color={color} focused={focused} />;
 const SettingsIcon = ({ color, focused }: TabIconArgs) => <SettingsTabIcon color={color} focused={focused} />;
 const ReceiveIcon = ({ color, focused }: TabIconArgs) => <ReceiveTabIcon color={color} focused={focused} />;
 
 function BootstrapLoading() {
+  const colors = useColors();
+  const styles = useStyles();
   return (
     <View style={styles.bootstrapLoading}>
       <ActivityIndicator size="large" color={colors.action.primary} />
@@ -118,15 +207,18 @@ function AuthStackNavigator() {
 }
 
 function MainTabs() {
+  const colors = useColors();
   const { t } = useTranslation();
 
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.action.primary,
-        tabBarInactiveTintColor: '#9A9AA0',
-        headerStyle: { backgroundColor: colors.background.primary },
+        // A surface-coloured bar, the current tab in ink and the rest in grey,
+        // as in Zapp Pay.
+        tabBarActiveTintColor: colors.ui.text,
+        tabBarInactiveTintColor: colors.ui.textFaint,
+        headerStyle: { backgroundColor: colors.ui.canvas },
         headerTitleStyle: { fontWeight: 'bold' },
         tabBarLabelStyle: {
           fontSize: 11,
@@ -138,8 +230,8 @@ function MainTabs() {
           paddingTop: 6,
         },
         tabBarStyle: {
-          backgroundColor: colors.background.primary,
-          borderTopColor: colors.border.light,
+          backgroundColor: colors.ui.surface,
+          borderTopColor: colors.ui.glassBorder,
           borderTopWidth: StyleSheet.hairlineWidth,
           height: 88,
           paddingBottom: 28,
@@ -153,16 +245,6 @@ function MainTabs() {
           title: t('navigation.tabs.home'),
           tabBarIcon: DashboardIcon,
           tabBarAccessibilityLabel: t('navigation.accessibility.dashboardTab'),
-        }}
-      />
-      <Tab.Screen
-        name="ScanCharge"
-        getComponent={() => require('../screens/scan/ScanCustomerScreen').default}
-        options={{
-          title: t('navigation.tabs.scan'),
-          headerTitle: t('navigation.tabs.scanAndCharge'),
-          tabBarIcon: ScanIcon,
-          tabBarAccessibilityLabel: t('navigation.accessibility.scanTab'),
         }}
       />
       <Tab.Screen
@@ -198,15 +280,16 @@ function MainTabs() {
 }
 
 function MainStackNavigator() {
+  const colors = useColors();
   const { t } = useTranslation();
 
   return (
     <MainStack.Navigator
       screenOptions={{
-        cardStyle: { backgroundColor: '#000000' },
-        headerStyle: { backgroundColor: '#000000', elevation: 0, shadowOpacity: 0 },
-        headerTitleStyle: { fontWeight: '700', color: '#FFFFFF' },
-        headerTintColor: '#FFFFFF',
+        cardStyle: { backgroundColor: colors.ui.canvas },
+        headerStyle: { backgroundColor: colors.ui.canvas, elevation: 0, shadowOpacity: 0 },
+        headerTitleStyle: { fontWeight: '700', color: colors.ui.text },
+        headerTintColor: colors.ui.text,
         headerShadowVisible: false,
         // The label would be the previous route's title, and MainTabs has
         // none, so iOS showed the internal name "MainTabs" in every language.
@@ -237,15 +320,20 @@ function MainStackNavigator() {
         options={{ title: t('navigation.headers.topUpCustomer') }}
       />
       <MainStack.Screen
-        name="TopupHistory"
-        getComponent={() => require('../screens/topup/TopupHistoryScreen').default}
-        options={{ title: t('navigation.headers.topUpHistory') }}
+        name="ScanCharge"
+        getComponent={() => require('../screens/scan/ScanCustomerScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="CounterCode"
+        getComponent={() => require('../screens/qr/CounterCodeScreen').default}
+        options={{ headerShown: false }}
       />
       <MainStack.Screen
         name="ScanCashOut"
         getComponent={() => require('../screens/scan/ScanCustomerScreen').default}
         initialParams={{ purpose: 'cash_out' }}
-        options={{ title: t('scan.cashOut.scanTitle') }}
+        options={{ headerShown: false }}
       />
       <MainStack.Screen
         name="ConfirmCashOut"
@@ -297,8 +385,23 @@ function MainStackNavigator() {
         options={{ headerShown: false }}
       />
       <MainStack.Screen
+        name="Send"
+        getComponent={() => require('../screens/send/SendScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
         name="MoveToFloat"
         getComponent={() => require('../screens/agent/MoveToFloatScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="ZaadTopups"
+        getComponent={() => require('../screens/agent/ZaadTopupsScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="BuyFloatZaad"
+        getComponent={() => require('../screens/agent/BuyFloatZaadScreen').default}
         options={{ headerShown: false }}
       />
       <MainStack.Screen
@@ -341,14 +444,60 @@ function MainStackNavigator() {
         getComponent={() => require('../screens/disputes/ReportProblemScreen').default}
         options={{ headerShown: false }}
       />
+      <MainStack.Screen
+        name="ZaadAccount"
+        getComponent={() => require('../screens/settings/ZaadAccountScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="CounterDisplays"
+        getComponent={() => require('../screens/settings/CounterDisplaysScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="LinkDisplay"
+        getComponent={() => require('../screens/settings/LinkDisplayScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="ZappBusiness"
+        getComponent={() => require('../screens/settings/ZappBusinessScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="PortalSignIn"
+        getComponent={() => require('../screens/settings/PortalSignInScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="Staff"
+        getComponent={() => require('../screens/settings/StaffScreen').default}
+        options={{ headerShown: false }}
+      />
     </MainStack.Navigator>
   );
 }
 
 export default function AppNavigator() {
   const { t } = useTranslation();
+  const { scheme, colors } = useTheme();
+  // What shows behind and between screens matches the canvas.
+  const navigationTheme = useMemo<Theme>(() => {
+    const base = scheme === 'dark' ? DarkTheme : DefaultTheme;
+    return {
+      ...base,
+      colors: {
+        ...base.colors,
+        primary: colors.ui.accent,
+        background: colors.ui.canvas,
+        card: colors.ui.canvas,
+        text: colors.ui.text,
+        border: colors.ui.divider,
+      },
+    };
+  }, [scheme, colors]);
   const { user } = useAuth();
-  const { loading, state, requestedRole, rejectionReason } = useMerchantOnboardingGate();
+  const { loading, state, requestedRole, rejectionReason, kycVerified } = useMerchantOnboardingGate();
   useIdleSignOut(!!user);
   useDeviceIntegrity(!!user);
   const deletionDueAt = useDeletionPending(user?.uid);
@@ -376,18 +525,25 @@ export default function AppNavigator() {
 
   if (user && (state === 'onboarding' || (state === 'rejected' && reapplying))) {
     return (
-      <NavigationContainer>
+      <NavigationContainer theme={navigationTheme}>
         <MerchantOnboardingNavigator />
       </NavigationContainer>
     );
   }
 
+  // Picked a role: now the full application (business, payout, ID). Its own
+  // steps, no navigator; submitting flips the gate to "pending" by itself.
+  if (user && state === 'application' && requestedRole) {
+    const MerchantApplicationScreen = require('../screens/auth/MerchantApplicationScreen').default;
+    return <MerchantApplicationScreen role={requestedRole} kycVerified={kycVerified} />;
+  }
+
   // Waiting on (or refused by) admin review. No navigator: the gate listens to
   // the user document, so an approval swaps this for the app by itself.
-  if (user && (state === 'pending' || state === 'rejected')) {
+  if (user && (state === 'pending' || state === 'rejected' || state === 'application')) {
     return (
       <RoleReviewPendingScreen
-        variant={state}
+        variant={state === 'rejected' ? 'rejected' : 'pending'}
         requestedRole={requestedRole}
         rejectionReason={rejectionReason}
         onApplyAgain={() => setReapplying(true)}
@@ -403,8 +559,22 @@ export default function AppNavigator() {
     return <AgentProfileSetupScreen navigation={{ goBack: () => confirmSignOut(t) }} />;
   }
 
+  // Working for a shop on their own account: staff mode only, behind the
+  // same app lock and terms as the shop's app.
+  if (user && state === 'staff') {
+    return (
+      <AppLockGate key={user.uid}>
+        <ConsentGate uid={user.uid}>
+          <NavigationContainer theme={navigationTheme}>
+            <StaffNavigator />
+          </NavigationContainer>
+        </ConsentGate>
+      </AppLockGate>
+    );
+  }
+
   const app = (
-    <NavigationContainer ref={navigationRef}>
+    <NavigationContainer ref={navigationRef} theme={navigationTheme}>
       <RootStack.Navigator
         screenOptions={{
           headerShown: false,
@@ -417,6 +587,9 @@ export default function AppNavigator() {
           <RootStack.Screen name="Auth" component={AuthStackNavigator} />
         )}
       </RootStack.Navigator>
+      {/* Agents taking Zaad top-ups: heartbeat, and opening offers as they
+          ring. For anyone else zaad_agents/{uid} doesn't exist and it idles. */}
+      {user ? <ZaadOfferWatcher isShowing={zaadScreenShowing} open={openZaadScreen} /> : null}
     </NavigationContainer>
   );
 
@@ -424,19 +597,22 @@ export default function AppNavigator() {
   // so a different account never inherits an unlocked state.
   return user ? (
     <AppLockGate key={user.uid}>
-      {/* Terms and privacy, recorded with versions (review E12). */}
-      <ConsentGate uid={user.uid}>{app}</ConsentGate>
+      {/* Terms and privacy, recorded with versions (review E12), then the
+          Zaad account payouts go to. */}
+      <ConsentGate uid={user.uid}>
+        <ZaadGate>{app}</ZaadGate>
+      </ConsentGate>
     </AppLockGate>
   ) : (
     app
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   bootstrapLoading: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: colors.background.primary,
   },
-});
+}));

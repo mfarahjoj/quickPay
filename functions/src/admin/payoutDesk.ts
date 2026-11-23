@@ -22,6 +22,7 @@ import { https } from "firebase-functions/v2";
 import { requireAdmin, requireRecentAdminAuth, requireReason } from "./guard";
 import { stageAuditEntry } from "./audit";
 import { notifyUser } from "../utils/notifications";
+import { PAYOUT_ROUTE_NAMES } from "../utils/pushTemplates";
 import {
   prepareJournalEntry,
   userAccount,
@@ -31,6 +32,7 @@ import {
 } from "../ledger";
 import { ApiResponse, PayoutRequest, PayoutStatus, Transaction } from "../types";
 import { PAYOUT_REQUESTS_COLLECTION } from "../payouts/requestPayout";
+import { parseCurrency, pushAmount } from "../utils/money";
 
 interface ListPayoutsInput {
   status?: PayoutStatus;
@@ -134,7 +136,8 @@ export const adminSettlePayout = https.onCall(
       const prepared = await prepareJournalEntry(tx, {
         entryId: journalEntryId,
         type: "payout_settled",
-        currency: "USD",
+        // Sent in the currency it was held in: shillings are never converted.
+        currency: parseCurrency(payout.currency) ?? "USD",
         lines: [
           { account: SETTLEMENT_HOLD, debit: payout.amountCents, credit: 0 },
           { account: floatAccount, debit: 0, credit: payout.amountCents },
@@ -190,6 +193,7 @@ export const adminSettlePayout = https.onCall(
         journalEntryId,
         merchantId: payout.merchantId,
         amountCents: payout.amountCents,
+        currency: payout.currency ?? "USD",
         route: payout.route,
       };
     });
@@ -197,8 +201,13 @@ export const adminSettlePayout = https.onCall(
     notifyUser(
       result.merchantId,
       "payout_sent",
-      "Payout sent",
-      `$${(result.amountCents / 100).toFixed(2)} is on its way via ${result.route}.`
+      {
+        key: "payout.sent",
+        params: {
+          amount: pushAmount(result.amountCents, result.currency),
+          route: PAYOUT_ROUTE_NAMES[result.route] ?? result.route,
+        },
+      }
     ).catch((err) => console.error("Failed to notify merchant:", err));
 
     return {
@@ -251,7 +260,8 @@ export const adminRejectPayout = https.onCall(
       const prepared = await prepareJournalEntry(tx, {
         entryId: journalEntryId,
         type: "payout_cancelled",
-        currency: "USD",
+        // Back to the balance it came from.
+        currency: parseCurrency(payout.currency) ?? "USD",
         lines: [
           { account: SETTLEMENT_HOLD, debit: payout.amountCents, credit: 0 },
           {
@@ -299,14 +309,17 @@ export const adminRejectPayout = https.onCall(
         journalEntryId,
       });
 
-      return { merchantId: payout.merchantId, amountCents: payout.amountCents };
+      return {
+        merchantId: payout.merchantId,
+        amountCents: payout.amountCents,
+        currency: payout.currency ?? "USD",
+      };
     });
 
     notifyUser(
       result.merchantId,
       "payout_rejected",
-      "Payout declined",
-      `$${(result.amountCents / 100).toFixed(2)} is back in your balance. ${reason}`
+      { key: "payout.declined", params: { amount: pushAmount(result.amountCents, result.currency), reason } }
     ).catch((err) => console.error("Failed to notify merchant:", err));
 
     return { success: true, message: "Returned to the merchant", data: { payoutId } };

@@ -4,9 +4,10 @@ import Svg, { Polygon } from 'react-native-svg';
 import { useTranslation } from 'react-i18next';
 import { Button } from '../Button';
 import { registerForPushNotifications } from '../../services/notification.service';
-import { colors, spacing } from '../../theme';
+import { spacing, makeStyles } from '../../theme';
 
-const CORAL = colors.dark.accent;
+// Brand coral: the same in light and dark.
+const CORAL = '#FF5043';
 const TEAL = '#5DCAA5';
 const TEAL_DARK = '#04342C';
 
@@ -39,6 +40,7 @@ const SPARKS = [
 ];
 
 function Spark({ dx, dy, color, delay }: { dx: number; dy: number; color: string; delay: number }) {
+  const styles = useStyles();
   const v = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -72,6 +74,7 @@ function Spark({ dx, dy, color, delay }: { dx: number; dy: number; color: string
 }
 
 function Ring({ color, delay }: { color: string; delay: number }) {
+  const styles = useStyles();
   const v = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -101,6 +104,7 @@ function Ring({ color, delay }: { color: string; delay: number }) {
 }
 
 export function SetupSuccessScreen({ onContinue, variant: _variant = 'customer' }: SetupSuccessScreenProps) {
+  const styles = useStyles();
   const { t } = useTranslation();
   const burst = useRef(new Animated.Value(0)).current;
   const textRise = useRef(new Animated.Value(0)).current;
@@ -168,10 +172,10 @@ export function SetupSuccessScreen({ onContinue, variant: _variant = 'customer' 
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
     justifyContent: 'center',
     alignItems: 'center',
     padding: spacing.xl,
@@ -230,7 +234,7 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     backgroundColor: TEAL,
     borderWidth: 3,
-    borderColor: colors.dark.canvas,
+    borderColor: colors.ui.canvas,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -247,16 +251,16 @@ const styles = StyleSheet.create({
     fontSize: 42,
     fontWeight: '800',
     letterSpacing: -1.9,
-    color: colors.dark.text,
+    color: colors.ui.text,
     textAlign: 'center',
   },
   teaser: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.ui.ink(0.06),
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: colors.ui.ink(0.1),
     borderRadius: 18,
     paddingVertical: 14,
     paddingHorizontal: 16,
@@ -276,13 +280,13 @@ const styles = StyleSheet.create({
   },
   teaserLabel: {
     fontSize: 11,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
   },
   teaserAmount: {
     fontSize: 18,
     fontWeight: '700',
     letterSpacing: -0.5,
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
   teaserHint: {
     fontSize: 11,
@@ -293,4 +297,4 @@ const styles = StyleSheet.create({
     width: '100%',
     marginTop: spacing.xxl,
   },
-});
+}));

@@ -28,6 +28,20 @@ export interface LinkedAccounts {
   edahabPhone?: string;
 }
 
+/**
+ * The Zaad account a customer or merchant gives as their own (auth/zaadAccount.ts):
+ * typed, not verified. Merchants' payouts go only here.
+ */
+export interface ZaadAccount {
+  /** E.164, e.g. +252634123456. */
+  msisdn: string;
+  /** The name the Zaad account is registered to. */
+  name: string;
+  updatedAt: FirebaseFirestore.Timestamp;
+  /** When an earlier number was replaced; payouts wait after it. */
+  changedAt?: FirebaseFirestore.Timestamp;
+}
+
 export type AgentService = "cash_in" | "cash_out";
 
 export interface AgentInfo {
@@ -59,6 +73,7 @@ export interface User {
   kycStatus: KycStatus;
   notificationPreferences: NotificationPreferences;
   linkedAccounts: LinkedAccounts;
+  zaad?: ZaadAccount;
   agentInfo?: AgentInfo;
   dailyTransactionLimit: number;
   monthlyTransactionLimit: number;
@@ -115,6 +130,44 @@ export interface RoleRequest {
    * held a privileged role before the approval gate existed.
    */
   backfilled?: boolean;
+  /**
+   * The full application from the merchant app (builds that collect it).
+   * Approval applies it: merchant profile, agent set-up, KYC. Absent on
+   * requests from older builds, which are approved the old way.
+   */
+  application?: RoleApplication;
+  /** The rejected application, kept on re-applying so the app can prefill. */
+  previousApplication?: RoleApplication;
+}
+
+/** Where a shop or agent is, as the phone reported it. */
+export interface GeoPin {
+  lat: number;
+  lng: number;
+  /** Metres, as reported by the phone. */
+  accuracyM?: number;
+}
+
+export interface RoleApplication {
+  businessName: string;
+  businessType: string;
+  businessAddress: string;
+  area: string;
+  location: GeoPin | null;
+  /** Bucket-relative path under kyc/{uid}/. */
+  shopPhotoPath: string;
+  /** Where takings are paid out (merchant roles). E.164. */
+  payout?: { provider: "zaad" | "edahab"; number: string };
+  /** Agent roles. */
+  agent?: {
+    openHours: string;
+    services: AgentService[];
+    /** E.164 Zaad number the agent receives customers' payments on. */
+    zaadReceiveNumber?: string;
+  };
+  /** False when the account was already KYC-verified and sent no ID. */
+  includesId: boolean;
+  submittedAt: FirebaseFirestore.Timestamp;
 }
 
 // Float desk types — see ADMIN_CONSOLE_PLAN.md §4.3.
@@ -139,7 +192,10 @@ export interface FloatIssuance {
   agentId: string;
   agentName?: string;
   direction: FloatDirection;
+  /** In the currency's smallest unit: cents, or whole shillings. */
   amountCents: number;
+  /** Absent on requests from before shillings: dollars. */
+  currency?: "USD" | "SLS";
   route: FloatRouteName;
   /** Zaad transaction id, deposit slip number, receipt number. */
   externalReference?: string;
@@ -172,6 +228,8 @@ export interface PayoutRequest {
   merchantName?: string;
   businessName?: string;
   amountCents: number;
+  /** "USD" or "SLS"; absent on payouts from before shillings: dollars. */
+  currency?: "USD" | "SLS";
   /** Which float account the money will leave from when it is sent. */
   route: FloatRouteName;
   /** Account name as the merchant gave it — what ops types into the bank. */
@@ -222,12 +280,36 @@ export interface KycDocument {
   reviewedAt?: FirebaseFirestore.Timestamp;
   reviewedBy?: string;
   rejectionReason?: string;
+  /** "role_application" when it came in with a merchant/agent application. */
+  source?: "role_application";
 }
 
 // Wallet types
+/**
+ * A wallet's balance in one currency other than its main one. Amounts are the
+ * currency's smallest unit: whole shillings for SLS.
+ */
+export interface CurrencyPocket {
+  balance: number;
+  totalReceived: number;
+  totalSent: number;
+  /**
+   * Shillings owed on a lost dispute, set aside until it is settled (D8),
+   * like `Wallet.reservedCents` for dollars. Whole shillings.
+   */
+  reservedCents?: number;
+}
+
 export interface Wallet {
-  balance: number; // Stored in cents
+  /** The main (dollar) balance, in cents. */
+  balance: number;
+  /** The main pocket's currency. Every wallet is USD; shillings live in `sls`. */
   currency: "USD" | "SLS";
+  /**
+   * Shillings, in whole shillings. Absent until the first shilling arrives,
+   * which reads as zero. Written only by the ledger, like `balance`.
+   */
+  sls?: CurrencyPocket;
   totalReceived: number;
   totalSent: number;
   lastTransactionAt: FirebaseFirestore.Timestamp | null;
@@ -282,6 +364,7 @@ export type TransactionKind =
   | "card_topup"
   | "mobile_money_topup"
   | "mobile_money_cashout"
+  | "bank_topup"
   | "remittance";
 
 export interface Transaction {
@@ -291,6 +374,11 @@ export interface Transaction {
   toUserId: string;
   /** [fromUserId, toUserId] — enables a single array-contains query per user. */
   participants?: string[];
+  /**
+   * The staff member who raised the charge for the shop (STAFF_ACCESS.md).
+   * Not a participant: it records who served, and gives them no read access.
+   */
+  raisedBy?: string;
   amount: number; // Gross amount, in cents
   /** Platform fee withheld from a payment, in cents (merchant absorbs it). */
   feeCents?: number;
@@ -298,6 +386,13 @@ export interface Transaction {
   netCents?: number;
   /** Agent commission earned on a top-up, in cents. */
   commissionCents?: number;
+  /** Top-ups through an agent: who, and how the customer paid them. */
+  agentName?: string;
+  paidBy?: "cash" | "zaad";
+  /** Zaad top-ups: with the agent, or found by Zapp. */
+  meeting?: "in_person" | "remote";
+  /** Zaad top-ups through agents: Zaad's own transaction ID, when the agent or an older customer build gave one. */
+  zaadTxnId?: string;
   /** Set when an agent's commission was withheld, and why. */
   commissionWithheld?: "round_trip";
   currency: string;
@@ -306,6 +401,8 @@ export interface Transaction {
   description: string;
   /** Free-text reference / order number shown to the merchant. */
   reference?: string;
+  /** Zapp receipt number, e.g. "ZP-7K3M-9QX2" (merchant payments and refunds). */
+  receiptNumber?: string;
   /** On a refund transaction: the id of the payment being refunded. */
   refundOfTransactionId?: string;
   /** On a refunded payment: when it was refunded and the refund tx id. */
@@ -329,6 +426,15 @@ export interface Transaction {
    * are tracked on the charge — see refundPayment.
    */
   apiChargeId?: string;
+  /**
+   * Set on an API payment the customer approved in a partner's app, on their
+   * phone, under an agreement (api/agreements.ts) rather than with the PIN here.
+   */
+  approvedVia?: "partner_device";
+  /** The agreement behind such a payment. */
+  apiAgreementId?: string;
+  /** Partner transfer (`api_transfers`) behind a payroll row. */
+  apiTransferId?: string;
   /** On an API payment: cents refunded so far, across partial refunds. */
   amountRefunded?: number;
   /** On an adjustment row: the `adjustments` doc behind it. */
@@ -367,6 +473,13 @@ export interface QRCode {
   feeCents?: number;
   netCents?: number;
   transactionId?: string;
+  receiptNumber?: string;
+  /**
+   * Set when a counter display scanned a customer for this sale: the QR was
+   * voided in the same transaction that raised this payment request
+   * (counterDisplay/scan.ts). The merchant app follows the sale there.
+   */
+  supersededBy?: string;
 }
 
 // Top-up types
@@ -447,7 +560,15 @@ export interface Notification {
     | "agent_flagged"
     | "pin_changed"
     | "new_device"
-    | "phone_changed";
+    | "phone_changed"
+    | "zaad_agent_topup"
+    | "topup_cancelled"
+    /** Zapp Business: an urgent insight pushed to the shop (insights/alerts.ts). */
+    | "insight_alert"
+    /** Zapp Business: a request to link stores, or its acceptance (portal/groups.ts). */
+    | "store_link"
+    /** Staff access: an invite, a role change or a removal (staff/manage.ts). */
+    | "staff";
   title: string;
   body: string;
   data?: Record<string, string>;
@@ -473,6 +594,10 @@ export interface CustomerToken {
   createdAt: FirebaseFirestore.Timestamp;
   scannedBy?: string;
   scannedAt?: FirebaseFirestore.Timestamp;
+  /** "counter_display" when a shop's counter tablet read the code. */
+  scannedVia?: string;
+  /** A staff member who scanned for the shop in `scannedBy` (STAFF_ACCESS.md). */
+  scannedByActor?: string;
 }
 
 // Merchant-initiated payment request types
@@ -499,6 +624,12 @@ export interface MerchantPaymentRequest {
   purpose?: "payment" | "cash_out";
   /** Cash-out only: the fee the customer pays on top, fixed when raised. */
   feeCents?: number;
+  /** "counter_display" when raised by a shop's counter tablet (counterDisplay/scan.ts). */
+  source?: "counter_display";
+  /** Counter display only: which tablet, which sale it replaced, who was scanned. */
+  displayId?: string;
+  saleId?: string;
+  customerName?: string;
   createdAt: FirebaseFirestore.Timestamp;
   /**
    * When the customer can no longer approve. Absent on requests raised before
@@ -508,6 +639,13 @@ export interface MerchantPaymentRequest {
   resolvedAt?: FirebaseFirestore.Timestamp;
   /** The `transactions` row an approval wrote, so a retried approval can return it. */
   transactionId?: string;
+  /** Zapp receipt number of the payment this request settled. */
+  receiptNumber?: string;
+  /**
+   * The staff member who raised it for the shop (STAFF_ACCESS.md). Absent
+   * when the shop's own account raised it.
+   */
+  raisedBy?: string;
 }
 
 // Remittance types
@@ -533,10 +671,14 @@ export interface QRPaymentRequest {
   qrCodeId: string;
   customerId: string;
   pin: string;
+  /** The currencies the paying app shows correctly, e.g. ["USD", "SLS"]. */
+  currencies?: string[];
 }
 
 export interface PaymentResponse {
   transactionId: string;
+  /** Zapp receipt number. Absent only when replaying a pre-receipt payment. */
+  receiptNumber?: string;
   status: TransactionStatus;
   amount: number;
   merchantId: string;
@@ -583,10 +725,18 @@ export interface CashOutRequest {
   feeCents?: number;
   /**
    * Code attempts against this request, by any agent, counted before each
-   * comparison (so a successful one is counted too). The fifth wrong one
+   * comparison and given back when the code was right. The fifth wrong one
    * returns the money; no attempt past the fifth is compared at all.
    */
   failedAttempts?: number;
+  /**
+   * The same attempts by agent: `{ [agentId]: count }`. One agent gets fewer
+   * than the request allows in total, so no single agent can lock a
+   * customer's cash-out by themselves.
+   */
+  attemptsBy?: Record<string, number>;
+  /** Who tried a code and when, in order, for ops. At most one per attempt. */
+  attemptLog?: Array<{ agentId: string; at: FirebaseFirestore.Timestamp }>;
   /** Why held money went back to the customer. */
   releaseReason?: CashOutReleaseReason;
   releasedAt?: FirebaseFirestore.Timestamp;
@@ -595,7 +745,11 @@ export interface CashOutRequest {
 /** cancelled: by the customer · replaced: a newer request superseded it · expired: unclaimed in time · too_many_attempts: wrong codes */
 export type CashOutReleaseReason = "cancelled" | "replaced" | "expired" | "too_many_attempts";
 
-export type AgentTopupStatus = "pending" | "completed" | "expired" | "cancelled";
+/**
+ * `moved_to_zaad`: the agent chose Zaad at the scan (zaadAgent/inPerson.ts);
+ * the top-up carries on as `zaadAgentTopups/{zaadRequestId}`.
+ */
+export type AgentTopupStatus = "pending" | "completed" | "expired" | "cancelled" | "moved_to_zaad";
 
 // Customer-initiated agent cash-in: the customer generates this request, pays
 // the agent cash, and the agent confirms it (by QR/code) to credit the wallet.
@@ -611,4 +765,18 @@ export interface AgentTopupRequest {
   confirmationId?: string; // Unique id recorded on confirmation (= transactionId)
   transactionId?: string;
   completedAt?: FirebaseFirestore.Timestamp;
+  /**
+   * The last agent whose app was shown this request (previewAgentTopup), and
+   * when. If the customer's cash is taken and the top-up never confirmed,
+   * this is who their dispute is raised against.
+   */
+  scannedBy?: string;
+  scannedAt?: FirebaseFirestore.Timestamp;
+  /** The scanning agent's display name, so the customer's phone can say who to pay. */
+  scannedByName?: string;
+  /** Set with status `moved_to_zaad`: the Zaad request the top-up continues as. */
+  zaadRequestId?: string;
+  /** Set when the customer cancelled it (customerCancelAgentTopup). */
+  cancelledBy?: "customer";
+  cancelledAt?: FirebaseFirestore.Timestamp;
 }

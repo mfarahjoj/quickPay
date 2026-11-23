@@ -13,13 +13,11 @@ const mockedPin = verifyUserPin as jest.MockedFunction<typeof verifyUserPin>;
 const { Timestamp } = admin.firestore;
 
 const SHOP = "shop-1";
+const ZAAD = { msisdn: "+252634000000", name: "Hooyo Xasan", updatedAt: Timestamp.now() };
 const settings = (extra: Record<string, unknown> = {}) => ({
   autoPayout: {
     enabled: true,
     keepCents: 2_000,
-    route: "zaad",
-    destinationName: "Hooyo Shop",
-    destinationRef: "0634000000",
     updatedAt: Timestamp.now(),
     ...extra,
   },
@@ -49,7 +47,7 @@ describe("automatic payouts (3.6, D11)", () => {
 
   const seed = (extra: Record<string, any> = {}): FakeDb => {
     const db = fakeFirestore({
-      [`users/${SHOP}`]: { accountType: "merchant", fullName: "Hooyo Shop" },
+      [`users/${SHOP}`]: { accountType: "merchant", fullName: "Hooyo Shop", zaad: ZAAD },
       [`wallets/${SHOP}`]: wallet(12_000),
       [`merchantProfiles/${SHOP}`]: { businessName: "Hooyo Shop", ...settings() },
       ...extra,
@@ -64,9 +62,60 @@ describe("automatic payouts (3.6, D11)", () => {
     const db = seed();
     expect(await runNow()).toEqual({ queued: 1, skipped: 0 });
     const [p] = payouts(db);
-    expect(p).toMatchObject({ merchantId: SHOP, amountCents: 10_000, route: "zaad", auto: true, status: "requested" });
+    expect(p).toMatchObject({
+      merchantId: SHOP,
+      amountCents: 10_000,
+      route: "zaad",
+      destinationName: "Hooyo Xasan",
+      destinationRef: "+252634000000",
+      auto: true,
+      status: "requested",
+    });
     expect(db.get(`wallets/${SHOP}`)!.balance).toBe(2_000);
     expect(db.get("ledger_balances/platform:settlement_hold")!.balance).toBe(10_000);
+  });
+
+  describe("in shillings", () => {
+    const sls = (balance: number) => ({ sls: { balance, totalSent: 0, totalReceived: 0 } });
+
+    it("pays shillings out as shillings, only when the shop turned them on", async () => {
+      let db = seed({ [`wallets/${SHOP}`]: wallet(12_000, sls(500_000)) });
+      expect((await runNow()).queued).toBe(1);
+      expect(payouts(db).map((p) => p.currency ?? "USD")).toEqual(["USD"]);
+      restore?.();
+
+      db = seed({
+        [`wallets/${SHOP}`]: wallet(12_000, sls(500_000)),
+        [`merchantProfiles/${SHOP}`]: { businessName: "Hooyo Shop", ...settings({ shillings: { enabled: true, keep: 100_000 } }) },
+        "config/rates": { slsPerUsd: 8_000 },
+      });
+      expect(await runNow()).toEqual({ queued: 2, skipped: 0 });
+      const slsPayout = payouts(db).find((p) => p.currency === "SLS")!;
+      expect(slsPayout).toMatchObject({ amountCents: 400_000, auto: true, status: "requested" });
+      expect(db.get(`wallets/${SHOP}`)!.sls.balance).toBe(100_000);
+      expect(db.get(`wallets/${SHOP}`)!.balance).toBe(2_000);
+      expect(db.get("ledger_balances/platform:settlement_hold@SLS")!.balance).toBe(400_000);
+    });
+
+    it("skips shillings under the minimum, counted at the rate", async () => {
+      const db = seed({
+        [`wallets/${SHOP}`]: wallet(0, sls(150_000)),
+        [`merchantProfiles/${SHOP}`]: { businessName: "Hooyo Shop", ...settings({ shillings: { enabled: true, keep: 100_000 } }) },
+        "config/rates": { slsPerUsd: 8_000, autoPayoutMinCents: 1_000 },
+      });
+      // 50,000 shillings above the kept balance; $10 is 80,000 shillings.
+      expect((await runNow()).queued).toBe(0);
+      expect(payouts(db)).toHaveLength(0);
+    });
+
+    it("is switched on with its own balance to keep, and older apps leave it alone", async () => {
+      const db = seed({ [`merchantProfiles/${SHOP}`]: { businessName: "Hooyo Shop" } });
+      await setAuto({ data: { enabled: true, keepCents: 1_000, shillingsEnabled: true, keepSls: 50_000, pin: "123456" }, auth: { uid: SHOP } });
+      expect(db.get(`merchantProfiles/${SHOP}`)!.autoPayout.shillings).toEqual({ enabled: true, keep: 50_000 });
+      // An app that knows nothing of shillings changes only the dollar side.
+      await setAuto({ data: { enabled: true, keepCents: 3_000, pin: "123456" }, auth: { uid: SHOP } });
+      expect(db.get(`merchantProfiles/${SHOP}`)!.autoPayout).toMatchObject({ keepCents: 3_000, shillings: { enabled: true, keep: 50_000 } });
+    });
   });
 
   it("never counts money reserved for a lost dispute", async () => {
@@ -82,22 +131,35 @@ describe("automatic payouts (3.6, D11)", () => {
     db = seed({ "payoutRequests/old": { merchantId: SHOP, status: "requested", amountCents: 500 } });
     expect((await runNow()).queued).toBe(0);
     restore?.();
-    db = seed({ [`users/${SHOP}`]: { accountType: "merchant", accountStatus: "frozen" } });
+    db = seed({ [`users/${SHOP}`]: { accountType: "merchant", accountStatus: "frozen", zaad: ZAAD } });
+    expect((await runNow()).queued).toBe(0);
+    expect(payouts(db)).toHaveLength(0);
+  });
+
+  it("skips a shop with no Zaad account, or a number changed today", async () => {
+    let db = seed({ [`users/${SHOP}`]: { accountType: "merchant", fullName: "Hooyo Shop" } });
+    expect((await runNow()).queued).toBe(0);
+    restore?.();
+    db = seed({ [`users/${SHOP}`]: { accountType: "merchant", zaad: { ...ZAAD, changedAt: Timestamp.now() } } });
     expect((await runNow()).queued).toBe(0);
     expect(payouts(db)).toHaveLength(0);
   });
 
   it("is switched on with the PIN, and off again", async () => {
     const db = seed({ [`merchantProfiles/${SHOP}`]: { businessName: "Hooyo Shop" } });
-    await setAuto({
-      data: { enabled: true, keepCents: 1_000, route: "bank", destinationName: "Hooyo Ltd", destinationRef: "0123456789", pin: "123456" },
-      auth: { uid: SHOP },
-    });
-    expect(db.get(`merchantProfiles/${SHOP}`)!.autoPayout).toMatchObject({ enabled: true, keepCents: 1_000, route: "bank" });
+    await setAuto({ data: { enabled: true, keepCents: 1_000, pin: "123456" }, auth: { uid: SHOP } });
+    expect(db.get(`merchantProfiles/${SHOP}`)!.autoPayout).toMatchObject({ enabled: true, keepCents: 1_000 });
     await setAuto({ data: { enabled: false, pin: "123456" }, auth: { uid: SHOP } });
     expect(db.get(`merchantProfiles/${SHOP}`)!.autoPayout.enabled).toBe(false);
     mockedPin.mockResolvedValue(false);
     await expect(setAuto({ data: { enabled: false, pin: "000000" }, auth: { uid: SHOP } })).rejects.toThrow(/Invalid PIN/);
+  });
+
+  it("won't switch on without a Zaad account", async () => {
+    seed({ [`users/${SHOP}`]: { accountType: "merchant", fullName: "Hooyo Shop" } });
+    await expect(setAuto({ data: { enabled: true, keepCents: 0, pin: "123456" }, auth: { uid: SHOP } })).rejects.toThrow(
+      /Add your Zaad account/
+    );
   });
 
   it("refuses customers", async () => {
@@ -117,11 +179,24 @@ describe("statements (3.6, D11)", () => {
   it("puts net in, money out and fees in their own columns, with totals", () => {
     const { csv, totals } = buildStatementCsv(SHOP, rows);
     const lines = csv.split("\n");
-    expect(lines[0]).toBe("Date (UTC),Type,Description,Money in,Money out,Fee,Status,Reference,Transaction ID");
-    expect(lines[1]).toBe("2026-10-01 09:00:00,merchant_payment,Payment from Amina,9.90,,0.10,completed,,t1");
-    expect(lines[2]).toBe("2026-10-02 10:00:00,refund,Partial refund,,3.00,,completed,,t2");
+    expect(lines[0]).toBe("Date (UTC),Type,Description,Currency,Money in,Money out,Fee,Status,Reference,Transaction ID");
+    expect(lines[1]).toBe("2026-10-01 09:00:00,merchant_payment,Payment from Amina,USD,9.90,,0.10,completed,,t1");
+    expect(lines[2]).toBe("2026-10-02 10:00:00,refund,Partial refund,USD,,3.00,,completed,,t2");
     expect(totals).toEqual({ inCents: 990, outCents: 300, feeCents: 10, count: 3 });
-    expect(lines[lines.length - 1]).toBe("Totals (completed only),,,9.90,3.00,0.10,,,");
+    expect(lines[lines.length - 1]).toBe("Totals (completed only),,,USD,9.90,3.00,0.10,,,");
+  });
+
+  it("never adds shillings into the dollar totals", () => {
+    const sls = { id: "t4", type: "payment", kind: "merchant_payment", fromUserId: "c1", toUserId: SHOP, amount: 30_000, feeCents: 300, netCents: 29_700, currency: "SLS", status: "completed", description: "Payment from Amina", createdAt: at("2026-10-04T09:00:00Z") };
+    const { csv, totals, totalsSls } = buildStatementCsv(SHOP, [...rows, sls]);
+    const lines = csv.split("\n");
+    expect(lines[4]).toBe("2026-10-04 09:00:00,merchant_payment,Payment from Amina,SLSH,29700,,300,completed,,t4");
+    expect(totals).toEqual({ inCents: 990, outCents: 300, feeCents: 10, count: 3 });
+    expect(totalsSls).toEqual({ inCents: 29_700, outCents: 0, feeCents: 300, count: 1 });
+    expect(lines.slice(-2)).toEqual([
+      "Totals (completed only),,,USD,9.90,3.00,0.10,,,",
+      "Totals (completed only),,,SLSH,29700,0,300,,,",
+    ]);
   });
 
   it("quotes commas and quotes, and defuses spreadsheet formulas", () => {

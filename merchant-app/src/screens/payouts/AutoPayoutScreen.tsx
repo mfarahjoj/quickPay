@@ -1,33 +1,38 @@
 /**
  * Automatic daily payouts (plan 3.6, D11): each evening, everything above the
- * balance the merchant chooses to keep is requested as a payout to the
- * account they give here. Switching it on or off takes the PIN.
+ * balance the merchant chooses to keep is requested as a payout to their
+ * Zaad account on file. Switching it on or off takes the PIN.
+ *
+ * Shillings are their own opt-in with their own balance to keep, paid out
+ * as shillings, never converted (SHILLINGS.md).
  */
 
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Switch, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput, ActivityIndicator, Switch, Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
-import { DarkScreen, ScreenHeader, GlassCard, PillButton, PinInput, ACCENT, TEXT_DIM, TEXT_FAINT } from '../../components';
+import { DarkScreen, ScreenHeader, GlassCard, PillButton, PinInput } from '../../components';
 import { firestore, functions } from '../../services/firebase.config';
 import { useAuth } from '../../hooks/useAuth';
-import { toCents, formatCents, sanitizeAmountInput } from '../../utils/money';
+import { useMerchantProfile } from '../../hooks/useMerchantProfile';
+import { toCents, formatCents, sanitizeAmountFor, sanitizeAmountInput, toAmount } from '../../utils/money';
 import { isWrongPin, pinActionErrorKey } from '../../utils/errors';
-
-type Route = 'bank' | 'zaad' | 'edahab' | 'cash';
-const ROUTES: Route[] = ['bank', 'zaad', 'edahab', 'cash'];
+import { ZaadDestination } from './ZaadDestination';
+import { makeStyles, useColors } from '../../theme';
 
 export default function AutoPayoutScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
   const { user } = useAuth();
+  const zaad = useMerchantProfile().profile?.zaad;
 
   const [loading, setLoading] = useState(true);
   const [enabled, setEnabled] = useState(false);
   const [keep, setKeep] = useState('20');
-  const [route, setRoute] = useState<Route>('zaad');
-  const [name, setName] = useState('');
-  const [ref, setRef] = useState('');
+  const [slsEnabled, setSlsEnabled] = useState(false);
+  const [keepSls, setKeepSls] = useState('0');
   const [minCents, setMinCents] = useState(1000);
   const [pinStep, setPinStep] = useState(false);
   const [pin, setPin] = useState('');
@@ -45,9 +50,10 @@ export default function AutoPayoutScreen() {
         if (a) {
           setEnabled(!!a.enabled);
           if (typeof a.keepCents === 'number') setKeep((a.keepCents / 100).toFixed(2));
-          if (a.route) setRoute(a.route);
-          if (a.destinationName) setName(a.destinationName);
-          if (a.destinationRef) setRef(a.destinationRef);
+          if (a.shillings) {
+            setSlsEnabled(!!a.shillings.enabled);
+            if (typeof a.shillings.keep === 'number') setKeepSls(String(a.shillings.keep));
+          }
         }
         setMinCents((pricing.data as any)?.data?.autoPayoutMinCents ?? 1000);
       })
@@ -55,7 +61,7 @@ export default function AutoPayoutScreen() {
       .finally(() => setLoading(false));
   }, [user?.uid]);
 
-  const valid = !enabled || (name.trim().length >= 2 && ref.trim().length >= 3);
+  const valid = !enabled || !!zaad;
 
   const save = async (enteredPin: string) => {
     if (saving) return;
@@ -63,7 +69,13 @@ export default function AutoPayoutScreen() {
     try {
       await functions().httpsCallable('setAutoPayout')(
         enabled
-          ? { enabled, keepCents: toCents(keep), route, destinationName: name.trim(), destinationRef: ref.trim(), pin: enteredPin }
+          ? {
+              enabled,
+              keepCents: toCents(keep),
+              shillingsEnabled: slsEnabled,
+              keepSls: toAmount(keepSls, 'SLS'),
+              pin: enteredPin,
+            }
           : { enabled, pin: enteredPin }
       );
       setPinStep(false);
@@ -88,6 +100,7 @@ export default function AutoPayoutScreen() {
         <Text style={styles.bigTitle}>{t('payout.pinTitle')}</Text>
         <Text style={styles.sub}>{enabled ? t('autoPayout.pinOn') : t('autoPayout.pinOff')}</Text>
         <PinInput
+          autoFocus
           value={pin}
           onChange={(v) => {
             setPin(v);
@@ -97,7 +110,7 @@ export default function AutoPayoutScreen() {
           style={styles.pinInput}
         />
         {pinError ? <Text style={styles.pinError}>{pinError}</Text> : null}
-        {saving ? <ActivityIndicator color="#FFFFFF" style={styles.spinner} /> : null}
+        {saving ? <ActivityIndicator color={colors.ui.text} style={styles.spinner} /> : null}
         <View style={styles.block}>
           <PillButton label={t('common.cancel')} variant="glass" onPress={() => setPinStep(false)} disabled={saving} />
         </View>
@@ -110,13 +123,13 @@ export default function AutoPayoutScreen() {
       <ScreenHeader title={t('autoPayout.title')} onBack={() => navigation.goBack()} />
       <View style={styles.body}>
         {loading ? (
-          <ActivityIndicator color="#FFFFFF" style={styles.spinner} />
+          <ActivityIndicator color={colors.ui.text} style={styles.spinner} />
         ) : (
           <>
             <GlassCard style={styles.toggleCard}>
               <View style={styles.toggleRow}>
                 <Text style={styles.toggleLabel}>{t('autoPayout.toggle')}</Text>
-                <Switch value={enabled} onValueChange={setEnabled} trackColor={{ false: 'rgba(255,255,255,0.15)', true: ACCENT }} thumbColor="#FFFFFF" />
+                <Switch value={enabled} onValueChange={setEnabled} trackColor={{ false: colors.ui.ink(0.15), true: colors.ui.accent }} thumbColor={colors.ui.text} />
               </View>
               <Text style={styles.hint}>{t('autoPayout.explain', { min: formatCents(minCents) })}</Text>
             </GlassCard>
@@ -130,32 +143,39 @@ export default function AutoPayoutScreen() {
                     value={keep}
                     onChangeText={(v) => setKeep(sanitizeAmountInput(v))}
                     keyboardType="decimal-pad"
-                    placeholderTextColor={TEXT_FAINT}
+                    placeholderTextColor={colors.ui.textFaint}
                   />
                 </GlassCard>
                 <Text style={styles.hint}>{t('autoPayout.keepHint')}</Text>
 
-                <Text style={styles.label}>{t('payout.routeLabel')}</Text>
-                <View style={styles.routeRow}>
-                  {ROUTES.map((r) => (
-                    <TouchableOpacity key={r} style={[styles.routeChip, route === r && styles.routeChipActive]} onPress={() => setRoute(r)}>
-                      <Text style={styles.routeText}>{t(`payout.route.${r}`)}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                <Text style={styles.label}>{t('payout.destinationLabel')}</Text>
-                <GlassCard>
-                  <TextInput style={styles.input} value={name} onChangeText={setName} placeholder={t('payout.destinationNamePlaceholder')} placeholderTextColor={TEXT_FAINT} />
-                  <View style={styles.divider} />
-                  <TextInput
-                    style={styles.input}
-                    value={ref}
-                    onChangeText={setRef}
-                    placeholder={route === 'bank' ? t('payout.destinationAccountPlaceholder') : t('payout.destinationPhonePlaceholder')}
-                    placeholderTextColor={TEXT_FAINT}
-                  />
+                <GlassCard style={[styles.toggleCard, styles.slsCard]}>
+                  <View style={styles.toggleRow}>
+                    <Text style={styles.toggleLabel}>{t('autoPayout.shillingsToggle')}</Text>
+                    <Switch
+                      value={slsEnabled}
+                      onValueChange={setSlsEnabled}
+                      trackColor={{ false: colors.ui.ink(0.15), true: colors.ui.accent }}
+                      thumbColor={colors.ui.text}
+                    />
+                  </View>
+                  <Text style={styles.hint}>{t('autoPayout.shillingsHint')}</Text>
                 </GlassCard>
+                {slsEnabled && (
+                  <>
+                    <Text style={styles.label}>{t('autoPayout.keepSlsLabel')}</Text>
+                    <GlassCard>
+                      <TextInput
+                        style={styles.input}
+                        value={keepSls}
+                        onChangeText={(v) => setKeepSls(sanitizeAmountFor(v, 'SLS'))}
+                        keyboardType="number-pad"
+                        placeholderTextColor={colors.ui.textFaint}
+                      />
+                    </GlassCard>
+                  </>
+                )}
+
+                <ZaadDestination zaad={zaad} />
               </>
             )}
 
@@ -167,25 +187,21 @@ export default function AutoPayoutScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   body: { paddingHorizontal: 24, paddingBottom: 48 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
-  bigTitle: { fontSize: 24, fontWeight: '800', color: '#FFFFFF', textAlign: 'center' },
-  sub: { fontSize: 15, color: TEXT_DIM, textAlign: 'center', marginTop: 6 },
+  bigTitle: { fontSize: 24, fontWeight: '800', color: colors.ui.text, textAlign: 'center' },
+  sub: { fontSize: 15, color: colors.ui.textDim, textAlign: 'center', marginTop: 6 },
   pinInput: { marginTop: 28 },
-  pinError: { fontSize: 14, color: '#FF6961', textAlign: 'center', marginTop: 16 },
+  pinError: { fontSize: 14, color: colors.ui.error, textAlign: 'center', marginTop: 16 },
   spinner: { marginTop: 20 },
   block: { alignSelf: 'stretch', marginTop: 28 },
   toggleCard: { padding: 16, marginTop: 8 },
   toggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  toggleLabel: { fontSize: 16, fontWeight: '600', color: '#FFFFFF', flex: 1 },
-  label: { fontSize: 12, fontWeight: '700', color: TEXT_FAINT, letterSpacing: 1, textTransform: 'uppercase', marginTop: 20, marginBottom: 8 },
-  input: { fontSize: 15, color: '#FFFFFF', padding: 16 },
-  divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.08)' },
-  hint: { fontSize: 12, color: TEXT_FAINT, marginTop: 10, lineHeight: 17 },
-  routeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  routeChip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
-  routeChipActive: { backgroundColor: ACCENT, borderColor: ACCENT },
-  routeText: { color: '#FFFFFF', fontWeight: '600' },
+  toggleLabel: { fontSize: 16, fontWeight: '600', color: colors.ui.text, flex: 1 },
+  label: { fontSize: 12, fontWeight: '700', color: colors.ui.textFaint, letterSpacing: 1, textTransform: 'uppercase', marginTop: 20, marginBottom: 8 },
+  input: { fontSize: 15, color: colors.ui.text, padding: 16 },
+  hint: { fontSize: 12, color: colors.ui.textFaint, marginTop: 10, lineHeight: 17 },
   save: { marginTop: 28 },
-});
+  slsCard: { marginTop: 20 },
+}));

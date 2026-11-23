@@ -23,6 +23,9 @@ import { maybeUnlockReferral } from "../referral/referralBonus";
 /** Long enough to review a submission, short enough that a leak expires. */
 const SIGNED_URL_TTL_MS = 15 * 60 * 1000;
 
+/** Photos up to this size travel inside the response. */
+const INLINE_IMAGE_MAX_BYTES = 8 * 1024 * 1024;
+
 interface ListKycRequest {
   status?: KycStatus;
   limit?: number;
@@ -75,11 +78,14 @@ export const adminListKycQueue = https.onCall(
       userSnaps.filter((u) => u.exists).map((u) => [u.id, u.data()!])
     );
 
-    const rows: KycQueueRow[] = snap.docs.map((doc, i) => {
+    const rows: KycQueueRow[] = snap.docs.flatMap((doc, i) => {
       const kyc = doc.data() as KycDocument;
+      // An ID sent with a merchant/agent application waiting in the role
+      // queue is decided there, with the rest of the application.
+      if (kyc.source === "role_application" && kyc.status === "submitted") return [];
       const userId = userIds[i];
       const user = usersById.get(userId);
-      return {
+      return [{
         userId,
         idType: kyc.idType,
         status: kyc.status,
@@ -87,7 +93,7 @@ export const adminListKycQueue = https.onCall(
         applicantName: user?.fullName,
         applicantPhone: user?.phoneNumber,
         accountType: user?.accountType,
-      };
+      }];
     });
 
     return { success: true, data: rows };
@@ -98,8 +104,8 @@ interface GetKycRequest {
   userId: string;
 }
 
-interface SignedImage {
-  label: "front" | "back" | "selfie";
+export interface SignedImage {
+  label: "front" | "back" | "selfie" | "shop";
   url?: string;
   /** Why the image could not be shown, when it could not. */
   error?: string;
@@ -111,7 +117,7 @@ interface SignedImage {
  * Returns an error string rather than the raw stored URL on any failure:
  * handing back the permanent download link is exactly what this avoids.
  */
-async function signImage(
+export async function signImage(
   label: SignedImage["label"],
   storedRef: unknown,
   pathHint: unknown,
@@ -134,7 +140,21 @@ async function signImage(
     const bucket = parsed.bucket
       ? admin.storage().bucket(parsed.bucket)
       : admin.storage().bucket();
-    const [url] = await bucket.file(parsed.path).getSignedUrl({
+    const file = bucket.file(parsed.path);
+    // Send the bytes themselves. A signed link depends on the service account
+    // being allowed to sign and on the browser reaching storage directly, and
+    // in practice the photos stayed broken. Nothing durable leaves here.
+    try {
+      const [meta] = await file.getMetadata();
+      if (Number(meta.size) <= INLINE_IMAGE_MAX_BYTES) {
+        const [bytes] = await file.download();
+        const type = typeof meta.contentType === "string" ? meta.contentType : "image/jpeg";
+        return { label, url: `data:${type};base64,${bytes.toString("base64")}` };
+      }
+    } catch (err) {
+      console.warn(`Could not inline KYC image ${parsed.path}, trying a signed link:`, err);
+    }
+    const [url] = await file.getSignedUrl({
       action: "read",
       expires: Date.now() + SIGNED_URL_TTL_MS,
     });
@@ -317,10 +337,7 @@ export const adminReviewKyc = https.onCall(
     notifyUser(
       userId,
       approved ? "kyc_approved" : "kyc_rejected",
-      approved ? "Identity verified" : "Verification unsuccessful",
-      approved
-        ? "Your identity is verified. Your transaction limits have increased."
-        : `We could not verify your documents. ${reason}`,
+      approved ? { key: "kyc.approved" } : { key: "kyc.rejected", params: { reason } },
       { kycStatus: outcome.kycStatus }
     ).catch((err) => console.error("Failed to notify applicant:", err));
 

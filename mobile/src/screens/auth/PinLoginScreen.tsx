@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from '../../components/SafeAreaView';
 import { useTranslation } from 'react-i18next';
 import { PinKeypad } from '../../components/PinKeypad';
 import {
@@ -8,11 +9,11 @@ import {
   IncorrectPinError,
   PinLockoutError, pinLockoutMessage,
 } from '../../services/auth.service';
-import { markPinVerifiedThisInstall } from '../../hooks/usePinVerifiedThisInstall';
 import { getDeviceCredential } from '../../services/device.service';
+import { setPendingSetupPin } from '../../services/biometric.service';
 import { accountLine } from '../../services/accountLabel';
 import { logger } from '../../utils/logger';
-import { colors, typography, spacing } from '../../theme';
+import { typography, spacing, makeStyles } from '../../theme';
 
 interface Props {
   /** Fall back to the phone + SMS code flow. */
@@ -28,6 +29,7 @@ interface Props {
  * onComplete, because signing in is the completion.
  */
 export default function PinLoginScreen({ onUseCode, onBack }: Props) {
+  const styles = useStyles();
   const { t } = useTranslation();
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
@@ -48,11 +50,12 @@ export default function PinLoginScreen({ onUseCode, onBack }: Props) {
     try {
       setLoading(true);
       setError('');
+      // Also marks the PIN checked on this install, before the session
+      // starts, so the navigator doesn't ask for it again.
       await loginWithPin(submitted);
-      // The PIN was just verified server-side, so satisfy the install-scoped
-      // flag too — signOut clears it, and without this the navigator would
-      // route straight to WelcomeBackScreen and ask for the same PIN again.
-      await markPinVerifiedThisInstall();
+      // Signing out clears Face ID; if they turn it back on next, it can use
+      // this PIN instead of asking for it a second time.
+      setPendingSetupPin(submitted);
       // Signed in — the navigator's auth gate swaps this screen out.
     } catch (err) {
       if (err instanceof PinLockoutError) {
@@ -120,10 +123,10 @@ export default function PinLoginScreen({ onUseCode, onBack }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   fullScreen: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   footer: {
     alignItems: 'center',
@@ -137,18 +140,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: colors.dark.accentText,
+    borderColor: colors.ui.accentText,
   },
   wrongAccountHint: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     textAlign: 'center',
     paddingHorizontal: spacing.xl,
     marginBottom: spacing.sm,
   },
   linkText: {
     ...typography.bodySemibold,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
   },
   backLink: {
     alignItems: 'center',
@@ -156,6 +159,6 @@ const styles = StyleSheet.create({
   },
   backText: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
   },
-});
+}));

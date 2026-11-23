@@ -1,50 +1,36 @@
 import { useState, useEffect, useCallback } from 'react';
-import { AppState, AppStateStatus } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const PIN_SETUP_DONE_KEY = '@quickpay_pin_setup_done';
-
-async function isPinSetup(): Promise<boolean> {
-  try {
-    return (await AsyncStorage.getItem(PIN_SETUP_DONE_KEY)) === 'true';
-  } catch {
-    return false;
-  }
-}
+import { AppState, AppStateStatus, Keyboard } from 'react-native';
+import { pinSetupDoneFlag, useFlag } from '../services/signInFlags';
 
 /**
  * `locked` is null until the first read settles. The navigator treats null as
- * still loading: starting at false let the wallet mount for a frame on a cold
- * start and then be torn down for the lock screen, which flashed the balance
- * and swapped the root under react-native-screens mid-mount.
+ * still loading: starting at false let the wallet show for a frame on a cold
+ * start before the lock screen went over it, which flashed the balance.
  */
 export function useAppLock() {
+  const pinSetUp = useFlag(pinSetupDoneFlag);
   const [locked, setLocked] = useState<boolean | null>(null);
 
   const unlock = useCallback(() => setLocked(false), []);
 
+  // Locked at launch when this phone has a PIN set up. Decided once: setting
+  // a PIN later (signing up) mustn't lock the app.
   useEffect(() => {
-    let cancelled = false;
-    isPinSetup().then((setup) => {
-      if (!cancelled) setLocked(setup);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    if (locked === null && pinSetUp !== null) setLocked(pinSetUp);
+  }, [locked, pinSetUp]);
 
-  // Lock as the app goes to the background, so the wallet is swapped for the
-  // lock screen while nobody can see it and the lock screen is already up
-  // when the app returns. Only 'background' counts, not 'inactive': the Face
-  // ID sheet, control center and permission dialogs all pass through
+  // Lock as the app goes to the background, so the lock screen is already
+  // up when the app returns. Only 'background' counts, not 'inactive': the
+  // Face ID sheet, control center and permission dialogs all pass through
   // 'inactive', and locking on those re-prompted Face ID right after it
   // succeeded.
   useEffect(() => {
     const handleAppStateChange = (nextState: AppStateStatus) => {
-      if (nextState !== 'background') return;
-      isPinSetup().then((setup) => {
-        if (setup) setLocked(true);
-      });
+      if (nextState !== 'background' || pinSetupDoneFlag.get() !== true) return;
+      // The lock covers the app rather than replacing it, so a field that
+      // had the keyboard up would bring it back over the PIN pad.
+      Keyboard.dismiss();
+      setLocked(true);
     };
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => subscription.remove();

@@ -86,7 +86,34 @@ describe("adminPostAdjustment", () => {
     });
     expect(db.get(`adjustments/${id}`)!.postedBy).toBe("admin-1");
     expect(db.get(`admin_audit/${res.data.auditId}`)!.action).toBe("ledger.adjust");
-    expect(notifyUser).toHaveBeenCalledWith("cust-1", "adjustment_posted", expect.any(String), expect.any(String), expect.any(Object));
+    expect(notifyUser).toHaveBeenCalledWith(
+      "cust-1",
+      "adjustment_posted",
+      { key: "adjustment.credit", params: { amount: "$25.00" } },
+      expect.any(Object)
+    );
+  });
+
+  it("corrects in shillings, moving shillings only, and says so", async () => {
+    const db = seed({ "config/rates": { slsPerUsd: 8_000 } });
+    const res = await call({ amountCents: 40_000, currency: "SLS" });
+    expect(db.get("wallets/cust-1")!.sls.balance).toBe(40_000);
+    expect(db.get("wallets/cust-1")!.balance).toBe(1_000);
+    expect(db.get("ledger_balances/platform:fees@SLS")!.balance).toBe(-40_000);
+    expect(db.get(`adjustments/${res.data.adjustmentId}`)).toMatchObject({ amountCents: 40_000, currency: "SLS" });
+    expect(db.get(`transactions/adjustment_${res.data.adjustmentId}`)).toMatchObject({ currency: "SLS", amount: 40_000 });
+    expect(notifyUser).toHaveBeenCalledWith(
+      "cust-1",
+      "adjustment_posted",
+      { key: "adjustment.credit", params: { amount: "40,000 SLSH" } },
+      expect.any(Object)
+    );
+  });
+
+  it("counts shillings at the rate towards the senior threshold", async () => {
+    seed({ "config/rates": { slsPerUsd: 8_000, floatApprovalThresholdCents: 50_000 } });
+    // 4,000,000 shillings is $500.
+    await expect(call({ amountCents: 4_000_000, currency: "SLS" })).rejects.toThrow(/senior admin/);
   });
 
   it("moves value between two wallets", async () => {

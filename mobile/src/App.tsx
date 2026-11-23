@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { Alert, Linking, StyleSheet } from 'react-native';
+import { Alert, Linking, StatusBar, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from 'react-i18next';
 import { guardFreshInstall } from './services/installGuard';
@@ -15,20 +15,32 @@ import { registerForPushNotifications } from './services/notification.service';
 import crashlytics from '@react-native-firebase/crashlytics';
 import { firebase } from '@react-native-firebase/app-check';
 import { parseChargeLink } from './services/apiCharge.service';
+import { parseAgreementLink } from './services/apiAgreement.service';
+import { ThemeProvider, useTheme } from './theme';
 
-/** Give up on a pending deep link if the customer hasn't unlocked the app by then. */
+/** Give up on a pending deep link if the customer hasn't signed in by then. */
 const PENDING_LINK_TIMEOUT_MS = 2 * 60 * 1000;
 
 /**
  * Open the approval screen for an API charge once the app can show it. The
- * navigation container only mounts after sign-in and the app lock, so a link
- * opened from the checkout page waits for the customer to unlock first.
+ * navigation container only mounts after sign-in, so a link opened from the
+ * checkout page waits for that. The app lock covers the screen until the
+ * customer unlocks.
  */
 function navigateToApiCharge(chargeId: string) {
+  navigateWhenSignedIn(() => navigationRef.navigate('ApprovePayment', { chargeId }));
+}
+
+/** Same, for a partner's request to link (zapppay://agreement/{id}). */
+function navigateToAgreement(agreementId: string) {
+  navigateWhenSignedIn(() => navigationRef.navigate('ApproveAgreement', { agreementId }));
+}
+
+function navigateWhenSignedIn(go: () => void) {
   const startedAt = Date.now();
   const waitAndNavigate = () => {
     if (navigationRef.isReady() && auth().currentUser) {
-      navigationRef.navigate('ApprovePayment', { chargeId });
+      go();
     } else if (Date.now() - startedAt < PENDING_LINK_TIMEOUT_MS) {
       setTimeout(waitAndNavigate, 500);
     }
@@ -152,10 +164,17 @@ function AppContent() {
   }, [t]);
 
   // zapppay://charge/{id} — the "Open Zapp Pay" button on the hosted checkout.
+  // zapppay://agreement/{id} — a partner's app asking to link (Ridy).
   useEffect(() => {
     const open = (url: string | null) => {
-      const chargeId = url ? parseChargeLink(url) : null;
-      if (chargeId) navigateToApiCharge(chargeId);
+      if (!url) return;
+      const chargeId = parseChargeLink(url);
+      if (chargeId) {
+        navigateToApiCharge(chargeId);
+        return;
+      }
+      const agreementId = parseAgreementLink(url);
+      if (agreementId) navigateToAgreement(agreementId);
     };
     Linking.getInitialURL().then(open).catch(() => undefined);
     const sub = Linking.addEventListener('url', ({ url }) => open(url));
@@ -165,8 +184,14 @@ function AppContent() {
   // After the App Check setup above: the gate's first read should carry a token.
   const updateGate = useUpdateGate();
 
+  const { scheme, colors } = useTheme();
+
   return (
-    <GestureHandlerRootView style={styles.root}>
+    <GestureHandlerRootView style={[styles.root, { backgroundColor: colors.ui.canvas }]}>
+      <StatusBar
+        barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'}
+        backgroundColor={colors.ui.canvas}
+      />
       <SafeAreaProvider>
         <ToastProvider>
           <LanguageSync />
@@ -187,7 +212,7 @@ export default function App() {
   useEffect(() => {
     guardFreshInstall().finally(() => setInstallChecked(true));
   }, []);
-  return installChecked ? <AppContent /> : null;
+  return <ThemeProvider>{installChecked ? <AppContent /> : null}</ThemeProvider>;
 }
 
 const styles = StyleSheet.create({

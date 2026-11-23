@@ -12,6 +12,8 @@ export interface MerchantProfile {
   accountType: 'merchant' | 'topup_agent' | 'agent_merchant';
   isActive: boolean;
   createdAt?: Date;
+  /** Where payouts go (services/zaadAccount.service.ts); unset until given. */
+  zaad?: { msisdn: string; name: string };
 }
 
 export function useMerchantProfile() {
@@ -51,6 +53,9 @@ export function useMerchantProfile() {
             accountType,
             isActive: data?.isActive ?? true,
             createdAt: data?.createdAt?.toDate() ?? undefined,
+            zaad: data?.zaad?.msisdn && data?.zaad?.name
+              ? { msisdn: data.zaad.msisdn, name: data.zaad.name }
+              : undefined,
           });
         },
         (err) => {

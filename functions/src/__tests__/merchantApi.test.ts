@@ -213,10 +213,30 @@ describe("Merchant Payments API", () => {
       expect(db.get(`api_charges/${res.json.id}`)!.customerId).toBe(CUSTOMER);
       expect(mockedPush).toHaveBeenCalledWith(
         CUSTOMER,
-        "Payment Request",
-        expect.stringContaining("Hooyo Cafe"),
+        {
+          key: "payment.request_with_reference",
+          params: { merchant: "Hooyo Cafe", amount: "USD 12.50", reference: "Order 1001" },
+        },
         expect.objectContaining({ type: "api_charge", chargeId: res.json.id })
       );
+    });
+
+    it("takes a shilling charge as SLSH, in whole shillings", async () => {
+      const res = await createCharge(
+        { amount: 30_000, currency: "SLSH", customer_phone: "+252634000001" },
+        "idem-sls-charge"
+      );
+      expect(res.statusCode).toBe(201);
+      expect(res.json).toMatchObject({ amount: 30_000, currency: "SLSH" });
+      // Stored in the ledger's code, which approval posts in.
+      expect(db.get(`api_charges/${res.json.id}`)).toMatchObject({ amount: 30_000, currency: "SLS" });
+      expect(mockedPush).toHaveBeenCalledWith(
+        CUSTOMER,
+        expect.objectContaining({ params: expect.objectContaining({ amount: "SLSH 30,000" }) }),
+        expect.objectContaining({ currency: "SLS" })
+      );
+      const read = await request("GET", `/v1/charges/${res.json.id}`);
+      expect(read.json.currency).toBe("SLSH");
     });
 
     it("answers the same for a phone with no Zapp account", async () => {
@@ -356,6 +376,30 @@ describe("Merchant Payments API", () => {
     const refund = (body: Record<string, unknown> = {}, idem = "refund-attempt-1") =>
       request("POST", `/v1/charges/${CHARGE}/refunds`, { body, idem });
 
+    it("refunds a shilling charge in shillings, from the merchant's shillings", async () => {
+      db.store.set(`api_charges/${CHARGE}`, {
+        ...db.get(`api_charges/${CHARGE}`)!,
+        amount: 30_000,
+        currency: "SLS",
+        feeCents: 300,
+        netCents: 29_700,
+      });
+      db.store.set(`wallets/${MERCHANT}`, wallet(4950, { sls: { balance: 29_700, totalSent: 0, totalReceived: 29_700 } }));
+      db.store.set("ledger_balances/platform:fees@SLS", { account: "platform:fees", balance: 300, currency: "SLS" });
+
+      const res = await refund({ amount: 10_000 });
+      expect(res.statusCode).toBe(201);
+      expect(res.json).toMatchObject({ amount: 10_000, fee_returned: 100, currency: "SLSH" });
+      const entry = db.get(`journal_entries/refund_apicharge_${CHARGE}_1`)!;
+      expect(entry.currency).toBe("SLS");
+      expect(db.get(`wallets/${CUSTOMER}`)!.sls.balance).toBe(10_000);
+      expect(db.get(`wallets/${MERCHANT}`)!.sls.balance).toBe(19_800);
+      // The dollar side is untouched.
+      expect(db.get(`wallets/${MERCHANT}`)!.balance).toBe(4950);
+      expect(db.get("ledger_balances/platform:fees")!.balance).toBe(50);
+      expect(db.get("ledger_balances/platform:fees@SLS")!.balance).toBe(200);
+    });
+
     it("fully refunds by default, returning the whole fee", async () => {
       const res = await refund();
       expect(res.statusCode).toBe(201);
@@ -383,7 +427,12 @@ describe("Merchant Payments API", () => {
       });
       expect(db.get(`transactions/${PAYMENT_TX}`)!.refundedAt).toBeDefined();
       expect(db.get(`api_charges/${CHARGE}`)).toMatchObject({ amountRefunded: 5000, feeRefunded: 50, refundCount: 1 });
-      expect(mockedNotify).toHaveBeenCalledWith(CUSTOMER, "refund_issued", expect.any(String), expect.any(String), expect.any(Object));
+      expect(mockedNotify).toHaveBeenCalledWith(
+        CUSTOMER,
+        "refund_issued",
+        expect.objectContaining({ key: "refund.received" }),
+        expect.any(Object)
+      );
     });
 
     it("partial refunds add up to exactly the charge and the fee", async () => {

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { colors, typography, borderRadius } from '../theme';
+import { typography, borderRadius, useColors, type Colors } from '../theme';
 
 type BadgeVariant = 'completed' | 'pending' | 'failed' | 'cancelled';
 
@@ -10,7 +10,7 @@ interface BadgeProps {
   label?: string;
 }
 
-const variantStyles: Record<BadgeVariant, { bg: string; text: string; labelKey: string }> = {
+const variantStyles = (colors: Colors): Record<BadgeVariant, { bg: string; text: string; labelKey: string }> => ({
   completed: {
     bg: colors.successLight,
     text: colors.successDark,
@@ -31,11 +31,12 @@ const variantStyles: Record<BadgeVariant, { bg: string; text: string; labelKey: 
     text: colors.text.secondary,
     labelKey: 'transaction.status.cancelled',
   },
-};
+});
 
 export function Badge({ status, label }: BadgeProps) {
+  const colors = useColors();
   const { t } = useTranslation();
-  const style = variantStyles[status];
+  const style = variantStyles(colors)[status];
   return (
     <View style={[styles.badge, { backgroundColor: style.bg }]}>
       <Text style={[styles.text, { color: style.text }]}>

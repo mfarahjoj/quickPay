@@ -38,7 +38,9 @@ import {
   SETTLEMENT_HOLD,
   InsufficientBalanceError,
   WalletNotFoundError,
+  type LedgerCurrency,
 } from "../ledger";
+import { formatAmount, parseCurrency, toLimitCents } from "../utils/money";
 
 export const ADJUSTMENTS_COLLECTION = "adjustments";
 
@@ -51,7 +53,10 @@ const OFF_LIMITS = [CASHOUT_HOLD, SETTLEMENT_HOLD];
 export interface AdjustmentDoc {
   debitAccount: string;
   creditAccount: string;
+  /** In the currency's smallest unit: cents, or whole shillings. */
   amountCents: number;
+  /** Absent on corrections from before shillings: dollars. */
+  currency?: "USD" | "SLS";
   reason: string;
   postedBy: string;
   postedByEmail?: string;
@@ -74,6 +79,11 @@ export interface AdjustmentInput {
   description?: string;
   /** Settling a lost dispute out of the reserve it created (D8). */
   useReserved?: boolean;
+  /**
+   * The currency of `amountCents`: dollars unless said otherwise. A dispute
+   * over a shilling payment is settled in shillings, never converted.
+   */
+  currency?: LedgerCurrency;
 }
 
 export interface PreparedAdjustment {
@@ -128,7 +138,7 @@ export async function prepareAdjustment(
   const prepared = await prepareJournalEntry(tx, {
     entryId: journalEntryId,
     type: "adjustment",
-    currency: "USD",
+    currency: input.currency ?? "USD",
     lines: [
       { account: input.debitAccount, debit: input.amountCents, credit: 0 },
       { account: input.creditAccount, debit: 0, credit: input.amountCents },
@@ -157,6 +167,7 @@ export async function prepareAdjustment(
         debitAccount: input.debitAccount,
         creditAccount: input.creditAccount,
         amountCents: input.amountCents,
+        ...(input.currency && input.currency !== "USD" ? { currency: input.currency } : {}),
         reason: input.reason,
         postedBy: input.postedBy,
         ...(input.postedByEmail ? { postedByEmail: input.postedByEmail } : {}),
@@ -176,7 +187,7 @@ export async function prepareAdjustment(
           toUserId: isUserAccount(input.creditAccount) ? userIdOf(input.creditAccount) : "system",
           participants: userIds,
           amount: input.amountCents,
-          currency: "USD",
+          currency: input.currency ?? "USD",
           status: "completed",
           description: input.description ?? "Correction by Zapp Pay",
           journalEntryId,
@@ -195,15 +206,15 @@ export async function prepareAdjustment(
 export function notifyAdjustment(
   debitAccount: string,
   creditAccount: string,
-  amountCents: number
+  amountCents: number,
+  currency: "USD" | "SLS" = "USD"
 ): void {
-  const amount = `$${(amountCents / 100).toFixed(2)}`;
+  const amount = formatAmount(amountCents, currency);
   if (isUserAccount(creditAccount)) {
     notifyUser(
       userIdOf(creditAccount),
       "adjustment_posted",
-      "Balance corrected",
-      `Zapp Pay added ${amount} to your wallet.`,
+      { key: "adjustment.credit", params: { amount } },
       { type: "adjustment_posted", amount: String(amountCents) }
     ).catch((err) => console.error("Failed to notify adjustment credit:", err));
   }
@@ -211,8 +222,7 @@ export function notifyAdjustment(
     notifyUser(
       userIdOf(debitAccount),
       "adjustment_posted",
-      "Balance corrected",
-      `Zapp Pay took ${amount} from your wallet to correct an error.`,
+      { key: "adjustment.debit", params: { amount } },
       { type: "adjustment_posted", amount: String(-amountCents) }
     ).catch((err) => console.error("Failed to notify adjustment debit:", err));
   }
@@ -221,7 +231,10 @@ export function notifyAdjustment(
 interface PostAdjustmentRequest {
   debitAccount: string;
   creditAccount: string;
+  /** In the currency's smallest unit: cents, or whole shillings. */
   amountCents: number;
+  /** "USD" (the default) or "SLS": both accounts move in it, never converted. */
+  currency?: string;
   reason: string;
   idempotencyKey: string;
 }
@@ -245,10 +258,18 @@ export const adminPostAdjustment = https.onCall(
     const { debitAccount, creditAccount, amountCents } = request.data ?? ({} as PostAdjustmentRequest);
 
     assertAdjustableAccounts(debitAccount, creditAccount);
+    const currency = parseCurrency(request.data?.currency);
+    if (!currency) {
+      throw new https.HttpsError("invalid-argument", "currency must be USD or SLS");
+    }
     if (!Number.isInteger(amountCents) || amountCents <= 0) {
       throw new https.HttpsError("invalid-argument", "amountCents must be a positive integer");
     }
-    if (amountCents > MAX_ADJUSTMENT_CENTS) {
+    // Caps and the senior threshold are dollars; shillings count at the rate.
+    const { floatApprovalThresholdCents, slsPerUsd } = await getRates();
+    const asCents = (amount: number, c: unknown) =>
+      toLimitCents(amount, parseCurrency(c) ?? "USD", slsPerUsd);
+    if (asCents(amountCents, currency) > MAX_ADJUSTMENT_CENTS) {
       throw new https.HttpsError(
         "invalid-argument",
         `A single adjustment is capped at $${MAX_ADJUSTMENT_CENTS / 100}`
@@ -260,7 +281,6 @@ export const adminPostAdjustment = https.onCall(
 
     // Seniority over the last 24 hours for these accounts, so a large
     // correction can't be posted by ops as several small ones.
-    const { floatApprovalThresholdCents } = await getRates();
     const recent = await db
       .collection(ADJUSTMENTS_COLLECTION)
       .where("createdAt", ">=", rollingWindowStart())
@@ -270,8 +290,8 @@ export const adminPostAdjustment = https.onCall(
       .filter((d) => d.id !== adjustmentId)
       .map((d) => d.data() as AdjustmentDoc)
       .filter((a) => touched.has(a.debitAccount) || touched.has(a.creditAccount))
-      .reduce((sum, a) => sum + a.amountCents, 0);
-    if (recentCents + amountCents >= floatApprovalThresholdCents && !actor.roles.includes("super")) {
+      .reduce((sum, a) => sum + asCents(a.amountCents, a.currency), 0);
+    if (recentCents + asCents(amountCents, currency) >= floatApprovalThresholdCents && !actor.roles.includes("super")) {
       throw new https.HttpsError(
         "permission-denied",
         "Corrections this large need a senior admin",
@@ -286,6 +306,7 @@ export const adminPostAdjustment = https.onCall(
           debitAccount,
           creditAccount,
           amountCents,
+          currency,
           reason,
           postedBy: actor.uid,
           postedByEmail: actor.email,
@@ -298,14 +319,14 @@ export const adminPostAdjustment = https.onCall(
           action: "ledger.adjust",
           target: { type: "adjustment", id: adjustmentId },
           reason,
-          after: { debitAccount, creditAccount, amountCents },
+          after: { debitAccount, creditAccount, amountCents, currency },
           journalEntryId: prepared.journalEntryId,
         });
         return { prepared, auditId };
       });
 
       if (!result.prepared.alreadyPosted) {
-        notifyAdjustment(debitAccount, creditAccount, amountCents);
+        notifyAdjustment(debitAccount, creditAccount, amountCents, currency);
       }
 
       return {

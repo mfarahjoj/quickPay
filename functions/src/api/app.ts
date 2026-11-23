@@ -7,6 +7,14 @@
  *   GET    /v1/charges/:id                retrieve (POS polling)
  *   POST   /v1/charges/:id/cancel         cancel while pending
  *   POST   /v1/charges/:id/refunds        refund, full or partial (Idempotency-Key required)
+ *   POST   /v1/charges/:id/confirm        partners: pay an agreement charge with the customer's phone signature
+ *   POST   /v1/agreements                 partners: ask a customer to link their wallet (Idempotency-Key required)
+ *   GET    /v1/agreements/:id             partners: retrieve an agreement
+ *   POST   /v1/agreements/:id/revoke      partners: end an agreement
+ *   POST   /v1/test_helpers/agreements/:id/approve   test mode: approve a test agreement
+ *   POST   /v1/transfers                  partners: pay a Zapp account (Idempotency-Key required)
+ *   GET    /v1/transfers/:id              partners: retrieve a transfer
+ *   GET    /v1/accounts/lookup?phone=     partners: can this number be paid?
  *   POST   /v1/webhook_endpoints          add an endpoint; the secret is shown once
  *   GET    /v1/webhook_endpoints          list
  *   DELETE /v1/webhook_endpoints/:id      remove
@@ -15,9 +23,11 @@
  *   GET    /v1/public/charges/:id         unauthenticated; the hosted checkout's view
  *   POST   /v1/public/charges/:id/test_payment    unauthenticated; test charges only
  *
- * No route here moves money on its own: a charge is paid only when the
- * customer approves it in the app (approveApiCharge), and a refund only ever
- * returns a customer's own payment. A `zpk_test_` key reaches the same routes
+ * Charges and refunds move no money on their own: a charge is paid only when
+ * the customer approves it in the app (approveApiCharge), and a refund only
+ * ever returns a customer's own payment. Transfers do move a partner's own
+ * money with no PIN, so they need a partner and a key with the `transfers`
+ * scope, both set only by Zapp ops (partners.ts). A `zpk_test_` key reaches the same routes
  * and sees only test objects, which no customer can pay.
  */
 
@@ -49,7 +59,17 @@ import {
   serializePublicCharge,
 } from "./charges";
 import { createRefund, serializeRefund } from "./refunds";
+import { createTransfer, getOwnTransfer, lookupAccount, serializeTransfer } from "./transfers";
 import { createEndpoint, deleteEndpoint, listEndpoints } from "./webhooks";
+import {
+  confirmAgreementCharge,
+  createAgreement,
+  getOwnAgreement,
+  revokeOwnAgreement,
+  serializeAgreement,
+} from "./agreements";
+import { approveTestAgreement } from "./approveApiAgreement";
+import { requireAgreementPartner } from "./partners";
 import { TestOutcome, settleTestCharge, testModeOnly } from "./testHelpers";
 
 interface Ctx {
@@ -98,6 +118,67 @@ const authed = compileRoutes<Ctx>([
       const result = await createRefund(caller, id, bodyOf(req), key);
       if (result.replayed) res.set("Idempotent-Replayed", "true");
       return { status: result.replayed ? 200 : 201, body: serializeRefund(result.id, result.refund) };
+    },
+  },
+  {
+    method: "POST",
+    path: "/v1/transfers",
+    handler: async ({ req, res, caller }) => {
+      const key = requireIdempotencyKeyHeader(req);
+      const { id, transfer, replayed } = await createTransfer(caller, bodyOf(req), key);
+      if (replayed) res.set("Idempotent-Replayed", "true");
+      return { status: replayed ? 200 : 201, body: serializeTransfer(id, transfer) };
+    },
+  },
+  {
+    method: "GET",
+    path: "/v1/transfers/:id",
+    handler: async ({ caller }, { id }) => ({
+      body: serializeTransfer(id, await getOwnTransfer(caller, id)),
+    }),
+  },
+  {
+    method: "GET",
+    path: "/v1/accounts/lookup",
+    handler: async ({ req, caller }) => ({
+      body: await lookupAccount(caller, req.query as Record<string, unknown>),
+    }),
+  },
+  {
+    method: "POST",
+    path: "/v1/charges/:id/confirm",
+    handler: async ({ req, caller }, { id }) => ({ body: await confirmAgreementCharge(caller, id, bodyOf(req)) }),
+  },
+  {
+    method: "POST",
+    path: "/v1/agreements",
+    handler: async ({ req, res, caller }) => {
+      const key = requireIdempotencyKeyHeader(req);
+      const { id, agreement, replayed } = await createAgreement(caller, bodyOf(req), key);
+      if (replayed) res.set("Idempotent-Replayed", "true");
+      return { status: replayed ? 200 : 201, body: serializeAgreement(id, agreement) };
+    },
+  },
+  {
+    method: "GET",
+    path: "/v1/agreements/:id",
+    handler: async ({ caller }, { id }) => {
+      await requireAgreementPartner(caller);
+      return { body: serializeAgreement(id, await getOwnAgreement(caller, id)) };
+    },
+  },
+  {
+    method: "POST",
+    path: "/v1/agreements/:id/revoke",
+    handler: async ({ caller }, { id }) => ({ body: serializeAgreement(id, await revokeOwnAgreement(caller, id)) }),
+  },
+  {
+    method: "POST",
+    path: "/v1/test_helpers/agreements/:id/approve",
+    handler: async ({ caller }, { id }) => {
+      if (caller.livemode) throw testModeOnly();
+      await requireAgreementPartner(caller);
+      return { body: serializeAgreement(id, await approveTestAgreement(caller, id)) };
     },
   },
   {

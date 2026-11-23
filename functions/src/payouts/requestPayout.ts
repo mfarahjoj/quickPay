@@ -18,6 +18,11 @@
  *   request   — debit user:{merchant}, credit platform:settlement_hold
  *   settle    — debit platform:settlement_hold, credit float:{route}
  *   reject    — debit platform:settlement_hold, credit user:{merchant}
+ *
+ * A payout is in one currency (SHILLINGS.md): shillings come out of the
+ * wallet's shilling balance, are held in platform:settlement_hold@SLS and
+ * are sent as shillings, never converted. The limits are in dollars and
+ * count shillings at `slsPerUsd`.
  */
 
 import * as admin from "firebase-admin";
@@ -28,7 +33,8 @@ import { assertAccountActive } from "../utils/accountStatus";
 import { verifyUserPin } from "../auth/validatePin";
 import { getRates } from "../config/rates";
 import { rollingWindowStart, sumStandingCents } from "../utils/rollingTotal";
-import { isFloatRoute, type FloatRoute } from "../ledger";
+import { type FloatRoute } from "../ledger";
+import { zaadLabel, zaadPayoutBlock, zaadPayoutBlockMessage } from "../auth/zaadAccount";
 import {
   prepareJournalEntry,
   userAccount,
@@ -37,6 +43,7 @@ import {
   WalletNotFoundError,
 } from "../ledger";
 import { ApiResponse, PayoutRequest, Transaction, User } from "../types";
+import { Currency, formatAmount, parseCurrency, toLimitCents } from "../utils/money";
 
 export const PAYOUT_REQUESTS_COLLECTION = "payoutRequests";
 
@@ -50,16 +57,23 @@ const MAX_PAYOUT_CENTS = 1_000_000_00;
 const MAX_OPEN_REQUESTS = 3;
 
 interface RequestPayoutInput {
+  /** In the currency's smallest unit: cents, or whole shillings. */
   amountCents: number;
-  route: string;
-  destinationName: string;
-  destinationRef: string;
+  /** "USD" (the default, and all older apps send) or "SLS". */
+  currency?: string;
   note?: string;
   pin: string;
+  // Older apps still send a route and destination. Payouts now go only to
+  // the Zaad account on file (auth/zaadAccount.ts), so these are ignored.
+  route?: string;
+  destinationName?: string;
+  destinationRef?: string;
 }
 
 export interface PayoutInput {
   amountCents: number;
+  /** Dollars unless said otherwise. */
+  currency?: Currency;
   route: FloatRoute;
   destinationName: string;
   destinationRef: string;
@@ -82,6 +96,7 @@ export async function createPayoutRequest(
   input: PayoutInput
 ): Promise<{ payoutId: string }> {
   const { amountCents, route } = input;
+  const currency: Currency = input.currency ?? "USD";
     const open = await db
       .collection(PAYOUT_REQUESTS_COLLECTION)
       .where("merchantId", "==", merchantId)
@@ -106,7 +121,11 @@ export async function createPayoutRequest(
     // Reuses the float desk's threshold: the question ("is this big enough to
     // need a second pair of eyes?") is the same one, and one number is easier
     // to reason about during a pilot than two.
-    const { floatApprovalThresholdCents } = await getRates();
+    const { floatApprovalThresholdCents, slsPerUsd } = await getRates();
+    // Every payout counts in dollars towards the threshold, shillings at the
+    // limits rate, so switching currency doesn't reset the total.
+    const asCents = (amount: number, c: unknown) =>
+      toLimitCents(amount, parseCurrency(c) ?? "USD", slsPerUsd);
 
     const payoutRef = db.collection(PAYOUT_REQUESTS_COLLECTION).doc();
     const holdEntryId = `payout_hold_${payoutRef.id}`;
@@ -125,12 +144,14 @@ export async function createPayoutRequest(
             .where("createdAt", ">=", rollingWindowStart(now.toMillis()))
         );
         const requiresSeniorApproval =
-          sumStandingCents(recent.docs) + amountCents >= floatApprovalThresholdCents;
+          sumStandingCents(recent.docs, undefined, (d) => asCents(d.amountCents, d.currency)) +
+            asCents(amountCents, currency) >=
+          floatApprovalThresholdCents;
 
         const prepared = await prepareJournalEntry(tx, {
           entryId: holdEntryId,
           type: "payout_hold",
-          currency: "USD",
+          currency,
           lines: [
             { account: userAccount(merchantId), debit: amountCents, credit: 0 },
             { account: SETTLEMENT_HOLD, debit: 0, credit: amountCents },
@@ -147,6 +168,7 @@ export async function createPayoutRequest(
           merchantName: merchant.fullName,
           ...(businessName ? { businessName } : {}),
           amountCents,
+          ...(currency === "USD" ? {} : { currency }),
           route,
           destinationName: input.destinationName,
           destinationRef: input.destinationRef,
@@ -171,7 +193,7 @@ export async function createPayoutRequest(
           toUserId: "system",
           participants: [merchantId],
           amount: amountCents,
-          currency: "USD",
+          currency,
           status: "pending",
           description: input.auto ? `Automatic payout (${route})` : `Payout requested (${route})`,
           journalEntryId: holdEntryId,
@@ -183,7 +205,9 @@ export async function createPayoutRequest(
       if (error instanceof InsufficientBalanceError) {
         throw new https.HttpsError(
           "failed-precondition",
-          "You don't have that much in your balance"
+          currency === "USD"
+            ? "You don't have that much in your balance"
+            : "You don't have that many shillings in your balance"
         );
       }
       if (error instanceof WalletNotFoundError) {
@@ -206,48 +230,40 @@ export const requestPayout = https.onCall(
   { enforceAppCheck: true },
   async (
     request: https.CallableRequest<RequestPayoutInput>
-  ): Promise<ApiResponse<{ payoutId: string; amountCents: number }>> => {
+  ): Promise<ApiResponse<{ payoutId: string; amountCents: number; currency: Currency }>> => {
     requireAuth(request);
     const merchantId = request.auth!.uid;
 
-    const { amountCents, route, destinationName, destinationRef, note, pin } =
-      request.data ?? {};
+    const { amountCents, note, pin } = request.data ?? ({} as RequestPayoutInput);
 
     if (!pin) {
       throw new https.HttpsError("invalid-argument", "PIN is required");
     }
-    if (
-      typeof amountCents !== "number" ||
-      !Number.isInteger(amountCents) ||
-      amountCents < MIN_PAYOUT_CENTS
-    ) {
+    const currency = parseCurrency(request.data?.currency);
+    if (!currency) {
+      throw new https.HttpsError("invalid-argument", "Currency must be USD or SLS");
+    }
+    // The limits are dollars; a shilling amount counts at the limits rate.
+    const limitCents =
+      typeof amountCents !== "number" || !Number.isInteger(amountCents)
+        ? 0
+        : currency === "USD"
+          ? amountCents
+          : toLimitCents(amountCents, currency, (await getRates()).slsPerUsd);
+    if (limitCents < MIN_PAYOUT_CENTS) {
       throw new https.HttpsError(
         "invalid-argument",
-        `Payouts start at $${MIN_PAYOUT_CENTS / 100}`
+        `Payouts start at $${MIN_PAYOUT_CENTS / 100}`,
+        { reason: "below_min" }
       );
     }
-    if (amountCents > MAX_PAYOUT_CENTS) {
+    if (limitCents > MAX_PAYOUT_CENTS) {
       throw new https.HttpsError(
         "invalid-argument",
-        `A single payout is capped at $${MAX_PAYOUT_CENTS / 100}`
+        `A single payout is capped at $${MAX_PAYOUT_CENTS / 100}`,
+        { reason: "above_max" }
       );
     }
-    if (!isFloatRoute(route)) {
-      throw new https.HttpsError(
-        "invalid-argument",
-        "route must be cash, zaad, edahab or bank"
-      );
-    }
-
-    const name = typeof destinationName === "string" ? destinationName.trim() : "";
-    const ref = typeof destinationRef === "string" ? destinationRef.trim() : "";
-    if (name.length < 2 || ref.length < 3) {
-      throw new https.HttpsError(
-        "invalid-argument",
-        "Tell us the account name and number to send the money to"
-      );
-    }
-
     const db = admin.firestore();
 
     const merchantSnap = await db.collection("users").doc(merchantId).get();
@@ -266,6 +282,13 @@ export const requestPayout = https.onCall(
     }
     assertAccountActive(merchant);
 
+    const { zaadChangeHoldHours } = await getRates();
+    const block = zaadPayoutBlock(merchant, zaadChangeHoldHours, Date.now());
+    if (block) {
+      throw new https.HttpsError("failed-precondition", zaadPayoutBlockMessage(block, zaadChangeHoldHours));
+    }
+    const zaad = merchant.zaad!;
+
     // The payout debits the merchant's own wallet, so it is a user-initiated
     // debit and takes a PIN like every other one.
     const pinValid = await verifyUserPin(merchantId, pin);
@@ -278,16 +301,17 @@ export const requestPayout = https.onCall(
 
     const { payoutId } = await createPayoutRequest(db, merchantId, merchant, {
       amountCents,
-      route,
-      destinationName: name,
-      destinationRef: ref,
+      currency,
+      route: "zaad",
+      destinationName: zaad.name,
+      destinationRef: zaad.msisdn,
       ...(typeof note === "string" && note.trim() ? { note } : {}),
     });
 
     return {
       success: true,
-      message: "Requested — we'll send it and confirm here",
-      data: { payoutId, amountCents },
+      message: `Requested — we'll send ${formatAmount(amountCents, currency)} to ${zaadLabel(zaad.msisdn)} and confirm here`,
+      data: { payoutId, amountCents, currency },
     };
   }
 );

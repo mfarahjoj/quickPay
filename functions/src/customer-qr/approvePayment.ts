@@ -26,6 +26,9 @@ import {
 import { requestExpiryMillis } from "./requestExpiry";
 import { counterCashOutEntryId, counterCashOutLines } from "./counterCashOut";
 import { cashedInWithAgentSince } from "../topup/agentConfirmCashOut";
+import { claimReceiptNumber, reserveReceiptNumber } from "../utils/receiptNumber";
+import { recordPaidReference } from "../utils/paidReferences";
+import { parseCurrency, pushAmount, toLimitCents } from "../utils/money";
 
 interface ApprovePaymentInput {
   requestId: string;
@@ -40,6 +43,8 @@ interface ApprovePaymentInput {
 
 interface ApprovePaymentResponse {
   transactionId: string;
+  /** Absent only when replaying a payment made before receipt numbers. */
+  receiptNumber?: string;
   amount: number;
 }
 
@@ -98,6 +103,7 @@ export const approvePaymentRequest = https.onCall(
         data: {
           transactionId:
             preRequest.transactionId ?? (await findTransactionId(db, requestId)),
+          ...(preRequest.receiptNumber ? { receiptNumber: preRequest.receiptNumber } : {}),
           amount: preRequest.amount,
         },
       };
@@ -109,7 +115,15 @@ export const approvePaymentRequest = https.onCall(
     // refused outright during the pause, like the code-based cash-out.
     const isCashOut = preRequest?.purpose === "cash_out";
     const preTotal = (preRequest?.amount ?? 0) + (isCashOut ? preRequest?.feeCents ?? 0 : 0);
-    await assertResetCooldownAllows(customerId, isCashOut ? "other" : "shop_payment", preTotal);
+    // A shop may charge in shillings (SHILLINGS.md). The allowance after a PIN
+    // reset is in dollars, so a shilling total counts at the limits rate.
+    const preCurrency = parseCurrency(preRequest?.currency) ?? "USD";
+    const { slsPerUsd } = await getRates();
+    await assertResetCooldownAllows(
+      customerId,
+      isCashOut ? "other" : "shop_payment",
+      toLimitCents(preTotal, preCurrency, slsPerUsd)
+    );
 
     const customerData = await requireActiveAccount(customerId);
 
@@ -118,7 +132,7 @@ export const approvePaymentRequest = https.onCall(
     // Limits are checked against the requested amount before posting. The
     // transaction below re-reads the request as the authoritative copy.
     if (preRequest) {
-      await enforceTransactionLimits(customerId, preTotal, customerData);
+      await enforceTransactionLimits(customerId, preTotal, customerData, undefined, preCurrency);
     }
 
     const { paymentFeeRate, cashOutCommissionRate, roundTripWindowHours } = await getRates();
@@ -140,10 +154,13 @@ export const approvePaymentRequest = https.onCall(
 
     const transactionId = db.collection("transactions").doc().id;
     let replayedTransactionId: string | undefined;
+    let replayedReceiptNumber: string | undefined;
     let approvedAmount: number;
     let approvedCurrency: string;
     let approvedMerchantId: string;
     let approvedReference: string | undefined;
+    let approvedRaisedBy: string | undefined;
+    let receiptNumber: string;
     let feeCents = 0;
     let netCents = 0;
 
@@ -153,6 +170,9 @@ export const approvePaymentRequest = https.onCall(
 
     await db.runTransaction(async (tx) => {
       lapsed = false;
+      // A read, so it goes before any write. A retried attempt claims afresh.
+      receiptNumber = await claimReceiptNumber(tx, db);
+
       const requestSnap = await tx.get(requestRef);
       if (!requestSnap.exists) {
         throw new https.HttpsError("not-found", "Payment request not found");
@@ -195,8 +215,13 @@ export const approvePaymentRequest = https.onCall(
 
       approvedAmount = paymentReq.amount;
       approvedCurrency = paymentReq.currency;
+      // The limits were checked in the currency read before the PIN.
+      if (preRequest && (parseCurrency(approvedCurrency) ?? "USD") !== preCurrency) {
+        throw new https.HttpsError("aborted", "This charge changed. Ask the shop to charge again.");
+      }
       approvedMerchantId = paymentReq.merchantId;
       approvedReference = paymentReq.reference;
+      approvedRaisedBy = paymentReq.raisedBy;
       cashOut = paymentReq.purpose === "cash_out";
       // The round-trip check read the request outside this transaction. A
       // request never changes purpose, but don't post on a stale read if it did.
@@ -239,7 +264,7 @@ export const approvePaymentRequest = https.onCall(
         type: cashOut ? "agent_cashout" : "customer_qr_payment",
         currency: approvedCurrency as "USD" | "SLS",
         lines,
-        refs: { transactionId },
+        refs: { transactionId, receiptNumber },
         description: cashOut ? "Cash-out at an agent" : "QR Payment (Customer Token)",
         postedBy: customerId,
       });
@@ -254,6 +279,7 @@ export const approvePaymentRequest = https.onCall(
           db.collection("journal_entries").doc(entryId)
         );
         const postedTxId = entrySnap.data()?.refs?.transactionId as string | undefined;
+        replayedReceiptNumber = entrySnap.data()?.refs?.receiptNumber as string | undefined;
         tx.update(requestRef, {
           status: "approved",
           resolvedAt: now,
@@ -281,6 +307,8 @@ export const approvePaymentRequest = https.onCall(
         status: "completed",
         description: cashOut ? "Cash-out at an agent" : "QR Payment (Customer Token)",
         ...(approvedReference ? { reference: approvedReference } : {}),
+        ...(approvedRaisedBy ? { raisedBy: approvedRaisedBy } : {}),
+        receiptNumber,
         journalEntryId: entryId,
         createdAt: now,
         completedAt: now,
@@ -288,10 +316,33 @@ export const approvePaymentRequest = https.onCall(
 
       tx.set(db.collection("transactions").doc(transactionId), txRecord);
 
+      reserveReceiptNumber(tx, db, receiptNumber, {
+        transactionId,
+        type: txRecord.type,
+        participants: [customerId, approvedMerchantId],
+        amount: approvedAmount,
+        currency: approvedCurrency,
+      });
+
+      // A cash-out has no invoice to be paid twice.
+      if (approvedReference && !cashOut) {
+        recordPaidReference(tx, db, {
+          merchantId: approvedMerchantId,
+          reference: approvedReference,
+          transactionId,
+          receiptNumber,
+          amount: approvedAmount,
+          currency: approvedCurrency,
+          paidByName: customerData?.fullName || null,
+        });
+      }
+
+      // The merchant's Charge screen watches this doc for the outcome.
       tx.update(requestRef, {
         status: "approved",
         resolvedAt: now,
         transactionId,
+        receiptNumber,
       });
     });
 
@@ -305,25 +356,28 @@ export const approvePaymentRequest = https.onCall(
     if (replayedTransactionId !== undefined) {
       return {
         success: true,
-        data: { transactionId: replayedTransactionId, amount: approvedAmount! },
+        data: {
+          transactionId: replayedTransactionId,
+          ...(replayedReceiptNumber ? { receiptNumber: replayedReceiptNumber } : {}),
+          amount: approvedAmount!,
+        },
       };
     }
 
     if (cashOut) {
-      const amountText = `${approvedCurrency!} ${(approvedAmount! / 100).toFixed(2)}`;
+      // The agent hands over cash from this: shillings as shillings.
+      const amountText = pushAmount(approvedAmount!, approvedCurrency!);
       // The agent hands over the cash on this.
       notifyUser(
         approvedMerchantId!,
         "cashout_completed",
-        "Cash-out approved",
-        `Hand over ${amountText} in cash now.`,
+        { key: "cashout.hand_over", params: { amount: amountText } },
         { type: "cashout_approved", transactionId, requestId }
       ).catch((err) => console.error("Failed to notify agent:", err));
       notifyUser(
         customerId,
         "cashout_completed",
-        "Cash Out Complete",
-        `You cashed out ${amountText}. Collect your cash from the agent.`,
+        { key: "cashout.completed", params: { amount: amountText } },
         { type: "cashout_complete", transactionId }
       ).catch((err) => console.error("Failed to notify customer:", err));
     } else {
@@ -346,6 +400,7 @@ export const approvePaymentRequest = https.onCall(
       success: true,
       data: {
         transactionId,
+        receiptNumber: receiptNumber!,
         amount: approvedAmount!,
       },
     };

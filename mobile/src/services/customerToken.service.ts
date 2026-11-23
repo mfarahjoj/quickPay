@@ -197,7 +197,7 @@ export async function approvePayment(
   requestId: string,
   pin: string,
   expectedAmount?: number
-): Promise<{ transactionId: string; amount: number }> {
+): Promise<{ transactionId: string; receiptNumber?: string; amount: number }> {
   const fn = functions().httpsCallable('approvePaymentRequest');
   const result = await fn({
     requestId,
@@ -207,7 +207,7 @@ export async function approvePayment(
   const data = result.data as {
     success: boolean;
     error?: string;
-    data: { transactionId: string; amount: number };
+    data: { transactionId: string; receiptNumber?: string; amount: number };
   };
 
   if (!data.success) {

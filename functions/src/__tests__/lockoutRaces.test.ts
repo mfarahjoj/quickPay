@@ -109,7 +109,13 @@ describe("lockouts hold under parallel requests", () => {
       const result = await outcomes(
         Array.from({ length: PARALLEL }, (_, i) =>
           confirm({
-            data: { otpCode: String(100000 + i), agentPin: GOOD_PIN },
+            // Each names a request (as every confirm must) that has no such code.
+            data: {
+              otpCode: String(100000 + i),
+              agentPin: GOOD_PIN,
+              requestId: "no-such-request",
+              expectedAmount: 5_000,
+            },
             auth: { uid: "agent" },
           })
         )

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, Text, TouchableOpacity, StyleSheet, Alert, SafeAreaView, View } from 'react-native';
+import { AppState, Text, TouchableOpacity, StyleSheet, Alert, View } from 'react-native';
+import { SafeAreaView } from '../../components/SafeAreaView';
 import { useTranslation } from 'react-i18next';
 import { BiometryTypes } from 'react-native-biometrics';
 import Animated, {
@@ -8,7 +9,6 @@ import Animated, {
   withRepeat,
   withSequence,
   withTiming,
-  withSpring,
   cancelAnimation,
   Easing,
 } from 'react-native-reanimated';
@@ -17,14 +17,13 @@ import { LockIcon } from '../../components/icons/AuthIcons';
 import { PinKeypad } from '../../components/PinKeypad';
 import ResetPinScreen from './ResetPinScreen';
 import {
-  getBiometricCredential,
+  unlockWithBiometrics,
   isBiometricAvailable,
   isBiometricEnabled,
 } from '../../services/biometric.service';
 import { validatePin, signOut, PinLockoutError, pinLockoutMessage } from '../../services/auth.service';
 import { markPinVerifiedThisInstall } from '../../hooks/usePinVerifiedThisInstall';
-import { colors, typography, spacing } from '../../theme';
-import { Springs } from '../../constants/springs';
+import { typography, spacing, makeStyles } from '../../theme';
 
 interface Props {
   onUnlock: () => void;
@@ -37,6 +36,7 @@ function getBiometricLabelKey(biometryType?: string): string {
 }
 
 export default function AppLockScreen({ onUnlock }: Props) {
+  const styles = useStyles();
   const { t } = useTranslation();
   const [biometryType, setBiometryType] = useState<string | undefined>();
   const [bioUsable, setBioUsable] = useState<boolean | null>(null);
@@ -87,10 +87,9 @@ export default function AppLockScreen({ onUnlock }: Props) {
     // A successful unlock (PIN, or Face ID backed by the keychain PIN)
     // proves the PIN on this install.
     markPinVerifiedThisInstall(unlockedPin);
-    glowScale.value = withSpring(1.5, Springs.celebration);
-    glowOpacity.value = withTiming(0, { duration: 260 });
-    setTimeout(onUnlock, 260);
-  }, [glowScale, glowOpacity, onUnlock]);
+    // At once: the app is already there under the lock, where it was left.
+    onUnlock();
+  }, [onUnlock]);
 
   // Only offer/auto-prompt biometrics when the user actually enabled them —
   // users who skipped or disabled Face ID go straight to the PIN pad.
@@ -106,33 +105,32 @@ export default function AppLockScreen({ onUnlock }: Props) {
     );
   }, []);
 
-  // The server checks Face ID now (a hardware-key signature, review D11),
-  // rather than trusting a prompt on the phone.
+  // Opening the app is checked on the phone: the hardware key only signs
+  // after Face ID passes. Asking the server as well (challenge, approve,
+  // validate) took three calls to us-central1, over 15 seconds when they
+  // were cold, and any hiccup dropped to the PIN pad. Payments still get a
+  // server-checked approval (getBiometricCredential).
   // One prompt at a time: a second Face ID request while one is on screen
   // fails at once and would drop the person to the PIN pad.
   const handleBiometricUnlock = useCallback(async () => {
     if (prompting.current) return;
     prompting.current = true;
     try {
-      const credential = await getBiometricCredential(t('common.unlockQuickPay'));
+      const result = await unlockWithBiometrics(t('common.unlockQuickPay'));
       if (!mounted.current) return;
-      if (!credential) {
-        setShowPinFallback(true);
+      if (result === 'ok') {
+        performUnlock();
         return;
       }
-      if (await validatePin(credential)) {
-        if (mounted.current) performUnlock(/^\d{6}$/.test(credential) ? credential : undefined);
-      } else if (mounted.current) {
-        setShowPinFallback(true);
+      if (result === 'unavailable') {
+        setBioUsable(false);
+        setPinError(t('auth.appLock.biometricReset', { label }));
       }
-    } catch (err) {
-      if (!mounted.current) return;
-      if (err instanceof PinLockoutError) setPinError(pinLockoutMessage(err, t));
       setShowPinFallback(true);
     } finally {
       prompting.current = false;
     }
-  }, [t, performUnlock]);
+  }, [t, label, performUnlock]);
 
   // Held in a ref so the effect below doesn't re-run (and re-prompt) each time
   // the parent re-renders with a new onUnlock.
@@ -294,7 +292,7 @@ export default function AppLockScreen({ onUnlock }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   lockIconWrap: {
     width: 88,
     height: 88,
@@ -306,11 +304,11 @@ const styles = StyleSheet.create({
     width: 88,
     height: 88,
     borderRadius: 44,
-    backgroundColor: colors.dark.accentSoft,
+    backgroundColor: colors.ui.accentSoft,
   },
   fullScreen: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   biometricContent: {
     flex: 1,
@@ -326,7 +324,7 @@ const styles = StyleSheet.create({
   },
   linkText: {
     ...typography.bodySemibold,
-    color: colors.dark.accentText,
+    color: colors.ui.accentText,
   },
   signOutLink: {
     alignItems: 'center',
@@ -334,6 +332,6 @@ const styles = StyleSheet.create({
   },
   signOutText: {
     ...typography.body,
-    color: colors.dark.error,
+    color: colors.ui.error,
   },
-});
+}));

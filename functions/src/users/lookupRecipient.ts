@@ -54,16 +54,25 @@ export function maskPersonName(fullName: unknown): string {
  * Fixed windows with blind increments, like the API rate limit: the read can
  * lag a concurrent call by one, which is fine for a budget that only exists to
  * stop bulk scraping. Docs carry `expireAt` for a TTL policy.
+ *
+ * `scope` keeps budgets apart: the customer's Send money lookups ("") and an
+ * agent's or shop's customer lookups ("agent_", users/lookupUser.ts) are
+ * counted separately, each against its own limits.
  */
-async function spendLookup(uid: string, now: number): Promise<void> {
+export async function spendLookup(
+  uid: string,
+  now: number,
+  limits: { perHour: number; perDay: number } = LOOKUP_LIMITS,
+  scope = ""
+): Promise<void> {
   const db = admin.firestore();
   const windows: Array<[string, number, number]> = [
-    ["h", HOUR_MS, LOOKUP_LIMITS.perHour],
-    ["d", DAY_MS, LOOKUP_LIMITS.perDay],
+    ["h", HOUR_MS, limits.perHour],
+    ["d", DAY_MS, limits.perDay],
   ];
   for (const [tag, size, limit] of windows) {
     const bucket = Math.floor(now / size);
-    const ref = db.collection(RECIPIENT_LOOKUPS_COLLECTION).doc(`${uid}_${tag}${bucket}`);
+    const ref = db.collection(RECIPIENT_LOOKUPS_COLLECTION).doc(`${uid}_${scope}${tag}${bucket}`);
     await ref.set(
       {
         count: admin.firestore.FieldValue.increment(1),

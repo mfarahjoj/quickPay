@@ -81,6 +81,7 @@ merchant-app/android/app/google-services.json
 .env
 .env.local
 .env.*.local
+.secret.local
 .stripe_sandbox
 mobile/ios/.xcode.env.local
 merchant-app/ios/.xcode.env.local

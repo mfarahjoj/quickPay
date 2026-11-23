@@ -71,7 +71,12 @@ describe("phone number change", () => {
     const res = await complete();
     expect(res.data).toMatchObject({ phoneNumber: NEW, sessionToken: "token" });
     expect(db.get("users/u1")).toMatchObject({ phoneNumber: NEW, previousPhoneNumber: OLD });
-    expect(notifyUser).toHaveBeenCalledWith("u1", "phone_changed", expect.any(String), expect.any(String), expect.anything());
+    expect(notifyUser).toHaveBeenCalledWith(
+      "u1",
+      "phone_changed",
+      { key: "security.phone_changed", params: { phone: NEW, until: expect.any(Date) } },
+      expect.anything()
+    );
     // Then a seven-day pause on sending.
     await expect(assertResetCooldownAllows("u1", "other", 100)).rejects.toMatchObject({
       details: { reason: "phone_change_cooldown" },

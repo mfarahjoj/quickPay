@@ -1,11 +1,12 @@
 # Zapp Pay (repo: QuickPay)
 
-Somaliland-focused mobile-money platform. **Zapp Pay** is the consumer brand; QuickPay is the internal/repo name. Currency is USD, amounts are **integer cents** everywhere.
+Somaliland-focused mobile-money platform. **Zapp Pay** is the consumer brand; QuickPay is the internal/repo name. Every wallet holds **dollars and shillings**, never converted into each other; amounts are integers in the currency's smallest unit (**cents** for USD, **whole shillings** for SLS). See `SHILLINGS.md`.
 
 - `mobile/` — React Native **customer** app (QR pay, top-up, remittance)
 - `merchant-app/` — React Native **merchant/agent** app (accept payments, agent top-ups)
 - `functions/` — Firebase Cloud Functions v2 (TypeScript) backend
 - `hosting/` — static pages (privacy, support)
+- `portal/` — Zapp Business, the merchant insights web dashboard (read-only, sign-in by QR from the merchant app; `MERCHANT_INSIGHTS.md`)
 
 Account types: `customer`, `merchant`, `topup_agent`, `agent_merchant`. Prod Firebase project: `quickpay-485417`.
 
@@ -18,6 +19,7 @@ Account types: `customer`, `merchant`, `topup_agent`, `agent_merchant`. Prod Fir
 5. **Guards run before posting:** App Check on callables, PIN verification for user-initiated debits, KYC per-transaction caps, and `enforceVelocity` (`functions/src/utils/velocity.ts`).
 6. **Every `transactions` writer sets the `participants` array** and links `journalEntryId`.
 7. Money helpers: `dollarsToCents`/`centsToDollars` in `functions/src/utils/validation.ts`.
+8. **Merchant payouts go only to the Zaad account on file** (`users.zaad`, set by `setZaadAccount` in `functions/src/auth/zaadAccount.ts`; both apps ask every account for it). Never take a payout destination from the request. A new number holds payouts for `zaadChangeHoldHours`. The Zaad account is typed, not verified, so it must never be used to credit money.
 
 Use the `new-money-flow` skill when adding or modifying any flow that moves value.
 
@@ -35,8 +37,10 @@ Every user-facing string ships in **all three locales** — `en`, `so`, `ar` —
 ## Design
 
 - `DESIGN_SYSTEM.md` — base palette and components.
-- Merchant app: dark-glass Revolut style, blue accent `#1A56FF`, incoming green `#34C77B` (reference: `merchant-app/src/screens/dashboard/DashboardScreen.tsx`).
-- Customer onboarding: "dark kinetic" theme — ink `#0D0B0A`, coral `#FF5043`, teal `#5DCAA5`.
+- **Both apps share one theme** (`src/theme/` in each, kept identical): light and dark, following the phone or the user's pick (customer: Profile → Appearance; merchant: Settings → Appearance). Screens read colours from the theme — `makeStyles((colors) => …)` and `useColors()`, `colors.ui.*`, `colors.tints.*` — never hard-coded hex, and use the same layout in both schemes. Exceptions that stay fixed: the coral `wallpaper` header (customer Home, merchant Dashboard, Paid), QR tickets (white), and camera overlays (dark).
+- Light: grey canvas `#F1F1F4`, white cards, deep coral `#D9362B` for buttons. Dark: black canvas, glass cards, coral `#FF5043`. Reference: `mobile/src/screens/wallet/DashboardScreen.tsx`.
+- Customer onboarding: "dark kinetic" theme — ink `#0D0B0A`, coral `#FF5043`, teal `#5DCAA5`. It stays dark in light mode, as do the QR camera screens.
+- Customer app: light and dark themes (`mobile/src/theme/colors.ts`), following the phone unless Profile → Appearance says otherwise. Read colours from `useColors()` and build sheets with `const useStyles = makeStyles((colors) => StyleSheet.create({...}))`; never hard-code canvas or text colours. `colors.ui.ink(alpha)` stands in for `rgba(255,255,255,alpha)`.
 
 ## Verification
 
@@ -51,8 +55,12 @@ Every user-facing string ships in **all three locales** — `en`, `so`, `ar` —
 | `LEDGER_ARCHITECTURE.md` | Chart of accounts, journal entry schema, per-flow templates, reconciliation |
 | `docs/MERCHANT_API.md` | Merchant Payments API (`functions/src/api/`): keys, charges, refunds, webhooks, hosted checkout |
 | `DESIGN_SYSTEM.md` | Colors, typography, component patterns |
+| `docs/DESIGN_FLOWS.md` | Every user story (customer, merchant, admin) as a flow: steps, taps, the flow rules (one decision per screen, Face ID as one deliberate tap, PIN keyboard open) |
 | `GTM_ROADMAP.md` | Hargeisa launch phases, KPIs, risks |
 | `SECURITY_REMEDIATION_PLAN.md` | Audit findings (2026-10-03), fix plan per finding, status, open decisions |
 | `CASH_IN_CASH_OUT.md` | Agent cash-in/cash-out: flow steps, ledger entries, guards, threat model |
+| `COUNTER_DISPLAY.md` | Counter display tablet: pairing, state doc, tablet scans, threat model, shop setup, runbook, rollout |
+| `SHILLINGS.md` | Dollar and shilling balances: units, ledger projections, limits at `slsPerUsd`, which flows take shillings |
+| `MERCHANT_INSIGHTS.md` | Zapp Business: the merchant insights read model (`functions/src/merchantStats/`), the read-only web sign-in (`functions/src/portal/`, threat model, deploy order), the dashboard (`portal/`) and its insight cards |
 | `MANUAL_TOPUP_GUIDE.md` | Agent top-up operational flow |
 | `TESTFLIGHT_QUICKSTART.md` | One-time Apple/signing setup |

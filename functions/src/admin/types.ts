@@ -33,7 +33,10 @@ export type AuditTargetType =
   | "ledger_check"
   | "api_key"
   | "adjustment"
+  | "mobile_money_receipt"
   | "dispute"
+  | "zaad_agent"
+  | "zaad_agent_topup"
   | "rates"
   | "migration";
 

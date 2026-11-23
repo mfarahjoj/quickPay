@@ -7,7 +7,6 @@ import {
   ScrollView,
   TextInput,
   Animated,
-  StatusBar,
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { functions } from '../../services/firebase.config';
 import { SetupSuccessScreen } from '../../components/auth';
 import { logger } from '../../utils/logger';
+import { makeStyles, useColors } from '../../theme';
 
 type Service = 'cash_in' | 'cash_out';
 
@@ -54,6 +54,8 @@ interface Props {
 }
 
 export default function AgentProfileSetupScreen({ navigation, isSettings }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const chipLabel = (value: string) => (DISPLAY_KEYS[value] ? t(DISPLAY_KEYS[value]) : value);
   const [businessName, setBusinessName] = useState('');
@@ -122,7 +124,6 @@ export default function AgentProfileSetupScreen({ navigation, isSettings }: Prop
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <StatusBar barStyle="light-content" backgroundColor="#000000" />
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
@@ -152,7 +153,7 @@ export default function AgentProfileSetupScreen({ navigation, isSettings }: Prop
               value={businessName}
               onChangeText={setBusinessName}
               placeholder={t('agentProfile.businessNamePlaceholder')}
-              placeholderTextColor="rgba(255,255,255,0.2)"
+              placeholderTextColor={colors.ui.ink(0.2)}
               autoCapitalize="words"
             />
           </View>
@@ -211,7 +212,7 @@ export default function AgentProfileSetupScreen({ navigation, isSettings }: Prop
                 value={customHours}
                 onChangeText={setCustomHours}
                 placeholder={t('agentProfile.customHoursPlaceholder')}
-                placeholderTextColor="rgba(255,255,255,0.2)"
+                placeholderTextColor={colors.ui.ink(0.2)}
                 autoFocus
               />
             </View>
@@ -282,87 +283,83 @@ export default function AgentProfileSetupScreen({ navigation, isSettings }: Prop
   );
 }
 
-const ACCENT = '#FF5043';
-const ACCENT_SOFT = 'rgba(26,86,255,0.18)';
-const ACCENT_BORDER = 'rgba(26,86,255,0.5)';
-
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#000000' },
+const useStyles = makeStyles((colors) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.ui.canvas },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 24, paddingBottom: 48 },
 
   backBtn: { width: 40, height: 40, justifyContent: 'center', marginTop: 12, marginBottom: 20, marginLeft: -6 },
-  backChevron: { fontSize: 38, color: '#FFFFFF', lineHeight: 42, fontWeight: '300' },
+  backChevron: { fontSize: 38, color: colors.ui.text, lineHeight: 42, fontWeight: '300' },
 
-  title: { fontSize: 32, fontWeight: '800', color: '#FFFFFF', letterSpacing: -1.2, lineHeight: 40, marginBottom: 10 },
-  subtitle: { fontSize: 15, color: 'rgba(255,255,255,0.4)', lineHeight: 22, marginBottom: 32 },
+  title: { fontSize: 32, fontWeight: '800', color: colors.ui.text, letterSpacing: -1.2, lineHeight: 40, marginBottom: 10 },
+  subtitle: { fontSize: 15, color: colors.ui.textFaint, lineHeight: 22, marginBottom: 32 },
 
   section: { marginBottom: 28 },
   sectionLabel: {
     fontSize: 11, fontWeight: '700', letterSpacing: 0.8,
-    textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)',
+    textTransform: 'uppercase', color: colors.ui.ink(0.35),
     marginBottom: 12,
   },
 
   inputBox: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.ui.glass,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: colors.ui.glassBorder,
     paddingHorizontal: 16,
     height: 52,
     justifyContent: 'center',
   },
-  input: { fontSize: 15, color: '#FFFFFF', padding: 0 },
-  inputHint: { fontSize: 12, color: 'rgba(255,255,255,0.25)', marginTop: 7 },
+  input: { fontSize: 15, color: colors.ui.text, padding: 0 },
+  inputHint: { fontSize: 12, color: colors.ui.ink(0.25), marginTop: 7 },
 
   chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     paddingHorizontal: 14, paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: colors.ui.glassBorder,
   },
-  chipActive: { backgroundColor: ACCENT_SOFT, borderColor: ACCENT_BORDER },
-  chipText: { fontSize: 13, fontWeight: '500', color: 'rgba(255,255,255,0.5)' },
-  chipTextActive: { color: '#FF8A7A', fontWeight: '600' },
+  chipActive: { backgroundColor: colors.ui.accentSoft, borderColor: colors.ui.accentBorder },
+  chipText: { fontSize: 13, fontWeight: '500', color: colors.ui.ink(0.5) },
+  chipTextActive: { color: colors.ui.accentText, fontWeight: '600' },
 
   serviceCards: { gap: 10 },
   serviceCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: colors.ui.ink(0.05),
     borderRadius: 18,
     borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.09)',
+    borderColor: colors.ui.glassRaised,
     padding: 16,
     gap: 14,
   },
-  serviceCardActive: { backgroundColor: ACCENT_SOFT, borderColor: ACCENT_BORDER },
+  serviceCardActive: { backgroundColor: colors.ui.accentSoft, borderColor: colors.ui.accentBorder },
   serviceCardLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 14 },
   serviceEmoji: { fontSize: 26 },
   serviceText: { flex: 1 },
-  serviceTitle: { fontSize: 16, fontWeight: '700', color: 'rgba(255,255,255,0.6)', marginBottom: 3 },
-  serviceTitleActive: { color: '#FFFFFF' },
-  serviceDesc: { fontSize: 12, color: 'rgba(255,255,255,0.3)', lineHeight: 18 },
+  serviceTitle: { fontSize: 16, fontWeight: '700', color: colors.ui.textDim, marginBottom: 3 },
+  serviceTitleActive: { color: colors.ui.text },
+  serviceDesc: { fontSize: 12, color: colors.ui.ink(0.3), lineHeight: 18 },
 
   checkbox: {
     width: 24, height: 24, borderRadius: 7,
-    borderWidth: 2, borderColor: 'rgba(255,255,255,0.2)',
+    borderWidth: 2, borderColor: colors.ui.ink(0.2),
     justifyContent: 'center', alignItems: 'center', flexShrink: 0,
   },
-  checkboxActive: { backgroundColor: ACCENT, borderColor: ACCENT },
+  checkboxActive: { backgroundColor: colors.ui.accent, borderColor: colors.ui.accent },
   checkmark: { fontSize: 13, color: '#FFFFFF', fontWeight: '700' },
 
   footer: { gap: 12, marginTop: 12 },
   ctaBtn: {
-    backgroundColor: '#FFFFFF', borderRadius: 9999,
+    backgroundColor: colors.ui.solid, borderRadius: 9999,
     height: 58, justifyContent: 'center', alignItems: 'center',
   },
-  ctaBtnDisabled: { backgroundColor: 'rgba(255,255,255,0.12)' },
-  ctaText: { fontSize: 17, fontWeight: '700', color: '#000000', letterSpacing: -0.3 },
-  ctaTextDisabled: { color: 'rgba(255,255,255,0.25)' },
+  ctaBtnDisabled: { backgroundColor: colors.ui.ink(0.12) },
+  ctaText: { fontSize: 17, fontWeight: '700', color: colors.ui.onSolid, letterSpacing: -0.3 },
+  ctaTextDisabled: { color: colors.ui.ink(0.25) },
   skipBtn: { alignItems: 'center', paddingVertical: 12 },
-  skipText: { fontSize: 15, color: 'rgba(255,255,255,0.3)', fontWeight: '500' },
-});
+  skipText: { fontSize: 15, color: colors.ui.ink(0.3), fontWeight: '500' },
+}));

@@ -10,7 +10,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import Svg, { Path, Circle } from 'react-native-svg';
-import { colors } from '../../theme';
+import { useColors } from '../../theme';
 import { Springs } from '../../constants/springs';
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
@@ -33,9 +33,11 @@ const X_PATH_LENGTH = 20;
 
 export function AnimatedCheckMark({
   size = 36,
-  color = colors.dark.incoming,
+  color: colorProp,
   onComplete,
 }: StatusIconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.ui.incoming;
   const circleScale = useSharedValue(0);
   const dashOffset = useSharedValue(CHECK_PATH_LENGTH);
 
@@ -82,9 +84,11 @@ export function AnimatedCheckMark({
 
 export function AnimatedXMark({
   size = 36,
-  color = colors.dark.error,
+  color: colorProp,
   onComplete,
 }: StatusIconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.ui.error;
   const circleScale = useSharedValue(0);
   const dash1 = useSharedValue(X_PATH_LENGTH);
   const dash2 = useSharedValue(X_PATH_LENGTH);
@@ -135,9 +139,11 @@ export function AnimatedXMark({
 
 export function AnimatedWarning({
   size = 36,
-  color = colors.dark.warning,
+  color: colorProp,
   onComplete,
 }: StatusIconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.ui.warning;
   const scale = useSharedValue(0);
   const exclamOpacity = useSharedValue(0);
 
@@ -185,7 +191,9 @@ export function AnimatedWarning({
 
 // ─── Static variants (no animation, for inline use) ──────────
 
-export function CheckMark({ size = 20, color = colors.dark.incoming }: IconProps) {
+export function CheckMark({ size = 20, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.ui.incoming;
   return (
     <View style={{ width: size, height: size }}>
       <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -196,7 +204,9 @@ export function CheckMark({ size = 20, color = colors.dark.incoming }: IconProps
   );
 }
 
-export function XMark({ size = 20, color = colors.dark.error }: IconProps) {
+export function XMark({ size = 20, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.ui.error;
   return (
     <View style={{ width: size, height: size }}>
       <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -207,7 +217,9 @@ export function XMark({ size = 20, color = colors.dark.error }: IconProps) {
   );
 }
 
-export function WarningMark({ size = 20, color = colors.dark.warning }: IconProps) {
+export function WarningMark({ size = 20, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.ui.warning;
   return (
     <View style={{ width: size, height: size }}>
       <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">

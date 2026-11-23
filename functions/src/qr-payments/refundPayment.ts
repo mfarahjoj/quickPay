@@ -17,6 +17,7 @@ import { prepareRefund, REFUNDABLE_ENTRY_TYPES } from "./refundCore";
 import { isValidIdempotencyKey } from "../utils/idempotency";
 import { DISPUTES_COLLECTION, DisputeDoc } from "../disputes/types";
 import { stageResolvedByRefund } from "../disputes/resolve";
+import { parseCurrency, pushAmount } from "../utils/money";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -31,8 +32,13 @@ interface RefundRequest {
 
 interface RefundResponse {
   refundTransactionId: string;
-  amount: number; // Gross amount refunded, in dollars
-  /** What is still refundable on the payment, in cents. */
+  /** Zapp receipt number of the refund. */
+  receiptNumber?: string;
+  /** Gross amount refunded, in whole units: dollars, or shillings. */
+  amount: number;
+  /** The payment's currency: "USD" or "SLS". */
+  currency: string;
+  /** What is still refundable, in the currency's smallest unit. */
   remainingCents: number;
 }
 
@@ -166,15 +172,20 @@ export const refundPayment = https.onCall(
         return { refund, closedDispute };
       });
 
-      const { refundTransactionId, customerId, gross, currency, remainingCents, alreadyPosted } =
-        outcome.refund;
+      const {
+        refundTransactionId,
+        receiptNumber,
+        customerId,
+        gross,
+        currency,
+        remainingCents,
+        alreadyPosted,
+      } = outcome.refund;
 
-      const amountFormatted = (gross / 100).toFixed(2);
       if (!alreadyPosted) notifyUser(
         customerId,
         "refund_issued",
-        "Refund Received",
-        `You were refunded ${currency} ${amountFormatted}`,
+        { key: "refund.received", params: { amount: pushAmount(gross, currency) } },
         { type: "refund_issued", amount: gross.toString(), currency, merchantId }
       ).catch((err) => console.error("Failed to notify customer:", err));
 
@@ -182,7 +193,11 @@ export const refundPayment = https.onCall(
         success: true,
         data: {
           refundTransactionId,
-          amount: gross / 100,
+          ...(receiptNumber ? { receiptNumber } : {}),
+          // In whole units, as history rows carry it: 12.5 dollars, or 30000
+          // shillings (a shilling has no cents).
+          amount: parseCurrency(currency) === "SLS" ? gross : gross / 100,
+          currency,
           remainingCents,
         },
       };

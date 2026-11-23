@@ -31,6 +31,7 @@ import * as admin from "firebase-admin";
 import { JournalEntryDoc, JournalLine } from "./types";
 import { CASHOUT_HOLD, PLATFORM_FEES, isUserAccount, isAgentAccount, agentIdOf, userAccount } from "./accounts";
 import { JOURNAL_COLLECTION } from "./post";
+import { getRates } from "../config/rates";
 
 export type ActivityKind = "self_dealing" | "agent_commission" | "round_trip" | "fees_net";
 
@@ -367,6 +368,13 @@ export interface ActivityReport {
 }
 
 /** Read the last 24h of the journal and analyse it. */
+/** An entry's lines with amounts in US cents, for comparing with the thresholds. */
+function inUsdCents(lines: JournalLine[], currency: string | undefined, slsPerUsd: number): JournalLine[] {
+  if (currency !== "SLS") return lines;
+  const cents = (n: number) => Math.round((n * 100) / slsPerUsd);
+  return lines.map((l) => ({ ...l, debit: cents(l.debit), credit: cents(l.credit) }));
+}
+
 export async function runActivityMonitor(now: Date = new Date()): Promise<ActivityReport> {
   const db = admin.firestore();
   const since = admin.firestore.Timestamp.fromMillis(now.getTime() - MONITOR_WINDOW_MS);
@@ -377,10 +385,13 @@ export async function runActivityMonitor(now: Date = new Date()): Promise<Activi
     .limit(MAX_ENTRIES + 1)
     .get();
 
+  // Thresholds are in US cents: a shilling entry is read at the limits rate,
+  // so 30,000 SLS of commission isn't taken for $300.
+  const { slsPerUsd } = await getRates();
   const docs = snap.docs.slice(0, MAX_ENTRIES);
   const entries: MonitoredEntry[] = docs.map((doc) => {
     const e = doc.data() as JournalEntryDoc;
-    return { id: doc.id, type: e.type, lines: e.lines ?? [] };
+    return { id: doc.id, type: e.type, lines: inUsdCents(e.lines ?? [], e.currency, slsPerUsd) };
   });
 
   // A cash-out settle only names the hold and the agent; the customer is on

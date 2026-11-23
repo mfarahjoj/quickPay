@@ -17,7 +17,7 @@ import type { Request } from "firebase-functions/v2/https";
 import { User } from "../types";
 import { isAccountActive } from "../utils/accountStatus";
 import { ApiError, header } from "./http";
-import { API_KEYS_COLLECTION, MerchantApiKey, isLiveObject } from "./types";
+import { API_KEYS_COLLECTION, ApiKeyScope, MerchantApiKey, isLiveObject } from "./types";
 
 export type ApiMode = "live" | "test";
 
@@ -65,6 +65,7 @@ export interface ApiKeyRow {
   revoked: boolean;
   createdAt: string;
   createdVia: "console" | "merchant_app";
+  scopes: ApiKeyScope[];
   lastUsedAt?: string;
   revokedAt?: string;
 }
@@ -78,6 +79,7 @@ export function toApiKeyRow(keyId: string, key: MerchantApiKey): ApiKeyRow {
     revoked: key.revoked,
     createdAt: key.createdAt.toDate().toISOString(),
     createdVia: key.createdVia ?? "console",
+    scopes: key.scopes ?? [],
     ...(key.lastUsedAt ? { lastUsedAt: key.lastUsedAt.toDate().toISOString() } : {}),
     ...(key.revokedAt ? { revokedAt: key.revokedAt.toDate().toISOString() } : {}),
   };
@@ -120,6 +122,7 @@ export function mintApiKey(input: {
   mode: ApiMode;
   createdBy: string;
   createdVia: "console" | "merchant_app";
+  scopes?: ApiKeyScope[];
 }): { apiKey: string; keyId: string; record: MerchantApiKey } {
   const apiKey = generateApiKey(input.mode);
   return {
@@ -134,6 +137,7 @@ export function mintApiKey(input: {
       createdAt: admin.firestore.Timestamp.now(),
       createdBy: input.createdBy,
       createdVia: input.createdVia,
+      ...(input.scopes?.length ? { scopes: input.scopes } : {}),
     },
   };
 }
@@ -144,6 +148,8 @@ export interface ApiCaller {
   merchant: User;
   /** False for a `zpk_test_` key: nothing this caller does moves money. */
   livemode: boolean;
+  /** Beyond charges and refunds. Empty for almost every key. */
+  scopes: ApiKeyScope[];
 }
 
 const invalidKey = () =>
@@ -209,5 +215,11 @@ export async function authenticateApiKey(req: Request): Promise<ApiCaller> {
       .catch((err) => console.error("Failed to record API key use:", err));
   }
 
-  return { keyId, merchantId: apiKey.merchantId, merchant: merchant as User, livemode };
+  return {
+    keyId,
+    merchantId: apiKey.merchantId,
+    merchant: merchant as User,
+    livemode,
+    scopes: apiKey.scopes ?? [],
+  };
 }

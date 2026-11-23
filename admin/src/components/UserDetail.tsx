@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, type UserDetail as Detail } from "../api";
+import { api, type AgentPosition, type UserDetail as Detail, formatFloat } from "../api";
+import { AccountWork } from "./AccountWork";
+import { FloatRequestModal } from "./FloatRequestModal";
+import { TopupForm } from "./TopupDesk";
 import { Icon } from "./Icon";
 import { ReasonPrompt } from "./ReasonPrompt";
 import { Avatar, EmptyState, Loading } from "./ui";
@@ -46,9 +49,10 @@ const ACTION_COPY: Record<
   },
 };
 
-function money(cents?: number, currency = "USD") {
-  if (cents === undefined || cents === null) return "—";
-  return `${currency} ${(cents / 100).toFixed(2)}`;
+/** "$12.50" or "30,000 SLSH": shillings are whole, never cents. */
+function money(amount?: number, currency = "USD") {
+  if (amount === undefined || amount === null) return "—";
+  return formatFloat(amount, currency === "SLS" || currency === "SLSH" ? "SLS" : "USD");
 }
 
 function when(ts?: { _seconds?: number; seconds?: number }) {
@@ -85,8 +89,27 @@ function statusTone(status?: string) {
   }
 }
 
-/** `canAdjust`: ops and super may correct balances (adminPostAdjustment). */
-export function UserDetail({ userId, canAdjust = false }: { userId: string; canAdjust?: boolean }) {
+const AGENT_TYPES = ["topup_agent", "agent_merchant"];
+
+/**
+ * One account, start to finish: who they are, what is waiting on Zapp for
+ * them on any desk (decided here), their money and the actions on it, and
+ * their history. `canRunFloat` (ops, super) covers money: top-ups, float,
+ * payouts, disputes and balance corrections; `canReview` (compliance, super)
+ * covers ID checks and role applications.
+ */
+export function UserDetail({
+  userId,
+  adminUid,
+  canRunFloat = false,
+  canReview = false,
+}: {
+  userId: string;
+  adminUid: string;
+  canRunFloat?: boolean;
+  canReview?: boolean;
+}) {
+  const canAdjust = canRunFloat;
   const [detail, setDetail] = useState<Detail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -95,6 +118,11 @@ export function UserDetail({ userId, canAdjust = false }: { userId: string; canA
   const [adjusting, setAdjusting] = useState(false);
   // Opening a PIN reset needs an in-person ID check, confirmed per use.
   const [idChecked, setIdChecked] = useState(false);
+  const [toppingUp, setToppingUp] = useState(false);
+  const [agent, setAgent] = useState<AgentPosition | null>(null);
+  const [floatOpen, setFloatOpen] = useState(false);
+  // Remounts the open-items panel after an action elsewhere on the page.
+  const [workKey, setWorkKey] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -112,6 +140,28 @@ export function UserDetail({ userId, canAdjust = false }: { userId: string; canA
   useEffect(() => {
     void load();
   }, [load]);
+
+  const accountType = String((detail?.profile as Record<string, unknown> | undefined)?.accountType ?? "");
+  const isAgent = AGENT_TYPES.includes(accountType);
+
+  const loadAgent = useCallback(async () => {
+    if (!isAgent || !canRunFloat) return setAgent(null);
+    try {
+      const all = await api.listAgentFloat();
+      setAgent(all.find((a) => a.agentId === userId) ?? null);
+    } catch {
+      setAgent(null);
+    }
+  }, [isAgent, canRunFloat, userId]);
+
+  useEffect(() => {
+    void loadAgent();
+  }, [loadAgent]);
+
+  const changed = async (message: string) => {
+    setNotice(message);
+    await Promise.all([load(), loadAgent()]);
+  };
 
   const run = async (reason: string) => {
     if (!action) return;
@@ -131,9 +181,12 @@ export function UserDetail({ userId, canAdjust = false }: { userId: string; canA
     setNotice(`${ACTION_COPY[action].title} — done.`);
     setAction(null);
     await load();
+    setWorkKey((k) => k + 1);
   };
 
-  if (loading)
+  // Only the first load blanks the page; a refresh after an action keeps
+  // open panels (and their messages) on screen.
+  if (loading && !detail)
     return (
       <div className="panel">
         <Loading />
@@ -210,13 +263,72 @@ export function UserDetail({ userId, canAdjust = false }: { userId: string; canA
           )}
         </dl>
 
-        <h3>Wallet</h3>
-        <div className="stat">
-          <span className="stat-label">Balance</span>
-          <span className="stat-value">
-            <Figure text={money(detail.wallet?.balance, detail.wallet?.currency)} />
-          </span>
+        <h3>Money</h3>
+        <div className="row wrap" style={{ gap: 12, marginTop: 10 }}>
+          <div className="stat" style={{ flex: 1, minWidth: 150 }}>
+            <span className="stat-label">Dollar wallet</span>
+            <span className="stat-value">
+              <Figure text={money(detail.wallet?.balance, detail.wallet?.currency)} />
+            </span>
+          </div>
+          <div className="stat" style={{ flex: 1, minWidth: 150 }}>
+            <span className="stat-label">Shilling wallet</span>
+            <span className="stat-value">
+              <Figure text={money(detail.wallet?.sls?.balance ?? 0, "SLS")} />
+            </span>
+          </div>
+          {agent && (
+            <>
+              <div className="stat" style={{ flex: 1, minWidth: 150 }}>
+                <span className="stat-label">Agent float</span>
+                <span className="stat-value">
+                  <Figure text={money(agent.balanceCents, "USD")} />
+                </span>
+              </div>
+              {agent.slsBalance !== undefined && (
+                <div className="stat" style={{ flex: 1, minWidth: 150 }}>
+                  <span className="stat-label">Shilling float</span>
+                  <span className="stat-value">
+                    <Figure text={money(agent.slsBalance, "SLS")} />
+                  </span>
+                </div>
+              )}
+            </>
+          )}
         </div>
+        {canRunFloat && (
+          <div className="row wrap" style={{ marginTop: 12 }}>
+            <button
+              className={toppingUp ? "ghost" : "primary"}
+              onClick={() => setToppingUp((v) => !v)}
+              disabled={!detail.wallet}
+            >
+              <Icon name="banknote" size={16} />
+              {toppingUp ? "Close top-up" : "Top up wallet"}
+            </button>
+            {agent && (
+              <button onClick={() => setFloatOpen(true)} disabled={detail.accountStatus !== "active"}>
+                Issue / withdraw float
+              </button>
+            )}
+            {canAdjust && (
+              <button onClick={() => setAdjusting(true)} disabled={!detail.wallet}>
+                Adjust balance
+              </button>
+            )}
+          </div>
+        )}
+        {toppingUp && (
+          <div className="work-expand">
+            <TopupForm
+              userId={detail.userId}
+              embedded
+              onPosted={async () => {
+                await load();
+              }}
+            />
+          </div>
+        )}
         <dl className="kv">
           <dt>Ledger freeze flag</dt>
           <dd>
@@ -256,11 +368,6 @@ export function UserDetail({ userId, canAdjust = false }: { userId: string; canA
           >
             Revoke devices ({detail.trustedDeviceCount})
           </button>
-          {canAdjust && (
-            <button onClick={() => setAdjusting(true)} disabled={!detail.wallet}>
-              Adjust balance
-            </button>
-          )}
         </div>
         {closed && (
           <p className="hint" style={{ marginTop: 12 }}>
@@ -268,6 +375,16 @@ export function UserDetail({ userId, canAdjust = false }: { userId: string; canA
           </p>
         )}
       </div>
+
+      <AccountWork
+        key={workKey}
+        userId={detail.userId}
+        name={profile.fullName || "this account"}
+        adminUid={adminUid}
+        canReview={canReview}
+        canRunFloat={canRunFloat}
+        onChanged={changed}
+      />
 
       {(profile.accountType === "merchant" || profile.accountType === "agent_merchant") && (
         <ApiKeysPanel merchantId={detail.userId} disabled={detail.accountStatus !== "active"} />
@@ -286,6 +403,7 @@ export function UserDetail({ userId, canAdjust = false }: { userId: string; canA
                 <tr>
                   <th>When</th>
                   <th>Type</th>
+                  <th>Receipt</th>
                   <th className="wide">Description</th>
                   <th>Status</th>
                   <th className="num">Amount</th>
@@ -296,7 +414,11 @@ export function UserDetail({ userId, canAdjust = false }: { userId: string; canA
                   <tr key={tx.id}>
                     <td className="muted nowrap">{when(tx.createdAt)}</td>
                     <td className="nowrap">{tx.type || "—"}</td>
-                    <td className="wide">{tx.description || "—"}</td>
+                    <td className="mono nowrap">{tx.receiptNumber || "—"}</td>
+                    <td className="wide">
+                      {tx.description || "—"}
+                      {tx.reference ? <span className="muted"> · {tx.reference}</span> : null}
+                    </td>
                     <td>
                       {tx.status ? (
                         <span className={`badge ${statusTone(tx.status)}`}>{tx.status}</span>
@@ -313,6 +435,18 @@ export function UserDetail({ userId, canAdjust = false }: { userId: string; canA
         )}
       </div>
 
+      {floatOpen && agent && (
+        <FloatRequestModal
+          agent={agent}
+          onCancel={() => setFloatOpen(false)}
+          onDone={async (message) => {
+            setFloatOpen(false);
+            setWorkKey((k) => k + 1);
+            await changed(message);
+          }}
+        />
+      )}
+
       {adjusting && (
         <AdjustModal
           userId={detail.userId}
@@ -320,8 +454,7 @@ export function UserDetail({ userId, canAdjust = false }: { userId: string; canA
           onCancel={() => setAdjusting(false)}
           onDone={async (message) => {
             setAdjusting(false);
-            setNotice(message);
-            await load();
+            await changed(message);
           }}
         />
       )}

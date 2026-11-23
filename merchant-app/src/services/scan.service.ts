@@ -1,5 +1,7 @@
 import { functions } from './firebase.config';
 import { logger } from '../utils/logger';
+import type { PaidReferenceOptions } from './qr.service';
+import { actingFor } from './staff.service';
 
 export interface ScanResult {
   valid: boolean;
@@ -11,7 +13,7 @@ export interface ScanResult {
 export async function scanCustomerToken(tokenData: string): Promise<ScanResult> {
   try {
     const fn = functions().httpsCallable('scanCustomerToken');
-    const result = await fn({ tokenData });
+    const result = await fn({ tokenData, ...actingFor() });
     const data = result.data as { success: boolean; error?: string; data: ScanResult };
 
     if (!data.success) {
@@ -48,7 +50,8 @@ export async function createPaymentRequest(
   amount: number,
   currency: string,
   reference?: string,
-  purpose: 'payment' | 'cash_out' = 'payment'
+  purpose: 'payment' | 'cash_out' = 'payment',
+  options: PaidReferenceOptions = {}
 ): Promise<ChargeResult> {
   try {
     const fn = functions().httpsCallable('createPaymentRequest');
@@ -56,8 +59,9 @@ export async function createPaymentRequest(
       tokenId,
       amount,
       currency,
-      ...(reference ? { reference } : {}),
+      ...(reference ? { reference, ...options } : {}),
       ...(purpose === 'cash_out' ? { purpose } : {}),
+      ...actingFor(),
     });
     const data = result.data as { success: boolean; error?: string; data: ChargeResult };
 
@@ -80,7 +84,7 @@ export async function createPaymentRequest(
 export async function cancelPaymentRequest(requestId: string): Promise<ChargeStatus> {
   try {
     const fn = functions().httpsCallable('cancelPaymentRequest');
-    const result = await fn({ requestId });
+    const result = await fn({ requestId, ...actingFor() });
     const data = result.data as { success: boolean; data: { status: ChargeStatus } };
     return data.data.status;
   } catch (error: any) {

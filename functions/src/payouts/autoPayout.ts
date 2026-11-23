@@ -2,7 +2,8 @@
  * Automatic daily payouts (plan 3.6, decision D11).
  *
  * A merchant switches it on once, with their PIN, choosing a balance to keep
- * for refunds and where the money goes. Every evening `runAutoPayouts` queues
+ * for refunds. The money goes to their Zaad account on file, like every
+ * payout (auth/zaadAccount.ts). Every evening `runAutoPayouts` queues
  * a payout of everything above that balance, through the same path as a
  * manual request (createPayoutRequest: hold, 24-hour senior threshold, ops
  * desk). Ops still send the money, since there are no automated rails yet.
@@ -11,8 +12,14 @@
  * - a frozen or closed account, or one no longer a merchant;
  * - a merchant still in the pause after a PIN reset;
  * - a merchant with a payout already waiting;
+ * - no Zaad account on file, or a number changed too recently;
  * - less than autoPayoutMinCents (config) above the kept balance.
  * Money reserved for a lost dispute (D8) is never counted as available.
+ *
+ * Shillings are their own opt-in (SHILLINGS.md), with their own balance to
+ * keep: a shop that turned on dollar payouts before shillings existed is
+ * never sent shillings it didn't ask for. Each currency is paid out as
+ * itself, never converted; the minimum counts shillings at `slsPerUsd`.
  */
 
 import * as admin from "firebase-admin";
@@ -26,8 +33,10 @@ import { isMerchantRole } from "../utils/roles";
 import { assertResetCooldownAllows } from "../utils/resetCooldown";
 import { notifyUser } from "../utils/notifications";
 import { getRates } from "../config/rates";
-import { isFloatRoute, type FloatRoute } from "../ledger";
+import { type FloatRoute } from "../ledger";
 import { createPayoutRequest, PAYOUT_REQUESTS_COLLECTION } from "./requestPayout";
+import { zaadLabel, zaadPayoutBlock } from "../auth/zaadAccount";
+import { fromLimitCents, pushAmount } from "../utils/money";
 
 /** A typo should not become a five-figure transfer. */
 const MAX_AUTO_PAYOUT_CENTS = 1_000_000_00;
@@ -36,18 +45,22 @@ export interface AutoPayoutSettings {
   enabled: boolean;
   /** Left in the wallet for refunds and change. */
   keepCents: number;
-  route: FloatRoute;
-  destinationName: string;
-  destinationRef: string;
+  /** Shillings too, keeping this many whole shillings. Absent: dollars only. */
+  shillings?: { enabled: boolean; keep: number };
   updatedAt: FirebaseFirestore.Timestamp;
+  // Set before payouts went only to the Zaad account on file; no longer read.
+  route?: FloatRoute;
+  destinationName?: string;
+  destinationRef?: string;
 }
 
 interface SetAutoPayoutRequest {
   enabled: boolean;
   keepCents?: number;
-  route?: string;
-  destinationName?: string;
-  destinationRef?: string;
+  /** Pay out shillings too. Older apps send nothing: shilling settings stay as they are. */
+  shillingsEnabled?: boolean;
+  /** Whole shillings to keep in the wallet. */
+  keepSls?: number;
   pin: string;
 }
 
@@ -77,20 +90,23 @@ export const setAutoPayout = https.onCall(
     if (!Number.isInteger(keepCents) || keepCents < 0 || keepCents > MAX_AUTO_PAYOUT_CENTS) {
       throw new https.HttpsError("invalid-argument", "Choose a balance to keep of $0 or more");
     }
-    if (!isFloatRoute(d.route)) {
-      throw new https.HttpsError("invalid-argument", "route must be cash, zaad, edahab or bank");
+    if (!user.zaad?.msisdn || !user.zaad?.name) {
+      throw new https.HttpsError("failed-precondition", "Add your Zaad account first");
     }
-    const name = (d.destinationName ?? "").trim();
-    const destRef = (d.destinationRef ?? "").trim();
-    if (name.length < 2 || destRef.length < 3) {
-      throw new https.HttpsError("invalid-argument", "Tell us the account name and number to send the money to");
+    // An app that says nothing about shillings keeps whatever was set for them.
+    let shillings: AutoPayoutSettings["shillings"] =
+      ((await ref.get()).data()?.autoPayout as AutoPayoutSettings | undefined)?.shillings;
+    if (typeof d.shillingsEnabled === "boolean") {
+      const keep = d.keepSls ?? 0;
+      if (d.shillingsEnabled && (!Number.isInteger(keep) || keep < 0)) {
+        throw new https.HttpsError("invalid-argument", "Choose a balance of shillings to keep of 0 or more");
+      }
+      shillings = { enabled: d.shillingsEnabled, keep: d.shillingsEnabled ? keep : 0 };
     }
     const settings: AutoPayoutSettings = {
       enabled: true,
       keepCents,
-      route: d.route,
-      destinationName: name.slice(0, 100),
-      destinationRef: destRef.slice(0, 60),
+      ...(shillings ? { shillings } : {}),
       updatedAt: admin.firestore.Timestamp.now(),
     };
     await ref.set({ autoPayout: settings }, { merge: true });
@@ -101,7 +117,9 @@ export const setAutoPayout = https.onCall(
 /** One night's run. Returns how many payouts were queued. */
 export async function runAutoPayoutsNow(): Promise<{ queued: number; skipped: number }> {
   const db = admin.firestore();
-  const { autoPayoutMinCents } = await getRates();
+  const { autoPayoutMinCents, zaadChangeHoldHours, slsPerUsd } = await getRates();
+  // The same minimum, as whole shillings (rounded up, so never below it).
+  const minSls = fromLimitCents(autoPayoutMinCents, "SLS", slsPerUsd, "up");
   const profiles = await db.collection("merchantProfiles").where("autoPayout.enabled", "==", true).limit(500).get();
 
   let queued = 0;
@@ -115,6 +133,11 @@ export async function runAutoPayoutsNow(): Promise<{ queued: number; skipped: nu
         skipped++;
         continue;
       }
+      if (zaadPayoutBlock(user, zaadChangeHoldHours, Date.now())) {
+        skipped++;
+        continue;
+      }
+      const zaad = user.zaad!;
       try {
         await assertResetCooldownAllows(uid, "other", 0);
       } catch {
@@ -132,27 +155,44 @@ export async function runAutoPayoutsNow(): Promise<{ queued: number; skipped: nu
         continue;
       }
       const wallet = (await db.collection("wallets").doc(uid).get()).data() as Wallet | undefined;
+      // Each currency that is on and has enough above its kept balance.
+      const due: Array<{ amountCents: number; currency: "USD" | "SLS" }> = [];
       const available = (wallet?.balance ?? 0) - (wallet?.reservedCents ?? 0) - settings.keepCents;
-      if (available < autoPayoutMinCents) {
+      if (available >= autoPayoutMinCents) {
+        due.push({ amountCents: Math.min(available, MAX_AUTO_PAYOUT_CENTS), currency: "USD" });
+      }
+      if (settings.shillings?.enabled) {
+        const slsAvailable =
+          (wallet?.sls?.balance ?? 0) - (wallet?.sls?.reservedCents ?? 0) - settings.shillings.keep;
+        if (slsAvailable >= minSls) {
+          const maxSls = fromLimitCents(MAX_AUTO_PAYOUT_CENTS, "SLS", slsPerUsd, "down");
+          due.push({ amountCents: Math.min(slsAvailable, maxSls), currency: "SLS" });
+        }
+      }
+      if (due.length === 0) {
         skipped++;
         continue;
       }
-      const amountCents = Math.min(available, MAX_AUTO_PAYOUT_CENTS);
-      await createPayoutRequest(db, uid, user, {
-        amountCents,
-        route: settings.route,
-        destinationName: settings.destinationName,
-        destinationRef: settings.destinationRef,
-        auto: true,
-      });
-      queued++;
-      notifyUser(
-        uid,
-        "payout_sent",
-        "Automatic payout requested",
-        `$${(amountCents / 100).toFixed(2)} is on its way to ${settings.destinationName}.`,
-        { type: "auto_payout" }
-      ).catch(() => undefined);
+      for (const { amountCents, currency } of due) {
+        await createPayoutRequest(db, uid, user, {
+          amountCents,
+          currency,
+          route: "zaad",
+          destinationName: zaad.name,
+          destinationRef: zaad.msisdn,
+          auto: true,
+        });
+        queued++;
+        notifyUser(
+          uid,
+          "payout_sent",
+          {
+            key: "payout.auto_requested",
+            params: { amount: pushAmount(amountCents, currency), destination: zaadLabel(zaad.msisdn) },
+          },
+          { type: "auto_payout" }
+        ).catch(() => undefined);
+      }
     } catch (err) {
       // One merchant's failure must not stop the others; tomorrow retries.
       console.error(`Automatic payout for ${uid} failed:`, err);

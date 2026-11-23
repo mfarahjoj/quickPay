@@ -16,8 +16,10 @@ import { ApiResponse, Transaction } from "../types";
 import { requireAuth, sanitizeString } from "../utils/validation";
 import { getRates } from "../config/rates";
 import { notifyUser } from "../utils/notifications";
+import { PushMessage } from "../utils/pushTemplates";
 import { JOURNAL_COLLECTION, JournalEntryType } from "../ledger";
 import { REFUNDABLE_ENTRY_TYPES } from "../qr-payments/refundCore";
+import { Currency, formatAmount, parseCurrency } from "../utils/money";
 import {
   ACTIVE_STATUSES,
   DISPUTES_COLLECTION,
@@ -63,7 +65,10 @@ export interface Disputable {
   disputedKind: DisputedKind;
   side: "payer" | "payee";
   against: string | null;
+  /** In the movement's currency: cents, or whole shillings. */
   transactionAmountCents: number;
+  /** The movement's currency; a remedy is paid in it. */
+  currency: Currency;
   happenedAt: number | undefined;
   /** One dispute per movement per person: this is its document id. */
   disputeId: string;
@@ -106,6 +111,7 @@ export async function describeDisputable(
       side,
       against: other && other !== "system" && other !== uid ? other : null,
       transactionAmountCents: tx.amount,
+      currency: parseCurrency(tx.currency) ?? "USD",
       happenedAt: (tx.completedAt ?? tx.createdAt)?.toMillis?.(),
       disputeId: `${transactionId}_${uid}`,
     };
@@ -129,12 +135,17 @@ export async function describeDisputable(
       { reason: "not_uncredited" }
     );
   }
+  // Nobody confirmed it, but the agent whose app was shown this request
+  // (previewAgentTopup) is on record: the claim is theirs to answer. With no
+  // scan on record there is nobody, and it goes straight to ops.
+  const scannedBy =
+    typeof req.scannedBy === "string" && req.scannedBy && req.scannedBy !== uid ? req.scannedBy : null;
   return {
     disputedKind: "uncredited_cash_in",
     side: "payee",
-    // Nobody confirmed it, so there is no known agent to answer.
-    against: null,
+    against: scannedBy,
     transactionAmountCents: req.amount,
+    currency: parseCurrency(req.currency) ?? "USD",
     happenedAt: req.createdAt?.toMillis?.(),
     disputeId: `atr_${agentTopupRequestId}_${uid}`,
   };
@@ -151,12 +162,11 @@ function requireText(value: unknown, field: string): string {
 function notifyQuietly(
   userId: string | null,
   type: "dispute_opened" | "dispute_updated" | "dispute_resolved",
-  title: string,
-  body: string,
+  message: PushMessage,
   disputeId: string
 ): void {
   if (!userId) return;
-  notifyUser(userId, type, title, body, { type, disputeId }).catch((err) =>
+  notifyUser(userId, type, message, { type, disputeId }).catch((err) =>
     console.error(`Failed to notify ${userId} about dispute ${disputeId}:`, err)
   );
 }
@@ -186,7 +196,7 @@ export const openDispute = https.onCall(
     const db = admin.firestore();
     const rates = await getRates();
 
-    const { disputedKind, side, against, transactionAmountCents, happenedAt, disputeId } =
+    const { disputedKind, side, against, transactionAmountCents, currency, happenedAt, disputeId } =
       await describeDisputable(db, uid, { transactionId, agentTopupRequestId });
 
     if (!allowedKinds(disputedKind, side).includes(kind)) {
@@ -241,7 +251,7 @@ export const openDispute = https.onCall(
       participants: against ? [uid, against] : [uid],
       amountCents,
       transactionAmountCents,
-      currency: "USD",
+      currency,
       messages: [{ by: uid, role: "raiser", text: note, at: now }],
       createdAt: now,
       updatedAt: now,
@@ -267,10 +277,13 @@ export const openDispute = https.onCall(
     notifyQuietly(
       against,
       "dispute_opened",
-      kind === "refund_requested" ? "Refund requested" : "A payment was disputed",
-      `${kind === "refund_requested" ? "A customer asked for a refund of" : "A customer disputed a payment of"} $${(amountCents / 100).toFixed(2)}. Reply within ${Math.round(
-        rates.disputeResponseHours / 24
-      )} days.`,
+      {
+        key: kind === "refund_requested" ? "dispute.refund_requested" : "dispute.payment_disputed",
+        params: {
+          amount: formatAmount(amountCents, currency),
+          days: { days: Math.round(rates.disputeResponseHours / 24) },
+        },
+      },
       disputeId
     );
 
@@ -324,7 +337,7 @@ export const postDisputeMessage = https.onCall(
       return { status, notify: role === "raiser" ? d.against : d.raisedBy };
     });
 
-    notifyQuietly(result.notify, "dispute_updated", "Dispute update", "There's a new reply on a dispute.", disputeId);
+    notifyQuietly(result.notify, "dispute_updated", { key: "dispute.new_reply" }, disputeId);
     return { success: true, data: { status: result.status } };
   }
 );
@@ -359,7 +372,7 @@ export const withdrawDispute = https.onCall(
       return d.against;
     });
 
-    notifyQuietly(against, "dispute_resolved", "Dispute withdrawn", "A dispute against you was withdrawn.", disputeId);
+    notifyQuietly(against, "dispute_resolved", { key: "dispute.withdrawn" }, disputeId);
     return { success: true, message: "Dispute withdrawn" };
   }
 );

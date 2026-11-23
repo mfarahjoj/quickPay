@@ -298,6 +298,18 @@ select {
 }
 input::placeholder,
 textarea::placeholder { color: var(--faint); }
+/* The rule above flattens every input into a text box; a checkbox needs its
+   own box and tick back, or it can't show whether it is ticked. */
+input[type="checkbox"] {
+  appearance: auto;
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  padding: 0;
+  flex: none;
+  accent-color: var(--accent, #1a56ff);
+  cursor: pointer;
+}
 input:hover,
 textarea:hover,
 select:hover { background-color: var(--fill-hover); }
@@ -421,6 +433,63 @@ label.stack > span { font-size: 13px; font-weight: 500; color: var(--muted); }
 .nav button[aria-current="page"] { background: var(--accent-soft); color: var(--accent-text); font-weight: 600; }
 .nav button[aria-current="page"] .icon { color: var(--accent-text); }
 .nav .short { display: none; }
+
+/* Sections, and the count of what is waiting in each desk */
+.nav-section { display: flex; flex-direction: column; gap: 2px; }
+.nav-section + .nav-section { margin-top: 14px; }
+.nav-heading {
+  padding: 0 10px 4px;
+  color: var(--faint);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.nav-label { flex: 1; min-width: 0; }
+.nav-count {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.nav-count.bad { background: var(--danger-solid); }
+
+/* Quick find: a customer from any page; "/" focuses it */
+.quick-find { position: relative; margin: 0 2px 16px; }
+.quick-find input {
+  width: 100%;
+  height: 34px;
+  padding: 0 30px 0 32px;
+  border-radius: 10px;
+  background: var(--fill) var(--ico-search) 10px center / 15px no-repeat;
+  border: 1px solid transparent;
+  font-size: 13.5px;
+}
+.quick-find input:focus { background-color: var(--panel); border-color: var(--accent-ring); }
+.quick-find kbd {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 5px;
+  border: 1px solid var(--separator);
+  color: var(--faint);
+  font: 600 11px/16px var(--font);
+  text-align: center;
+  pointer-events: none;
+}
+.quick-find input:focus + kbd { display: none; }
 
 .account {
   margin-top: auto;
@@ -941,6 +1010,103 @@ td.diff { color: var(--danger); font-weight: 600; }
   mask: var(--m-image) center / contain no-repeat;
 }
 
+/* ─────────────────────────── To do (home) ─────────────────────────── */
+.todo-hero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 22px 24px;
+  border-radius: var(--radius-card);
+  background: var(--panel);
+  box-shadow: var(--shadow-card);
+}
+.todo-hello { color: var(--muted); font-size: 13.5px; font-weight: 500; }
+.todo-summary { margin-top: 2px; font: 650 20px/1.3 var(--font-display); letter-spacing: -0.018em; text-wrap: balance; }
+
+.todo-ledger {
+  justify-content: flex-start;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 16px;
+  border-radius: 14px;
+  text-align: left;
+  font-weight: 400;
+}
+.todo-ledger, .todo-card, .todo-link { white-space: normal; }
+.todo-ledger.ok, .todo-ledger.ok:hover:not(:disabled), .todo-ledger.ok:active:not(:disabled) { background: var(--ok-soft); color: var(--text); }
+.todo-ledger.bad, .todo-ledger.bad:hover:not(:disabled), .todo-ledger.bad:active:not(:disabled) { background: var(--danger-soft); color: var(--text); }
+.todo-ledger-text { flex: 1; min-width: 0; line-height: 1.4; }
+.todo-ledger strong { font-weight: 600; }
+.todo-ledger .icon { color: var(--muted); }
+.todo-ledger-dot { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--ok); }
+.todo-ledger.bad .todo-ledger-dot { background: var(--danger); box-shadow: 0 0 0 4px var(--danger-soft); }
+
+.todo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px;
+}
+.todo-card {
+  justify-content: flex-start;
+  align-items: center;
+  gap: 14px;
+  min-height: 84px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: var(--panel);
+  box-shadow: var(--shadow-card);
+  text-align: left;
+  font-weight: 400;
+  transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.todo-card:hover:not(:disabled) { background: var(--panel); transform: translateY(-1px); box-shadow: var(--shadow-card), 0 0 0 1px var(--accent-ring); }
+.todo-card:active:not(:disabled) { transform: scale(0.99); }
+.todo-icon {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.todo-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.todo-title { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.todo-sub { color: var(--muted); font-size: 12.5px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.todo-count {
+  flex: none;
+  min-width: 40px;
+  font: 700 30px/1 var(--font-display);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  text-align: right;
+  color: var(--text);
+}
+.todo-card[data-tone="clear"] .todo-icon { background: var(--ok-soft); color: var(--ok); }
+.todo-card[data-tone="clear"] .todo-count { color: var(--faint); font-size: 22px; }
+.todo-card[data-tone="clear"] .todo-title { color: var(--muted); }
+.todo-card[data-tone="bad"] .todo-icon { background: var(--danger-soft); color: var(--danger); }
+.todo-card[data-tone="bad"] .todo-count { color: var(--danger); }
+.todo-card[data-tone="busy"] .todo-icon { background: var(--fill); color: var(--faint); }
+
+.todo-section { margin: 4px 0 10px; color: var(--muted); font-size: 13px; font-weight: 600; }
+.todo-links { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.todo-link {
+  justify-content: flex-start;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--fill);
+  text-align: left;
+  font-weight: 400;
+}
+.todo-link .icon { margin-top: 1px; color: var(--accent-text); }
+.todo-link-title { display: block; font-weight: 600; }
+.todo-link-hint { display: block; margin-top: 2px; color: var(--muted); font-size: 12.5px; }
+
 /* ─────────────────────────── 12 · Responsive ─────────────────────────── */
 
 /* Below 860px the sidebar becomes a top bar, and navigation moves to an iOS-style tab bar. */
@@ -1008,6 +1174,16 @@ td.diff { color: var(--danger); font-weight: 600; }
   .nav button[aria-current="page"] { color: var(--accent-text); font-weight: 600; }
   .nav .long { display: none; }
   .nav .short { display: inline; }
+  /* The phone tab bar keeps five tabs; the queues open from the To do page. */
+  .nav-section { display: contents; }
+  .nav-heading, .quick-find { display: none; }
+  .nav button:not([data-phone]) { display: none; }
+  .nav-label { flex: none; }
+  .nav button { position: relative; }
+  .nav-count { position: absolute; top: 2px; left: calc(50% + 4px); min-width: 17px; height: 17px; font-size: 10.5px; padding: 0 4px; }
+  .todo-hero { padding: 18px; }
+  .todo-summary { font-size: 18px; }
+  .todo-grid { grid-template-columns: minmax(0, 1fr); }
 
   .content { padding: 22px 16px 28px; }
   .page-header { margin-bottom: 18px; }
@@ -1053,10 +1229,11 @@ td.diff { color: var(--danger); font-weight: 600; }
    plain rounded corners above apply. Pills and discs must stay truly round. */
 @supports (corner-shape: squircle) {
   .panel, .modal, .gate .card, .banner, .item, .brand-mark, .gate-icon, .empty-icon,
-  .photo a, .photo img, .photo-missing, button, input, textarea, select, code, .tile {
+  .photo a, .photo img, .photo-missing, button, input, textarea, select, code, .tile,
+  .todo-hero, .todo-card, .todo-icon, .todo-link, .todo-ledger {
     corner-shape: squircle;
   }
-  .badge, .avatar, .segmented, .segmented button, .icon-btn, .spinner, .status-disc {
+  .badge, .avatar, .segmented, .segmented button, .icon-btn, .spinner, .status-disc, .nav-count, .todo-ledger-dot {
     corner-shape: round;
   }
 }
@@ -1090,3 +1267,42 @@ td.diff { color: var(--danger); font-weight: 600; }
 .thread-msg .muted { font-size: 12.5px; margin-bottom: 2px; }
 .thread-msg[data-role="counterparty"] { margin-left: 24px; }
 .thread-msg[data-role="ops"] { background: var(--accent-soft); }
+
+/* ───────────────────── Account page · waiting on Zapp ───────────────────── */
+.work-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+}
+.work-item[data-tone="warn"] { border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+.work-item[data-tone="bad"] { border-color: color-mix(in srgb, var(--danger) 55%, transparent); }
+.work-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.work-item[data-tone="bad"] .work-icon { color: var(--danger); }
+.work-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.work-title { font-weight: 600; }
+.work-actions { justify-content: flex-end; }
+.work-expand {
+  margin-top: 10px;
+  padding: 4px 0 4px 14px;
+  border-left: 3px solid var(--accent-soft-2);
+}
+@media (max-width: 640px) {
+  .work-item { grid-template-columns: auto minmax(0, 1fr); }
+  .work-actions { grid-column: 1 / -1; justify-content: flex-start; }
+  .work-expand { padding-left: 10px; }
+}
+
+.map-embed { display: block; width: 100%; max-width: 520px; height: 220px; margin-top: 10px; border: 0; border-radius: 10px; }

@@ -28,6 +28,7 @@ export function useWallet() {
             setWallet({
               balance: data!.balance / 100, // Convert cents to dollars
               balanceCents: data!.balance,
+              slsBalance: data!.sls?.balance ?? 0,
               currency: data!.currency,
               totalReceived: data!.totalReceived / 100,
               totalSent: data!.totalSent / 100,

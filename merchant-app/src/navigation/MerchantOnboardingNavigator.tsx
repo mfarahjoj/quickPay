@@ -1,6 +1,6 @@
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
-import { colors } from '../theme';
+import { useColors } from '../theme';
 
 export type MerchantOnboardingParamList = {
   MerchantOnboardingEntry: undefined;
@@ -12,6 +12,7 @@ export type MerchantOnboardingParamList = {
 const Stack = createStackNavigator<MerchantOnboardingParamList>();
 
 export default function MerchantOnboardingNavigator() {
+  const colors = useColors();
   return (
     <Stack.Navigator
       screenOptions={{

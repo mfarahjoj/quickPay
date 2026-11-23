@@ -206,6 +206,12 @@ Each phase ends with a deploy that Mahamed authorises per target, as `CLAUDE.md`
 - **4.4 (F17)** Finish the merchant error localisation (BACKLOG #8).
 - **4.5** Make one shared receipt vocabulary in both apps: the same status names, kinds, refund and dispute badges, and transaction ID format.
 
+**Status 2026-10-28:** 4.3 committed on `feat/push-i18n` (from `fix/customer-login`), not deployed. Every push, and the copy kept for the customer app's notifications list, is written in the recipient's `users/{uid}.preferredLanguage` (the field both language pickers save), falling back to English as the apps do. The texts are templates in en/so/ar in `functions/src/utils/pushTemplates.ts`; dates are in Hargeisa time. Each function keeps sending English until it is redeployed. These 33 send pushes:
+
+`firebase deploy --only functions:sendP2P,functions:payrollPayout,functions:processPayment,functions:payMerchant,functions:refundPayment,functions:approvePaymentRequest,functions:createPaymentRequest,functions:rejectPaymentRequest,functions:approveApiCharge,functions:api,functions:stripeWebhook,functions:manualTopup,functions:agentConfirmTopup,functions:agentConfirmCashOut,functions:cancelCashOut,functions:expireAgentRequests,functions:changePin,functions:resetPin,functions:registerTrustedDevice,functions:completePhoneChange,functions:freezeMyAccount,functions:openDispute,functions:postDisputeMessage,functions:withdrawDispute,functions:adminResolveDispute,functions:disputeHousekeeping,functions:adminPostAdjustment,functions:adminApproveFloat,functions:adminSettlePayout,functions:adminRejectPayout,functions:adminReviewKyc,functions:adminReviewRoleRequest,functions:runAutoPayouts`
+
+No money logic changed, but most of these move money, so each still needs the user's per-target OK, and the deploy must come from a branch that has everything prod runs, or it rolls those functions back. `feat/zaad-topups` merges cleanly in this respect: its `adminAssignMobileMoney` and `mobileMoneyListener` call `notifyTopupCompleted`, which kept its signature, so they send localized pushes once both are in.
+
 ### Phase 5: Run it safely
 - **5.1 (F21)** External reconciliation and alerts that reach a person (BACKLOG #1), an error-rate alert on the money callables (BACKLOG #6), a Firestore PITR plus backup runbook (BACKLOG #7), and a staging project.
 - **5.2 (F22)** Turn on `consumeAppCheckToken` for the money and admin callables.

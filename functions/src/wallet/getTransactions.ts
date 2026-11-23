@@ -7,14 +7,19 @@ import { kindOf } from "../utils/transactionKind";
 interface TransactionResponse {
   id: string;
   type: string;
-  amount: number; // Gross, in dollars
-  fee: number; // Platform fee, in dollars
-  net: number; // Amount received after fees, in dollars
-  commission: number; // Agent commission, in dollars
+  /** Gross, in whole units of `currency`: dollars, or shillings. Same for fee, net and commission. */
+  amount: number;
+  fee: number; // Platform fee
+  net: number; // Amount received after fees
+  commission: number; // Agent commission
   currency: string;
   status: TransactionStatus;
   description: string;
   reference?: string;
+  /** Zapp receipt number, e.g. "ZP-7K3M-9QX2". Absent on older payments. */
+  receiptNumber?: string;
+  /** Set when the customer approved this payment in a partner's app, on their phone (api/agreements.ts). */
+  approvedVia?: "partner_device";
   /** ISO 8601. */
   createdAt: string;
   completedAt?: string;
@@ -135,18 +140,22 @@ export const getTransactions = https.onCall(
           otherId && otherId !== userId ? parties.get(otherId) : undefined;
 
         const netCents = data.netCents ?? data.amount;
+        // Whole units of the row's currency: dollars, or shillings as stored.
+        const major = (v: number) => (data.currency === "SLS" ? v : centsToDollars(v));
 
         return {
           id: doc.id,
           type: data.type,
-          amount: centsToDollars(data.amount),
-          fee: centsToDollars(data.feeCents ?? 0),
-          net: centsToDollars(netCents),
-          commission: centsToDollars(data.commissionCents ?? 0),
+          amount: major(data.amount),
+          fee: major(data.feeCents ?? 0),
+          net: major(netCents),
+          commission: major(data.commissionCents ?? 0),
           currency: data.currency,
           status: data.status,
           description: data.description,
           reference: data.reference,
+          receiptNumber: data.receiptNumber,
+          approvedVia: data.approvedVia,
           // ISO strings: a callable sends a Date as {} (it copies own fields,
           // and a Date has none), so the apps never got these dates.
           createdAt: data.createdAt.toDate().toISOString(),

@@ -19,6 +19,7 @@ import { ApiResponse } from "../types";
 import { requireAdmin, requireRecentAdminAuth, requireReason } from "./guard";
 import { stageAuditEntry, writeAuditEntry } from "./audit";
 import { resolveAccountStatus } from "../utils/accountStatus";
+import { RECEIPT_NUMBERS, normalizeReceiptNumber } from "../utils/receiptNumber";
 import { probeSpendIndex } from "../utils/limits";
 
 const SENSITIVE_FIELDS: readonly string[] = AUTH_FIELDS;
@@ -55,10 +56,11 @@ function toSummary(doc: FirebaseFirestore.DocumentSnapshot): UserSummary {
 }
 
 /**
- * Find a customer by phone number, uid or name prefix.
+ * Find a customer by phone number, uid, Zapp receipt number or name prefix.
  *
- * Phone and uid are exact; name is a prefix scan, which is all Firestore does
- * without a search index.
+ * Phone, uid and receipt number are exact; name is a prefix scan, which is
+ * all Firestore does without a search index. A receipt number returns both
+ * sides of that payment or refund.
  */
 export const adminSearchUsers = https.onCall(
   { enforceAppCheck: true },
@@ -77,6 +79,22 @@ export const adminSearchUsers = https.onCall(
 
     const query = raw.trim();
     const db = admin.firestore();
+
+    // Only with the ZP prefix: an eight-letter name can otherwise read as a
+    // valid receipt body ("Mohamedx" is M-0-H-A-M-E-D-X).
+    if (/^zp/i.test(query)) {
+      const receiptNumber = normalizeReceiptNumber(query);
+      if (receiptNumber) {
+        const receipt = await db.collection(RECEIPT_NUMBERS).doc(receiptNumber).get();
+        const participants: string[] = receipt.exists ?
+          (receipt.data()?.participants ?? []) :
+          [];
+        const users = await Promise.all(
+          participants.map((uid) => db.collection("users").doc(uid).get())
+        );
+        return { success: true, data: users.filter((u) => u.exists).map(toSummary) };
+      }
+    }
 
     if (query.startsWith("+")) {
       const snap = await db
@@ -345,8 +363,7 @@ export const adminAllowPinReset = https.onCall(
     notifyUser(
       userId,
       "pin_reset",
-      "PIN reset opened by Zapp Pay staff",
-      `You can reset your PIN in the app for the next ${STAFF_RESET_GRANT_MINUTES} minutes. If you didn't ask for this, contact support now.`,
+      { key: "security.staff_pin_reset", params: { minutes: String(STAFF_RESET_GRANT_MINUTES) } },
       { type: "pin_reset" }
     ).catch((err) => console.error("Failed to notify staff PIN reset:", err));
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
-import { colors, borderRadius, shadows } from '../theme';
+import { borderRadius, makeStyles } from '../theme';
 
 interface CardProps {
   children: React.ReactNode;
@@ -13,6 +13,7 @@ export function Card({
   variant = 'default',
   style,
 }: CardProps) {
+  const styles = useStyles();
   if (variant === 'glass') {
     return (
       <View style={[styles.base, styles.glass, style]}>
@@ -28,19 +29,19 @@ export function Card({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   base: {
     borderRadius: borderRadius.lg,
-    backgroundColor: colors.background.primary,
+    backgroundColor: colors.ui.glass,
     padding: 16,
   },
   default: {
-    ...shadows.md,
+    borderWidth: 1,
+    borderColor: colors.ui.glassBorder,
   },
   glass: {
-    backgroundColor: 'rgba(255,255,255,0.92)',
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.5)',
-    ...shadows.md,
+    borderColor: colors.ui.glassBorder,
   },
-});
+}));

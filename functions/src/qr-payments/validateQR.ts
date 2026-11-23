@@ -4,9 +4,15 @@ import { requireAuth } from "../utils/validation";
 import { parseQRData } from "../utils/encryption";
 import { parseEmvQRPayload } from "../utils/emvqr";
 import { ApiResponse, QRCode } from "../types";
+import { appReads, parseCurrency } from "../utils/money";
 
 interface ValidateQRRequest {
   qrData: string;
+  /**
+   * The currencies the paying app shows correctly, e.g. ["USD", "SLS"]. Older
+   * customer apps send none and read every amount as cents.
+   */
+  currencies?: string[];
 }
 
 interface ValidateQRResponse {
@@ -20,6 +26,8 @@ interface ValidateQRResponse {
   reason?: string;
   /** When true the QR is a permanent merchant sticker — the customer must enter an amount. */
   isMerchantSticker?: boolean;
+  /** Set when the code is fine but this app can't show its currency. */
+  updateFor?: "shillings";
 }
 
 /**
@@ -200,6 +208,20 @@ export const validateQRCode = https.onCall(
 
       const merchantData = merchantDoc.data();
       const sessionMerchantName = merchantData?.fullName || "Merchant";
+
+      // An app that would show 30,000 shillings as "$300.00" is told to
+      // update instead; the code stays active for one that can pay it.
+      const qrCurrency = parseCurrency(qrCode.currency) ?? "USD";
+      if (!appReads(qrCurrency, request.data.currencies)) {
+        return {
+          success: true,
+          data: {
+            valid: false,
+            reason: "This shop is charging in shillings. Update Zapp Pay to pay it.",
+            updateFor: "shillings",
+          },
+        };
+      }
 
       return {
         success: true,

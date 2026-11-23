@@ -57,9 +57,11 @@
 		<true/>
 	</dict>
 	<key>NSCameraUsageDescription</key>
-	<string>We need camera access to scan QR codes for payments</string>
+	<string>We need camera access to scan QR codes for payments, read receipts, and photograph your ID and shop when you apply</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>We use Face ID to securely authenticate your payments</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Zapp Pay Merchant uses your location once, when you apply, to pin where your shop is.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>We need access to save QR codes to your photo library</string>
 	<key>RCTNewArchEnabled</key>

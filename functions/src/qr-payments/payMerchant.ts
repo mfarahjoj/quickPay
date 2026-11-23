@@ -1,7 +1,8 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { assertResetCooldownAllows } from "../utils/resetCooldown";
-import { requireAuth, validateAmount, validateCurrency } from "../utils/validation";
+import { requireAuth, validateAmount } from "../utils/validation";
+import { parseCurrency, toLimitCents } from "../utils/money";
 import { enforceTransactionLimits } from "../utils/limits";
 import { assertAccountActive } from "../utils/accountStatus";
 import { verifyUserPin } from "../auth/validatePin";
@@ -26,6 +27,7 @@ import {
   PLATFORM_FEES,
   WalletNotFoundError,
 } from "../ledger";
+import { claimReceiptNumber, reserveReceiptNumber } from "../utils/receiptNumber";
 import {
   isValidIdempotencyKey,
   scopedEntryId,
@@ -33,7 +35,13 @@ import {
 
 interface PayMerchantRequest {
   merchantId: string;
-  amount: number; // In cents
+  /** In the currency's smallest unit: cents, or whole shillings. */
+  amount: number;
+  /**
+   * "USD" or "SLS" (also "SLSH"): the customer picks it on the amount
+   * screen and pays from that balance, never converted. Older apps only
+   * ever send "USD".
+   */
   currency: string;
   pin: string;
   /**
@@ -75,6 +83,7 @@ async function findPostedPayment(
   const tx = txSnap.data() as Transaction;
   return {
     transactionId: postedTransactionId,
+    ...(tx.receiptNumber ? { receiptNumber: tx.receiptNumber } : {}),
     status: "completed",
     amount: tx.amount,
     merchantId: tx.toUserId as string,
@@ -92,7 +101,8 @@ export const payMerchant = https.onCall(
   ): Promise<ApiResponse<PaymentResponse>> => {
     requireAuth(request);
     const customerId = request.auth!.uid;
-    const { merchantId, amount, currency, pin, idempotencyKey } = request.data;
+    const { merchantId, amount, pin, idempotencyKey } = request.data;
+    const currency = parseCurrency(request.data.currency, "USD");
 
     if (!merchantId || !pin) {
       throw new https.HttpsError(
@@ -104,14 +114,14 @@ export const payMerchant = https.onCall(
     if (!validateAmount(amount)) {
       throw new https.HttpsError(
         "invalid-argument",
-        "Amount must be a positive integer (in cents)"
+        "Amount must be a positive integer in the currency's smallest unit"
       );
     }
 
-    if (!validateCurrency(currency)) {
+    if (!currency) {
       throw new https.HttpsError(
         "invalid-argument",
-        "Invalid currency. Supported: USD"
+        "Invalid currency. Supported: USD, SLS"
       );
     }
 
@@ -143,7 +153,13 @@ export const payMerchant = https.onCall(
       }
 
       // Outgoing money waits out the pause after a PIN reset.
-      await assertResetCooldownAllows(customerId, "shop_payment", amount);
+      // The allowance after a PIN reset is dollars; shillings count at the rate.
+      const { paymentFeeRate, slsPerUsd } = await getRates();
+      await assertResetCooldownAllows(
+        customerId,
+        "shop_payment",
+        toLimitCents(amount, currency, slsPerUsd)
+      );
 
       await enforceVelocity(customerId);
 
@@ -165,9 +181,8 @@ export const payMerchant = https.onCall(
       const customerDoc = await db.collection("users").doc(customerId).get();
       const customerData = customerDoc.data() as User;
       assertAccountActive(customerData);
-      await enforceTransactionLimits(customerId, amount, customerData);
+      await enforceTransactionLimits(customerId, amount, customerData, undefined, currency);
 
-      const { paymentFeeRate } = await getRates();
       const feeCents = computePaymentFee(amount, paymentFeeRate);
       const netCents = amount - feeCents;
 
@@ -184,7 +199,12 @@ export const payMerchant = https.onCall(
 
       let alreadyPosted = false;
 
+      let receiptNumber: string;
+
       await db.runTransaction(async (transaction) => {
+        // A read, so it goes before any write. A retried attempt claims afresh.
+        receiptNumber = await claimReceiptNumber(transaction, db);
+
         const lines: JournalLine[] = [
           { account: userAccount(customerId), debit: amount, credit: 0 },
           { account: userAccount(merchantId), debit: 0, credit: netCents },
@@ -196,9 +216,9 @@ export const payMerchant = https.onCall(
         const pending = await prepareJournalEntry(transaction, {
           entryId: journalEntryId,
           type: "qr_payment",
-          currency: currency as "USD" | "SLS",
+          currency,
           lines,
-          refs: { transactionId },
+          refs: { transactionId, receiptNumber },
           description: `Payment to ${merchantData.fullName}`,
           postedBy: customerId,
         });
@@ -225,6 +245,7 @@ export const payMerchant = https.onCall(
           currency,
           status: "completed",
           description: `Payment to ${merchantData.fullName}`,
+          receiptNumber,
           journalEntryId,
           createdAt: admin.firestore.Timestamp.now(),
           completedAt: admin.firestore.Timestamp.now(),
@@ -234,6 +255,14 @@ export const payMerchant = https.onCall(
           db.collection("transactions").doc(transactionId),
           txRecord
         );
+
+        reserveReceiptNumber(transaction, db, receiptNumber, {
+          transactionId,
+          type: "payment",
+          participants: [customerId, merchantId],
+          amount,
+          currency,
+        });
       });
 
       if (alreadyPosted) {
@@ -265,6 +294,7 @@ export const payMerchant = https.onCall(
         success: true,
         data: {
           transactionId,
+          receiptNumber: receiptNumber!,
           status: "completed",
           amount,
           merchantId,

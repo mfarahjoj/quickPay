@@ -43,3 +43,52 @@ export function formatCents(cents: number): string {
     maximumFractionDigits: 2,
   })}`;
 }
+
+/** "SLSH" and "SLS" are shillings; anything else is dollars. */
+export function isShillings(currency: unknown): boolean {
+  return currency === 'SLS' || currency === 'SLSH';
+}
+
+/**
+ * An amount in its currency's smallest unit, for display: cents as "$12.34",
+ * whole shillings as "30,000 SLSH". Agents hand over cash from what this
+ * shows, so a shilling amount must never go through formatCents.
+ */
+export function formatAmount(amount: number, currency: unknown): string {
+  if (!isShillings(currency)) return formatCents(amount);
+  const safe = Number.isFinite(amount) ? Math.round(amount) : 0;
+  return `${safe.toLocaleString('en-US')} SLSH`;
+}
+
+/**
+ * An amount in whole units, as history rows carry it (12.5 dollars, or 30000
+ * shillings): "$12.50" or "30,000 SLSH".
+ */
+export function formatMajor(amount: number, currency: unknown): string {
+  const safe = Number.isFinite(amount) ? amount : 0;
+  return isShillings(currency) ? formatAmount(safe, 'SLS') : formatCents(Math.round(safe * 100));
+}
+
+/**
+ * Sent with every cash-in and cash-out call: this app shows shillings
+ * correctly, so the server may hand it shilling requests.
+ */
+export const READS_CURRENCIES = ['USD', 'SLS'];
+
+/**
+ * Free text to an amount in [currency]'s smallest unit: cents for dollars,
+ * whole shillings for shillings (no decimals: SLSH has no coins in use).
+ */
+export function toAmount(text: string, currency: unknown): number {
+  if (!isShillings(currency)) return toCents(text);
+  const digits = sanitizeAmountFor(text, currency);
+  return digits ? parseInt(digits, 10) : 0;
+}
+
+/** Constrain typing to a well-formed amount in [currency]. */
+export function sanitizeAmountFor(raw: string, currency: unknown): string {
+  if (!isShillings(currency)) return sanitizeAmountInput(raw);
+  // Whole shillings: anything after a decimal point is dropped, never joined
+  // on ("20000.50" is 20,000, not 2,000,050).
+  return (raw ?? '').split('.')[0].replace(/[^0-9]/g, '').slice(0, 10);
+}

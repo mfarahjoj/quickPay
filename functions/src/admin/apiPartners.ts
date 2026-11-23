@@ -1,0 +1,190 @@
+/**
+ * Partners (api/partners.ts), set from the console.
+ *
+ * Making a merchant a partner lets its transfer-scoped keys pay any Zapp
+ * account out of its wallet with no PIN, so it is a super-admin action with a
+ * reason and an audit entry, and the caps are always set alongside it.
+ */
+
+import * as admin from "firebase-admin";
+import { https } from "firebase-functions/v2";
+import { requireAdmin, requireRecentAdminAuth, requireReason } from "./guard";
+import { stageAuditEntry } from "./audit";
+import { ApiResponse, User } from "../types";
+import { isMerchantAccount } from "../api/keys";
+import {
+  DEFAULT_AGREEMENT_DAILY_USD_CENTS,
+  DEFAULT_AGREEMENT_MAX_CHARGE_USD_CENTS,
+  DEFAULT_DAILY_TRANSFER_USD_CENTS,
+  DEFAULT_MAX_TRANSFER_USD_CENTS,
+  E164_PATTERN,
+  MAX_PARTNER_FEE_RATE,
+  MAX_TEST_PHONE_NUMBERS,
+} from "../api/partners";
+import { API_PARTNERS_COLLECTION, ApiPartner } from "../api/types";
+
+export interface ApiPartnerRow {
+  transfersEnabled: boolean;
+  maxTransferUsdCents: number;
+  dailyTransferUsdCents: number;
+  /** null: the standard online payment fee. */
+  chargeFeeRate: number | null;
+  /** Numbers outside +252 the partner may charge, pay and look up. */
+  testPhoneNumbers: string[];
+  /** Linked payments (api/agreements.ts). */
+  agreementsEnabled: boolean;
+  agreementMaxChargeUsdCents: number;
+  agreementDailyUsdCents: number;
+  updatedAt: string | null;
+}
+
+function toRow(p: ApiPartner | undefined): ApiPartnerRow {
+  return {
+    transfersEnabled: p?.transfersEnabled ?? false,
+    maxTransferUsdCents: p?.maxTransferUsdCents ?? DEFAULT_MAX_TRANSFER_USD_CENTS,
+    dailyTransferUsdCents: p?.dailyTransferUsdCents ?? DEFAULT_DAILY_TRANSFER_USD_CENTS,
+    chargeFeeRate: typeof p?.chargeFeeRate === "number" ? p.chargeFeeRate : null,
+    testPhoneNumbers: Array.isArray(p?.testPhoneNumbers) ? p!.testPhoneNumbers : [],
+    agreementsEnabled: p?.agreementsEnabled ?? false,
+    agreementMaxChargeUsdCents: p?.agreementMaxChargeUsdCents ?? DEFAULT_AGREEMENT_MAX_CHARGE_USD_CENTS,
+    agreementDailyUsdCents: p?.agreementDailyUsdCents ?? DEFAULT_AGREEMENT_DAILY_USD_CENTS,
+    updatedAt: p?.updatedAt ? p.updatedAt.toDate().toISOString() : null,
+  };
+}
+
+export const adminGetApiPartner = https.onCall(
+  { enforceAppCheck: true },
+  async (request: https.CallableRequest<{ merchantId: string }>): Promise<ApiResponse<ApiPartnerRow>> => {
+    requireAdmin(request, ["ops", "super"]);
+    const merchantId = request.data?.merchantId;
+    if (typeof merchantId !== "string" || !merchantId) {
+      throw new https.HttpsError("invalid-argument", "merchantId is required");
+    }
+    const snap = await admin.firestore().collection(API_PARTNERS_COLLECTION).doc(merchantId).get();
+    return { success: true, data: toRow(snap.data() as ApiPartner | undefined) };
+  }
+);
+
+interface SetPartnerInput {
+  merchantId: string;
+  transfersEnabled: boolean;
+  maxTransferUsdCents: number;
+  dailyTransferUsdCents: number;
+  chargeFeeRate: number | null;
+  testPhoneNumbers?: string[];
+  /** Absent from an older console: kept as they are. */
+  agreementsEnabled?: boolean;
+  agreementMaxChargeUsdCents?: number;
+  agreementDailyUsdCents?: number;
+  reason: string;
+}
+
+/** Pure, for testing: refuse anything that isn't a sane partner setting. */
+export function validatePartnerInput(
+  d: Partial<SetPartnerInput>
+): Required<Omit<SetPartnerInput, "merchantId" | "reason" | "agreementsEnabled" | "agreementMaxChargeUsdCents" | "agreementDailyUsdCents">> &
+  Pick<SetPartnerInput, "agreementsEnabled" | "agreementMaxChargeUsdCents" | "agreementDailyUsdCents"> {
+  const cents = (v: unknown, name: string, max: number) => {
+    if (typeof v !== "number" || !Number.isSafeInteger(v) || v < 100 || v > max) {
+      throw new https.HttpsError("invalid-argument", `${name} must be whole US cents between 100 and ${max}`);
+    }
+    return v;
+  };
+  if (typeof d.transfersEnabled !== "boolean") {
+    throw new https.HttpsError("invalid-argument", "transfersEnabled must be true or false");
+  }
+  const maxTransferUsdCents = cents(d.maxTransferUsdCents, "maxTransferUsdCents", 1_000_000);
+  const dailyTransferUsdCents = cents(d.dailyTransferUsdCents, "dailyTransferUsdCents", 10_000_000);
+  if (dailyTransferUsdCents < maxTransferUsdCents) {
+    throw new https.HttpsError("invalid-argument", "The daily cap cannot be below the per-transfer cap");
+  }
+  const rate = d.chargeFeeRate;
+  if (rate !== null && rate !== undefined && (typeof rate !== "number" || !(rate >= 0 && rate <= MAX_PARTNER_FEE_RATE))) {
+    throw new https.HttpsError("invalid-argument", `chargeFeeRate must be between 0 and ${MAX_PARTNER_FEE_RATE}, or empty`);
+  }
+  const phones = d.testPhoneNumbers ?? [];
+  if (!Array.isArray(phones) || phones.length > MAX_TEST_PHONE_NUMBERS) {
+    throw new https.HttpsError("invalid-argument", `Up to ${MAX_TEST_PHONE_NUMBERS} test numbers`);
+  }
+  const testPhoneNumbers: string[] = [];
+  for (const raw of phones) {
+    const p = typeof raw === "string" ? raw.replace(/[\s\-()]/g, "") : "";
+    if (!E164_PATTERN.test(p)) {
+      throw new https.HttpsError(
+        "invalid-argument",
+        `${String(raw)} is not a number in international form, e.g. +447700900123`
+      );
+    }
+    if (!testPhoneNumbers.includes(p)) testPhoneNumbers.push(p);
+  }
+  // Linked payments: all three together, or none (an older console, which keeps what is set).
+  let agreements: Pick<SetPartnerInput, "agreementsEnabled" | "agreementMaxChargeUsdCents" | "agreementDailyUsdCents"> = {};
+  if (d.agreementsEnabled !== undefined) {
+    if (typeof d.agreementsEnabled !== "boolean") {
+      throw new https.HttpsError("invalid-argument", "agreementsEnabled must be true or false");
+    }
+    const agreementMaxChargeUsdCents = cents(d.agreementMaxChargeUsdCents, "agreementMaxChargeUsdCents", 100_000);
+    const agreementDailyUsdCents = cents(d.agreementDailyUsdCents, "agreementDailyUsdCents", 500_000);
+    if (agreementDailyUsdCents < agreementMaxChargeUsdCents) {
+      throw new https.HttpsError("invalid-argument", "The daily cap cannot be below the per-payment cap");
+    }
+    agreements = { agreementsEnabled: d.agreementsEnabled, agreementMaxChargeUsdCents, agreementDailyUsdCents };
+  }
+  return {
+    transfersEnabled: d.transfersEnabled,
+    maxTransferUsdCents,
+    dailyTransferUsdCents,
+    chargeFeeRate: typeof rate === "number" ? rate : null,
+    testPhoneNumbers,
+    ...agreements,
+  };
+}
+
+export const adminSetApiPartner = https.onCall(
+  { enforceAppCheck: true },
+  async (request: https.CallableRequest<SetPartnerInput>): Promise<ApiResponse<ApiPartnerRow>> => {
+    const actor = requireAdmin(request, ["super"]);
+    requireRecentAdminAuth(request);
+    const reason = requireReason(request.data?.reason);
+    const merchantId = request.data?.merchantId;
+    if (typeof merchantId !== "string" || !merchantId) {
+      throw new https.HttpsError("invalid-argument", "merchantId is required");
+    }
+    const input = validatePartnerInput(request.data ?? {});
+
+    const db = admin.firestore();
+    const userSnap = await db.collection("users").doc(merchantId).get();
+    if (!userSnap.exists || !isMerchantAccount(userSnap.data() as User)) {
+      throw new https.HttpsError("failed-precondition", "Only a merchant account can be a partner");
+    }
+
+    const ref = db.collection(API_PARTNERS_COLLECTION).doc(merchantId);
+    const row = await db.runTransaction(async (tx) => {
+      const before = (await tx.get(ref)).data() as ApiPartner | undefined;
+      const { chargeFeeRate, testPhoneNumbers, agreementsEnabled, agreementMaxChargeUsdCents, agreementDailyUsdCents, ...rest } = input;
+      const keep = (k: "agreementsEnabled" | "agreementMaxChargeUsdCents" | "agreementDailyUsdCents") =>
+        before?.[k] !== undefined ? { [k]: before[k] } : {};
+      const next: ApiPartner = {
+        ...rest,
+        ...(agreementsEnabled !== undefined
+          ? { agreementsEnabled, agreementMaxChargeUsdCents, agreementDailyUsdCents }
+          : { ...keep("agreementsEnabled"), ...keep("agreementMaxChargeUsdCents"), ...keep("agreementDailyUsdCents") }),
+        ...(chargeFeeRate !== null ? { chargeFeeRate } : {}),
+        ...(testPhoneNumbers.length ? { testPhoneNumbers } : {}),
+        updatedAt: admin.firestore.Timestamp.now(),
+        updatedBy: actor.uid,
+      };
+      tx.set(ref, next);
+      stageAuditEntry(tx, {
+        actor,
+        action: "api_partner.set",
+        target: { type: "user", id: merchantId },
+        reason,
+        before: before ? { ...toRow(before) } : { transfersEnabled: false },
+        after: { ...toRow(next) },
+      });
+      return toRow(next);
+    });
+    return { success: true, data: row };
+  }
+);

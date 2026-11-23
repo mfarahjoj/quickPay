@@ -1,21 +1,31 @@
-import { Platform, Vibration } from 'react-native';
+import HapticFeedback from 'react-native-haptic-feedback';
 
 export type HapticType = 'light' | 'medium' | 'success';
 
+/**
+ * Short taps through the system haptic engine (iOS Taptic Engine, Android
+ * haptic feedback constants).
+ *
+ * This used to call Vibration.vibrate(8), but iOS ignores the duration and
+ * plays its full ~400 ms vibration every time: each PIN digit buzzed like a
+ * phone call, and typing quickly queued them up so the keypad felt laggy.
+ */
+const PATTERN = {
+  light: 'impactLight',
+  medium: 'impactMedium',
+  success: 'notificationSuccess',
+} as const;
+
+const OPTIONS = {
+  // No long vibration on phones without a haptic engine.
+  enableVibrateFallback: false,
+  // Respect the phone's "touch feedback" setting.
+  ignoreAndroidSystemSettings: false,
+};
+
 export function triggerHaptic(type: HapticType = 'light') {
   try {
-    if (Platform.OS === 'ios') {
-      const duration = type === 'medium' ? 12 : type === 'success' ? 18 : 8;
-      Vibration.vibrate(duration);
-      return;
-    }
-
-    if (type === 'success') {
-      Vibration.vibrate([0, 14, 26, 18]);
-      return;
-    }
-
-    Vibration.vibrate(type === 'medium' ? 12 : 8);
+    HapticFeedback.trigger(PATTERN[type], OPTIONS);
   } catch {
     // Haptics should never block user actions.
   }

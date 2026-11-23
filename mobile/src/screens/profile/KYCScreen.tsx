@@ -15,7 +15,7 @@ import { Button } from '../../components/Button';
 import { useAuth } from '../../hooks/useAuth';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import { functions, storage } from '../../services/firebase.config';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, makeStyles, useColors, type Colors } from '../../theme';
 import type { KycStatus } from '../../types';
 
 async function pickFromGallery(): Promise<string | null> {
@@ -66,14 +66,16 @@ const STATUS_DESC_KEYS: Record<KycStatus, string> = {
   rejected: 'kyc.status.rejectedDesc',
 };
 
-const STATUS_COLORS: Record<KycStatus, string> = {
+const statusColors = (colors: Colors): Record<KycStatus, string> => ({
   pending: colors.text.tertiary,
   submitted: colors.warning,
   verified: colors.success,
-  rejected: colors.dark.error,
-};
+  rejected: colors.ui.error,
+});
 
 export default function KYCScreen({ navigation }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const { user } = useAuth();
   const { profile } = useUserProfile();
@@ -173,7 +175,7 @@ export default function KYCScreen({ navigation }: Props) {
       <Header title={t('profile.kyc.title')} onBack={() => navigation.goBack()} />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         <View style={styles.statusCard}>
-          <View style={[styles.statusDot, { backgroundColor: STATUS_COLORS[kycStatus] }]} />
+          <View style={[styles.statusDot, { backgroundColor: statusColors(colors)[kycStatus] }]} />
           <View style={styles.statusContent}>
             <Text style={styles.statusLabel}>{t(STATUS_LABEL_KEYS[kycStatus])}</Text>
             <Text style={styles.statusDesc}>{t(STATUS_DESC_KEYS[kycStatus])}</Text>
@@ -272,15 +274,15 @@ export default function KYCScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.dark.canvas },
+const useStyles = makeStyles((colors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.ui.canvas },
   scroll: { flex: 1 },
   content: { padding: spacing.lg, paddingBottom: spacing.xxl },
   statusCard: {
     flexDirection: 'row',
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
     marginBottom: spacing.lg,
@@ -294,37 +296,37 @@ const styles = StyleSheet.create({
     marginRight: spacing.md,
   },
   statusContent: { flex: 1 },
-  statusLabel: { ...typography.bodySemibold, color: colors.dark.text },
-  statusDesc: { ...typography.caption, color: colors.dark.textDim, marginTop: spacing.xs },
+  statusLabel: { ...typography.bodySemibold, color: colors.ui.text },
+  statusDesc: { ...typography.caption, color: colors.ui.textDim, marginTop: spacing.xs },
   doneCard: {
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderRadius: borderRadius.lg,
     padding: spacing.xl,
     alignItems: 'center',
   },
-  doneText: { ...typography.body, color: colors.dark.textDim, textAlign: 'center' },
+  doneText: { ...typography.body, color: colors.ui.textDim, textAlign: 'center' },
   sectionTitle: {
     ...typography.h3,
-    color: colors.dark.text,
+    color: colors.ui.text,
     marginTop: spacing.lg,
     marginBottom: spacing.sm,
   },
   label: {
     ...typography.captionBold,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     marginTop: spacing.md,
     marginBottom: spacing.xs,
   },
   input: {
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderRadius: borderRadius.md,
     padding: spacing.md,
     ...typography.body,
-    color: colors.dark.text,
+    color: colors.ui.text,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
   },
   chipRow: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
   chip: {
@@ -332,27 +334,27 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.full,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
-    backgroundColor: colors.dark.glass,
+    borderColor: colors.ui.glassBorder,
+    backgroundColor: colors.ui.glass,
   },
   chipSelected: {
-    backgroundColor: colors.dark.accentSoft,
-    borderColor: colors.dark.accentBorder,
+    backgroundColor: colors.ui.accentSoft,
+    borderColor: colors.ui.accentBorder,
   },
-  chipText: { ...typography.caption, color: colors.dark.textDim },
-  chipTextSelected: { color: colors.dark.accentText, fontWeight: '600' },
+  chipText: { ...typography.caption, color: colors.ui.textDim },
+  chipTextSelected: { color: colors.ui.accentText, fontWeight: '600' },
   photoBox: {
     height: 160,
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
   },
   photoPreview: { width: '100%', height: '100%', resizeMode: 'cover' },
-  photoPlaceholder: { ...typography.body, color: colors.dark.textFaint },
+  photoPlaceholder: { ...typography.body, color: colors.ui.textFaint },
   submitContainer: { marginTop: spacing.xl },
-});
+}));

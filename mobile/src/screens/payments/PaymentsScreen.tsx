@@ -27,14 +27,12 @@ import Animated, {
 } from 'react-native-reanimated';
 import QRCode from 'react-native-qrcode-svg';
 import { Button, PinInput } from '../../components';
-import { colors, typography, spacing, borderRadius } from '../../theme';
-import { CURRENCY_SYMBOL, PHONE_PREFIX } from '../../config/constants';
+import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
+import { PHONE_PREFIX } from '../../config/constants';
 import { Springs } from '../../constants/springs';
 import { SuccessCheckIcon, QrCodeIcon, LockIcon, ChevronLeftIcon } from '../../components/icons/AuthIcons';
-import { useTransactions } from '../../hooks/useTransactions';
 import { formatCountdown } from '../../utils/time';
 import { triggerHaptic } from '../../services/haptics.service';
-import { appendAmountKey } from '../../utils/amountInput';
 import { functions } from '../../services/firebase.config';
 import {
   TokenResponse,
@@ -46,20 +44,28 @@ import {
   secondsLeftFromToken,
 } from '../../services/customerToken.service';
 import type { PaymentLink } from '../../services/paymentLink.service';
+import { useWallet } from '../../hooks/useWallet';
+import { useHomeCurrency } from '../../hooks/useHomeCurrency';
+import { useTransactions } from '../../hooks/useTransactions';
+import { useAuth } from '../../hooks/useAuth';
+import { useBiometricApproval } from '../../hooks/useBiometricApproval';
+import { isCompleteLocalNumber, personInitials, recentPeople } from '../../utils/recentPeople';
+import { pressAmountKey, type AmountKey } from '../../utils/amountKeypad';
+import {
+  amountInputLabel,
+  amountInputUnits,
+  balanceIn,
+  formatMoney,
+  otherCurrency,
+  type Currency,
+} from '../../utils/money';
 
 type PaymentTab = 'send' | 'receive';
-type SendStep = 'phone' | 'amount' | 'review' | 'pin' | 'success';
+// Review and PIN are one step: the summary sits above the PIN (or Face ID).
+type SendStep = 'phone' | 'amount' | 'confirm' | 'success';
 
-/** Steps the progress bar counts; success sits past the end. */
-const SEND_STEPS = ['phone', 'amount', 'review', 'pin'] as const;
-
-/** How many past recipients the Recent row shows. */
-const MAX_RECENT = 8;
-
-interface RecentRecipient {
-  name: string;
-  phone: string;
-}
+/** Steps the progress bar counts; success fills it. */
+const SEND_STEPS = ['phone', 'amount', 'confirm'] as const;
 
 /** Max automatic generateCustomerToken calls per Receive visit (initial load + expiry renewals). Manual actions are unlimited. */
 const MAX_RECEIVE_AUTO_FETCHES = 4;
@@ -80,26 +86,11 @@ interface Props {
 }
 
 export default function PaymentsScreen({ route }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
-
-  // People this user has sent to before, newest first, one per number. The
-  // lookup still runs on tap, so a closed or changed account is caught there.
-  const { transactions } = useTransactions(undefined, 30);
-  const recentRecipients = useMemo<RecentRecipient[]>(() => {
-    const seen = new Set<string>();
-    const out: RecentRecipient[] = [];
-    for (const tx of transactions) {
-      if (tx.kind !== 'p2p' || tx.isIncoming || !tx.counterpartyPhone) continue;
-      if (seen.has(tx.counterpartyPhone)) continue;
-      seen.add(tx.counterpartyPhone);
-      out.push({ name: tx.counterpartyName || tx.counterpartyPhone, phone: tx.counterpartyPhone });
-      if (out.length >= MAX_RECENT) break;
-    }
-    return out;
-  }, [transactions]);
-
   const initialMode = route?.params?.mode === 'receive' ? 'receive' : 'send';
   const [tab, setTab] = useState<PaymentTab>(initialMode);
   /** Set when a zapppay:// link started this payment; drives the "check before paying" notice. */
@@ -109,11 +100,31 @@ export default function PaymentsScreen({ route }: Props) {
   const [phoneInput, setPhoneInput] = useState('');
   const [recipient, setRecipient] = useState<RecipientInfo | null>(null);
   const [amountText, setAmountText] = useState('');
+  // Dollars or shillings. Starts on the currency Home shows; a payment link
+  // sets its own (dollars unless it says SLSH). Never converted: it comes out
+  // of that balance.
+  const { wallet } = useWallet();
+  const { currency: homeCurrency } = useHomeCurrency(wallet?.balanceCents ?? 0, wallet?.slsBalance ?? 0);
+  const [pickedCurrency, setPickedCurrency] = useState<Currency | null>(null);
+  const currency = pickedCurrency ?? homeCurrency;
   const [note, setNote] = useState('');
   const [pin, setPin] = useState('');
   const [sending, setSending] = useState(false);
   const [lookingUp, setLookingUp] = useState(false);
   const [transactionId, setTransactionId] = useState<string | null>(null);
+  /** Face ID is on, but the person chose to type the PIN this time. */
+  const [usePin, setUsePin] = useState(false);
+  const biometric = useBiometricApproval();
+
+  // People already paid or paid by, for one-tap picks above the number field.
+  const { user } = useAuth();
+  const { transactions: history } = useTransactions(undefined, 30);
+  const recents = useMemo(
+    () => recentPeople(history, 8, user?.phoneNumber),
+    [history, user?.phoneNumber]
+  );
+  /** The last number looked up on its own, so an edit can't loop the lookup. */
+  const autoLookedUp = useRef<string | null>(null);
 
   // Amount input pulse
   const amountScale = useSharedValue(1);
@@ -296,11 +307,24 @@ export default function PaymentsScreen({ route }: Props) {
     successBtnsOp.value = withDelay(580, withTiming(1, { duration: 200 }));
   }, [step, successRingScale, successRingOpacity, successTitleOp, successTitleY, successAmountOp, successBtnsOp]);
 
-  const amount = Number(amountText || '0');
+  /** Cents or whole shillings: what `sendP2P` takes. */
+  const amountUnits = amountInputUnits(amountText, currency);
+  const amountLabel = formatMoney(amountUnits, currency);
 
   const appendDigit = (digit: string) => {
+    // Shillings have no smaller unit, so no decimal point.
+    if (digit === '.' && currency === 'SLS') return;
+    const next = pressAmountKey(amountText, digit as AmountKey);
+    if (next === amountText) return;
     triggerHaptic('light');
-    setAmountText((prev) => appendAmountKey(prev, digit));
+    setAmountText(next);
+  };
+
+  const switchSendCurrency = () => {
+    triggerHaptic('light');
+    setPickedCurrency(otherCurrency(currency));
+    // "4.70" dollars is not 4.70 shillings: start the amount again.
+    setAmountText('');
   };
 
   const backspace = () => {
@@ -313,11 +337,14 @@ export default function PaymentsScreen({ route }: Props) {
     setPhoneInput('');
     setRecipient(null);
     setAmountText('');
+    setPickedCurrency(null);
     setNote('');
     setPin('');
     setSending(false);
     setTransactionId(null);
     setFromLink(false);
+    setUsePin(false);
+    autoLookedUp.current = null;
   };
 
   const fullPhone = phoneInput.startsWith('+') ? phoneInput : `${PHONE_PREFIX}${phoneInput}`;
@@ -376,7 +403,11 @@ export default function PaymentsScreen({ route }: Props) {
     setTab('send');
     resetSend();
     setFromLink(true);
+    // The link's own currency; links from before shillings are dollars.
+    setPickedCurrency(prefill.currency ?? 'USD');
     const local = prefill.to.startsWith(PHONE_PREFIX) ? prefill.to.slice(PHONE_PREFIX.length) : prefill.to;
+    // Looked up just below; the typed-number lookup mustn't run it again.
+    autoLookedUp.current = local;
     setPhoneInput(local);
     setAmountText(prefill.amount ?? '');
     setNote(prefill.note ?? '');
@@ -384,18 +415,44 @@ export default function PaymentsScreen({ route }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill]);
 
-  const handleConfirmSend = async () => {
-    if (pin.length < 6) return;
+  // The ninth digit of a local number looks the person up: no Continue tap.
+  useEffect(() => {
+    if (tab !== 'send' || step !== 'phone' || lookingUp) return;
+    const typed = phoneInput.replace(/\s+/g, '');
+    if (!isCompleteLocalNumber(typed) || autoLookedUp.current === typed) return;
+    autoLookedUp.current = typed;
+    lookupRef.current(typed);
+  }, [tab, step, phoneInput, lookingUp]);
+
+  const pickRecent = (phoneNumber: string) => {
+    if (lookingUp) return;
+    triggerHaptic('light');
+    const local = phoneNumber.startsWith(PHONE_PREFIX) ? phoneNumber.slice(PHONE_PREFIX.length) : phoneNumber;
+    autoLookedUp.current = local;
+    setPhoneInput(local);
+    handleLookup(phoneNumber);
+  };
+
+  const goToConfirm = () => {
+    triggerHaptic('medium');
+    setPin('');
+    setUsePin(false);
+    biometric.prepare();
+    setStep('confirm');
+  };
+
+  /** `credential` is the typed PIN, or the one-time token Face ID returns. */
+  const handleConfirmSend = async (credential: string) => {
+    if (sending || !credential) return;
     try {
       setSending(true);
       triggerHaptic('medium');
-      const amountCents = Math.round(amount * 100);
       const sendFn = functions().httpsCallable('sendP2P');
       const result = await sendFn({
         recipientPhone: recipient!.phoneNumber,
-        amount: amountCents,
-        currency: 'USD',
-        pin,
+        amount: amountUnits,
+        currency,
+        pin: credential,
         note: note || undefined,
       });
       const data = result.data as { success: boolean; data?: { transactionId: string }; error?: string };
@@ -421,30 +478,36 @@ export default function PaymentsScreen({ route }: Props) {
     }
   };
 
+  // One tap on a screen that shows who and how much; cancelled means the PIN.
+  const sendWithBiometric = async () => {
+    if (sending || !recipient) return;
+    const approval = await biometric.approve(
+      t('payments.sendingTo', { amount: amountLabel, name: recipient.fullName })
+    );
+    if (approval) {
+      await handleConfirmSend(approval);
+    } else {
+      setUsePin(true);
+    }
+  };
+
   const shareReceipt = async () => {
     triggerHaptic('success');
     await Share.share({
       title: t('payments.receiptShareTitle'),
       message: t('common.sharePaymentReceipt', {
         recipient: recipient?.fullName ?? fullPhone,
-        amount: `${CURRENCY_SYMBOL}${amount.toFixed(2)}`,
+        amount: amountLabel,
         note: note || 'N/A',
       }),
     });
   };
 
+
   const goBack = () => {
     triggerHaptic('light');
     if (step === 'amount') setStep('phone');
-    else if (step === 'review') setStep('amount');
-    else if (step === 'pin') { setPin(''); setStep('review'); }
-  };
-
-  const pickRecent = (r: RecentRecipient) => {
-    triggerHaptic('light');
-    const local = r.phone.startsWith(PHONE_PREFIX) ? r.phone.slice(PHONE_PREFIX.length) : r.phone;
-    setPhoneInput(local);
-    void handleLookup(r.phone);
+    else if (step === 'confirm') { setPin(''); setStep('amount'); }
   };
 
   const switchTab = (next: PaymentTab) => {
@@ -454,7 +517,8 @@ export default function PaymentsScreen({ route }: Props) {
   };
 
   const stepIndex = SEND_STEPS.indexOf(step as (typeof SEND_STEPS)[number]);
-  const showStepHeader = tab === 'send' && stepIndex > 0;
+  const showStepHeader = tab === 'send' && step !== 'phone';
+  const amountInput = amountInputLabel(amountText, currency);
 
   return (
     <View style={styles.container}>
@@ -465,13 +529,13 @@ export default function PaymentsScreen({ route }: Props) {
         contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.md }]}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Header */}
         <Text style={styles.title}>{t('payments.title')}</Text>
         <Text style={styles.subtitle}>{t('payments.subtitle')}</Text>
 
         <View style={styles.segment} accessibilityRole="tablist">
           {(['send', 'receive'] as const).map((key) => {
             const active = tab === key;
+            const mark = active ? colors.ui.onSolid : colors.ui.textDim;
             return (
               <TouchableOpacity
                 key={key}
@@ -481,9 +545,7 @@ export default function PaymentsScreen({ route }: Props) {
                 accessibilityRole="tab"
                 accessibilityState={{ selected: active }}
               >
-                {key === 'send'
-                  ? <ArrowUpGlyph size={15} color={active ? colors.dark.text : colors.dark.textDim} />
-                  : <QrCodeIcon size={15} color={active ? colors.dark.text : colors.dark.textDim} />}
+                {key === 'send' ? <ArrowUpGlyph size={15} color={mark} /> : <QrCodeIcon size={15} color={mark} />}
                 <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
                   {key === 'send' ? t('payments.tabSend') : t('payments.tabReceive')}
                 </Text>
@@ -501,12 +563,15 @@ export default function PaymentsScreen({ route }: Props) {
                 accessibilityRole="button"
                 accessibilityLabel={t('common.back')}
               >
-                <ChevronLeftIcon size={18} color={colors.dark.text} />
+                <ChevronLeftIcon size={18} color={colors.ui.text} />
               </TouchableOpacity>
             ) : <View style={styles.backBtnSpacer} />}
             <View style={styles.stepTrack}>
               {SEND_STEPS.map((s, i) => (
-                <View key={s} style={[styles.stepSeg, i <= stepIndex && styles.stepSegDone]} />
+                <View
+                  key={s}
+                  style={[styles.stepSeg, (step === 'success' || i <= stepIndex) && styles.stepSegDone]}
+                />
               ))}
             </View>
           </View>
@@ -518,8 +583,8 @@ export default function PaymentsScreen({ route }: Props) {
               <>
                 <View style={styles.panel}>
                   <View style={styles.panelHead}>
-                    <View style={[styles.methodIcon, styles.iconCoral]}>
-                      <PhoneGlyph size={20} color={colors.dark.accent} />
+                    <View style={[styles.methodIcon, { backgroundColor: colors.tints.coral.fill }]}>
+                      <PhoneGlyph size={20} color={colors.tints.coral.mark} />
                     </View>
                     <View style={styles.flex1}>
                       <Text style={styles.panelTitle}>{t('payments.sendToPhone')}</Text>
@@ -532,7 +597,7 @@ export default function PaymentsScreen({ route }: Props) {
                     </View>
                     <TextInput
                       placeholder="63 XXX XXXX"
-                      placeholderTextColor={colors.dark.textFaint}
+                      placeholderTextColor={colors.ui.textFaint}
                       value={phoneInput}
                       onChangeText={setPhoneInput}
                       keyboardType="phone-pad"
@@ -552,29 +617,32 @@ export default function PaymentsScreen({ route }: Props) {
                   />
                 </View>
 
-                {recentRecipients.length > 0 && (
+                {recents.length > 0 && (
                   <>
-                    <Text style={styles.sectionTitle}>{t('payments.recent')}</Text>
+                    <Text style={styles.sectionTitle}>{t('payments.recentPeople')}</Text>
                     <ScrollView
                       horizontal
                       showsHorizontalScrollIndicator={false}
+                      style={styles.recentScroll}
                       contentContainerStyle={styles.recentRow}
                       keyboardShouldPersistTaps="handled"
                     >
-                      {recentRecipients.map((r) => (
+                      {recents.map((person) => (
                         <TouchableOpacity
-                          key={r.phone}
-                          style={styles.recentItem}
-                          onPress={() => pickRecent(r)}
+                          key={person.phoneNumber}
+                          style={styles.recentPerson}
+                          onPress={() => pickRecent(person.phoneNumber)}
                           disabled={lookingUp}
-                          activeOpacity={0.8}
+                          activeOpacity={0.7}
                           accessibilityRole="button"
-                          accessibilityLabel={r.name}
+                          accessibilityLabel={t('payments.sendToPerson', { name: person.name })}
                         >
                           <View style={styles.recentAvatar}>
-                            <Text style={styles.recentInitial}>{initialOf(r.name)}</Text>
+                            <Text style={styles.recentAvatarText}>{personInitials(person.name)}</Text>
                           </View>
-                          <Text style={styles.recentName} numberOfLines={1}>{firstWord(r.name)}</Text>
+                          <Text style={styles.recentName} numberOfLines={1}>
+                            {person.name.startsWith('+') ? `…${person.name.slice(-4)}` : person.name.split(' ')[0]}
+                          </Text>
                         </TouchableOpacity>
                       ))}
                     </ScrollView>
@@ -584,22 +652,22 @@ export default function PaymentsScreen({ route }: Props) {
                 <Text style={styles.sectionTitle}>{t('payments.otherWays')}</Text>
                 <View style={styles.methodList}>
                   <MethodRow
-                    icon={<ScanGlyph size={20} color={colors.dark.warning} />}
-                    tint={styles.iconAmber}
+                    icon={<ScanGlyph size={20} color={colors.tints.amber.mark} />}
+                    tint={colors.tints.amber.fill}
                     title={t('payments.method.scanTitle')}
                     subtitle={t('payments.method.scanSubtitle')}
                     onPress={() => { triggerHaptic('light'); navigation.navigate('ScanQR'); }}
                   />
                   <MethodRow
-                    icon={<QrCodeIcon size={20} color={colors.dark.accent} />}
-                    tint={styles.iconCoral}
+                    icon={<QrCodeIcon size={20} color={colors.tints.coral.mark} />}
+                    tint={colors.tints.coral.fill}
                     title={t('payments.method.showQrTitle')}
                     subtitle={t('payments.method.showQrSubtitle')}
                     onPress={() => switchTab('receive')}
                   />
                   <MethodRow
-                    icon={<CashGlyph size={20} color={BLUE} />}
-                    tint={styles.iconBlue}
+                    icon={<CashGlyph size={20} color={colors.tints.blue.mark} />}
+                    tint={colors.tints.blue.fill}
                     title={t('payments.method.cashOutTitle')}
                     subtitle={t('payments.method.cashOutSubtitle')}
                     onPress={() => { triggerHaptic('light'); navigation.navigate('CashOut'); }}
@@ -614,57 +682,84 @@ export default function PaymentsScreen({ route }: Props) {
                 <RecipientChip name={recipient.fullName} phone={recipient.phoneNumber} />
                 {fromLink && <LinkNotice text={t('payments.linkNotice')} />}
                 <Animated.Text
-                  style={[styles.amountLarge, !amountText && styles.amountEmpty, amountAnimStyle]}
-                  accessibilityLabel={`${CURRENCY_SYMBOL}${amountText || '0'}`}
+                  style={[
+                    styles.amountLarge,
+                    amountInput.length > 10 && styles.amountLargeLong,
+                    !amountText && styles.amountEmpty,
+                    amountAnimStyle,
+                  ]}
+                  numberOfLines={1}
                 >
-                  {CURRENCY_SYMBOL}{amountText || '0'}
+                  {amountInput}
                 </Animated.Text>
-                <View style={styles.freePill}>
-                  <Text style={styles.freePillText}>{t('payments.freeInstant')}</Text>
+                <View style={styles.currencyRow}>
+                  <Text style={styles.availableText}>
+                    {t('payments.available', { amount: formatMoney(balanceIn(wallet, currency), currency) })}
+                  </Text>
+                  {!fromLink && (
+                    <TouchableOpacity
+                      onPress={switchSendCurrency}
+                      style={styles.currencyChip}
+                      accessibilityRole="button"
+                      accessibilityLabel={t(currency === 'SLS' ? 'payments.sendInDollars' : 'payments.sendInShillings')}
+                    >
+                      <Text style={styles.currencyChipText}>{currency === 'SLS' ? 'SLSH' : 'USD'} ⇄</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
                 <TextInput
                   placeholder={t('payments.addNote')}
-                  placeholderTextColor={colors.dark.textFaint}
+                  placeholderTextColor={colors.ui.textFaint}
                   value={note}
                   onChangeText={setNote}
                   style={styles.noteInput}
                   maxLength={80}
                 />
                 <View style={styles.keypad}>
-                  {['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '<'].map((key) => (
-                    <TouchableOpacity
-                      key={key}
-                      style={styles.key}
-                      onPress={() => (key === '<' ? backspace() : appendDigit(key))}
-                      activeOpacity={0.6}
-                      accessibilityRole="button"
-                      accessibilityLabel={key === '<' ? t('common.delete') : key}
-                    >
-                      {key === '<'
-                        ? <BackspaceGlyph size={22} color={colors.dark.text} />
-                        : <Text style={styles.keyText}>{key}</Text>}
-                    </TouchableOpacity>
-                  ))}
+                  {['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '<'].map((key) =>
+                    // Shillings have no smaller unit, so no decimal point.
+                    key === '.' && currency === 'SLS' ? (
+                      <View key={key} style={styles.keyBlank} />
+                    ) : (
+                      <TouchableOpacity
+                        key={key}
+                        style={styles.key}
+                        onPress={() => (key === '<' ? backspace() : appendDigit(key))}
+                        activeOpacity={0.6}
+                        accessibilityRole="button"
+                        accessibilityLabel={key === '<' ? t('common.delete') : key}
+                      >
+                        {key === '<'
+                          ? <BackspaceGlyph size={22} color={colors.ui.text} />
+                          : <Text style={styles.keyText}>{key}</Text>}
+                      </TouchableOpacity>
+                    )
+                  )}
                 </View>
                 <Button
                   title={t('common.continue')}
-                  onPress={() => { triggerHaptic('medium'); setStep('review'); }}
-                  disabled={amount <= 0}
+                  onPress={goToConfirm}
+                  disabled={amountUnits <= 0}
                   fullWidth
                   style={styles.primaryCta}
                 />
               </View>
             )}
 
-            {step === 'review' && recipient && (
+            {step === 'confirm' && recipient && (
               <View style={styles.flowBlock}>
                 {fromLink && <LinkNotice text={t('payments.linkNotice')} />}
                 <View style={styles.receipt}>
                   <Text style={styles.receiptLabel}>{t('payments.youSend')}</Text>
-                  <Text style={styles.receiptAmount}>{CURRENCY_SYMBOL}{amount.toFixed(2)}</Text>
+                  <Text
+                    style={[styles.receiptAmount, amountLabel.length > 10 && styles.amountLargeLong]}
+                    numberOfLines={1}
+                  >
+                    {amountLabel}
+                  </Text>
                   <View style={styles.receiptTo}>
                     <View style={styles.avatarSmall}>
-                      <Text style={styles.avatarSmallText}>{initialOf(recipient.fullName)}</Text>
+                      <Text style={styles.avatarSmallText}>{personInitials(recipient.fullName)}</Text>
                     </View>
                     <Text style={styles.receiptToText} numberOfLines={1}>
                       {t('common.toRecipient', { name: recipient.fullName })}
@@ -672,48 +767,45 @@ export default function PaymentsScreen({ route }: Props) {
                   </View>
                   <View style={styles.receiptDivider} />
                   <ReviewRow label={t('common.phone')} value={recipient.phoneNumber} />
-                  <ReviewRow label={t('common.fee')} value={t('payments.free')} valueStyle={styles.valueGreen} />
+                  <ReviewRow label={t('common.fee')} value={t('payments.free')} valueTone="good" />
                   <ReviewRow label={t('common.delivery')} value={t('common.instant')} />
                   {note ? <ReviewRow label={t('common.note')} value={note} /> : null}
                   <View style={styles.receiptDivider} />
-                  <ReviewRow
-                    label={t('common.total')}
-                    value={`${CURRENCY_SYMBOL}${amount.toFixed(2)}`}
-                    strong
-                  />
+                  <ReviewRow label={t('common.total')} value={amountLabel} strong />
                 </View>
-                <Button
-                  title={t('payments.confirmEnterPin')}
-                  onPress={() => { triggerHaptic('medium'); setStep('pin'); }}
-                  fullWidth
-                  style={styles.primaryCta}
-                />
-              </View>
-            )}
 
-            {step === 'pin' && (
-              <View style={[styles.flowBlock, styles.center]}>
-                <View style={[styles.methodIconLarge, styles.iconCoral]}>
-                  <LockIcon size={26} color={colors.dark.accent} />
-                </View>
-                <Text style={styles.pinTitle}>{t('payments.enterPin')}</Text>
-                <Text style={styles.pinSubtitle}>
-                  {t('payments.sendingTo', {
-                    amount: `${CURRENCY_SYMBOL}${amount.toFixed(2)}`,
-                    name: recipient?.fullName ?? '',
-                  })}
-                </Text>
-                <PinInput value={pin} onChange={setPin} secure />
                 {sending ? (
-                  <ActivityIndicator style={styles.pinSpinner} size="large" color={colors.dark.accent} />
+                  <ActivityIndicator style={styles.pinSpinner} size="large" color={colors.ui.accent} />
+                ) : biometric.available && !usePin ? (
+                  <>
+                    <Button
+                      title={t('payments.sendWithBiometric', { amount: amountLabel, label: biometric.label })}
+                      onPress={sendWithBiometric}
+                      fullWidth
+                      style={styles.primaryCta}
+                    />
+                    <TouchableOpacity
+                      onPress={() => setUsePin(true)}
+                      style={styles.textLink}
+                      accessibilityRole="button"
+                    >
+                      <Text style={styles.textLinkText}>{t('payments.usePinInstead')}</Text>
+                    </TouchableOpacity>
+                  </>
                 ) : (
-                  <Button
-                    title={t('common.send')}
-                    onPress={handleConfirmSend}
-                    disabled={pin.length < 6}
-                    fullWidth
-                    style={styles.primaryCta}
-                  />
+                  <View style={styles.pinBlock}>
+                    <View style={styles.pinHead}>
+                      <LockIcon size={16} color={colors.ui.textDim} />
+                      <Text style={styles.pinPrompt}>{t('payments.enterPinToSend')}</Text>
+                    </View>
+                    <PinInput
+                      value={pin}
+                      onChange={setPin}
+                      onComplete={handleConfirmSend}
+                      secure
+                      autoFocus={biometric.checked}
+                    />
+                  </View>
                 )}
               </View>
             )}
@@ -728,14 +820,14 @@ export default function PaymentsScreen({ route }: Props) {
                   <Text style={styles.successTitle}>{t('payments.paymentSent')}</Text>
                 </Animated.View>
                 <Animated.View style={[styles.center, successAmountStyle]}>
-                  <Text style={styles.successAmount}>{CURRENCY_SYMBOL}{amount.toFixed(2)}</Text>
+                  <Text style={styles.successAmount} numberOfLines={1}>{amountLabel}</Text>
                   <Text style={styles.successRecipient}>
                     {t('common.toRecipient', { name: recipient?.fullName ?? '' })}
                   </Text>
                 </Animated.View>
                 <Animated.View style={[styles.fullWidth, successBtnsStyle]}>
                   <Button title={t('common.done')} onPress={() => { triggerHaptic('light'); resetSend(); }} fullWidth style={styles.primaryCta} />
-                  <Button title={t('payments.shareReceipt')} onPress={shareReceipt} variant="darkGhost" fullWidth style={styles.secondaryCta} />
+                  <Button title={t('payments.shareReceipt')} onPress={shareReceipt} variant="secondary" fullWidth style={styles.secondaryCta} />
                 </Animated.View>
               </View>
             )}
@@ -749,7 +841,7 @@ export default function PaymentsScreen({ route }: Props) {
               <View style={styles.qrPlate}>
                 {tokenLoading && !token ? (
                   <View style={styles.qrPlaceholder}>
-                    <ActivityIndicator size="large" color={colors.dark.accent} />
+                    <ActivityIndicator size="large" color={colors.ui.accent} />
                     <Text style={styles.qrPlaceholderText}>{t('payments.generatingQr')}</Text>
                   </View>
                 ) : tokenError ? (
@@ -764,18 +856,9 @@ export default function PaymentsScreen({ route }: Props) {
               </View>
 
               {token && !tokenError ? (
-                <View style={[
-                  styles.timerPill,
-                  (secondsLeft < 30 || receiveCapReached) && styles.timerPillWarning,
-                ]}>
-                  <View style={[
-                    styles.timerDot,
-                    (secondsLeft < 30 || receiveCapReached) && styles.timerDotWarning,
-                  ]} />
-                  <Text style={[
-                    styles.timerText,
-                    (secondsLeft < 30 || receiveCapReached) && styles.timerTextWarning,
-                  ]}>
+                <View style={[styles.timerPill, (secondsLeft < 30 || receiveCapReached) && styles.timerPillWarning]}>
+                  <View style={[styles.timerDot, (secondsLeft < 30 || receiveCapReached) && styles.timerDotWarning]} />
+                  <Text style={[styles.timerText, (secondsLeft < 30 || receiveCapReached) && styles.timerTextWarning]}>
                     {receiveCapReached
                       ? t('payments.autoRefreshPaused', { count: MAX_RECEIVE_AUTO_FETCHES })
                       : tokenLoading && secondsLeft <= 0
@@ -795,7 +878,7 @@ export default function PaymentsScreen({ route }: Props) {
                     setReceiveCapReached(false);
                     fetchToken({ forceRefresh: true });
                   }}
-                  variant="darkGhost"
+                  variant="secondary"
                   disabled={tokenLoading}
                   fullWidth
                   style={styles.primaryCta}
@@ -806,15 +889,15 @@ export default function PaymentsScreen({ route }: Props) {
             <Text style={styles.sectionTitle}>{t('payments.addMoney')}</Text>
             <View style={styles.methodList}>
               <MethodRow
-                icon={<PlusGlyph size={20} color={colors.dark.incoming} />}
-                tint={styles.iconGreen}
+                icon={<PlusGlyph size={20} color={colors.tints.green.mark} />}
+                tint={colors.tints.green.fill}
                 title={t('payments.method.topUpTitle')}
                 subtitle={t('topup.method.agentSubtitle')}
                 onPress={() => { triggerHaptic('light'); navigation.navigate('TopUpMethod'); }}
               />
               <MethodRow
-                icon={<PinGlyph size={20} color={BLUE} />}
-                tint={styles.iconBlue}
+                icon={<PinGlyph size={20} color={colors.tints.blue.mark} />}
+                tint={colors.tints.blue.fill}
                 title={t('agentLocator.title')}
                 subtitle={t('agentLocator.subtitle')}
                 onPress={() => { triggerHaptic('light'); navigation.navigate('AgentLocator'); }}
@@ -830,16 +913,6 @@ export default function PaymentsScreen({ route }: Props) {
 
 // ─── Pieces ──────────────────────────────────────────────────
 
-const BLUE = '#6F9BFF';
-
-function initialOf(name: string): string {
-  return (name.trim()[0] ?? '?').toUpperCase();
-}
-
-function firstWord(name: string): string {
-  return name.trim().split(/\s+/)[0] ?? name;
-}
-
 function MethodRow({
   icon,
   tint,
@@ -849,12 +922,13 @@ function MethodRow({
   last,
 }: {
   icon: React.ReactNode;
-  tint: object;
+  tint: string;
   title: string;
   subtitle: string;
   onPress: () => void;
   last?: boolean;
 }) {
+  const styles = useStyles();
   return (
     <TouchableOpacity
       style={[styles.methodRow, !last && styles.methodRowDivider]}
@@ -864,7 +938,7 @@ function MethodRow({
       accessibilityLabel={title}
       accessibilityHint={subtitle}
     >
-      <View style={[styles.methodIcon, tint]}>{icon}</View>
+      <View style={[styles.methodIcon, { backgroundColor: tint }]}>{icon}</View>
       <View style={styles.flex1}>
         <Text style={styles.methodTitle}>{title}</Text>
         <Text style={styles.methodSub}>{subtitle}</Text>
@@ -875,10 +949,11 @@ function MethodRow({
 }
 
 function RecipientChip({ name, phone }: { name: string; phone: string }) {
+  const styles = useStyles();
   return (
     <View style={styles.recipientChip}>
       <View style={styles.avatarSmall}>
-        <Text style={styles.avatarSmallText}>{initialOf(name)}</Text>
+        <Text style={styles.avatarSmallText}>{personInitials(name)}</Text>
       </View>
       <View style={styles.flexShrink}>
         <Text style={styles.recipientName} numberOfLines={1}>{name}</Text>
@@ -889,6 +964,7 @@ function RecipientChip({ name, phone }: { name: string; phone: string }) {
 }
 
 function LinkNotice({ text }: { text: string }) {
+  const styles = useStyles();
   return (
     <View style={styles.linkNotice}>
       <Text style={styles.linkNoticeText}>{text}</Text>
@@ -900,17 +976,21 @@ function ReviewRow({
   label,
   value,
   strong,
-  valueStyle,
+  valueTone,
 }: {
   label: string;
   value: string;
   strong?: boolean;
-  valueStyle?: object;
+  valueTone?: 'good';
 }) {
+  const styles = useStyles();
   return (
     <View style={styles.reviewRow}>
       <Text style={[styles.reviewKey, strong && styles.reviewStrong]}>{label}</Text>
-      <Text style={[styles.reviewValue, strong && styles.reviewStrong, valueStyle]} numberOfLines={2}>
+      <Text
+        style={[styles.reviewValue, strong && styles.reviewStrong, valueTone === 'good' && styles.valueGood]}
+        numberOfLines={2}
+      >
         {value}
       </Text>
     </View>
@@ -919,9 +999,9 @@ function ReviewRow({
 
 // ─── Glyphs ──────────────────────────────────────────────────
 
-type GlyphProps = { size?: number; color?: string };
+type GlyphProps = { size?: number; color: string };
 
-function ArrowUpGlyph({ size = 20, color = '#FFFFFF' }: GlyphProps) {
+function ArrowUpGlyph({ size = 20, color }: GlyphProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M7 17 L17 7 M9 7 H17 V15" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
@@ -929,7 +1009,7 @@ function ArrowUpGlyph({ size = 20, color = '#FFFFFF' }: GlyphProps) {
   );
 }
 
-function PhoneGlyph({ size = 20, color = '#FFFFFF' }: GlyphProps) {
+function PhoneGlyph({ size = 20, color }: GlyphProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Rect x="6.5" y="2.5" width="11" height="19" rx="2.8" stroke={color} strokeWidth="1.9" />
@@ -938,7 +1018,7 @@ function PhoneGlyph({ size = 20, color = '#FFFFFF' }: GlyphProps) {
   );
 }
 
-function ScanGlyph({ size = 20, color = '#FFFFFF' }: GlyphProps) {
+function ScanGlyph({ size = 20, color }: GlyphProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path
@@ -951,7 +1031,7 @@ function ScanGlyph({ size = 20, color = '#FFFFFF' }: GlyphProps) {
   );
 }
 
-function CashGlyph({ size = 20, color = '#FFFFFF' }: GlyphProps) {
+function CashGlyph({ size = 20, color }: GlyphProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Rect x="2.5" y="6" width="19" height="12" rx="2.5" stroke={color} strokeWidth="1.9" />
@@ -960,7 +1040,7 @@ function CashGlyph({ size = 20, color = '#FFFFFF' }: GlyphProps) {
   );
 }
 
-function PlusGlyph({ size = 20, color = '#FFFFFF' }: GlyphProps) {
+function PlusGlyph({ size = 20, color }: GlyphProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M12 5 V19 M5 12 H19" stroke={color} strokeWidth="2.4" strokeLinecap="round" />
@@ -968,7 +1048,7 @@ function PlusGlyph({ size = 20, color = '#FFFFFF' }: GlyphProps) {
   );
 }
 
-function PinGlyph({ size = 20, color = '#FFFFFF' }: GlyphProps) {
+function PinGlyph({ size = 20, color }: GlyphProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path
@@ -982,7 +1062,7 @@ function PinGlyph({ size = 20, color = '#FFFFFF' }: GlyphProps) {
   );
 }
 
-function BackspaceGlyph({ size = 22, color = '#FFFFFF' }: GlyphProps) {
+function BackspaceGlyph({ size = 22, color }: GlyphProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path
@@ -998,11 +1078,8 @@ function BackspaceGlyph({ size = 22, color = '#FFFFFF' }: GlyphProps) {
 
 // ─── Styles ──────────────────────────────────────────────────
 
-const PANEL_BG = 'rgba(255,255,255,0.09)';
-const PANEL_BORDER = 'rgba(255,255,255,0.16)';
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.dark.canvas },
+const useStyles = makeStyles((colors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.ui.canvas },
   scroll: { flex: 1 },
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxxl },
   glow: {
@@ -1012,7 +1089,7 @@ const styles = StyleSheet.create({
     width: 420,
     height: 420,
     borderRadius: 210,
-    backgroundColor: colors.dark.accent,
+    backgroundColor: colors.ui.accent,
     opacity: 0.06,
   },
   glowInner: {
@@ -1022,7 +1099,7 @@ const styles = StyleSheet.create({
     width: 240,
     height: 240,
     borderRadius: 120,
-    backgroundColor: colors.dark.accent,
+    backgroundColor: colors.ui.accent,
     opacity: 0.05,
   },
   flex1: { flex: 1 },
@@ -1032,25 +1109,15 @@ const styles = StyleSheet.create({
   fullWidth: { width: '100%' },
 
   // Header
-  title: {
-    fontSize: 28,
-    fontWeight: '800',
-    letterSpacing: -0.8,
-    color: colors.dark.text,
-  },
-  subtitle: {
-    fontSize: 13,
-    color: colors.dark.textDim,
-    marginTop: 2,
-    marginBottom: spacing.lg,
-  },
+  title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.8, color: colors.ui.text },
+  subtitle: { fontSize: 13, color: colors.ui.textDim, marginTop: 2, marginBottom: spacing.lg },
 
-  // Segmented control
+  // Send / Receive switch
   segment: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: colors.ui.glassBorder,
     borderRadius: borderRadius.full,
     padding: 4,
     marginBottom: spacing.lg,
@@ -1064,63 +1131,57 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  segmentItemActive: { backgroundColor: colors.dark.accent },
-  segmentText: { fontSize: 14, fontWeight: '600', color: colors.dark.textDim },
-  segmentTextActive: { color: colors.dark.text },
+  segmentItemActive: { backgroundColor: colors.ui.solid },
+  segmentText: { fontSize: 14, fontWeight: '600', color: colors.ui.textDim },
+  segmentTextActive: { color: colors.ui.onSolid },
 
   // Step header
-  stepHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    marginBottom: spacing.lg,
-  },
+  stepHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.lg },
   backBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.16)',
+    borderColor: colors.ui.glassBorderStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
   backBtnSpacer: { width: 36, height: 36 },
   stepTrack: { flex: 1, flexDirection: 'row', gap: 6 },
-  stepSeg: { flex: 1, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.12)' },
-  stepSegDone: { backgroundColor: colors.dark.accent },
+  stepSeg: { flex: 1, height: 4, borderRadius: 2, backgroundColor: colors.ui.ink(0.12) },
+  stepSegDone: { backgroundColor: colors.ui.accent },
 
   // Panels
   panel: {
-    backgroundColor: PANEL_BG,
+    backgroundColor: colors.ui.glassRaised,
     borderWidth: 1,
-    borderColor: PANEL_BORDER,
+    borderColor: colors.ui.glassBorderStrong,
     borderRadius: 22,
     padding: spacing.lg,
     marginBottom: spacing.lg,
   },
   panelHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.md },
-  panelTitle: { fontSize: 17, fontWeight: '700', color: colors.dark.text, letterSpacing: -0.3 },
-  panelSub: { fontSize: 13, color: colors.dark.textDim, marginTop: 3, lineHeight: 18 },
-
+  panelTitle: { fontSize: 17, fontWeight: '700', color: colors.ui.text, letterSpacing: -0.3 },
+  panelSub: { fontSize: 13, color: colors.ui.textDim, marginTop: 3, lineHeight: 18 },
   phoneField: {
     flexDirection: 'row',
     alignItems: 'center',
     height: 56,
     borderRadius: 16,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: colors.ui.canvas,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
+    borderColor: colors.ui.glassBorderStrong,
     paddingLeft: 6,
   },
   prefixChip: {
     height: 42,
     paddingHorizontal: spacing.md,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.ui.ink(0.08),
     justifyContent: 'center',
   },
-  prefixText: { fontSize: 16, fontWeight: '700', color: colors.dark.text },
+  prefixText: { fontSize: 16, fontWeight: '700', color: colors.ui.text },
   phoneInput: {
     flex: 1,
     height: '100%',
@@ -1128,84 +1189,56 @@ const styles = StyleSheet.create({
     fontSize: 19,
     fontWeight: '600',
     letterSpacing: 0.5,
-    color: colors.dark.text,
+    color: colors.ui.text,
   },
   primaryCta: { marginTop: spacing.md },
   secondaryCta: { marginTop: spacing.sm },
 
-  // Section
-  sectionTitle: {
-    ...typography.h3,
-    color: colors.dark.text,
-    marginBottom: spacing.sm,
-  },
+  sectionTitle: { ...typography.h3, color: colors.ui.text, marginBottom: spacing.sm },
 
-  // Recent
-  recentRow: { gap: spacing.md, paddingBottom: spacing.lg, paddingRight: spacing.md },
-  recentItem: { alignItems: 'center', width: 64 },
+  // Recent people
+  recentScroll: { marginHorizontal: -spacing.lg, marginBottom: spacing.lg },
+  recentRow: { paddingHorizontal: spacing.lg, gap: spacing.md },
+  recentPerson: { width: 64, alignItems: 'center' },
   recentAvatar: {
     width: 54,
     height: 54,
     borderRadius: 27,
-    backgroundColor: colors.dark.accentSoft,
+    backgroundColor: colors.ui.accentSoft,
     borderWidth: 1,
-    borderColor: colors.dark.accentBorder,
+    borderColor: colors.ui.accentBorder,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  recentInitial: { fontSize: 20, fontWeight: '700', color: colors.dark.accentText },
-  recentName: { fontSize: 12, color: colors.dark.textDim, marginTop: 6, maxWidth: 64 },
+  recentAvatarText: { fontSize: 18, fontWeight: '700', color: colors.ui.accentText },
+  recentName: { fontSize: 12, color: colors.ui.textDim, marginTop: 6, maxWidth: 64, textAlign: 'center' },
 
-  // Methods
+  // Method lists
   methodList: {
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     borderRadius: 20,
     overflow: 'hidden',
     marginBottom: spacing.lg,
   },
-  methodRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: 14,
-    paddingHorizontal: spacing.md,
-  },
-  methodRowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.dark.glassBorderStrong },
-  methodIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  methodIconLarge: {
-    width: 60,
-    height: 60,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.md,
-  },
-  iconCoral: { backgroundColor: 'rgba(255,80,67,0.2)' },
-  iconAmber: { backgroundColor: colors.dark.warningSoft },
-  iconBlue: { backgroundColor: 'rgba(111,155,255,0.16)' },
-  iconGreen: { backgroundColor: colors.dark.incomingSoft },
-  methodTitle: { fontSize: 15, fontWeight: '600', color: colors.dark.text },
-  methodSub: { fontSize: 12, color: colors.dark.textFaint, marginTop: 2, lineHeight: 16 },
-  chevron: { fontSize: 24, color: colors.dark.textFaint, fontWeight: '300', lineHeight: 28 },
+  methodRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: 14, paddingHorizontal: spacing.md },
+  methodRowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.ui.glassBorderStrong },
+  methodIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  methodTitle: { fontSize: 15, fontWeight: '600', color: colors.ui.text },
+  methodSub: { fontSize: 12, color: colors.ui.textFaint, marginTop: 2, lineHeight: 16 },
+  chevron: { fontSize: 24, color: colors.ui.textFaint, fontWeight: '300', lineHeight: 28 },
 
-  // Flow steps
+  // Send steps
   flowBlock: { marginBottom: spacing.lg },
   recipientChip: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'center',
     gap: spacing.sm,
-    backgroundColor: PANEL_BG,
+    backgroundColor: colors.ui.glassRaised,
     borderWidth: 1,
-    borderColor: PANEL_BORDER,
+    borderColor: colors.ui.glassBorderStrong,
     borderRadius: borderRadius.full,
     paddingVertical: 6,
     paddingLeft: 6,
@@ -1217,53 +1250,58 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: colors.dark.accent,
+    backgroundColor: colors.ui.solid,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarSmallText: { fontSize: 15, fontWeight: '700', color: colors.dark.text },
-  recipientName: { fontSize: 14, fontWeight: '600', color: colors.dark.text },
-  recipientPhone: { fontSize: 11, color: colors.dark.textFaint },
-
+  avatarSmallText: { fontSize: 13, fontWeight: '700', color: colors.ui.onSolid },
+  recipientName: { fontSize: 14, fontWeight: '600', color: colors.ui.text },
+  recipientPhone: { fontSize: 11, color: colors.ui.textFaint },
   linkNotice: {
-    backgroundColor: colors.dark.warningSoft,
-    borderWidth: 1,
-    borderColor: 'rgba(245,166,35,0.35)',
+    backgroundColor: colors.ui.warningSoft,
     borderRadius: 14,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     marginBottom: spacing.md,
   },
-  linkNoticeText: { ...typography.caption, color: colors.dark.warning },
-
+  linkNoticeText: { ...typography.caption, color: colors.ui.warning },
   amountLarge: {
     fontSize: 56,
     fontWeight: '800',
     letterSpacing: -2.5,
     lineHeight: 66,
-    color: colors.dark.text,
+    color: colors.ui.text,
     textAlign: 'center',
     fontVariant: ['tabular-nums'],
   },
-  amountEmpty: { color: colors.dark.textFaint },
-  freePill: {
-    alignSelf: 'center',
-    backgroundColor: colors.dark.incomingSoft,
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 4,
+  amountLargeLong: { fontSize: 32, lineHeight: 40, letterSpacing: -0.8 },
+  amountEmpty: { color: colors.ui.textFaint },
+  currencyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
     marginTop: spacing.xs,
     marginBottom: spacing.md,
   },
-  freePillText: { fontSize: 12, fontWeight: '600', color: colors.dark.incoming },
+  availableText: { fontSize: 12, color: colors.ui.textDim },
+  currencyChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.ui.glassBorderStrong,
+    backgroundColor: colors.ui.glass,
+  },
+  currencyChipText: { fontSize: 12, fontWeight: '700', color: colors.ui.text },
   noteInput: {
     height: 46,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     borderWidth: 1,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     paddingHorizontal: spacing.lg,
-    color: colors.dark.text,
+    color: colors.ui.text,
     fontSize: 14,
     textAlign: 'center',
     marginBottom: spacing.md,
@@ -1273,113 +1311,78 @@ const styles = StyleSheet.create({
     width: '31.5%',
     height: 58,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: colors.ui.glass,
+    borderWidth: 1,
+    borderColor: colors.ui.glassBorder,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  keyText: { fontSize: 24, fontWeight: '600', color: colors.dark.text, fontVariant: ['tabular-nums'] },
+  keyBlank: { width: '31.5%', height: 58 },
+  keyText: { fontSize: 24, fontWeight: '600', color: colors.ui.text, fontVariant: ['tabular-nums'] },
 
-  // Review
+  // Confirm
   receipt: {
-    backgroundColor: PANEL_BG,
+    backgroundColor: colors.ui.glassRaised,
     borderWidth: 1,
-    borderColor: PANEL_BORDER,
+    borderColor: colors.ui.glassBorderStrong,
     borderRadius: 22,
     padding: spacing.lg,
   },
-  receiptLabel: { fontSize: 12, color: colors.dark.textDim, textAlign: 'center' },
+  receiptLabel: { fontSize: 12, color: colors.ui.textDim, textAlign: 'center' },
   receiptAmount: {
     fontSize: 44,
     fontWeight: '800',
     letterSpacing: -1.8,
-    color: colors.dark.text,
+    color: colors.ui.text,
     textAlign: 'center',
     fontVariant: ['tabular-nums'],
     marginTop: 2,
   },
-  receiptTo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  receiptToText: { fontSize: 14, fontWeight: '600', color: colors.dark.text, flexShrink: 1 },
-  receiptDivider: {
-    height: 1,
-    borderRadius: 1,
-    backgroundColor: colors.dark.divider,
-    marginVertical: spacing.md,
-  },
-  reviewRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingVertical: 7,
-    gap: spacing.md,
-  },
-  reviewKey: { fontSize: 14, color: colors.dark.textDim },
-  reviewValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.dark.text,
-    maxWidth: '62%',
-    textAlign: 'right',
-  },
-  reviewStrong: { fontSize: 16, fontWeight: '700', color: colors.dark.text },
-  valueGreen: { color: colors.dark.incoming },
-
-  // PIN
-  pinTitle: { fontSize: 20, fontWeight: '700', color: colors.dark.text, letterSpacing: -0.4 },
-  pinSubtitle: {
-    fontSize: 14,
-    color: colors.dark.textDim,
-    textAlign: 'center',
-    marginTop: spacing.xs,
-    marginBottom: spacing.lg,
-  },
+  receiptTo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, marginTop: spacing.sm },
+  receiptToText: { fontSize: 14, fontWeight: '600', color: colors.ui.text, flexShrink: 1 },
+  receiptDivider: { height: 1, backgroundColor: colors.ui.divider, marginVertical: spacing.md },
+  reviewRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingVertical: 7, gap: spacing.md },
+  reviewKey: { fontSize: 14, color: colors.ui.textDim },
+  reviewValue: { fontSize: 14, fontWeight: '600', color: colors.ui.text, maxWidth: '62%', textAlign: 'right' },
+  reviewStrong: { fontSize: 16, fontWeight: '700', color: colors.ui.text },
+  valueGood: { color: colors.ui.incoming },
+  pinBlock: { marginTop: spacing.lg },
+  pinHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: spacing.smPlus },
+  pinPrompt: { ...typography.captionBold, color: colors.ui.textDim },
   pinSpinner: { marginTop: spacing.lg },
+  textLink: { alignSelf: 'center', paddingVertical: spacing.smPlus, paddingHorizontal: spacing.md, marginTop: spacing.xs },
+  textLinkText: { ...typography.captionBold, color: colors.ui.accentText },
 
   // Success
   successBlock: { paddingTop: spacing.lg },
-  successCheckWrap: {
-    width: 88,
-    height: 88,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.lg,
-  },
+  successCheckWrap: { width: 88, height: 88, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.lg },
   successRing: {
     position: 'absolute',
     width: 88,
     height: 88,
     borderRadius: 44,
     borderWidth: 2,
-    borderColor: colors.dark.incoming,
+    borderColor: colors.ui.incoming,
   },
-  successTitle: { fontSize: 22, fontWeight: '700', color: colors.dark.text, textAlign: 'center' },
+  successTitle: { fontSize: 22, fontWeight: '700', color: colors.ui.text, textAlign: 'center' },
   successAmount: {
     fontSize: 48,
     fontWeight: '800',
     letterSpacing: -2,
-    color: colors.dark.text,
+    color: colors.ui.text,
     marginTop: spacing.sm,
     fontVariant: ['tabular-nums'],
   },
-  successRecipient: { fontSize: 14, color: colors.dark.textDim, marginTop: spacing.xs, marginBottom: spacing.lg },
+  successRecipient: { fontSize: 14, color: colors.ui.textDim, marginTop: spacing.xs, marginBottom: spacing.lg },
 
   // Receive
-  qrPlate: {
-    marginTop: spacing.lg,
-    marginBottom: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 228,
-  },
+  qrPlate: { marginTop: spacing.lg, marginBottom: spacing.md, alignItems: 'center', justifyContent: 'center', minHeight: 228 },
   qrWhite: {
     padding: 16,
     backgroundColor: '#FFFFFF',
     borderRadius: 24,
+    borderWidth: 1,
+    borderColor: colors.ui.glassBorder,
   },
   qrPlaceholder: {
     width: 228,
@@ -1387,25 +1390,25 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 1,
     borderStyle: 'dashed',
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: colors.ui.glassBorderStrong,
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.md,
   },
-  qrPlaceholderText: { fontSize: 13, color: colors.dark.textDim, marginTop: spacing.md, textAlign: 'center' },
-  tokenErrorText: { fontSize: 14, color: colors.dark.error, textAlign: 'center' },
+  qrPlaceholderText: { fontSize: 13, color: colors.ui.textDim, marginTop: spacing.md, textAlign: 'center' },
+  tokenErrorText: { fontSize: 14, color: colors.ui.error, textAlign: 'center' },
   timerPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: colors.dark.accentSoft,
+    backgroundColor: colors.ui.accentSoft,
     paddingHorizontal: spacing.md,
     paddingVertical: 7,
     borderRadius: borderRadius.full,
   },
-  timerPillWarning: { backgroundColor: colors.dark.errorSoft },
-  timerDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.dark.accentText },
-  timerDotWarning: { backgroundColor: colors.dark.error },
-  timerText: { fontSize: 13, fontWeight: '600', color: colors.dark.accentText, flexShrink: 1 },
-  timerTextWarning: { color: colors.dark.error },
-});
+  timerPillWarning: { backgroundColor: colors.ui.errorSoft },
+  timerDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.ui.accentText },
+  timerDotWarning: { backgroundColor: colors.ui.error },
+  timerText: { fontSize: 13, fontWeight: '600', color: colors.ui.accentText, flexShrink: 1 },
+  timerTextWarning: { color: colors.ui.error },
+}));

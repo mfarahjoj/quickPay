@@ -3,7 +3,7 @@ import { Animated, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { SuccessCheckIcon } from '../icons/AuthIcons';
 import { Button } from '../Button';
-import { colors, typography, spacing } from '../../theme';
+import { typography, spacing, makeStyles } from '../../theme';
 
 interface SetupSuccessScreenProps {
   onContinue: () => void;
@@ -11,6 +11,7 @@ interface SetupSuccessScreenProps {
 }
 
 export function SetupSuccessScreen({ onContinue, variant = 'customer' }: SetupSuccessScreenProps) {
+  const styles = useStyles();
   const { t } = useTranslation();
   const scale = useRef(new Animated.Value(0.4)).current;
   const opacity = useRef(new Animated.Value(0)).current;
@@ -44,7 +45,7 @@ export function SetupSuccessScreen({ onContinue, variant = 'customer' }: SetupSu
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background.primary,
@@ -75,4 +76,4 @@ const styles = StyleSheet.create({
   btn: {
     width: '100%',
   },
-});
+}));

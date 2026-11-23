@@ -29,6 +29,9 @@ import {
   PLATFORM_FEES,
   WalletNotFoundError,
 } from "../ledger";
+import { claimReceiptNumber, reserveReceiptNumber } from "../utils/receiptNumber";
+import { recordPaidReference } from "../utils/paidReferences";
+import { appReads, parseCurrency, toLimitCents } from "../utils/money";
 
 /**
  * Callable function to process a QR payment
@@ -74,8 +77,26 @@ export const processPayment = https.onCall(
         throw new https.HttpsError("permission-denied", "Cannot pay yourself");
       }
 
-      // Outgoing money waits out the pause after a PIN reset.
-      await assertResetCooldownAllows(customerId, "shop_payment", qrPreData.amount);
+      // The code's own currency, from start to finish (SHILLINGS.md). An app
+      // that reads every amount as cents never pays a shilling code: it would
+      // have shown the customer the wrong amount.
+      const preCurrency = parseCurrency(qrPreData.currency) ?? "USD";
+      if (!appReads(preCurrency, request.data.currencies)) {
+        throw new https.HttpsError(
+          "failed-precondition",
+          "This shop is charging in shillings. Update Zapp Pay to pay it.",
+          { reason: "update_for_shillings" }
+        );
+      }
+      const { slsPerUsd } = await getRates();
+
+      // Outgoing money waits out the pause after a PIN reset. The allowance is
+      // in dollars, so a shilling amount counts at the limits rate.
+      await assertResetCooldownAllows(
+        customerId,
+        "shop_payment",
+        toLimitCents(qrPreData.amount, preCurrency, slsPerUsd)
+      );
 
       // A frozen merchant must not keep taking payments while under review.
       await requireActiveAccount(qrPreData.merchantId, "counterparty");
@@ -86,7 +107,7 @@ export const processPayment = https.onCall(
 
       assertAccountActive(customerData);
 
-      await enforceTransactionLimits(customerId, qrPreData.amount, customerData);
+      await enforceTransactionLimits(customerId, qrPreData.amount, customerData, undefined, preCurrency);
 
       const { paymentFeeRate } = await getRates();
 
@@ -95,10 +116,14 @@ export const processPayment = https.onCall(
       let qrCurrency: string;
       let merchantId: string;
       let qrReference: string | undefined;
+      let receiptNumber: string;
       let feeCents = 0;
       let netCents = 0;
 
       await db.runTransaction(async (transaction) => {
+        // A read, so it goes before any write. A retried attempt claims afresh.
+        receiptNumber = await claimReceiptNumber(transaction, db);
+
         const qrCodeRef = db.collection("qrCodes").doc(qrCodeId);
         const qrCodeDoc = await transaction.get(qrCodeRef);
 
@@ -125,6 +150,10 @@ export const processPayment = https.onCall(
 
         qrAmount = qrCode.amount;
         qrCurrency = qrCode.currency;
+        // The limits were checked in the currency read before the PIN.
+        if ((parseCurrency(qrCurrency) ?? "USD") !== preCurrency) {
+          throw new https.HttpsError("aborted", "This code changed. Scan it again.");
+        }
         merchantId = qrCode.merchantId;
         qrReference = qrCode.reference;
 
@@ -148,7 +177,7 @@ export const processPayment = https.onCall(
           type: "qr_payment",
           currency: qrCurrency as "USD" | "SLS",
           lines,
-          refs: { transactionId, qrCodeId },
+          refs: { transactionId, qrCodeId, receiptNumber },
           description: "QR payment",
           postedBy: customerId,
         });
@@ -169,6 +198,7 @@ export const processPayment = https.onCall(
           feeCents,
           netCents,
           transactionId,
+          receiptNumber,
         });
 
         const txRecord: Transaction = {
@@ -185,12 +215,33 @@ export const processPayment = https.onCall(
           qrCodeId,
           description: "QR payment",
           ...(qrReference ? { reference: qrReference } : {}),
+          receiptNumber,
           journalEntryId: `qrpay_${qrCodeId}`,
           createdAt: now,
           completedAt: now,
         };
 
         transaction.set(db.collection("transactions").doc(transactionId), txRecord);
+
+        reserveReceiptNumber(transaction, db, receiptNumber, {
+          transactionId,
+          type: "payment",
+          participants: [customerId, merchantId],
+          amount: qrAmount,
+          currency: qrCurrency,
+        });
+
+        if (qrReference) {
+          recordPaidReference(transaction, db, {
+            merchantId,
+            reference: qrReference,
+            transactionId,
+            receiptNumber,
+            amount: qrAmount,
+            currency: qrCurrency,
+            paidByName: customerData?.fullName || null,
+          });
+        }
       });
 
       notifyPaymentReceived(merchantId!, netCents, qrCurrency!, customerId)
@@ -202,6 +253,7 @@ export const processPayment = https.onCall(
         success: true,
         data: {
           transactionId,
+          receiptNumber: receiptNumber!,
           status: "completed",
           amount: qrAmount!,
           merchantId: merchantId!,

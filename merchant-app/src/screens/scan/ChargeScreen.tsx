@@ -14,18 +14,21 @@ import {
   cancelPaymentRequest,
   ChargeStatus,
 } from '../../services/scan.service';
-import {
-  DarkScreen,
-  GlassCard,
-  PillButton,
-  ACCENT,
-  TEXT_DIM,
-  TEXT_FAINT,
-} from '../../components';
+import { DarkScreen, GlassCard, PillButton, PaidReferenceSheet } from '../../components';
 import { SuccessCheckIcon, CloseIcon } from '../../components/icons/AuthIcons';
 import { useExitGuard } from '../../hooks/useExitGuard';
-import { toCents, formatCents, sanitizeAmountInput } from '../../utils/money';
+import { formatAmount, sanitizeAmountFor, toAmount } from '../../utils/money';
+import { CurrencyToggle, type FloatCurrency } from '../../components/CurrencyToggle';
 import { callableErrorKey } from '../../utils/errors';
+import {
+  PriorPayment,
+  priorPaymentFromError,
+  shouldCheckPaidReference,
+} from '../../utils/paidReference';
+import { REFERENCE_MAX_LENGTH } from '../../utils/receiptParser';
+import { triggerHaptic } from '../../services/haptics.service';
+import { AmountInput } from '../../components/AmountInput';
+import { makeStyles, useColors } from '../../theme';
 
 interface Props {
   route: {
@@ -34,6 +37,12 @@ interface Props {
       customerName: string;
       customerId: string;
       purpose?: 'payment' | 'cash_out';
+      amountCents?: number;
+      /** "USD" (the default) or "SLS". A cash-out is always dollars. */
+      currency?: 'USD' | 'SLS';
+      reference?: string;
+      /** A request already raised (a scan at the counter display): wait on it. */
+      requestId?: string;
     };
   };
   navigation: any;
@@ -79,16 +88,33 @@ const formatClock = (seconds: number) =>
   `${Math.floor(seconds / 60)}:${(seconds % 60).toString().padStart(2, '0')}`;
 
 export default function ChargeScreen({ route, navigation }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
-  const { tokenId, customerName } = route.params;
+  const { tokenId } = route.params;
+  // Resuming a request raised elsewhere: its name, amount and expiry come from the request.
+  const resumedId = route.params.requestId ?? null;
+  const [customerName, setCustomerName] = useState(route.params.customerName);
   // A cash-out: the agent hands over cash once the customer approves.
   const cashOut = route.params.purpose === 'cash_out';
   const k = (key: string) => (cashOut ? `scan.cashOut.${key}` : `scan.charge.${key}`);
-  const [amount, setAmount] = useState('');
-  const [reference, setReference] = useState('');
-  const [phase, setPhase] = useState<Phase>('idle');
-  const [requestId, setRequestId] = useState<string | null>(null);
-  const [chargedCents, setChargedCents] = useState(0);
+  // A charge or a cash-out is in one currency, never converted.
+  const [currency, setCurrency] = useState<FloatCurrency>(
+    route.params.currency === 'SLS' ? 'SLS' : 'USD'
+  );
+  const show = (n: number) => formatAmount(n, currency);
+  // Filled in already when the sale was typed on Receive.
+  const [amount, setAmount] = useState(
+    route.params.amountCents
+      ? route.params.currency === 'SLS'
+        ? String(route.params.amountCents)
+        : (route.params.amountCents / 100).toFixed(2)
+      : ''
+  );
+  const [reference, setReference] = useState(route.params.reference ?? '');
+  const [phase, setPhase] = useState<Phase>(resumedId ? 'waiting' : 'idle');
+  const [requestId, setRequestId] = useState<string | null>(resumedId);
+  const [chargedCents, setChargedCents] = useState(resumedId ? route.params.amountCents ?? 0 : 0);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [connectionLost, setConnectionLost] = useState(false);
   // The last attempt failed without saying whether the charge was raised.
@@ -97,6 +123,9 @@ export default function ChargeScreen({ route, navigation }: Props) {
   const [refFocused, setRefFocused] = useState(false);
   const deadline = useRef(0);
   const withdrawing = useRef(false);
+  const [receiptNumber, setReceiptNumber] = useState<string | null>(null);
+  // The earlier payment of this reference, while the warning is up.
+  const [prior, setPrior] = useState<PriorPayment | null>(null);
 
   // A late reply must never overwrite a known outcome: paid stays paid.
   const settle = useCallback((next: Phase) => {
@@ -112,12 +141,22 @@ export default function ChargeScreen({ route, navigation }: Props) {
       .onSnapshot(
         (doc) => {
           setConnectionLost(false);
-          const status = doc.data()?.status as ChargeStatus | undefined;
+          const data = doc.data();
+          if (resumedId && data) {
+            if (typeof data.amount === 'number') setChargedCents(data.amount);
+            if (typeof data.customerName === 'string' && data.customerName) setCustomerName(data.customerName);
+            const expiresAtMs = data.expiresAt?.toMillis?.();
+            if (!deadline.current && typeof expiresAtMs === 'number') deadline.current = expiresAtMs;
+          }
+          const status = data?.status as ChargeStatus | undefined;
+          if (status === 'approved' && typeof data?.receiptNumber === 'string') {
+            setReceiptNumber(data.receiptNumber);
+          }
           if (status && status !== 'pending') settle(status);
         },
         () => setConnectionLost(true),
       );
-  }, [requestId, settle]);
+  }, [requestId, resumedId, settle]);
 
   /**
    * Ask the server to end the charge, then show how it really ended. Its
@@ -153,6 +192,8 @@ export default function ChargeScreen({ route, navigation }: Props) {
   useEffect(() => {
     if (phase !== 'waiting' || !requestId) return;
     const tick = () => {
+      // A resumed request's expiry arrives with its first snapshot.
+      if (!deadline.current) return;
       const left = Math.max(0, Math.ceil((deadline.current - Date.now()) / 1000));
       setSecondsLeft(left);
       if (left === 0) withdraw(requestId, 'unknown');
@@ -168,7 +209,7 @@ export default function ChargeScreen({ route, navigation }: Props) {
       t('scan.charge.cancelConfirmTitle'),
       t('scan.charge.cancelConfirmMessage', {
         name: customerName,
-        amount: formatCents(chargedCents),
+        amount: show(chargedCents),
       }),
       [
         { text: t('scan.charge.keepWaiting'), style: 'cancel' },
@@ -191,7 +232,7 @@ export default function ChargeScreen({ route, navigation }: Props) {
     cancelPaymentRequest(tokenId)
       .then((final) => {
         if (final === 'approved') {
-          setChargedCents(toCents(amount));
+          setChargedCents(toAmount(amount, currency));
           settle('approved');
         } else {
           leave();
@@ -210,21 +251,27 @@ export default function ChargeScreen({ route, navigation }: Props) {
           : undefined,
   });
 
-  const handleCharge = async () => {
-    const cents = toCents(amount);
+  const handleCharge = async (chargeAgain = false) => {
+    const cents = toAmount(amount, currency);
     if (cents <= 0) {
       Alert.alert(t('common.invalidAmount'), t('common.invalidAmountMessage'));
       return;
     }
+    const ref = cashOut ? undefined : reference.trim() || undefined;
     setPhase('sending');
     try {
       const result = await createPaymentRequest(
         tokenId,
         cents,
-        'USD',
-        cashOut ? undefined : reference.trim() || undefined,
+        currency,
+        ref,
         cashOut ? 'cash_out' : 'payment',
+        {
+          checkPaidReference: !!ref && shouldCheckPaidReference(ref, null),
+          confirmPaidReference: chargeAgain,
+        },
       );
+      setPrior(null);
       // Fallbacks cover a server older than this screen, which replies with
       // the request ID alone.
       deadline.current = Date.now() + (result.expiresInSeconds ?? 90) * 1000;
@@ -234,6 +281,16 @@ export default function ChargeScreen({ route, navigation }: Props) {
       const status = result.status ?? 'pending';
       setPhase(status === 'pending' ? 'waiting' : status);
     } catch (e: any) {
+      // This reference was already paid: nothing was raised, so the merchant
+      // is asked before anything is.
+      const earlier = priorPaymentFromError(e);
+      if (earlier) {
+        triggerHaptic('medium');
+        setPrior(earlier);
+        setPhase('idle');
+        return;
+      }
+      setPrior(null);
       if (AMBIGUOUS.includes(e?.code)) setMaybeRaised(true);
       Alert.alert(t('common.error'), t(chargeErrorKey(e)));
       setPhase('idle');
@@ -244,7 +301,11 @@ export default function ChargeScreen({ route, navigation }: Props) {
   const scanAgain = () =>
     cashOut
       ? navigation.navigate('ScanCashOut', { purpose: 'cash_out' })
-      : navigation.navigate('MainTabs', { screen: 'ScanCharge' });
+      : navigation.navigate('ScanCharge', {
+          amountCents: route.params.amountCents,
+          currency,
+          reference: route.params.reference,
+        });
 
   // ── Outcomes ──
   if (phase === 'approved') {
@@ -252,8 +313,16 @@ export default function ChargeScreen({ route, navigation }: Props) {
       <DarkScreen edges={[]} contentStyle={styles.resultWrap}>
         <SuccessCheckIcon size={72} />
         <Text style={styles.resultTitle}>{t(k('paymentReceived'))}</Text>
-        <Text style={styles.resultAmount}>{formatCents(chargedCents)}</Text>
+        <Text style={styles.resultAmount}>{show(chargedCents)}</Text>
         <Text style={styles.resultSubtitle}>{t(k('fromCustomer'), { name: customerName })}</Text>
+        {receiptNumber ? (
+          <View style={styles.receiptPill}>
+            <Text style={styles.receiptPillLabel}>{t('qr.paid.receipt')}</Text>
+            <Text style={styles.receiptPillValue} selectable>
+              {receiptNumber}
+            </Text>
+          </View>
+        ) : null}
         <View style={styles.resultBtn}>
           <PillButton label={t('common.done')} onPress={close} />
         </View>
@@ -284,7 +353,7 @@ export default function ChargeScreen({ route, navigation }: Props) {
     return (
       <DarkScreen edges={[]} contentStyle={styles.resultWrap}>
         <View style={styles.failIcon}>
-          <CloseIcon size={32} color="#FF6961" />
+          <CloseIcon size={32} color={colors.ui.error} />
         </View>
         <Text style={styles.resultTitle}>{title}</Text>
         <Text style={styles.resultSubtitle}>{message}</Text>
@@ -307,10 +376,10 @@ export default function ChargeScreen({ route, navigation }: Props) {
   if (phase === 'waiting' || phase === 'cancelling') {
     return (
       <DarkScreen edges={[]} contentStyle={styles.resultWrap}>
-        <ActivityIndicator size="large" color={ACCENT} style={styles.spinner} />
+        <ActivityIndicator size="large" color={colors.ui.accent} style={styles.spinner} />
         <Text style={styles.resultTitle}>{t(k('waitingApproval'))}</Text>
         <Text style={styles.resultSubtitle}>{t(k('confirmMessage'), { name: customerName })}</Text>
-        <Text style={styles.waitingAmount}>{formatCents(chargedCents)}</Text>
+        <Text style={styles.waitingAmount}>{show(chargedCents)}</Text>
         {reference.trim() ? (
           <Text style={styles.waitingRef}>{reference.trim()}</Text>
         ) : null}
@@ -349,10 +418,11 @@ export default function ChargeScreen({ route, navigation }: Props) {
             <TextInput
               style={styles.refInput}
               placeholder={t('scan.charge.referencePlaceholder')}
-              placeholderTextColor="rgba(255,255,255,0.25)"
+              placeholderTextColor={colors.ui.ink(0.25)}
               value={reference}
               onChangeText={setReference}
               returnKeyType="next"
+              maxLength={REFERENCE_MAX_LENGTH}
               onFocus={() => setRefFocused(true)}
               onBlur={() => setRefFocused(false)}
             />
@@ -362,33 +432,54 @@ export default function ChargeScreen({ route, navigation }: Props) {
 
         <Text style={[styles.label, styles.amountLabel]}>{t(k('amountLabel'))}</Text>
         <GlassCard style={[styles.amountCard, focused && styles.amountCardFocused]}>
-          <Text style={styles.currency}>$</Text>
-          <TextInput
+          {currency === 'USD' ? <Text style={styles.currency}>$</Text> : null}
+          <AmountInput
             style={styles.amountInput}
-            placeholder="0.00"
-            placeholderTextColor="rgba(255,255,255,0.25)"
+            placeholder={currency === 'SLS' ? '0,000' : '0.00'}
+            placeholderTextColor={colors.ui.ink(0.25)}
             value={amount}
-            onChangeText={(v) => setAmount(sanitizeAmountInput(v))}
-            keyboardType="decimal-pad"
+            onChangeText={(v) => setAmount(sanitizeAmountFor(v, currency))}
+            keyboardType={currency === 'SLS' ? 'number-pad' : 'decimal-pad'}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
           />
+          {currency === 'SLS' ? <Text style={styles.currency}>SLSH</Text> : null}
         </GlassCard>
+        <CurrencyToggle
+          value={currency}
+          onChange={(next) => {
+            if (next === currency) return;
+            setCurrency(next);
+            setAmount('');
+          }}
+          disabled={phase !== 'idle'}
+          style={styles.currencyToggle}
+        />
       </View>
 
       <View style={styles.footer}>
         <PillButton
           label={t(k('chargeCustomer'))}
-          onPress={handleCharge}
+          onPress={() => handleCharge()}
           loading={phase === 'sending'}
-          disabled={toCents(amount) <= 0 || phase === 'sending'}
+          disabled={toAmount(amount, currency) <= 0 || phase === 'sending'}
         />
       </View>
+
+      <PaidReferenceSheet
+        prior={prior}
+        amountCents={toAmount(amount, currency)}
+        currency={currency}
+        loading={phase === 'sending'}
+        onCancel={() => setPrior(null)}
+        onChargeAgain={() => handleCharge(true)}
+      />
     </DarkScreen>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
+  currencyToggle: { marginTop: 16 },
   content: { flex: 1, paddingTop: 20 },
   body: { flex: 1, paddingHorizontal: 24 },
   footer: { paddingHorizontal: 24, paddingBottom: 24 },
@@ -403,13 +494,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 1,
     textTransform: 'uppercase',
-    color: '#FF8A7A',
+    color: colors.ui.accentText,
     marginBottom: 6,
   },
   customerName: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     letterSpacing: -0.5,
   },
   label: {
@@ -417,7 +508,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 0.4,
     textTransform: 'uppercase',
-    color: 'rgba(255,255,255,0.4)',
+    color: colors.ui.textFaint,
     marginBottom: 12,
   },
   amountLabel: { marginTop: 20 },
@@ -428,19 +519,19 @@ const styles = StyleSheet.create({
     height: 76,
   },
   amountCardFocused: {
-    borderColor: ACCENT,
+    borderColor: colors.ui.accent,
   },
   currency: {
     fontSize: 36,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     marginRight: 8,
   },
   amountInput: {
     flex: 1,
     fontSize: 40,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     letterSpacing: -1,
     padding: 0,
   },
@@ -457,14 +548,14 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: 'rgba(255,59,48,0.14)',
+    backgroundColor: colors.ui.errorSoft,
     justifyContent: 'center',
     alignItems: 'center',
   },
   resultTitle: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     letterSpacing: -0.5,
     textAlign: 'center',
     marginTop: 24,
@@ -473,39 +564,62 @@ const styles = StyleSheet.create({
   resultAmount: {
     fontSize: 40,
     fontWeight: '800',
-    color: '#34C77B',
+    color: colors.ui.incoming,
     letterSpacing: -1.5,
     marginBottom: 8,
   },
+  receiptPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.ui.divider,
+    borderWidth: 1,
+    borderColor: colors.ui.ink(0.14),
+    marginTop: 12,
+  },
+  receiptPillLabel: {
+    fontSize: 13,
+    color: colors.ui.textFaint,
+  },
+  receiptPillValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.ui.text,
+    letterSpacing: 0.6,
+    fontVariant: ['tabular-nums'],
+  },
   resultSubtitle: {
     fontSize: 15,
-    color: TEXT_DIM,
+    color: colors.ui.textDim,
     textAlign: 'center',
     lineHeight: 22,
   },
   waitingAmount: {
     fontSize: 28,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     letterSpacing: -1,
     marginTop: 20,
   },
   waitingRef: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.5)',
+    color: colors.ui.ink(0.5),
     marginTop: 8,
     letterSpacing: 0.2,
   },
   countdown: {
     fontSize: 14,
     fontWeight: '600',
-    color: TEXT_FAINT,
+    color: colors.ui.textFaint,
     marginTop: 16,
     fontVariant: ['tabular-nums'],
   },
   warning: {
     fontSize: 13,
-    color: '#FF6961',
+    color: colors.ui.error,
     textAlign: 'center',
     marginTop: 12,
   },
@@ -516,13 +630,13 @@ const styles = StyleSheet.create({
     height: 52,
   },
   refCardFocused: {
-    borderColor: ACCENT,
+    borderColor: colors.ui.accent,
   },
   refInput: {
     flex: 1,
     fontSize: 16,
     fontWeight: '500',
-    color: '#FFFFFF',
+    color: colors.ui.text,
     padding: 0,
   },
   resultBtn: {
@@ -530,4 +644,4 @@ const styles = StyleSheet.create({
     marginTop: 32,
   },
   secondBtn: { marginTop: 12 },
-});
+}));

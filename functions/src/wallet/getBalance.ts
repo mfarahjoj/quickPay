@@ -5,6 +5,7 @@ import { https } from "firebase-functions/v2";
 import { requireAuth } from "../utils/validation";
 import { centsToDollars } from "../utils/validation";
 import { ApiResponse, Wallet } from "../types";
+import { walletPocket } from "../ledger";
 
 interface BalanceResponse {
   balance: number; // In dollars
@@ -15,6 +16,8 @@ interface BalanceResponse {
   lastTransactionAt: Date | null;
   /** Agents only: float in agent:{uid}, apart from this wallet. */
   floatCents?: number;
+  /** The shilling pocket, in whole shillings (0 if it never held any). */
+  slsBalance: number;
 }
 
 /**
@@ -42,7 +45,11 @@ export const getBalance = https.onCall(
 
       const wallet = walletDoc.data() as Wallet;
       const user = (await db.collection("users").doc(userId).get()).data();
-      const floatCents = isAgentRole(user?.accountType) ? await readFloatCents(userId) : undefined;
+      // An agent's float in each currency: dollars in cents, shillings whole.
+      const isAgent = isAgentRole(user?.accountType);
+      const [floatCents, floatSls] = isAgent
+        ? await Promise.all([readFloatCents(userId), readFloatCents(userId, undefined, "SLS")])
+        : [undefined, undefined];
 
       return {
         success: true,
@@ -53,7 +60,8 @@ export const getBalance = https.onCall(
           totalReceived: centsToDollars(wallet.totalReceived),
           totalSent: centsToDollars(wallet.totalSent),
           lastTransactionAt: wallet.lastTransactionAt?.toDate() || null,
-          ...(floatCents !== undefined ? { floatCents } : {}),
+          ...(floatCents !== undefined ? { floatCents, floatSls } : {}),
+          slsBalance: walletPocket(wallet, "SLS").balance,
         },
       };
     } catch (error: any) {

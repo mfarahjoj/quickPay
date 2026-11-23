@@ -8,23 +8,16 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  Vibration,
-} from 'react-native';
+  } from 'react-native';
+import { triggerHaptic } from '../../services/haptics.service';
 import { CameraLayer, CAMERA_NATIVE_AVAILABLE } from '../../components/QrCameraLayer';
 import { functions } from '../../services/firebase.config';
-import {
-  DarkScreen,
-  GlassCard,
-  PillButton,
-  PinInput,
-  ACCENT,
-  TEXT_DIM,
-  TEXT_FAINT,
-} from '../../components';
+import { DarkScreen, GlassCard, PillButton, PinInput } from '../../components';
 import { SuccessCheckIcon, CloseIcon, ScanIcon } from '../../components/icons/AuthIcons';
-import { formatCents } from '../../utils/money';
+import { formatAmount, READS_CURRENCIES } from '../../utils/money';
 import { isWrongPin, pinActionErrorKey } from '../../utils/errors';
 import { useExitGuard } from '../../hooks/useExitGuard';
+import { makeStyles, useColors } from '../../theme';
 
 type Step = 'enter' | 'pin' | 'processing' | 'success' | 'error';
 
@@ -57,7 +50,19 @@ function parseCashOutQr(value: string): { cashOutId: string; otpCode: string } |
 // Loose client check; the server normalises and decides.
 const phoneLooksValid = (v: string) => v.replace(/\D/g, '').length >= 7;
 
+/**
+ * A smaller size for a long amount ("400,000 SLSH"), so the cash to hand over
+ * never gets cut off. Shrink-to-fit isn't used: it can draw text as a dot.
+ */
+function longAmount(text: string) {
+  if (text.length > 12) return { fontSize: 30, letterSpacing: -1 };
+  if (text.length > 9) return { fontSize: 36, letterSpacing: -1 };
+  return null;
+}
+
 export default function ConfirmCashOutScreen({ navigation }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useTranslation();
   const [step, setStep] = useState<Step>('enter');
   const [otp, setOtp] = useState('');
@@ -70,7 +75,13 @@ export default function ConfirmCashOutScreen({ navigation }: Props) {
   // Confirming pays the customer cash and moves their held balance into this
   // agent's float, so the agent authorises it with their PIN.
   const [pin, setPin] = useState('');
-  const [result, setResult] = useState<{ amount: number; customerName: string; commission: number } | null>(null);
+  const [result, setResult] = useState<{
+    amount: number;
+    /** Absent from servers before shillings: dollars. */
+    currency?: string;
+    customerName: string;
+    commission: number;
+  } | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [pinError, setPinError] = useState('');
 
@@ -101,7 +112,7 @@ export default function ConfirmCashOutScreen({ navigation }: Props) {
         setScanError(t('cashout.confirm.notCashOutQr'));
         return;
       }
-      Vibration.vibrate(80);
+      triggerHaptic('medium');
       askForPin(scanned);
     },
     [askForPin, t],
@@ -124,7 +135,7 @@ export default function ConfirmCashOutScreen({ navigation }: Props) {
     setStep('processing');
     try {
       const fn = functions().httpsCallable('agentConfirmCashOut');
-      const res = await fn({ ...target, agentPin });
+      const res = await fn({ ...target, agentPin, currencies: READS_CURRENCIES });
       const data = (res.data as any).data;
       setResult(data);
       setStep('success');
@@ -148,14 +159,17 @@ export default function ConfirmCashOutScreen({ navigation }: Props) {
       <DarkScreen edges={[]} contentStyle={styles.resultWrap}>
         <SuccessCheckIcon size={72} />
         <Text style={styles.resultTitle}>{t('cashout.confirm.successTitle')}</Text>
-        <Text style={styles.resultAmount}>{formatCents(result.amount)}</Text>
+        {/* The cash to hand over: shillings must read as shillings. */}
+        <Text style={[styles.resultAmount, longAmount(formatAmount(result.amount, result.currency))]} numberOfLines={1}>
+          {formatAmount(result.amount, result.currency)}
+        </Text>
         <Text style={styles.resultSub}>
           {t('cashout.confirm.paidTo', { name: result.customerName })}
         </Text>
         {result.commission > 0 && (
           <GlassCard style={styles.commissionCard}>
             <Text style={styles.commissionLabel}>{t('agent.yourCommission')}</Text>
-            <Text style={styles.commissionValue}>+{formatCents(result.commission)}</Text>
+            <Text style={styles.commissionValue}>+{formatAmount(result.commission, result.currency)}</Text>
           </GlassCard>
         )}
         <View style={styles.resultBtn}>
@@ -169,7 +183,7 @@ export default function ConfirmCashOutScreen({ navigation }: Props) {
     return (
       <DarkScreen edges={[]} contentStyle={styles.resultWrap}>
         <View style={styles.failIcon}>
-          <CloseIcon size={32} color="#FF6961" />
+          <CloseIcon size={32} color={colors.ui.error} />
         </View>
         <Text style={styles.resultTitle}>{t('agent.couldNotConfirm')}</Text>
         <Text style={styles.resultSub}>{errorMsg}</Text>
@@ -193,7 +207,7 @@ export default function ConfirmCashOutScreen({ navigation }: Props) {
   if (step === 'processing') {
     return (
       <DarkScreen edges={[]} contentStyle={styles.resultWrap}>
-        <ActivityIndicator size="large" color={ACCENT} />
+        <ActivityIndicator size="large" color={colors.ui.accent} />
         <Text style={styles.processingText}>{t('cashout.confirm.processing')}</Text>
       </DarkScreen>
     );
@@ -205,6 +219,7 @@ export default function ConfirmCashOutScreen({ navigation }: Props) {
         <Text style={styles.resultTitle}>{t('cashout.confirm.pinTitle')}</Text>
         <Text style={styles.resultSub}>{t('cashout.confirm.pinSubtitle')}</Text>
         <PinInput
+          autoFocus
           value={pin}
           onChange={(value) => {
             setPin(value);
@@ -245,9 +260,9 @@ export default function ConfirmCashOutScreen({ navigation }: Props) {
           {hasPermission !== true && (
             <View style={styles.scanPlaceholder}>
               {hasPermission === null ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color={colors.ui.text} />
               ) : (
-                <ScanIcon size={40} color="rgba(255,255,255,0.4)" />
+                <ScanIcon size={40} color={colors.ui.textFaint} />
               )}
             </View>
           )}
@@ -270,7 +285,7 @@ export default function ConfirmCashOutScreen({ navigation }: Props) {
             onChangeText={(v) => setPhone(v.replace(/[^\d+ ]/g, '').slice(0, 20))}
             keyboardType="phone-pad"
             placeholder="063 412 0987"
-            placeholderTextColor="rgba(255,255,255,0.2)"
+            placeholderTextColor={colors.ui.ink(0.2)}
           />
         </GlassCard>
 
@@ -283,7 +298,7 @@ export default function ConfirmCashOutScreen({ navigation }: Props) {
             keyboardType="number-pad"
             maxLength={6}
             placeholder="— — — — — —"
-            placeholderTextColor="rgba(255,255,255,0.2)"
+            placeholderTextColor={colors.ui.ink(0.2)}
           />
         </GlassCard>
 
@@ -307,7 +322,7 @@ export default function ConfirmCashOutScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   content: { flex: 1, paddingTop: 0 },
   header: {
     flexDirection: 'row',
@@ -319,59 +334,59 @@ const styles = StyleSheet.create({
   },
   backBtn: {
     width: 36, height: 36, borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.ui.glass,
     alignItems: 'center', justifyContent: 'center', marginTop: 2,
   },
-  backArrow: { fontSize: 24, color: '#FFFFFF', lineHeight: 28 },
-  title: { fontSize: 22, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.5 },
-  subtitle: { fontSize: 13, color: TEXT_DIM, marginTop: 3 },
+  backArrow: { fontSize: 24, color: colors.ui.text, lineHeight: 28 },
+  title: { fontSize: 22, fontWeight: '800', color: colors.ui.text, letterSpacing: -0.5 },
+  subtitle: { fontSize: 13, color: colors.ui.textDim, marginTop: 3 },
   body: { flex: 1, paddingHorizontal: 24, gap: 16 },
   label: {
     fontSize: 12, fontWeight: '700', letterSpacing: 0.8,
-    textTransform: 'uppercase', color: TEXT_FAINT,
+    textTransform: 'uppercase', color: colors.ui.textFaint,
   },
   otpCard: {
     height: 72, alignItems: 'center', justifyContent: 'center',
     paddingHorizontal: 24,
   },
   otpInput: {
-    fontSize: 34, fontWeight: '800', color: ACCENT,
+    fontSize: 34, fontWeight: '800', color: colors.ui.accent,
     letterSpacing: 8, textAlign: 'center', width: '100%',
   },
   scanBox: {
     height: 220, borderRadius: 20, overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: colors.ui.ink(0.04),
+    borderWidth: 1, borderColor: colors.ui.divider,
   },
   scanPlaceholder: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
-  scanHint: { fontSize: 13, color: TEXT_DIM, textAlign: 'center', marginTop: -6 },
-  scanHintError: { color: '#FF6961' },
+  scanHint: { fontSize: 13, color: colors.ui.textDim, textAlign: 'center', marginTop: -6 },
+  scanHintError: { color: colors.ui.error },
   orRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  orLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(255,255,255,0.15)' },
-  orText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5, color: 'rgba(255,255,255,0.35)' },
+  orLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.ui.ink(0.15) },
+  orText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5, color: colors.ui.ink(0.35) },
   phoneCard: { height: 56, justifyContent: 'center', paddingHorizontal: 20 },
-  phoneInput: { fontSize: 20, fontWeight: '700', color: '#FFFFFF', width: '100%' },
+  phoneInput: { fontSize: 20, fontWeight: '700', color: colors.ui.text, width: '100%' },
   infoCard: { padding: 18, gap: 8 },
-  infoTitle: { fontSize: 13, fontWeight: '700', color: TEXT_DIM, marginBottom: 4 },
-  infoStep: { fontSize: 13, color: TEXT_FAINT, lineHeight: 20 },
+  infoTitle: { fontSize: 13, fontWeight: '700', color: colors.ui.textDim, marginBottom: 4 },
+  infoStep: { fontSize: 13, color: colors.ui.textFaint, lineHeight: 20 },
   footer: { paddingHorizontal: 24, paddingBottom: 36 },
 
   // Result states
   resultWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
   failIcon: {
     width: 72, height: 72, borderRadius: 36,
-    backgroundColor: 'rgba(255,59,48,0.12)',
+    backgroundColor: colors.ui.errorSoft,
     alignItems: 'center', justifyContent: 'center',
   },
-  resultTitle: { fontSize: 24, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.5, textAlign: 'center', marginTop: 20 },
-  resultAmount: { fontSize: 44, fontWeight: '800', color: '#34C77B', letterSpacing: -2, marginTop: 8 },
-  resultSub: { fontSize: 15, color: TEXT_DIM, textAlign: 'center', marginTop: 6 },
+  resultTitle: { fontSize: 24, fontWeight: '800', color: colors.ui.text, letterSpacing: -0.5, textAlign: 'center', marginTop: 20 },
+  resultAmount: { fontSize: 44, fontWeight: '800', color: colors.ui.incoming, letterSpacing: -2, marginTop: 8 },
+  resultSub: { fontSize: 15, color: colors.ui.textDim, textAlign: 'center', marginTop: 6 },
   commissionCard: { marginTop: 20, padding: 18, alignItems: 'center', width: '100%' },
-  commissionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: TEXT_FAINT },
-  commissionValue: { fontSize: 28, fontWeight: '800', color: '#34C77B', marginTop: 4 },
+  commissionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: colors.ui.textFaint },
+  commissionValue: { fontSize: 28, fontWeight: '800', color: colors.ui.incoming, marginTop: 4 },
   resultBtn: { alignSelf: 'stretch', marginTop: 28 },
   secondBtn: { marginTop: 12 },
   pinInput: { marginTop: 28 },
-  pinError: { fontSize: 14, color: '#FF6961', textAlign: 'center', marginTop: 16 },
-  processingText: { fontSize: 16, color: TEXT_DIM, marginTop: 20 },
-});
+  pinError: { fontSize: 14, color: colors.ui.error, textAlign: 'center', marginTop: 16 },
+  processingText: { fontSize: 16, color: colors.ui.textDim, marginTop: 20 },
+}));

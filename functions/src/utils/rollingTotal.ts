@@ -20,16 +20,20 @@ export function rollingWindowStart(nowMs: number = Date.now()): FirebaseFirestor
  * Sum `amountCents` over the docs that still count: anything not rejected.
  * Pending and approved/paid both count, so splitting a request and getting
  * the first half approved doesn't reset the total.
+ *
+ * `toCents` turns a doc's amount into dollar cents for the comparison; the
+ * float desk uses it to count shilling movements at the limits rate.
  */
 export function sumStandingCents(
   docs: Array<{ data(): FirebaseFirestore.DocumentData | undefined }>,
-  include: (doc: FirebaseFirestore.DocumentData) => boolean = () => true
+  include: (doc: FirebaseFirestore.DocumentData) => boolean = () => true,
+  toCents: (doc: FirebaseFirestore.DocumentData) => number = (d) => d.amountCents
 ): number {
   let total = 0;
   for (const snap of docs) {
     const d = snap.data();
     if (!d || d.status === "rejected" || !include(d)) continue;
-    if (typeof d.amountCents === "number") total += d.amountCents;
+    if (typeof d.amountCents === "number") total += toCents(d);
   }
   return total;
 }

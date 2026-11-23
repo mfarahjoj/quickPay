@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
+import { ReviewPhoto } from "./ReviewPhoto";
 import { api, type KycQueueRow, type KycSubmission } from "../api";
 import { Icon } from "./Icon";
 import { ReasonPrompt } from "./ReasonPrompt";
+import { AccountLink } from "./AccountLink";
 import { Avatar, EmptyState, Loading } from "./ui";
 
 function secondsOf(ts?: { _seconds?: number; seconds?: number }) {
@@ -29,12 +31,15 @@ const ID_LABEL: Record<string, string> = {
   drivers_license: "Driving licence",
 };
 
-function SubmissionView({
+/** `compact`: on an account page, which already shows who this is. */
+export function SubmissionView({
   userId,
   onDecided,
+  compact = false,
 }: {
   userId: string;
   onDecided: (message: string) => void;
+  compact?: boolean;
 }) {
   const [submission, setSubmission] = useState<KycSubmission | null>(null);
   const [loading, setLoading] = useState(true);
@@ -80,7 +85,8 @@ function SubmissionView({
 
   return (
     <div className="stack-lg">
-      <div className="panel">
+      <div className={compact ? undefined : "panel"}>
+        {!compact && (
         <div className="person-head">
           <Avatar name={applicant.fullName} size={56} />
           <div className="person-text">
@@ -91,8 +97,10 @@ function SubmissionView({
               </span>
             </div>
             <div className="sub">{applicant.phoneNumber || "(no phone)"}</div>
+            <AccountLink uid={userId}>Open account</AccountLink>
           </div>
         </div>
+        )}
 
         <h3>Submitted documents</h3>
         <dl className="kv">
@@ -104,7 +112,8 @@ function SubmissionView({
           <dd>{when(submission.submittedAt)}</dd>
         </dl>
 
-        <h3>Applicant</h3>
+        {!compact && <h3>Applicant</h3>}
+        {!compact && (
         <dl className="kv">
           <dt>Phone</dt>
           <dd>{applicant.phoneNumber || "—"}</dd>
@@ -115,10 +124,13 @@ function SubmissionView({
           <dt>Wallet balance</dt>
           <dd>
             {wallet
-              ? `${wallet.currency ?? "USD"} ${((wallet.balance ?? 0) / 100).toFixed(2)}`
+              ? `${wallet.currency ?? "USD"} ${((wallet.balance ?? 0) / 100).toFixed(2)}${
+                  wallet.sls?.balance ? ` · ${wallet.sls.balance.toLocaleString("en-US")} SLSH` : ""
+                }`
               : "no wallet"}
           </dd>
         </dl>
+        )}
 
         <h3>Photos</h3>
         <p className="hint">
@@ -129,9 +141,7 @@ function SubmissionView({
           {submission.images.map((img) => (
             <figure key={img.label} className="photo">
               {img.url ? (
-                <a href={img.url} target="_blank" rel="noreferrer noopener">
-                  <img src={img.url} alt={`${img.label} of ID document`} />
-                </a>
+                <ReviewPhoto url={img.url} alt={`${img.label} of ID document`} />
               ) : (
                 <div className="photo-missing">{img.error || "Not provided"}</div>
               )}

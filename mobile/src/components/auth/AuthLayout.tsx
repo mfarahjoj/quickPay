@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeftIcon } from '../icons/AuthIcons';
 import { StepProgress } from './StepProgress';
-import { colors, spacing } from '../../theme';
+import { spacing, makeStyles, useTheme } from '../../theme';
 
 interface AuthLayoutProps {
   children: React.ReactNode;
@@ -41,8 +41,11 @@ export function AuthLayout({
   variant = 'light',
   backdrop,
 }: AuthLayoutProps) {
+  const { scheme, colors } = useTheme();
+  const styles = useStyles();
   const dark = variant === 'dark';
   const white = variant === 'white';
+  const lightIcons = dark || (!white && scheme === 'dark');
   const body = (
     <>
       <View style={styles.topBar}>
@@ -71,8 +74,10 @@ export function AuthLayout({
       edges={['top', 'bottom']}
     >
       {backdrop}
+      {/* The default variant follows the theme's canvas: light clock and
+          battery on dark, dark on light. */}
       <StatusBar
-        barStyle={white ? 'dark-content' : 'light-content'}
+        barStyle={lightIcons ? 'light-content' : 'dark-content'}
         backgroundColor={dark ? colors.hero.canvas : white ? '#FFFFFF' : colors.background.primary}
       />
       <KeyboardAvoidingView
@@ -95,10 +100,10 @@ export function AuthLayout({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   safeDark: {
     backgroundColor: colors.hero.canvas,
@@ -125,7 +130,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -141,4 +146,4 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
   },
-});
+}));

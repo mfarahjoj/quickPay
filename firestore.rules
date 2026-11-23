@@ -3,8 +3,11 @@ service cloud.firestore {
   match /databases/{database}/documents {
     
     // Helper functions
+    // A signed-in app user. Zapp Business web sessions (portal/) are signed in
+    // too, but read-only: they are not "authenticated" for any rule here, only
+    // for isPortalFor below.
     function isAuthenticated() {
-      return request.auth != null;
+      return request.auth != null && request.auth.token.get('portal', false) != true;
     }
     
     function isOwner(userId) {
@@ -116,6 +119,29 @@ service cloud.firestore {
 
     // Agent top-up requests (customer-initiated cash-in). Customer reads their
     // own request live to detect confirmation; the confirming agent can read it.
+    // Zaad top-ups through agents (functions/src/zaadAgent/). The customer,
+    // the agent who accepted, and the agent it is ringing on may read it.
+    match /zaadAgentTopups/{requestId} {
+      allow read: if isAuthenticated() &&
+                     (isOwner(resource.data.customerId) ||
+                      isOwner(resource.data.agentId) ||
+                      isOwner(resource.data.offeredTo));
+      allow write: if false;
+    }
+    match /zaad_agents/{agentId} {
+      allow read: if isOwner(agentId);
+      allow write: if false;
+    }
+    match /zaad_agent_customers/{userId} {
+      allow read, write: if false;
+    }
+    match /zaad_agent_txn_ids/{txnId} {
+      allow read, write: if false;
+    }
+    match /zaad_agent_refs/{reference} {
+      allow read, write: if false;
+    }
+
     match /agentTopupRequests/{requestId} {
       allow read: if isAuthenticated() &&
                      (isOwner(resource.data.customerId) ||
@@ -138,6 +164,82 @@ service cloud.firestore {
       allow write: if false;
     }
     
+    // Merchant insights read model (functions/src/merchantStats/,
+    // MERCHANT_INSIGHTS.md): a projection of the shop's own transactions,
+    // written only by the server. The shop may read its totals, customers and
+    // live feed; the idempotency and first-visit markers stay server-only
+    // (they match nothing here, so the default deny covers them).
+    //
+    // So may a live Zapp Business web session for that shop (portal/): its
+    // own Firebase user `portal_{sid}` with claims {portal, portalFor,
+    // portalSid}, honoured only while portalSessions/{sid} is active and
+    // unexpired. Such a user's uid never equals a real user's, so every
+    // isOwner() rule above already refuses it.
+    function portalSession() {
+      return get(/databases/$(database)/documents/portalSessions/$(request.auth.token.portalSid)).data;
+    }
+    // Its own shop, or a store linked to it with an active storeLinks doc
+    // (functions/src/portal/groups.ts). An invite alone gives nothing.
+    function isPortalFor(storeUid) {
+      return request.auth != null
+        && request.auth.token.get('portal', false) == true
+        && request.auth.uid == 'portal_' + request.auth.token.get('portalSid', '')
+        && portalSession().active == true
+        && portalSession().expiresAt > request.time
+        && portalSession().merchantUid == request.auth.token.get('portalFor', '')
+        && (storeUid == request.auth.token.portalFor
+            || (portalSession().get('actorUid', null) == null
+                && get(/databases/$(database)/documents/storeLinks/$(storeUid)).data.ownerUid == request.auth.token.portalFor
+                && get(/databases/$(database)/documents/storeLinks/$(storeUid)).data.status == 'active'));
+    }
+    function canViewStore(storeUid) {
+      return (isAuthenticated() && isOwner(storeUid)) || isPortalFor(storeUid);
+    }
+    // A staff manager's sign-in (actorUid set, STAFF_ACCESS.md) sees only the
+    // shop that granted it, never its linked stores (above), and customer
+    // details only if the shop allowed it. Any change to the grant ends the
+    // session (staff/manage.ts), so the session's fields are current.
+    function canViewCustomers(storeUid) {
+      return (isAuthenticated() && isOwner(storeUid))
+        || (isPortalFor(storeUid)
+            && (portalSession().get('actorUid', null) == null || portalSession().get('showCustomers', false) == true));
+    }
+    // Staff access (STAFF_ACCESS.md). The shop sees its staff list and each
+    // staff member their own grants, to accept and to know where they work.
+    // Every change goes through staff/manage.ts; the audit log is server-only.
+    match /merchantStaff/{grantId} {
+      allow read: if isAuthenticated() &&
+                     (isOwner(resource.data.merchantUid) || isOwner(resource.data.staffUid));
+      allow write: if false;
+    }
+    match /merchantStaffAudit/{entryId} {
+      allow read, write: if false;
+    }
+
+    match /merchantStats/{storeUid} {
+      allow read: if canViewStore(storeUid);
+      allow write: if false;
+      match /days/{day} {
+        allow read: if canViewStore(storeUid);
+        allow write: if false;
+      }
+      match /months/{month} {
+        allow read: if canViewStore(storeUid);
+        allow write: if false;
+      }
+      match /customers/{customerUid} {
+        allow read: if canViewCustomers(storeUid);
+        allow write: if false;
+      }
+      // The feed's customer names sit in their own doc, `recentNames`, so a
+      // manager without "Show customers" gets the feed but not who paid.
+      match /live/{docId} {
+        allow read: if (docId != 'recentNames' && canViewStore(storeUid))
+                    || (docId == 'recentNames' && canViewCustomers(storeUid));
+        allow write: if false;
+      }
+    }
+
     // Notifications - users can read and mark as read their own notifications
     match /notifications/{notificationId} {
       allow read: if isAuthenticated() && isOwner(resource.data.userId);
@@ -167,9 +269,12 @@ service cloud.firestore {
     
     // Payment requests - readable by merchant or customer involved
     match /paymentRequests/{requestId} {
+      // Also the staff member who raised it for the shop, so their charge
+      // screen can follow it (STAFF_ACCESS.md).
       allow read: if isAuthenticated() &&
                      (isOwner(resource.data.merchantId) ||
-                      isOwner(resource.data.customerId));
+                      isOwner(resource.data.customerId) ||
+                      isOwner(resource.data.get('raisedBy', '')));
       allow write: if false; // Only Cloud Functions can manage payment requests
     }
     
@@ -250,6 +355,16 @@ service cloud.firestore {
     match /webhook_deliveries/{deliveryId} {
       allow read, write: if false;
     }
+    // Partner settings and transfers move money with no PIN. Server-only.
+    match /api_partners/{merchantId}/{document=**} {
+      allow read, write: if false;
+    }
+    match /api_transfers/{transferId} {
+      allow read, write: if false;
+    }
+    match /api_agreements/{document=**} {
+      allow read, write: if false;
+    }
     // lookupRecipient's per-caller budget counters. Server-only, or a client
     // could reset its own count.
     match /recipient_lookups/{counterId} {
@@ -257,6 +372,10 @@ service cloud.firestore {
     }
     // Ops corrections. Server-only; the console reads them through callables.
     match /adjustments/{adjustmentId} {
+      allow read, write: if false;
+    }
+    // Ops top-ups from a float account. Server-only, like adjustments.
+    match /admin_topups/{topupId} {
       allow read, write: if false;
     }
     // Disputes: the raiser and the party it's against read their own, so the
@@ -273,6 +392,63 @@ service cloud.firestore {
     match /config/app_client {
       allow read: if true;
       allow write: if false;
+    }
+
+    // Counter display (functions/src/counterDisplay/, COUNTER_DISPLAY.md).
+    // A shop's counter tablet has no Firebase Auth identity. It reads one
+    // state doc whose id is a 256-bit secret handed to it at pairing: the id
+    // is the capability, so `get` needs no sign-in and `list` is closed (ids
+    // can't be enumerated). The doc holds only what the counter screen shows
+    // to the public anyway: shop name, QR payloads, an amount, a first name.
+    match /counterDisplayStates/{stateKey} {
+      allow get: if true;
+      allow list: if false;
+      allow write: if false;
+    }
+    // Display records (hashed secrets), pairing codes and rate counters:
+    // server-only. The merchant app goes through listMyDisplays.
+    match /merchantDisplays/{displayId} {
+      allow read, write: if false;
+    }
+    match /displayPairings/{pairingId} {
+      allow read, write: if false;
+    }
+    match /display_rate_limits/{bucketId} {
+      allow read, write: if false;
+    }
+
+    // Zapp Business web sign-ins and sessions (functions/src/portal/):
+    // server-only. The rules above read a session through get().
+    match /portalLogins/{loginId} {
+      allow read, write: if false;
+    }
+    // A Zapp Business sign-in may watch its own session (never another's), so
+    // an open tab leaves the moment the session ends: signed out from the
+    // phone, or a staff grant changed (STAFF_ACCESS.md). Nothing secret is on it.
+    match /portalSessions/{sessionId} {
+      allow read: if request.auth != null
+                  && request.auth.token.get('portal', false) == true
+                  && request.auth.token.get('portalSid', '') == sessionId
+                  && request.auth.uid == 'portal_' + sessionId;
+      allow write: if false;
+    }
+    match /storeLinks/{storeUid} {
+      allow read, write: if false;
+    }
+
+    // Bills (functions/src/bills/): server-only. Both apps list them through
+    // listMyBills / merchantListBills.
+    match /bills/{billId} {
+      allow read, write: if false;
+    }
+    match /billSeries/{seriesId} {
+      allow read, write: if false;
+    }
+    match /billAutopay/{settingId} {
+      allow read, write: if false;
+    }
+    match /billRequests/{requestId} {
+      allow read, write: if false;
     }
 
     // Default deny all other access

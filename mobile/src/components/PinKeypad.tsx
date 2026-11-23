@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -8,7 +8,7 @@ import Animated, {
   withSequence,
   Easing,
 } from 'react-native-reanimated';
-import { colors, typography, spacing } from '../theme';
+import { typography, spacing, makeStyles } from '../theme';
 import { triggerHaptic } from '../services/haptics.service';
 import { Springs } from '../constants/springs';
 
@@ -24,6 +24,7 @@ const KEYS: Array<string | null> = [
 // ─── PinDot ──────────────────────────────────────────────────
 
 function PinDot({ filled }: { filled: boolean }) {
+  const styles = useStyles();
   const scale = useSharedValue(filled ? 1 : 0.01);
   const opacity = useSharedValue(filled ? 1 : 0);
 
@@ -56,6 +57,7 @@ function PinDot({ filled }: { filled: boolean }) {
 // ─── KeyButton ───────────────────────────────────────────────
 
 function KeyButton({ keyLabel, onPress }: { keyLabel: string; onPress: () => void }) {
+  const styles = useStyles();
   const isBackspace = keyLabel === '⌫';
   const scale = useSharedValue(1);
   const rotateZ = useSharedValue(0);
@@ -66,15 +68,17 @@ function KeyButton({ keyLabel, onPress }: { keyLabel: string; onPress: () => voi
 
   return (
     <Pressable
+      // The digit counts on touch-down, as on the phone's own keypad. Waiting
+      // for the finger to lift made fast typing feel a beat behind.
       onPressIn={() => {
         scale.value = withTiming(0.88, { duration: 60, easing: Easing.out(Easing.quad) });
         if (isBackspace) rotateZ.value = withTiming(-15, { duration: 80 });
+        onPress();
       }}
       onPressOut={() => {
         scale.value = withSpring(1, Springs.feedback);
         if (isBackspace) rotateZ.value = withSpring(0, Springs.feedback);
       }}
-      onPress={onPress}
       accessibilityLabel={isBackspace ? 'Delete' : keyLabel}
     >
       <Animated.View
@@ -100,6 +104,7 @@ interface PinKeypadProps {
 }
 
 export function PinKeypad({ value, onChange, onComplete, title, subtitle, error }: PinKeypadProps) {
+  const styles = useStyles();
   const shakeX = useSharedValue(0);
   const errorGlow = useSharedValue(0);
 
@@ -118,14 +123,24 @@ export function PinKeypad({ value, onChange, onComplete, title, subtitle, error 
     );
   }, [error, shakeX, errorGlow]);
 
+  // The PIN as of the last tap, not the last render: two quick taps can land
+  // before the parent re-renders, and building both on the same old value
+  // dropped a digit.
+  const latest = useRef(value);
+  latest.current = value;
+
   const handlePress = (key: string) => {
     triggerHaptic('light');
+    const current = latest.current;
     if (key === '⌫') {
-      onChange(value.slice(0, -1));
+      const next = current.slice(0, -1);
+      latest.current = next;
+      onChange(next);
       return;
     }
-    if (value.length >= PIN_LENGTH) return;
-    const next = value + key;
+    if (current.length >= PIN_LENGTH) return;
+    const next = current + key;
+    latest.current = next;
     onChange(next);
     if (next.length === PIN_LENGTH) onComplete?.(next);
   };
@@ -134,8 +149,11 @@ export function PinKeypad({ value, onChange, onComplete, title, subtitle, error 
     transform: [{ translateX: shakeX.value }],
   }));
 
+  // Fade a fixed colour by opacity. Building "rgba(…, ${alpha})" here crashed
+  // the app: near the end of the fade alpha prints as e.g. 3.4e-9, which
+  // Reanimated rejects as an invalid colour (a fatal JS error).
   const glowStyle = useAnimatedStyle(() => ({
-    backgroundColor: `rgba(255, 92, 92, ${errorGlow.value * 0.12})`,
+    opacity: errorGlow.value,
   }));
 
   return (
@@ -143,13 +161,14 @@ export function PinKeypad({ value, onChange, onComplete, title, subtitle, error 
       <Text style={styles.title}>{title}</Text>
       {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
 
-      <Animated.View style={[styles.dotsGlow, glowStyle]}>
+      <View style={styles.dotsGlow}>
+        <Animated.View pointerEvents="none" style={[styles.dotsGlowFill, glowStyle]} />
         <Animated.View style={[styles.dotsRow, dotsRowStyle]}>
           {Array.from({ length: PIN_LENGTH }).map((_, i) => (
             <PinDot key={i} filled={i < value.length} />
           ))}
         </Animated.View>
-      </Animated.View>
+      </View>
 
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
@@ -167,23 +186,23 @@ export function PinKeypad({ value, onChange, onComplete, title, subtitle, error 
 
 const KEY_SIZE = 76;
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   container: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xl,
-    backgroundColor: colors.dark.canvas,
+    backgroundColor: colors.ui.canvas,
   },
   title: {
     ...typography.h2,
-    color: colors.dark.text,
+    color: colors.ui.text,
     textAlign: 'center',
     marginBottom: spacing.sm,
   },
   subtitle: {
     ...typography.body,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
     textAlign: 'center',
     marginBottom: spacing.xl,
   },
@@ -192,6 +211,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     marginTop: spacing.lg,
+  },
+  dotsGlowFill: {
+    ...StyleSheet.absoluteFill,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,92,92,0.12)',
   },
   dotsRow: {
     flexDirection: 'row',
@@ -206,15 +230,15 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     borderRadius: 7,
     borderWidth: 2,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
   },
   dotFilled: {
     borderRadius: 7,
-    backgroundColor: colors.dark.text,
+    backgroundColor: colors.ui.text,
   },
   errorText: {
     ...typography.caption,
-    color: colors.dark.error,
+    color: colors.ui.error,
     marginTop: spacing.sm,
     marginBottom: spacing.sm,
     textAlign: 'center',
@@ -232,10 +256,10 @@ const styles = StyleSheet.create({
     height: KEY_SIZE,
     borderRadius: KEY_SIZE / 2,
     borderWidth: 1.5,
-    borderColor: colors.dark.glassBorder,
+    borderColor: colors.ui.glassBorder,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.dark.glass,
+    backgroundColor: colors.ui.glass,
   },
   keyBackspace: {
     borderColor: 'transparent',
@@ -244,15 +268,15 @@ const styles = StyleSheet.create({
   keyText: {
     fontSize: 26,
     fontWeight: '400',
-    color: colors.dark.text,
+    color: colors.ui.text,
     lineHeight: 32,
   },
   keyBackspaceText: {
     fontSize: 22,
-    color: colors.dark.textDim,
+    color: colors.ui.textDim,
   },
   keyPlaceholder: {
     width: KEY_SIZE,
     height: KEY_SIZE,
   },
-});
+}));

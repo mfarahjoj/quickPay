@@ -16,6 +16,9 @@ export interface NotificationPreferences {
 export interface LinkedAccounts {
   zaadPhone?: string;
   edahabPhone?: string;
+  /** Set by the server once an activation payment from the number arrives. */
+  zaadVerified?: boolean;
+  edahabVerified?: boolean;
 }
 
 export interface User {
@@ -41,6 +44,8 @@ export interface User {
 export interface Wallet {
   balance: number; // In dollars
   balanceCents: number; // In cents
+  /** Shillings, in whole shillings. Kept apart from dollars; never converted. */
+  slsBalance: number;
   currency: string;
   totalReceived: number;
   totalSent: number;
@@ -72,6 +77,12 @@ export interface Transaction {
   disputeId?: string;
   /** What the row really is (shop payment, transfer...); see getTransactions. */
   kind?: string;
+  /** The merchant's order or invoice reference, when the sale had one. */
+  reference?: string;
+  /** Zapp receipt number, e.g. "ZP-7K3M-9QX2". Absent on older payments. */
+  receiptNumber?: string;
+  /** Approved in a partner's app, on the customer's phone (Linked apps). */
+  approvedVia?: 'partner_device';
 }
 
 export interface QRCodeData {
@@ -82,6 +93,8 @@ export interface QRCodeData {
 
 export interface PaymentResult {
   transactionId: string;
+  /** Zapp receipt number. Optional until every backend returns it. */
+  receiptNumber?: string;
   status: TransactionStatus;
   amount: number;
   merchantId: string;

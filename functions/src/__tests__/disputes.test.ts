@@ -153,7 +153,12 @@ describe("disputes", () => {
       expect(d.respondBy.toMillis() - d.createdAt.toMillis()).toBe(72 * HOUR_MS);
       expect(d.resolveBy.toMillis() - d.createdAt.toMillis()).toBe(168 * HOUR_MS);
       expect(db.get("transactions/pay-1")!.disputeId).toBe("pay-1_cust-1");
-      expect(notifyUser).toHaveBeenCalledWith(MERCHANT, "dispute_opened", expect.any(String), expect.any(String), expect.any(Object));
+      expect(notifyUser).toHaveBeenCalledWith(
+        MERCHANT,
+        "dispute_opened",
+        { key: "dispute.payment_disputed", params: { amount: "$10.00", days: { days: 3 } } },
+        expect.any(Object)
+      );
     });
 
     it("refuses a claim that doesn't fit the movement", async () => {
@@ -298,6 +303,98 @@ describe("disputes", () => {
       const { data } = await raise({ transactionId: "big-1" });
       const err = await decide({ disputeId: data.disputeId, outcome: "upheld" }).catch((e: any) => e);
       expect(err.details.reason).toBe("needs_super");
+    });
+
+    // A dispute over shillings is settled in shillings: 30,000 shillings must
+    // never become 30,000 cents ($300).
+    describe("in shillings", () => {
+      const slsRequest = {
+        customerId: CUSTOMER,
+        amount: 30_000,
+        currency: "SLS",
+        status: "expired",
+        createdAt: ago(2 * HOUR_MS),
+        expiresAt: ago(HOUR_MS),
+      };
+      const slsP2p = {
+        ...payment({ toUserId: FRIEND, participants: [CUSTOMER, FRIEND], amount: 20_000, currency: "SLS" }),
+        feeCents: undefined,
+        netCents: undefined,
+        journalEntryId: "p2p_t1",
+      };
+      const sls = (db: FakeDb, uid: string) => db.get(`wallets/${uid}`)!.sls?.balance ?? 0;
+
+      it("records the currency, and pays an uncredited shilling cash-in in shillings", async () => {
+        const db = seed({ "agentTopupRequests/atr-sls": slsRequest });
+        const { data } = await raise({ agentTopupRequestId: "atr-sls", kind: "cash_given_not_credited" });
+        expect(dispute(db, data.disputeId)).toMatchObject({ currency: "SLS", amountCents: 30_000 });
+
+        await decide({ disputeId: data.disputeId, outcome: "upheld", payFrom: "platform" });
+        expect(sls(db, CUSTOMER)).toBe(30_000);
+        expect(balance(db, CUSTOMER)).toBe(0);
+        expect(db.get("ledger_balances/platform:fees@SLS")!.balance).toBe(-30_000);
+        expect(db.get("ledger_balances/platform:fees")).toBeUndefined();
+        const row = db.get(`transactions/adjustment_dispute_${data.disputeId}`)!;
+        expect(row).toMatchObject({ currency: "SLS", amount: 30_000 });
+      });
+
+      it("takes a shilling P2P back from the recipient's shillings", async () => {
+        const db = seed({
+          "transactions/p2p-sls": slsP2p,
+          [`wallets/${FRIEND}`]: wallet(2_000, { sls: { balance: 20_000, totalSent: 0, totalReceived: 20_000 } }),
+        });
+        const { data } = await raise({ transactionId: "p2p-sls", kind: "wrong_recipient" });
+        await decide({ disputeId: data.disputeId, outcome: "upheld" });
+        expect(sls(db, CUSTOMER)).toBe(20_000);
+        expect(sls(db, FRIEND)).toBe(0);
+        expect(balance(db, FRIEND)).toBe(2_000);
+      });
+
+      it("reserves shillings when the other party is short, and collects them later", async () => {
+        // Dollars don't count: nothing is converted. The shortfall is reserved
+        // in their shilling pocket, as dollars are on the wallet (D8).
+        const db = seed({ "transactions/p2p-sls": slsP2p });
+        const { data } = await raise({ transactionId: "p2p-sls", kind: "wrong_recipient" });
+        const res = await decide({ disputeId: data.disputeId, outcome: "upheld" });
+        expect(res.data.status).toBe("awaiting_funds");
+        expect(dispute(db, data.disputeId)).toMatchObject({ status: "awaiting_funds", owedCents: 20_000 });
+        expect(db.get(`wallets/${FRIEND}`)!.sls.reservedCents).toBe(20_000);
+        expect(db.get(`wallets/${FRIEND}`)!.reservedCents).toBeUndefined();
+        expect(sls(db, CUSTOMER)).toBe(0);
+
+        // Shillings arrive; the reserve keeps them from being spent, then pays.
+        db.store.set(`wallets/${FRIEND}`, {
+          ...db.get(`wallets/${FRIEND}`)!,
+          sls: { balance: 25_000, totalSent: 0, totalReceived: 25_000, reservedCents: 20_000 },
+        });
+        expect(await collect()).toBe(1);
+        expect(dispute(db, data.disputeId).status).toBe("resolved");
+        expect(sls(db, CUSTOMER)).toBe(20_000);
+        expect(sls(db, FRIEND)).toBe(5_000);
+        expect(db.get(`wallets/${FRIEND}`)!.sls.reservedCents).toBe(0);
+      });
+
+      it("counts shillings at the rate against the senior-admin threshold", async () => {
+        // A $200 threshold. 4,000,000 shillings is $500 at 8,000 a dollar: over it.
+        const db = seed({
+          "agentTopupRequests/atr-big": { ...slsRequest, amount: 4_000_000 },
+          "config/rates": { slsPerUsd: 8_000, floatApprovalThresholdCents: 200_00 },
+        });
+        const { data } = await raise({ agentTopupRequestId: "atr-big", kind: "cash_given_not_credited" });
+        const err = await decide({ disputeId: data.disputeId, outcome: "upheld", payFrom: "platform" }).catch(
+          (e: any) => e
+        );
+        expect(err.details.reason).toBe("needs_super");
+        // 30,000 shillings is $3.75: under it. Read as cents ($300) it would be over.
+        const small = await decide({
+          disputeId: data.disputeId,
+          outcome: "upheld",
+          payFrom: "platform",
+          amountCents: 30_000,
+        });
+        expect(small.data.status).toBe("resolved");
+        expect(sls(db, CUSTOMER)).toBe(30_000);
+      });
     });
 
     it("refuses non-admins and closed disputes", async () => {
@@ -483,7 +580,12 @@ describe("refund requests (3.2)", () => {
       auth: { uid: "cust-1" },
     });
     expect(res.data.status).toBe("open");
-    expect(notifyUser).toHaveBeenCalledWith("shop-1", "dispute_opened", "Refund requested", expect.any(String), expect.any(Object));
+    expect(notifyUser).toHaveBeenCalledWith(
+      "shop-1",
+      "dispute_opened",
+      expect.objectContaining({ key: "dispute.refund_requested" }),
+      expect.any(Object)
+    );
 
     await refundPayment({ data: { transactionId: "pay-1", pin: "123456" }, auth: { uid: "shop-1" } });
     expect(db.get(`disputes/${res.data.disputeId}`)!.status).toBe("resolved");

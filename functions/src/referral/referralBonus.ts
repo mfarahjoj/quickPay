@@ -131,11 +131,11 @@ export async function maybeUnlockReferral(newUserId: string, event: ReferralEven
 
     if (!paid) return false;
     const amount = `$${(bonus / 100).toFixed(2)}`;
-    notifyUser(newUserId, "topup_completed", "Referral bonus", `You got a ${amount} welcome bonus.`, {
+    notifyUser(newUserId, "topup_completed", { key: "referral.welcome_bonus", params: { amount } }, {
       type: "referral_bonus",
     }).catch(() => undefined);
     if (paid.payReferrer) {
-      notifyUser(paid.referrerId, "topup_completed", "Referral bonus", `Your friend joined: you got ${amount}.`, {
+      notifyUser(paid.referrerId, "topup_completed", { key: "referral.friend_joined", params: { amount } }, {
         type: "referral_bonus",
       }).catch(() => undefined);
     }

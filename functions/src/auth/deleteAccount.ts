@@ -1,11 +1,26 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { onSchedule } from "firebase-functions/v2/scheduler";
+import { revokeAllDisplays } from "../counterDisplay/manage";
 import { requireAuth } from "../utils/validation";
 import { verifyUserPin } from "./validatePin";
 import { endSessions } from "./sessions";
 import { getRates } from "../config/rates";
+import { LINKED_NUMBERS } from "../mobileMoney/receipts";
 import { ApiResponse } from "../types";
+
+/**
+ * Whether a wallet still holds anything: dollars, shillings, or money held
+ * back on a lost dispute. An account isn't deleted with money in it.
+ */
+function holdsMoney(wallet: FirebaseFirestore.DocumentData | undefined): boolean {
+  return (
+    (wallet?.balance ?? 0) > 0 ||
+    (wallet?.sls?.balance ?? 0) > 0 ||
+    (wallet?.reservedCents ?? 0) > 0 ||
+    (wallet?.sls?.reservedCents ?? 0) > 0
+  );
+}
 
 /**
  * Deleting an account (App Store 5.1.1(v), Play's account-deletion policy).
@@ -16,8 +31,10 @@ import { ApiResponse } from "../types";
  *   cancel   → signing back in (SMS) during the wait and entering the PIN
  *              keeps the account.
  *   daily    → due accounts are deleted: the sign-in record (which frees the
- *              phone number), PIN secrets, push tokens, trusted phones and
- *              the profile's personal details. users/{uid} stays as an
+ *              phone number), PIN secrets, push tokens, trusted phones, the
+ *              Zaad/eDahab numbers linked for top-ups (a later payment from
+ *              one is held for review, not credited to the closed wallet)
+ *              and the profile's personal details. users/{uid} stays as an
  *              anonymous tombstone so past transactions and the ledger, which
  *              the law requires kept, still resolve. An account that has
  *              money again (a refund, a dispute) is skipped and flagged.
@@ -67,6 +84,11 @@ async function forgetTrustedDevices(uid: string): Promise<void> {
   await Promise.all(snap.docs.map((d) => d.ref.delete()));
 }
 
+async function forgetLinkedNumbers(uid: string): Promise<void> {
+  const snap = await admin.firestore().collection(LINKED_NUMBERS).where("uid", "==", uid).get();
+  await Promise.all(snap.docs.map((d) => d.ref.delete()));
+}
+
 export const requestAccountDeletion = https.onCall(
   { enforceAppCheck: true },
   async (
@@ -88,7 +110,7 @@ export const requestAccountDeletion = https.onCall(
 
     const db = admin.firestore();
     const wallet = (await db.collection("wallets").doc(userId).get()).data() ?? {};
-    if ((wallet.balance ?? 0) > 0 || (wallet.reservedCents ?? 0) > 0) {
+    if (holdsMoney(wallet)) {
       throw new https.HttpsError(
         "failed-precondition",
         "Please withdraw your remaining balance before deleting your account"
@@ -164,13 +186,17 @@ export async function deleteDueAccount(uid: string, nowMs: number): Promise<"del
 
   const walletRef = db.collection("wallets").doc(uid);
   const wallet = (await walletRef.get()).data();
-  if ((wallet?.balance ?? 0) > 0 || (wallet?.reservedCents ?? 0) > 0) {
+  if (holdsMoney(wallet)) {
     await userRef.update({ deletionBlocked: "has_money", deletionBlockedAt: admin.firestore.Timestamp.now() });
     console.warn(`Account ${uid} is due for deletion but holds money; skipped`);
     return "has_money";
   }
 
   await forgetTrustedDevices(uid);
+  // A shop's counter displays stop showing its QR.
+  await revokeAllDisplays(uid);
+  // Whoever has their Zaad/eDahab number next can link it.
+  await forgetLinkedNumbers(uid);
   // PIN secrets (private/auth), push tokens and anything else under the user.
   await db.recursiveDelete(userRef);
   await userRef.set(tombstone(user!, nowMs));

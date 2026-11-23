@@ -7,9 +7,9 @@ import {
   Easing,
   TouchableOpacity,
   Dimensions,
-  SafeAreaView,
   StatusBar,
 } from 'react-native';
+import { SafeAreaView } from '../../components/SafeAreaView';
 import Svg, { Circle, Rect, Path, Polygon } from 'react-native-svg';
 import { useTranslation } from 'react-i18next';
 import { LanguageSelector } from '../../components/LanguageSelector';
