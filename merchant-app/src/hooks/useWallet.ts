@@ -3,6 +3,7 @@ import { firestore, functions } from '../services/firebase.config';
 import { Wallet } from '../types';
 import { useAuth } from './useAuth';
 import { logger } from '../utils/logger';
+import { BalanceResponse, walletFromBalance } from '../utils/walletFromBalance';
 
 export function useWallet() {
   const { user } = useAuth();
@@ -59,9 +60,9 @@ export function useWallet() {
       const getBalanceFunction = functions().httpsCallable('getBalance');
       const result = await getBalanceFunction();
 
-      const data = result.data as { success: boolean; data: Wallet };
+      const data = result.data as { success: boolean; data: BalanceResponse };
       if (data.success) {
-        setWallet(data.data);
+        setWallet((prev) => walletFromBalance(prev, data.data));
         setError(null);
       }
     } catch (err: any) {
