@@ -613,7 +613,11 @@ export default function AppNavigator() {
     (!user && authIntent === 'login' && deviceTrusted === null) ||
     (user != null &&
       (deletionDueAt === undefined ||
-        pinSetupDone === null ||
+        // A locked app shows the lock screen without waiting on the server's
+        // answer for pinSetupDone (a Firestore read, slow on a weak connection
+        // and the reason launch sat on a spinner). It's settled by the time the
+        // person has unlocked, and nothing above the lock depends on it.
+        (pinSetupDone === null && locked !== true) ||
         biometricSetupDone === null ||
         pinVerified === null ||
         locked === null));
