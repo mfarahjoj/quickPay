@@ -26,6 +26,7 @@ import {
   enableBiometricKey,
 } from '../../services/biometric.service';
 import { logger } from '../../utils/logger';
+import { errorMessage } from '../../utils/errors';
 import { formatUntil } from '../../utils/cooldownMessage';
 import { typography, spacing, makeStyles, useColors } from '../../theme';
 
@@ -77,7 +78,7 @@ export default function ResetPinScreen({ onDone, onCancel }: Props) {
       confirmationRef.current = await sendOTP(phoneNumber);
     } catch (err) {
       logger.error('Reset PIN OTP send error:', err);
-      setOtpError(t('auth.resetPin.sendFailed'));
+      setOtpError(errorMessage(err, t, 'auth.resetPin.sendFailed'));
     } finally {
       setSending(false);
     }
@@ -95,8 +96,8 @@ export default function ResetPinScreen({ onDone, onCancel }: Props) {
       setOtpError('');
       await verifyOTP(confirmationRef.current, code);
       setStep('newPin');
-    } catch {
-      setOtpError(t('auth.otp.inlineError'));
+    } catch (err: any) {
+      setOtpError(errorMessage(err, t, 'auth.otp.inlineError'));
       setOtpCode('');
     } finally {
       setVerifying(false);

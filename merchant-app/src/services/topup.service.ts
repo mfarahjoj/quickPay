@@ -1,4 +1,5 @@
 import { functions } from './firebase.config';
+import { asError } from '../utils/errors';
 import { logger } from '../utils/logger';
 
 export interface CustomerLookupResult {
@@ -41,7 +42,7 @@ export async function lookupCustomer(phoneNumber: string): Promise<CustomerLooku
     return data.data;
   } catch (error: any) {
     logger.error('Lookup customer error:', error);
-    throw new Error(error.message || 'Failed to look up customer');
+    throw asError(error, 'Failed to look up customer');
   }
 }
 

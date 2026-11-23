@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import { verifyOTP, sendOTP } from '../../services/auth.service';
+import { errorMessage } from '../../utils/errors';
 import { AuthLayout, AuthHeader, CodeInput, useToast } from '../../components/auth';
 import { Button } from '../../components/Button';
 import { typography, spacing, makeStyles } from '../../theme';
@@ -46,8 +47,8 @@ export default function OTPScreen({ navigation, route }: Props) {
       setLoading(true);
       setInlineError('');
       await verifyOTP(confirmationResult, otpCode);
-    } catch {
-      setInlineError(t('auth.otp.inlineError'));
+    } catch (error: any) {
+      setInlineError(errorMessage(error, t, 'auth.otp.inlineError'));
       setCode('');
     } finally {
       setLoading(false);
@@ -65,7 +66,7 @@ export default function OTPScreen({ navigation, route }: Props) {
       setSecondsLeft(RESEND_COOLDOWN);
       showToast(t('auth.otp.newCodeSent'), 'success');
     } catch (error: any) {
-      showToast(error.message ?? t('common.error'), 'error');
+      showToast(errorMessage(error, t), 'error');
     } finally {
       setResending(false);
     }

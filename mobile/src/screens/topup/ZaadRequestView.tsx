@@ -30,6 +30,7 @@ import {
 } from '../../services/zaadAgent.service';
 import { useColors } from '../../theme';
 import { formatMoney } from '../../utils/money';
+import { errorMessage } from '../../utils/errors';
 import { DialPanel, Primary, Waiting, useStyles } from './ZaadTopupScreen';
 
 function useSecondsLeft(at: { toMillis(): number } | undefined): number {
@@ -137,7 +138,7 @@ export default function ZaadRequestView({ requestId, onStartOver }: { requestId:
     try {
       await fn();
     } catch (e: any) {
-      setError(e?.message || t('common.error'));
+      setError(errorMessage(e, t));
     } finally {
       setBusy(false);
     }

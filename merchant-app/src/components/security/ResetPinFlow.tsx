@@ -7,6 +7,7 @@ import { PinInput as PinBoxes } from '../PinInput';
 import { CodeInput, isWeakPin } from '../auth/CodeInput';
 import { getCurrentUser, resetPin, sendOTP, verifyOTP } from '../../services/auth.service';
 import { logger } from '../../utils/logger';
+import { genericErrorKey } from '../../utils/errors';
 import { makeStyles, useColors } from '../../theme';
 
 /**
@@ -58,7 +59,7 @@ export function ResetPinFlow({ onDone, onCancel }: Props) {
       confirmationRef.current = await sendOTP(phoneNumber);
     } catch (err) {
       logger.error('Reset PIN OTP send error:', err);
-      setOtpError(t('security.reset.sendFailed'));
+      setOtpError(t(genericErrorKey(err, 'security.reset.sendFailed')));
     } finally {
       setSending(false);
     }
@@ -76,8 +77,8 @@ export function ResetPinFlow({ onDone, onCancel }: Props) {
       setOtpError('');
       await verifyOTP(confirmationRef.current, code);
       setStep('newPin');
-    } catch {
-      setOtpError(t('security.reset.codeWrong'));
+    } catch (err: any) {
+      setOtpError(t(genericErrorKey(err, 'security.reset.codeWrong')));
       setOtpCode('');
     } finally {
       setVerifying(false);

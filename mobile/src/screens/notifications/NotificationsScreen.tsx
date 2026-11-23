@@ -100,7 +100,7 @@ export default function NotificationsScreen({ navigation }: Props) {
         </View>
       ) : error ? (
         <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
+          <Text style={styles.errorText}>{t('notifications.loadFailed')}</Text>
         </View>
       ) : notifications.length === 0 ? (
         <EmptyState

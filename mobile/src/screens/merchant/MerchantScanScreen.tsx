@@ -17,6 +17,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import { scanCustomerToken, createPaymentRequest, ScanTokenResult } from '../../services/customerToken.service';
 import { firestore } from '../../services/firebase.config';
 import { triggerHaptic } from '../../services/haptics.service';
+import { errorMessage } from '../../utils/errors';
 import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
 import { CURRENCY_SYMBOL } from '../../config/constants';
 import { Header } from '../../components/Header';
@@ -91,7 +92,7 @@ export default function MerchantScanScreen({ navigation }: Props) {
       setCustomer(result);
       setStep('amount');
     } catch (err: any) {
-      setScanError(err.message || t('merchant.scan.invalidQr'));
+      setScanError(errorMessage(err, t, 'merchant.scan.invalidQr'));
       setIsScanning(true);
     }
   };
@@ -134,7 +135,7 @@ export default function MerchantScanScreen({ navigation }: Props) {
         });
       listenerRef.current = unsub;
     } catch (err: any) {
-      Alert.alert(t('common.error'), err.message || t('merchant.scan.chargeFailed'));
+      Alert.alert(t('common.error'), errorMessage(err, t, 'merchant.scan.chargeFailed'));
     } finally {
       setSending(false);
     }

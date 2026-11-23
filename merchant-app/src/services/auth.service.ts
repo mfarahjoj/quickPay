@@ -2,6 +2,7 @@ import { auth, functions } from './firebase.config';
 import { unregisterPushNotifications } from './notification.service';
 import { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { asError } from '../utils/errors';
 import { logger } from '../utils/logger';
 
 /**
@@ -15,7 +16,7 @@ export async function sendOTP(
     return confirmation;
   } catch (error: any) {
     logger.error('Send OTP error:', error);
-    throw new Error(error.message || 'Failed to send OTP');
+    throw asError(error, 'Failed to send OTP');
   }
 }
 
@@ -34,7 +35,7 @@ export async function verifyOTP(
     return credential;
   } catch (error: any) {
     logger.error('Verify OTP error:', error);
-    throw new Error(error.message || 'Invalid verification code');
+    throw asError(error, 'Invalid verification code');
   }
 }
 
@@ -50,7 +51,7 @@ export async function signOut(): Promise<void> {
     await auth().signOut();
   } catch (error: any) {
     logger.error('Sign out error:', error);
-    throw new Error(error.message || 'Failed to sign out');
+    throw asError(error, 'Failed to sign out');
   }
 }
 
@@ -120,7 +121,7 @@ export async function completeMerchantSetup(data: {
     };
   } catch (error: any) {
     logger.error('completeMerchantSetup error:', error);
-    throw new Error(error.message || 'Failed to complete registration');
+    throw asError(error, 'Failed to complete registration');
   }
 }
 

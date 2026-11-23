@@ -1,4 +1,5 @@
 import { functions } from './firebase.config';
+import { asError } from '../utils/errors';
 import { logger } from '../utils/logger';
 import type { PaidReferenceOptions } from './qr.service';
 import { actingFor } from './staff.service';
@@ -23,7 +24,7 @@ export async function scanCustomerToken(tokenData: string): Promise<ScanResult> 
     return data.data;
   } catch (error: any) {
     logger.error('Scan customer token error:', error);
-    throw new Error(error.message || 'Failed to scan token');
+    throw asError(error, 'Failed to scan token');
   }
 }
 

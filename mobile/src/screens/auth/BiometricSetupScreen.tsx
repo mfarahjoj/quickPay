@@ -16,6 +16,7 @@ import {
 } from '../../services/biometric.service';
 import { triggerHaptic } from '../../services/haptics.service';
 import { validatePin, PinLockoutError } from '../../services/auth.service';
+import { errorMessage } from '../../utils/errors';
 import { markBiometricSetupDone } from '../../hooks/useBiometricSetupDone';
 import ResetPinScreen from './ResetPinScreen';
 import { typography, spacing, makeStyles } from '../../theme';
@@ -312,7 +313,7 @@ export default function BiometricSetupScreen() {
       if (err instanceof PinLockoutError) {
         setPinError(t('pin.lockedOut', { seconds: err.secondsLeft ?? 60 }));
       } else {
-        setPinError(err.message ?? t('auth.biometricSetup.failedEnable'));
+        setPinError(errorMessage(err, t, 'auth.biometricSetup.failedEnable'));
       }
       setPin('');
     } finally {

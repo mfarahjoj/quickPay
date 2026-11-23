@@ -12,6 +12,7 @@ import {
 import { pinVerifiedFlag } from './signInFlags';
 import { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { asError } from '../utils/errors';
 import { logger } from '../utils/logger';
 
 export interface SetupPinData {
@@ -32,7 +33,7 @@ export async function sendOTP(
     return confirmation;
   } catch (error: any) {
     logger.error('Send OTP error:', error);
-    throw new Error(error.message || 'Failed to send OTP');
+    throw asError(error, 'Failed to send OTP');
   }
 }
 
@@ -51,7 +52,7 @@ export async function verifyOTP(
     return credential;
   } catch (error: any) {
     logger.error('Verify OTP error:', error);
-    throw new Error(error.message || 'Invalid verification code');
+    throw asError(error, 'Invalid verification code');
   }
 }
 
@@ -76,7 +77,7 @@ export async function setupPin(data: SetupPinData): Promise<{ alreadyHasPin: boo
     return { alreadyHasPin: responseData.data?.alreadyHasPin === true };
   } catch (error: any) {
     logger.error('Setup PIN error:', error);
-    throw new Error(error.message || 'Failed to setup PIN');
+    throw asError(error, 'Failed to setup PIN');
   }
 }
 
@@ -345,7 +346,7 @@ export async function loginWithPin(pin: string): Promise<void> {
       throw new IncorrectPinError('Incorrect PIN.');
     }
     logger.error('PIN login error:', error);
-    throw new Error(error?.message || 'Failed to sign in');
+    throw asError(error, 'Failed to sign in');
   }
 }
 
@@ -402,7 +403,7 @@ export async function signOut(): Promise<void> {
     await auth().signOut();
   } catch (error: any) {
     logger.error('Sign out error:', error);
-    throw new Error(error.message || 'Failed to sign out');
+    throw asError(error, 'Failed to sign out');
   }
 }
 

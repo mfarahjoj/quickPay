@@ -14,6 +14,7 @@ import {
 import Svg, { Polygon } from 'react-native-svg';
 import { useTranslation } from 'react-i18next';
 import { sendOTP } from '../../services/auth.service';
+import { errorMessage } from '../../utils/errors';
 import { AuthLayout } from '../../components/auth';
 import { BottomSheet } from '../../components/BottomSheet';
 import { CheckIcon, ChevronDownIcon, CloseIcon } from '../../components/icons/AuthIcons';
@@ -163,7 +164,7 @@ export default function LoginScreen({ navigation, intent = 'signup', onBack }: P
       const confirmation = await sendOTP(fullNumber);
       navigation.navigate('OTP', { phoneNumber: fullNumber, confirmation });
     } catch (error: any) {
-      setSubmitError(error.message ?? t('common.error'));
+      setSubmitError(errorMessage(error, t));
     } finally {
       setLoading(false);
     }

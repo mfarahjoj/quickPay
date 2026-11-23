@@ -6,6 +6,7 @@ import { DarkScreen, GlassCard, PinInput } from '../../components';
 import { functions } from '../../services/firebase.config';
 import { newIdempotencyKey } from '../../utils/idempotency';
 import { formatAmount, formatMajor, isShillings, sanitizeAmountFor, toAmount } from '../../utils/money';
+import { pinActionErrorKey } from '../../utils/errors';
 import { makeStyles, useColors, type Colors } from '../../theme';
 
 interface Props {
@@ -178,7 +179,7 @@ export default function TransactionDetailScreen({ route, navigation }: Props) {
         setRefundStep('idle');
         return;
       }
-      Alert.alert(t('common.error'), e.message || t('transactions.refund.failed'));
+      Alert.alert(t('common.error'), t(pinActionErrorKey(e, 'transactions.refund.failed')));
       setRefundStep('pin');
     }
   };

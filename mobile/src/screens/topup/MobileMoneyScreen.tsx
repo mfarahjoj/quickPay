@@ -16,6 +16,7 @@ import { CURRENCY_SYMBOL, PHONE_PREFIX } from '../../config/constants';
 import { useAuth } from '../../hooks/useAuth';
 import { triggerHaptic } from '../../services/haptics.service';
 import { functions } from '../../services/firebase.config';
+import { errorMessage } from '../../utils/errors';
 
 type Mode = 'topup' | 'cashout';
 type Provider = 'zaad' | 'edahab';
@@ -84,7 +85,11 @@ export default function MobileMoneyScreen() {
       if (!data.success) {
         Alert.alert(
           t('common.failed'),
-          data.error || (mode === 'topup' ? t('topup.mobileMoney.topupFailed') : t('topup.mobileMoney.cashoutFailed'))
+          errorMessage(
+            { message: data.error },
+            t,
+            mode === 'topup' ? 'topup.mobileMoney.topupFailed' : 'topup.mobileMoney.cashoutFailed',
+          )
         );
         setPin('');
         setStep('pin');
@@ -95,8 +100,11 @@ export default function MobileMoneyScreen() {
       triggerHaptic('success');
       setStep('success');
     } catch (err: any) {
-      const msg = err.message?.replace(/^\[.*?\]\s*/, '') ||
-        (mode === 'topup' ? t('topup.mobileMoney.topupFailed') : t('topup.mobileMoney.cashoutFailed'));
+      const msg = errorMessage(
+        err,
+        t,
+        mode === 'topup' ? 'topup.mobileMoney.topupFailed' : 'topup.mobileMoney.cashoutFailed',
+      );
       Alert.alert(t('common.error'), msg);
       setPin('');
       setStep('pin');

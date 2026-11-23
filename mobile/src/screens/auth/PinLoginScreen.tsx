@@ -13,6 +13,7 @@ import { getDeviceCredential } from '../../services/device.service';
 import { setPendingSetupPin } from '../../services/biometric.service';
 import { accountLine } from '../../services/accountLabel';
 import { logger } from '../../utils/logger';
+import { errorMessage } from '../../utils/errors';
 import { typography, spacing, makeStyles } from '../../theme';
 
 interface Props {
@@ -69,7 +70,7 @@ export default function PinLoginScreen({ onUseCode, onBack }: Props) {
         setTimeout(onUseCode, 1200);
       } else {
         logger.error('PIN login failed:', err);
-        setError(t('auth.appLock.verifyError'));
+        setError(errorMessage(err, t, 'auth.appLock.verifyError'));
       }
       setPin('');
     } finally {

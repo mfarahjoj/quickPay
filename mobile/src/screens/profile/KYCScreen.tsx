@@ -15,6 +15,7 @@ import { Button } from '../../components/Button';
 import { useAuth } from '../../hooks/useAuth';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import { functions, storage } from '../../services/firebase.config';
+import { errorMessage } from '../../utils/errors';
 import { typography, spacing, borderRadius, makeStyles, useColors, type Colors } from '../../theme';
 import type { KycStatus } from '../../types';
 
@@ -161,10 +162,10 @@ export default function KYCScreen({ navigation }: Props) {
           { text: t('common.ok'), onPress: () => navigation.goBack() },
         ]);
       } else {
-        Alert.alert(t('common.error'), data.error ?? t('profile.kyc.submissionFailed'));
+        Alert.alert(t('common.error'), errorMessage({ message: data.error }, t, 'profile.kyc.submissionFailed'));
       }
     } catch (err: any) {
-      Alert.alert(t('common.error'), err.message ?? t('profile.kyc.submitFailed'));
+      Alert.alert(t('common.error'), errorMessage(err, t, 'profile.kyc.submitFailed'));
     } finally {
       setLoading(false);
     }

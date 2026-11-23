@@ -20,6 +20,7 @@ import {
 } from '../../services/customerToken.service';
 import { triggerHaptic } from '../../services/haptics.service';
 import { formatCountdown } from '../../utils/time';
+import { errorMessage } from '../../utils/errors';
 
 const REFRESH_AT_MS = BACKOFF_SECONDS_ON_FAILURE * 1000;
 
@@ -48,7 +49,7 @@ export default function MyQRScreen() {
       triggerHaptic('success');
     } catch (e: any) {
       if (mountedRef.current) {
-        setError(e.message || t('payments.myQr.loadFailed'));
+        setError(errorMessage(e, t, 'payments.myQr.loadFailed'));
       }
     } finally {
       if (mountedRef.current) { setLoading(false); }

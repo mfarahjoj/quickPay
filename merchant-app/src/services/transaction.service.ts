@@ -1,5 +1,6 @@
 import { functions } from './firebase.config';
 import { Transaction, TransactionStatus, TransactionSummary, SummaryPeriod } from '../types';
+import { asError } from '../utils/errors';
 import { logger } from '../utils/logger';
 
 interface RawTransaction extends Omit<Transaction, 'createdAt' | 'completedAt' | 'refundedAt'> {
@@ -54,7 +55,7 @@ export async function fetchTransactions(params: {
     };
   } catch (error: any) {
     logger.error('Fetch transactions error:', error);
-    throw new Error(error.message || 'Failed to load transactions');
+    throw asError(error, 'Failed to load transactions');
   }
 }
 
@@ -78,7 +79,7 @@ export async function fetchTransactionSummary(
     return data.data;
   } catch (error: any) {
     logger.error('Fetch transaction summary error:', error);
-    throw new Error(error.message || 'Failed to load summary');
+    throw asError(error, 'Failed to load summary');
   }
 }
 
@@ -100,6 +101,6 @@ export async function refundPayment(
     return data.data;
   } catch (error: any) {
     logger.error('Refund payment error:', error);
-    throw new Error(error.message || 'Failed to refund payment');
+    throw asError(error, 'Failed to refund payment');
   }
 }

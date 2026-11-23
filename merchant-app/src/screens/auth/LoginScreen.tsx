@@ -18,6 +18,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { sendOTP } from '../../services/auth.service';
+import { genericErrorKey } from '../../utils/errors';
 import { BottomSheet } from '../../components/BottomSheet';
 import { CheckIcon } from '../../components/icons/AuthIcons';
 import { makeStyles, useColors } from '../../theme';
@@ -124,7 +125,7 @@ export default function LoginScreen({ navigation }: Props) {
       const confirmation = await sendOTP(fullNumber);
       navigation.navigate('OTP', { phoneNumber: fullNumber, confirmation });
     } catch (error: any) {
-      setPhoneError(error.message || t('common.error'));
+      setPhoneError(t(genericErrorKey(error, 'qr.errors.generic')));
     } finally {
       setLoading(false);
     }

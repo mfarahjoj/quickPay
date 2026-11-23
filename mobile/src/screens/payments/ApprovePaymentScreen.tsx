@@ -17,6 +17,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import { cooldownMessage } from '../../utils/cooldownMessage';
+import { errorMessage } from '../../utils/errors';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { PinInput } from '../../components/PinInput';
 import { useBiometricApproval } from '../../hooks/useBiometricApproval';
@@ -361,10 +362,7 @@ export default function ApprovePaymentScreen() {
       } else if (e?.code === 'functions/resource-exhausted' && e?.details?.secondsLeft) {
         showResult('error', t('pin.lockedOut', { seconds: e.details.secondsLeft }));
       } else {
-        showResult(
-          'error',
-          message.replace(/^\[.*?\]\s*/, '') || t('common.failedApprovePayment'),
-        );
+        showResult('error', errorMessage(e, t, 'common.failedApprovePayment'));
       }
     } finally {
       approving.current = false;
@@ -394,10 +392,7 @@ export default function ApprovePaymentScreen() {
       } else if (/expired/i.test(message)) {
         showClosed('expired');
       } else {
-        showResult(
-          'error',
-          message.replace(/^\[.*?\]\s*/, '') || t('common.failedDeclinePayment'),
-        );
+        showResult('error', errorMessage(e, t, 'common.failedDeclinePayment'));
       }
     } finally {
       setRejecting(false);

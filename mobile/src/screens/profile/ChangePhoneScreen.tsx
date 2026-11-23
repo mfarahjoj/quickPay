@@ -20,6 +20,7 @@ import { CodeInput } from '../../components/auth/CodeInput';
 import { getCurrentUser, sendOTP, verifyOTP } from '../../services/auth.service';
 import { finishPhoneChange, sendCodeToNewPhone, startPhoneChange } from '../../services/phoneChange.service';
 import { logger } from '../../utils/logger';
+import { errorMessage } from '../../utils/errors';
 import { makeStyles, useColors } from '../../theme';
 
 /**
@@ -90,7 +91,8 @@ export default function ChangePhoneScreen() {
       return t('changePhone.taken');
     }
     if (err?.code === 'auth/invalid-verification-code') return t('changePhone.codeWrong');
-    return t('changePhone.failed');
+    // Connection, expired-code and too-many-codes failures say so.
+    return errorMessage(err, t, 'changePhone.failed');
   };
 
   const continueFromNumber = () =>

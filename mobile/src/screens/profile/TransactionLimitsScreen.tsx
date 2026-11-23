@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { Header } from '../../components/Header';
 import { Button } from '../../components/Button';
 import { functions } from '../../services/firebase.config';
+import { errorMessage } from '../../utils/errors';
 import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
 
 interface Props {
@@ -86,10 +87,10 @@ export default function TransactionLimitsScreen({ navigation }: Props) {
       if (data.success && data.data) {
         setLimits(data.data);
       } else {
-        setError(data.error ?? t('profile.limits.loadFailed'));
+        setError(errorMessage({ message: data.error }, t, 'profile.limits.loadFailed'));
       }
     } catch (err: any) {
-      setError(err.message ?? t('profile.limits.loadFailed'));
+      setError(errorMessage(err, t, 'profile.limits.loadFailed'));
     } finally {
       setLoading(false);
     }

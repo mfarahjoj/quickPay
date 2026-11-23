@@ -18,8 +18,40 @@ const CODE_KEYS: Record<string, string> = {
   'functions/internal': 'qr.errors.generic',
 };
 
+// RNFirebase prints the code at the front of the message: "[functions/not-found] …".
+const CODE_PREFIX = /^\[([a-z-]+\/[a-z-]+)\]\s*/i;
+
+/**
+ * The error's Firebase code. Several services re-throw a plain
+ * `Error(error.message)`, which drops `code` but keeps it at the front of the
+ * message, so it is read from there too.
+ */
+export function errorCode(error: any): string | undefined {
+  const code = error?.code;
+  if (typeof code === 'string' && code.includes('/')) return code;
+  const prefixed = typeof error?.message === 'string' ? CODE_PREFIX.exec(error.message) : null;
+  if (prefixed) return prefixed[1].toLowerCase();
+  return typeof code === 'string' ? code : undefined;
+}
+
+/**
+ * What a service re-throws: the failure itself, so its `code` and `details`
+ * reach the screen, which explains it from them (`new Error(e.message)` kept
+ * only the words). Only something thrown that isn't an Error is wrapped, and
+ * keeps its code and details.
+ */
+export function asError(error: any, fallback: string): Error {
+  if (error instanceof Error) return error;
+  const message = typeof error?.message === 'string' && error.message ? error.message : fallback;
+  return Object.assign(
+    new Error(message),
+    error?.code ? { code: error.code } : {},
+    error?.details ? { details: error.details } : {},
+  );
+}
+
 export function callableErrorKey(error: any): string {
-  const code: string | undefined = error?.code;
+  const code = errorCode(error);
   if (code && CODE_KEYS[code]) return CODE_KEYS[code];
 
   // App Check failures surface as unauthenticated with a distinctive message.
@@ -28,6 +60,44 @@ export function callableErrorKey(error: any): string {
   }
 
   return 'qr.errors.generic';
+}
+
+/** Firebase Auth, while sending and checking the SMS code. */
+const AUTH_KEYS: Record<string, string> = {
+  'auth/invalid-verification-code': 'errors.smsCodeWrong',
+  'auth/missing-verification-code': 'errors.smsCodeWrong',
+  'auth/code-expired': 'errors.smsCodeExpired',
+  'auth/session-expired': 'errors.smsCodeExpired',
+  'auth/too-many-requests': 'errors.tooManyCodes',
+  'auth/quota-exceeded': 'errors.tooManyCodes',
+  'auth/network-request-failed': 'qr.errors.unavailable',
+  'auth/invalid-phone-number': 'errors.invalidPhone',
+  'auth/missing-phone-number': 'errors.invalidPhone',
+};
+
+/** Codes that mean the same on every screen. */
+const GENERIC_CODE_KEYS: Record<string, string> = {
+  'functions/unauthenticated': 'qr.errors.unauthenticated',
+  'functions/unavailable': 'qr.errors.unavailable',
+  'functions/deadline-exceeded': 'qr.errors.unavailable',
+  'functions/resource-exhausted': 'qr.errors.tooMany',
+  ...AUTH_KEYS,
+};
+
+/**
+ * Translation key for a screen that is not taking a payment, where
+ * `callableErrorKey`'s QR wording ("This account can't take payments") would
+ * be wrong. Connection, sign-in and rate-limit failures get their own line;
+ * everything else gets the screen's `fallbackKey`.
+ */
+export function genericErrorKey(error: any, fallbackKey: string): string {
+  if (typeof error?.message === 'string' && /app.?check/i.test(error.message)) return 'qr.errors.appCheck';
+  const code = errorCode(error);
+  if (code && GENERIC_CODE_KEYS[code]) return GENERIC_CODE_KEYS[code];
+  if (!code && /network|offline|internet connection|timed out/i.test(error?.message ?? '')) {
+    return 'qr.errors.unavailable';
+  }
+  return fallbackKey;
 }
 
 /**
@@ -39,7 +109,7 @@ export function callableErrorKey(error: any): string {
  */
 export function isWrongPin(error: any): boolean {
   return (
-    error?.code === 'functions/permission-denied' &&
+    errorCode(error) === 'functions/permission-denied' &&
     /\b(invalid|incorrect)(\s+agent)?\s+pin\b/i.test(error?.message ?? '')
   );
 }
@@ -54,9 +124,12 @@ export function isWrongPin(error: any): boolean {
  * ("This account can't take payments") would be wrong for all of them. The
  * backend's messages are fixed English strings in this repo, so they are
  * matched here to tell those cases apart.
+ *
+ * `fallbackKey` is the screen's own failure line for anything unrecognised;
+ * without it the QR wording above is used.
  */
-export function pinActionErrorKey(error: any): string {
-  const code: string | undefined = error?.code;
+export function pinActionErrorKey(error: any, fallbackKey?: string): string {
+  const code = errorCode(error);
   const message: string = typeof error?.message === 'string' ? error.message : '';
 
   if (isWrongPin(error)) return 'errors.wrongPin';
@@ -91,5 +164,5 @@ export function pinActionErrorKey(error: any): string {
       return 'errors.accountRestricted';
   }
 
-  return callableErrorKey(error);
+  return fallbackKey ? genericErrorKey(error, fallbackKey) : callableErrorKey(error);
 }

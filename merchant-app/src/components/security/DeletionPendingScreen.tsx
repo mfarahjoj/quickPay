@@ -5,6 +5,7 @@ import { DarkScreen, PillButton } from '../DarkScreen';
 import { PinInput } from '../PinInput';
 import { functions } from '../../services/firebase.config';
 import { signOut } from '../../services/auth.service';
+import { genericErrorKey } from '../../utils/errors';
 import { makeStyles, useColors } from '../../theme';
 
 interface Props {
@@ -32,7 +33,7 @@ export function DeletionPendingScreen({ dueAt }: Props) {
     try {
       await functions().httpsCallable('cancelAccountDeletion')({ pin: submitted });
     } catch (e: any) {
-      setError(e?.code === 'functions/permission-denied' ? t('errors.wrongPin') : e?.message || t('common.error'));
+      setError(t(e?.code === 'functions/permission-denied' ? 'errors.wrongPin' : genericErrorKey(e, 'qr.errors.generic')));
       setPin('');
     } finally {
       setBusy(false);

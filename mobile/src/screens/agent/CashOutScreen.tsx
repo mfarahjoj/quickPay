@@ -19,7 +19,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
-import { cooldownMessage } from '../../utils/cooldownMessage';
+import { errorMessage } from '../../utils/errors';
 import { functions } from '../../services/firebase.config';
 import { triggerHaptic } from '../../services/haptics.service';
 import { makeStyles, useColors } from '../../theme';
@@ -189,7 +189,7 @@ export default function CashOutScreen() {
       otpOpacity.value = withDelay(200, withTiming(1, { duration: 400 }));
       otpScale.value = withDelay(200, withSpring(1, Springs.celebration));
     } catch (e: any) {
-      setErrorMsg(cooldownMessage(e, t) ?? (e.message || t('common.error')));
+      setErrorMsg(errorMessage(e, t, 'common.cashoutFailed'));
       setStep('error');
     }
   }, [amount, currency, otpOpacity, otpScale, t]);
@@ -221,7 +221,7 @@ export default function CashOutScreen() {
       Alert.alert(t('cashout.cancelledTitle'), t('cashout.cancelledBody'));
       navigation.goBack();
     } catch (e: any) {
-      Alert.alert(t('cashout.cancelFailed'), e?.message || '');
+      Alert.alert(t('cashout.cancelFailed'), errorMessage(e, t));
     } finally {
       setCancelling(false);
     }

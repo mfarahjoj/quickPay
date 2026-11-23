@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { cooldownMessage } from '../../utils/cooldownMessage';
+import { errorMessage } from '../../utils/errors';
 import {
   View,
   Text,
@@ -449,7 +449,7 @@ export default function PaymentsScreen({ route }: Props) {
       });
       const data = result.data as { success: boolean; data?: { transactionId: string }; error?: string };
       if (!data.success) {
-        Alert.alert(t('common.failed'), data.error || t('payments.transferFailed'));
+        Alert.alert(t('common.failed'), errorMessage({ message: data.error }, t, 'payments.transferFailed'));
         setPin('');
         return;
       }
@@ -457,13 +457,7 @@ export default function PaymentsScreen({ route }: Props) {
       triggerHaptic('success');
       setStep('success');
     } catch (err: any) {
-      const msg =
-        cooldownMessage(err, t) ??
-        (err?.details?.reason === 'recipient_is_merchant'
-          ? t('payments.recipientIsBusiness')
-          : null) ??
-        (err.message?.replace(/^\[.*?\]\s*/, '') || t('payments.transferFailed'));
-      Alert.alert(t('common.error'), msg);
+      Alert.alert(t('common.error'), errorMessage(err, t, 'payments.transferFailed'));
       setPin('');
     } finally {
       setSending(false);

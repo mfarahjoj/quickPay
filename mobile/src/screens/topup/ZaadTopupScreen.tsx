@@ -29,6 +29,7 @@ import {
 } from '../../services/mobileMoney.service';
 import { makeStyles, useColors } from '../../theme';
 import { Currency, formatMoney } from '../../utils/money';
+import { errorMessage } from '../../utils/errors';
 
 /**
  * Top up from Zaad, through Zapp's collection number.
@@ -114,7 +115,7 @@ export default function ZaadTopupScreen() {
   }, [step, user]);
 
   const fail = (e: any) => {
-    setError(e?.message || t('common.error'));
+    setError(errorMessage(e, t, 'common.topupFailed'));
     setStep('error');
   };
 

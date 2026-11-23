@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { PinKeypad } from '../../components/PinKeypad';
 import { functions } from '../../services/firebase.config';
 import { signOut } from '../../services/auth.service';
+import { errorMessage } from '../../utils/errors';
 import { typography, spacing, makeStyles } from '../../theme';
 
 interface Props {
@@ -35,7 +36,7 @@ export default function DeletionPendingScreen({ dueAt, onKept }: Props) {
       onKept();
     } catch (e: any) {
       setError(
-        e?.code === 'functions/permission-denied' ? t('auth.pinLogin.invalidPin') : e?.message || t('common.error')
+        e?.code === 'functions/permission-denied' ? t('auth.pinLogin.invalidPin') : errorMessage(e, t)
       );
       setPin('');
     } finally {

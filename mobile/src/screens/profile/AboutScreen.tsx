@@ -14,6 +14,7 @@ import { Button } from '../../components/Button';
 import { PinInput } from '../../components/PinInput';
 import { signOut } from '../../services/auth.service';
 import { functions } from '../../services/firebase.config';
+import { errorMessage } from '../../utils/errors';
 import { typography, spacing, borderRadius, makeStyles } from '../../theme';
 
 interface Props {
@@ -24,7 +25,7 @@ const APP_VERSION = '1.0.0';
 
 export default function AboutScreen({ navigation }: Props) {
   const styles = useStyles();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [showDelete, setShowDelete] = useState(false);
   const [pin, setPin] = useState('');
   const [deleting, setDeleting] = useState(false);
@@ -54,20 +55,33 @@ export default function AboutScreen({ navigation }: Props) {
       setDeleting(true);
       const fn = functions().httpsCallable('requestAccountDeletion');
       const result = await fn({ pin });
-      const data = result.data as { success: boolean; message?: string; error?: string };
+      const data = result.data as {
+        success: boolean;
+        error?: string;
+        data?: { deletionDueAt?: string };
+      };
 
       if (data.success) {
+        const dueAt = data.data?.deletionDueAt;
         // Every session on the account has just ended, this one included.
         Alert.alert(
           t('profile.about.deletionRequested'),
-          data.message ?? t('profile.about.deletionMessage'),
+          dueAt
+            ? t('profile.about.deletionDueMessage', {
+                date: new Date(dueAt).toLocaleDateString(i18n.language, {
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric',
+                }),
+              })
+            : t('profile.about.deletionMessage'),
           [{ text: t('common.ok'), onPress: () => signOut().catch(() => undefined) }]
         );
       } else {
-        Alert.alert(t('common.error'), data.error ?? t('profile.about.deleteFailed'));
+        Alert.alert(t('common.error'), errorMessage({ message: data.error }, t, 'profile.about.deleteFailed'));
       }
     } catch (err: any) {
-      Alert.alert(t('common.error'), err.message ?? t('profile.about.deleteFailed'));
+      Alert.alert(t('common.error'), errorMessage(err, t, 'profile.about.deleteFailed'));
     } finally {
       setDeleting(false);
       setPin('');

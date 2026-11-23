@@ -1,5 +1,6 @@
 import { functions } from './firebase.config';
 import { QRCodeData, PaymentResult } from '../types';
+import { asError } from '../utils/errors';
 import { logger } from '../utils/logger';
 import { READS_CURRENCIES } from '../utils/money';
 
@@ -33,7 +34,7 @@ export async function generateQRCode(
     };
   } catch (error: any) {
     logger.error('Generate QR code error:', error);
-    throw new Error(error.message || 'Failed to generate QR code');
+    throw asError(error, 'Failed to generate QR code');
   }
 }
 
@@ -71,7 +72,7 @@ export async function validateQRCode(qrData: string): Promise<{
     return data.data;
   } catch (error: any) {
     logger.error('Validate QR code error:', error);
-    throw new Error(error.message || 'Failed to validate QR code');
+    throw asError(error, 'Failed to validate QR code');
   }
 }
 
@@ -101,7 +102,6 @@ export async function processPayment(
     logger.error('Process payment error:', error);
     // Keep the callable's code and details: the screen explains some refusals
     // (such as the pause after a PIN reset) from them.
-    if (error?.code) throw error;
-    throw new Error(error.message || 'Payment failed');
+    throw asError(error, 'Payment failed');
   }
 }

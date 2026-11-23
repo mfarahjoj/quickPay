@@ -20,7 +20,7 @@ import { CURRENCY_SYMBOL, MAX_TOPUP_AMOUNT } from '../../config/constants';
 import { CurrencyToggle, type FloatCurrency } from '../../components/CurrencyToggle';
 import { formatAmount, sanitizeAmountFor, toAmount } from '../../utils/money';
 import { newIdempotencyKey } from '../../utils/idempotency';
-import { isWrongPin, pinActionErrorKey } from '../../utils/errors';
+import { genericErrorKey, isWrongPin, pinActionErrorKey } from '../../utils/errors';
 import { getZaadStatus } from '../../services/zaadAgent.service';
 import { makeStyles, useColors } from '../../theme';
 
@@ -128,7 +128,7 @@ export default function TopupCustomerScreen({ navigation }: { navigation: any })
       setCustomer(result);
       setStep('amount');
     } catch (e: any) {
-      Alert.alert(t('common.notFound'), e.message || t('common.customerNotFound'));
+      Alert.alert(t('common.notFound'), t(genericErrorKey(e, 'common.customerNotFound')));
     } finally {
       setLookupLoading(false);
     }

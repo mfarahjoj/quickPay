@@ -6,6 +6,7 @@ import { QrScannerView } from '../../components/QrScannerView';
 import { validateQRCode } from '../../services/qr.service';
 import { parseChargeLink } from '../../services/apiCharge.service';
 import { toCurrency } from '../../utils/money';
+import { errorMessage } from '../../utils/errors';
 
 interface Props {
   navigation: any;
@@ -42,7 +43,7 @@ export default function ScanQRScreen({ navigation }: Props) {
       const validation = await validateQRCode(qrData);
 
       if (!validation.valid) {
-        setScanError(validation.reason || t('qr.scan.invalidQr'));
+        setScanError(errorMessage({ message: validation.reason }, t, 'qr.scan.invalidQr'));
         setIsScanning(true);
         return;
       }
@@ -67,7 +68,7 @@ export default function ScanQRScreen({ navigation }: Props) {
         });
       }
     } catch (error: any) {
-      setScanError(error.message || t('qr.scan.invalidQr'));
+      setScanError(errorMessage(error, t, 'qr.scan.invalidQr'));
       setIsScanning(true);
     } finally {
       setChecking(false);

@@ -6,6 +6,7 @@ import { setupPin } from '../../services/auth.service';
 import { auth } from '../../services/firebase.config';
 import { loadPendingAgreements, rememberOffer, requestToOffer } from '../../services/partnerSignup';
 import { setPendingSetupPin } from '../../services/biometric.service';
+import { errorMessage } from '../../utils/errors';
 import { markPinVerifiedThisInstall } from '../../hooks/usePinVerifiedThisInstall';
 import { markPinSetupDone } from '../../hooks/usePinSetupDone';
 import { AuthLayout, AuthHeader } from '../../components/auth';
@@ -120,7 +121,7 @@ export default function SetupPinScreen() {
       }
       await markPinSetupDone();
     } catch (error: any) {
-      setSubmitError(error.message ?? t('common.error'));
+      setSubmitError(errorMessage(error, t));
       setConfirmPin('');
     } finally {
       setLoading(false);

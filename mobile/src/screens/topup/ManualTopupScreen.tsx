@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import LinearGradient from 'react-native-linear-gradient';
 import { functions } from '../../services/firebase.config';
 import { useAuth } from '../../hooks/useAuth';
+import { errorMessage } from '../../utils/errors';
 import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
 import {
   PHONE_PREFIX,
@@ -133,7 +134,7 @@ export default function ManualTopupScreen({ navigation }: Props) {
         );
       }
     } catch (error: any) {
-      Alert.alert(t('topup.manual.failedTitle'), error.message);
+      Alert.alert(t('topup.manual.failedTitle'), errorMessage(error, t));
       setPin(['', '', '', '', '', '']);
       pinRefs.current[0]?.focus();
     } finally {

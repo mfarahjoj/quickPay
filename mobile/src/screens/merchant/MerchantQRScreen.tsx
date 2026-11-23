@@ -11,6 +11,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import QRCode from 'react-native-qrcode-svg';
 import { getMerchantSticker, MerchantStickerData } from '../../services/merchant.service';
+import { errorMessage } from '../../utils/errors';
 import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
 import { Header } from '../../components/Header';
 
@@ -37,7 +38,7 @@ export default function MerchantQRScreen({ navigation }: Props) {
       const data = await getMerchantSticker();
       setSticker(data);
     } catch (e: any) {
-      setError(e.message || t('merchant.qr.loadFailed'));
+      setError(errorMessage(e, t, 'merchant.qr.loadFailed'));
     } finally {
       setLoading(false);
     }

@@ -32,6 +32,7 @@ import {
   ContrastIcon,
 } from '../../components/icons/UIIcons';
 import { formatLocal } from '../../services/mobileMoney.utils';
+import { errorMessage } from '../../utils/errors';
 import type { KycStatus } from '../../types';
 
 interface Props {
@@ -101,7 +102,7 @@ export default function ProfileScreen({ navigation }: Props) {
       setSigningOut(true);
       await signOut();
     } catch (err: any) {
-      Alert.alert(t('common.error'), err.message ?? t('profile.failedLogOut'));
+      Alert.alert(t('common.error'), errorMessage(err, t, 'profile.failedLogOut'));
     } finally {
       setSigningOut(false);
     }

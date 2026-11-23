@@ -15,6 +15,7 @@ import { Input } from '../../components/Input';
 import { HandshakeIcon, StoreIcon } from '../../components/icons/AuthIcons';
 import { completeMerchantSetup } from '../../services/auth.service';
 import { confirmSignOut } from '../../utils/confirmSignOut';
+import { genericErrorKey } from '../../utils/errors';
 import type { MerchantOnboardingParamList } from '../../navigation/MerchantOnboardingNavigator';
 import { makeStyles } from '../../theme';
 
@@ -166,7 +167,7 @@ export default function MerchantRoleSelectScreen({
         setShowSuccess(true);
       }
     } catch (e: any) {
-      showToast(e.message || t('auth.onboarding.role.couldNotFinishMessage'), 'error');
+      showToast(t(genericErrorKey(e, 'auth.onboarding.role.couldNotFinishMessage')), 'error');
     } finally {
       setLoading(false);
     }

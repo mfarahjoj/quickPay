@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 import { scanCustomerToken } from '../../services/scan.service';
 import { formatAmount } from '../../utils/money';
+import { genericErrorKey } from '../../utils/errors';
 import { CodeSheet, QrScannerView, ScannerButton } from '../../components/QrScannerView';
 
 /**
@@ -59,7 +60,7 @@ export default function ScanCustomerScreen() {
           reference,
         });
       } catch (e: any) {
-        setScanError(e.message || t('scan.scanFailedMessage'));
+        setScanError(t(genericErrorKey(e, 'scan.scanFailedMessage')));
         setIsScanning(true);
         isProcessing.current = false;
       } finally {

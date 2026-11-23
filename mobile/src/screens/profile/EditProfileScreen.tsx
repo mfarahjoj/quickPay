@@ -14,6 +14,7 @@ import { Header } from '../../components/Header';
 import { Button } from '../../components/Button';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import { functions } from '../../services/firebase.config';
+import { errorMessage } from '../../utils/errors';
 import { applyLanguage } from '../../i18n';
 import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
 import type { PreferredLanguage } from '../../types';
@@ -84,7 +85,7 @@ export default function EditProfileScreen({ navigation }: Props) {
       const data = result.data as { success: boolean; error?: string };
 
       if (!data.success) {
-        Alert.alert(t('common.error'), data.error ?? t('profile.edit.updateFailed'));
+        Alert.alert(t('common.error'), errorMessage({ message: data.error }, t, 'profile.edit.updateFailed'));
         return;
       }
 
@@ -96,7 +97,7 @@ export default function EditProfileScreen({ navigation }: Props) {
         { text: t('common.ok'), onPress: () => navigation.goBack() },
       ]);
     } catch (err: any) {
-      Alert.alert(t('common.error'), err.message ?? t('profile.edit.updateFailed'));
+      Alert.alert(t('common.error'), errorMessage(err, t, 'profile.edit.updateFailed'));
     } finally {
       setSaving(false);
     }

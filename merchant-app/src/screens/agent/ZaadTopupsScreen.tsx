@@ -30,7 +30,7 @@ import { ZaadRequestList } from '../../components/ZaadRequestList';
 import { useZaadAgentRequests } from '../../hooks/useZaadAgentRequests';
 import { formatCents } from '../../utils/money';
 import { formatLocal } from '../../utils/zaad';
-import { callableErrorKey } from '../../utils/errors';
+import { callableErrorKey, pinActionErrorKey } from '../../utils/errors';
 import {
   answerZaadOffer,
   confirmZaadTopup,
@@ -137,7 +137,7 @@ export default function ZaadTopupsScreen() {
       } else if (e?.details?.reason === 'paused') {
         setError(t('zaadTopups.paused', { until: new Date(e.details.pausedUntil).toLocaleString() }));
       } else {
-        setError(e?.message ? String(e.message) : t(callableErrorKey(e)));
+        setError(t(pinActionErrorKey(e, 'qr.errors.generic')));
       }
     } finally {
       setBusy(false);

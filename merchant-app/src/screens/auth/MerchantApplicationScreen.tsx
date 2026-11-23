@@ -23,6 +23,7 @@ import {
   type PlaceResult,
 } from '../../services/roleApplication.service';
 import { logger } from '../../utils/logger';
+import { genericErrorKey } from '../../utils/errors';
 import { auth, firestore } from '../../services/firebase.config';
 import { makeStyles, useColors } from '../../theme';
 
@@ -199,7 +200,7 @@ export default function MerchantApplicationScreen({ role, kycVerified }: Props) 
     } catch (err: any) {
       logger.warn('Place search failed:', err);
       setResults([]);
-      setSearchError(err?.message || t('application.find.failed'));
+      setSearchError(t(genericErrorKey(err, 'application.find.failed')));
     } finally {
       setSearching(false);
     }
@@ -289,7 +290,8 @@ export default function MerchantApplicationScreen({ role, kycVerified }: Props) 
       });
       // The gate listens to the user document and swaps in the review screen.
     } catch (err: any) {
-      setSubmitError(err?.message || t('application.submitFailed'));
+      logger.warn('Application submit failed:', err);
+      setSubmitError(t(genericErrorKey(err, 'application.submitFailed')));
     } finally {
       setSubmitting(false);
     }

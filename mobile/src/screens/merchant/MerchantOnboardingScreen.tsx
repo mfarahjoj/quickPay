@@ -15,6 +15,7 @@ import { typography, spacing, borderRadius, makeStyles, useColors } from '../../
 import { PHONE_PREFIX } from '../../config/constants';
 import { functions } from '../../services/firebase.config';
 import { triggerHaptic } from '../../services/haptics.service';
+import { errorMessage } from '../../utils/errors';
 
 type SettlementProvider = 'zaad' | 'edahab';
 type Step = 'business' | 'type' | 'address' | 'settlement' | 'submitting' | 'success';
@@ -74,7 +75,7 @@ export default function MerchantOnboardingScreen() {
 
       const data = result.data as { success: boolean; error?: string };
       if (!data.success) {
-        Alert.alert(t('common.failed'), data.error || t('merchant.onboarding.registrationFailed'));
+        Alert.alert(t('common.failed'), errorMessage({ message: data.error }, t, 'merchant.onboarding.registrationFailed'));
         setStep('settlement');
         return;
       }
@@ -82,8 +83,7 @@ export default function MerchantOnboardingScreen() {
       triggerHaptic('success');
       setStep('success');
     } catch (err: any) {
-      const msg = err.message?.replace(/^\[.*?\]\s*/, '') || t('merchant.onboarding.registrationFailed');
-      Alert.alert(t('common.error'), msg);
+      Alert.alert(t('common.error'), errorMessage(err, t, 'merchant.onboarding.registrationFailed'));
       setStep('settlement');
     } finally {
       setSubmitting(false);

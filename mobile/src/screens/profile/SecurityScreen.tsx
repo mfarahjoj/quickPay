@@ -15,6 +15,7 @@ import { PinInput } from '../../components/PinInput';
 import { typography, spacing, makeStyles, useColors } from '../../theme';
 import { validatePin, PinLockoutError, pinLockoutMessage, adoptSessionToken } from '../../services/auth.service';
 import { functions } from '../../services/firebase.config';
+import { errorMessage } from '../../utils/errors';
 import { isWeakPin } from '../../components/auth/CodeInput';
 import {
   isBiometricEnabled,
@@ -142,7 +143,7 @@ export default function SecurityScreen({ navigation }: Props) {
       if (err instanceof PinLockoutError) {
         Alert.alert(t('common.error'), pinLockoutMessage(err, t));
       } else {
-        Alert.alert(t('common.error'), err.message ?? t('profile.security.failedEnableBiometrics'));
+        Alert.alert(t('common.error'), errorMessage(err, t, 'profile.security.failedEnableBiometrics'));
       }
     } finally {
       setLoading(false);
@@ -191,7 +192,7 @@ export default function SecurityScreen({ navigation }: Props) {
           setNewPin('');
           setConfirmPin('');
         } else {
-          Alert.alert(t('common.error'), data.error ?? t('profile.security.failedChangePin'));
+          Alert.alert(t('common.error'), errorMessage({ message: data.error }, t, 'profile.security.failedChangePin'));
         }
       } catch (innerErr: any) {
         const code = innerErr?.code;
@@ -203,17 +204,14 @@ export default function SecurityScreen({ navigation }: Props) {
             t('profile.security.pinChangeComingSoon')
           );
         } else {
-          const msg =
-            innerErr?.message?.replace(/^\[.*?\]\s*/, '') ||
-            t('common.failedChangePinRetry');
-          Alert.alert(t('common.error'), msg);
+          Alert.alert(t('common.error'), errorMessage(innerErr, t, 'common.failedChangePinRetry'));
         }
       }
     } catch (err: any) {
       if (err instanceof PinLockoutError) {
         Alert.alert(t('common.error'), pinLockoutMessage(err, t));
       } else {
-        Alert.alert(t('common.error'), err.message ?? t('profile.security.failedChangePin'));
+        Alert.alert(t('common.error'), errorMessage(err, t, 'profile.security.failedChangePin'));
       }
     } finally {
       setLoading(false);

@@ -19,6 +19,7 @@ import { AnimatedXMark } from '../../components/icons/StatusIcons';
 import { useWallet } from '../../hooks/useWallet';
 import { useHomeCurrency } from '../../hooks/useHomeCurrency';
 import { amountInputUnits, formatMoney, type Currency } from '../../utils/money';
+import { errorMessage } from '../../utils/errors';
 import { useAuth } from '../../hooks/useAuth';
 import { useZaadAgentTopups } from '../../hooks/useZaadTopups';
 import { requestZaadAgentTopup } from '../../services/zaadAgent.service';
@@ -213,7 +214,7 @@ export default function AgentTopupScreen({ initialWay }: { initialWay?: 'remote'
         setStep('zaad');
         return;
       }
-      setErrorMsg(e?.message || t('common.error'));
+      setErrorMsg(errorMessage(e, t, 'common.topupFailed'));
       setStep('error');
     }
   }, [amountUnits, currency, t]);
@@ -248,7 +249,7 @@ export default function AgentTopupScreen({ initialWay }: { initialWay?: 'remote'
       );
       setStep('code');
     } catch (e: any) {
-      setErrorMsg(e.message || t('common.error'));
+      setErrorMsg(errorMessage(e, t, 'common.topupFailed'));
       setStep('error');
     }
   }, [amountUnits, currency, t]);
@@ -314,7 +315,7 @@ export default function AgentTopupScreen({ initialWay }: { initialWay?: 'remote'
       cancellingRef.current = false;
       setCancelling(false);
       // Already completed: the listener shows the receipt.
-      if (e?.details?.reason !== 'completed') setCancelError(e?.message || t('common.error'));
+      if (e?.details?.reason !== 'completed') setCancelError(errorMessage(e, t));
     }
   }, [requestId, t]);
 

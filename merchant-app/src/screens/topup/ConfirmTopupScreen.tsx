@@ -288,7 +288,7 @@ export default function ConfirmTopupScreen({ navigation }: Props) {
             ? t('zaadTopups.notSetUp')
             : reason === 'customer_cancelled'
               ? t('errors.topupCancelledByCustomer')
-            : e?.message || t('qr.errors.generic'),
+            : t(pinActionErrorKey(e, 'qr.errors.generic')),
       );
     } finally {
       isProcessing.current = false;

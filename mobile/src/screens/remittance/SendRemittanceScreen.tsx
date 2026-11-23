@@ -16,6 +16,7 @@ import { CURRENCY_SYMBOL, PHONE_PREFIX } from '../../config/constants';
 import { useAuth } from '../../hooks/useAuth';
 import { triggerHaptic } from '../../services/haptics.service';
 import { functions } from '../../services/firebase.config';
+import { errorMessage } from '../../utils/errors';
 
 type Step = 'phone' | 'amount' | 'review' | 'success';
 
@@ -101,7 +102,7 @@ export default function SendRemittanceScreen() {
       };
 
       if (!createData.success || !createData.data) {
-        Alert.alert(t('common.failed'), createData.error || t('remittance.createFailed'));
+        Alert.alert(t('common.failed'), errorMessage({ message: createData.error }, t, 'remittance.createFailed'));
         return;
       }
 
@@ -116,15 +117,14 @@ export default function SendRemittanceScreen() {
       const completeData = completeResult.data as { success: boolean; error?: string };
 
       if (!completeData.success) {
-        Alert.alert(t('common.failed'), completeData.error || t('remittance.completeFailed'));
+        Alert.alert(t('common.failed'), errorMessage({ message: completeData.error }, t, 'remittance.completeFailed'));
         return;
       }
 
       triggerHaptic('success');
       setStep('success');
     } catch (err: any) {
-      const msg = err.message?.replace(/^\[.*?\]\s*/, '') || t('remittance.failed');
-      Alert.alert(t('common.error'), msg);
+      Alert.alert(t('common.error'), errorMessage(err, t, 'remittance.failed'));
     } finally {
       setProcessing(false);
     }
