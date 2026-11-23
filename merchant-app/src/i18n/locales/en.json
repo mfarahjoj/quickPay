@@ -23,6 +23,7 @@
   "language.changedTitle": "Language Changed",
   "language.changeFailed": "Could not change language. Please try again.",
   "language.english": "English",
+  "language.reopenForLayout": "Close and reopen Zapp Pay Merchant to finish switching the layout direction.",
   "language.selectLanguage": "Select Language",
   "language.somali": "Somali",
   "dashboard.greeting.hello": "Hello, {{name}}",

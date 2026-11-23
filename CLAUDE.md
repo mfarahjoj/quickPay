@@ -34,6 +34,8 @@ Use the `new-money-flow` skill when adding or modifying any flow that moves valu
 
 Every user-facing string ships in **all three locales** — `en`, `so`, `ar` — in both apps (`mobile/src/i18n/locales/`, `merchant-app/src/i18n/locales/`). `fallbackLng='en'` silently hides missing keys; do not rely on it.
 
+RTL (Arabic): leave `textAlign` unset — `src/i18n/directionalText.tsx` makes text start at the reading edge (iOS won't on its own); `'right'` means *end*; pin `writingDirection: 'ltr'` on keys/codes. A direction change only applies after relaunch, so language pickers show `showRestartNotice()`. Details and open items: `docs/RTL_ARABIC.md`.
+
 ## Design
 
 - `DESIGN_SYSTEM.md` — base palette and components.
@@ -54,6 +56,7 @@ Every user-facing string ships in **all three locales** — `en`, `so`, `ar` —
 |---|---|
 | `LEDGER_ARCHITECTURE.md` | Chart of accounts, journal entry schema, per-flow templates, reconciliation |
 | `docs/MERCHANT_API.md` | Merchant Payments API (`functions/src/api/`): keys, charges, refunds, webhooks, hosted checkout |
+| `docs/RTL_ARABIC.md` | Arabic/RTL: why iOS text needed a start-align default, restart-to-flip rule, simulator checks, open items |
 | `DESIGN_SYSTEM.md` | Colors, typography, component patterns |
 | `docs/DESIGN_FLOWS.md` | Every user story (customer, merchant, admin) as a flow: steps, taps, the flow rules (one decision per screen, Face ID as one deliberate tap, PIN keyboard open) |
 | `GTM_ROADMAP.md` | Hargeisa launch phases, KPIs, risks |

@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { SUPPORTED_LANGUAGES, LanguageOption } from '../../i18n/languages';
-import { applyLanguage } from '../../i18n';
+import { applyLanguage, showRestartNotice } from '../../i18n';
 import type { PreferredLanguage } from '../../types';
 import { makeStyles } from '../../theme';
 
@@ -44,7 +44,9 @@ function LanguagePicker() {
 
   const handleSelect = async (lang: LanguageOption) => {
     closeMenu();
-    await applyLanguage(lang.code as PreferredLanguage);
+    if (await applyLanguage(lang.code as PreferredLanguage)) {
+      showRestartNotice();
+    }
   };
 
   return (

@@ -23,6 +23,7 @@
   "language.changedTitle": "Luqadda waa la beddelay",
   "language.changeFailed": "Luqadda lama beddeli karin. Fadlan isku day mar kale.",
   "language.english": "Ingiriisi",
+  "language.reopenForLayout": "Xir oo dib u fur Zapp Pay Merchant si uu u dhammaystiro beddelka jihada bogga.",
   "language.selectLanguage": "Dooro Luqadda",
   "language.somali": "Soomaali",
   "dashboard.greeting.hello": "Salaan, {{name}}",

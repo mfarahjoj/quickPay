@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { applyLanguage, getStoredLanguage } from './index';
+import { applyLanguage, getStoredLanguage, showRestartNotice } from './index';
 import { useMerchantProfile } from '../hooks/useMerchantProfile';
 import type { PreferredLanguage } from '../types';
 
@@ -15,7 +15,11 @@ export function LanguageSync() {
       const language: PreferredLanguage = profileLanguage ?? storedLanguage;
 
       if (!cancelled) {
-        await applyLanguage(language);
+        // e.g. signing in to a profile whose language reads the other way.
+        const directionChanged = await applyLanguage(language);
+        if (directionChanged && !cancelled) {
+          showRestartNotice();
+        }
       }
     }
 
