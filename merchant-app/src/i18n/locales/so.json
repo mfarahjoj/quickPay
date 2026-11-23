@@ -173,6 +173,7 @@
   "scan.subtitle": "Sawir koodhka QR ee macmiilka si aad u bilowdo lacag bixinta",
   "scan.cameraPlaceholder": "Sawiraha kamarada ayaa halkan ka muuqan doona",
   "scan.cameraHint": "U jihee kamarada koodhka QR ee macmiilka",
+  "scan.scannerHint": "Iskaanar Bluetooth ah? Kaliya iskaan — waa diyaar.",
   "scan.pastePlaceholder": "Ku dheji xogta QR ee macmiilka...",
   "scan.verifyCustomer": "Xaqiiji Macmiilka",
   "scan.scanFailedTitle": "Sawirku wuu fashilmay",

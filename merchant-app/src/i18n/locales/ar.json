@@ -173,6 +173,7 @@
   "scan.subtitle": "امسح رمز QR الخاص بالعميل لبدء الدفع",
   "scan.cameraPlaceholder": "سيظهر ماسح الكاميرا هنا",
   "scan.cameraHint": "وجّه الكاميرا نحو رمز QR الخاص بالعميل",
+  "scan.scannerHint": "لديك ماسح بلوتوث؟ امسح مباشرة — إنه جاهز.",
   "scan.pastePlaceholder": "الصق بيانات QR للعميل...",
   "scan.verifyCustomer": "تحقق من العميل",
   "scan.scanFailedTitle": "فشل المسح",

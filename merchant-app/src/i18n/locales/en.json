@@ -224,6 +224,7 @@
   "scan.subtitle": "Scan the customer's QR code to start a payment",
   "scan.cameraPlaceholder": "Point at customer QR code",
   "scan.cameraHint": "Point at customer QR code",
+  "scan.scannerHint": "Bluetooth scanner? Just scan — it's ready.",
   "scan.pastePlaceholder": "Paste customer QR data...",
   "scan.verifyCustomer": "Verify Customer",
   "scan.scanFailedTitle": "Scan Failed",
