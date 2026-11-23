@@ -8,6 +8,7 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTransactions } from '../../hooks/useTransactions';
 import { Transaction } from '../../types';
 import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
@@ -43,6 +44,7 @@ export default function TransactionHistoryScreen({ navigation }: Props) {
   const colors = useColors();
   const styles = useStyles();
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const { transactions, loading, refresh } = useTransactions(undefined, 100);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'sent' | 'received'>('all');
@@ -108,12 +110,11 @@ export default function TransactionHistoryScreen({ navigation }: Props) {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <Text style={styles.title}>{t('wallet.history.title')}</Text>
-        <TouchableOpacity style={styles.searchButton}>
-          <Text style={styles.searchIcon}>S</Text>
-        </TouchableOpacity>
+        {/* A round "S" sat here as a search button that did nothing. Search
+            needs building before it gets a button again. */}
       </View>
 
       <View style={styles.filterRow}>
@@ -183,19 +184,6 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
   title: {
     ...typography.h1,
     color: colors.text.primary,
-  },
-  searchButton: {
-    width: 34,
-    height: 34,
-    borderRadius: borderRadius.full,
-    borderWidth: 1,
-    borderColor: colors.border.default,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  searchIcon: {
-    ...typography.body,
-    color: colors.text.secondary,
   },
   filterRow: {
     flexDirection: 'row',

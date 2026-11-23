@@ -102,6 +102,18 @@ export default function DashboardScreen({ navigation }: Props) {
   const { wallet, loading: walletLoading, error: walletError, refreshBalance } = useWallet();
   // 30 rows: Home's spending card counts the last seven days.
   const { transactions, loading: txLoading, error: txError, refresh: refreshTx } = useTransactions(undefined, 30);
+  // The balance is live but the list is fetched once, so after a payment Home
+  // showed the new balance over an old list and spending total. Every posting
+  // moves the wallet's lastTransactionAt (money in too): fetch again then.
+  const lastTxAt = wallet?.lastTransactionAt?.getTime() ?? null;
+  const seenLastTxAt = useRef<number | null>(null);
+  useEffect(() => {
+    if (lastTxAt === null || lastTxAt === seenLastTxAt.current) return;
+    const firstSeen = seenLastTxAt.current === null;
+    seenLastTxAt.current = lastTxAt;
+    if (!firstSeen) refreshTx();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastTxAt]);
   const [refreshing, setRefreshing] = useState(false);
   const [balanceVisible, setBalanceVisible] = useState(true);
   // Home shows one balance; the currency button switches to the other.

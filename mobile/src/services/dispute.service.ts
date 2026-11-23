@@ -11,6 +11,7 @@ import firestore from '@react-native-firebase/firestore';
 import { functions } from './firebase.config';
 import { useAuth } from '../hooks/useAuth';
 import { logger } from '../utils/logger';
+import { toCurrency, type Currency } from '../utils/money';
 
 export type DisputeKind =
   | 'refund_requested'
@@ -40,8 +41,9 @@ export interface Dispute {
   status: DisputeStatus;
   raisedBy: string;
   against: string | null;
-  /** Cents. */
+  /** In the dispute's currency: cents, or whole shillings. */
   amountCents: number;
+  currency: Currency;
   messages: DisputeMessage[];
   createdAt: Date;
   respondBy: Date;
@@ -67,6 +69,8 @@ export interface DisputeOptions {
   disputeWindowDays: number;
   hasCounterparty: boolean;
   transactionAmountCents: number;
+  /** Absent from servers before it was added; those amounts are dollars. */
+  currency?: string;
 }
 
 export const ACTIVE_STATUSES: DisputeStatus[] = ['open', 'under_review', 'awaiting_funds'];
@@ -83,6 +87,7 @@ function fromDoc(id: string, d: any): Dispute {
     raisedBy: d.raisedBy,
     against: d.against ?? null,
     amountCents: d.amountCents,
+    currency: toCurrency(d.currency),
     messages: (d.messages ?? []).map((m: any) => ({ ...m, at: toDate(m.at) })),
     createdAt: toDate(d.createdAt),
     respondBy: toDate(d.respondBy),

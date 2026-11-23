@@ -298,6 +298,13 @@ export default function ChargeScreen({ route, navigation }: Props) {
   };
 
   const close = () => navigation.goBack();
+  // A paid sale is over. Going back landed on the scanner still titled
+  // "Charging $6.50", and behind it Receive still held $6.50: both ready to
+  // charge the next customer for the same order. Receive starts a new sale.
+  const finish = () =>
+    cashOut
+      ? navigation.popToTop()
+      : navigation.navigate('MainTabs', { screen: 'GenerateQR', params: { saleDone: Date.now() } });
   const scanAgain = () =>
     cashOut
       ? navigation.navigate('ScanCashOut', { purpose: 'cash_out' })
@@ -324,7 +331,7 @@ export default function ChargeScreen({ route, navigation }: Props) {
           </View>
         ) : null}
         <View style={styles.resultBtn}>
-          <PillButton label={t('common.done')} onPress={close} />
+          <PillButton label={t('common.done')} onPress={finish} />
         </View>
       </DarkScreen>
     );

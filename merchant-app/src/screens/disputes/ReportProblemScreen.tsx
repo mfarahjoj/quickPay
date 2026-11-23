@@ -81,7 +81,7 @@ export default function ReportProblemScreen() {
         ) : (
           <>
             <Text style={styles.lead}>
-              {t('disputes.report.lead', { amount: money(options.transactionAmountCents) })}
+              {t('disputes.report.lead', { amount: money(options.transactionAmountCents, options.currency) })}
             </Text>
             {options.allowedKinds.length > 1 && (
               <View style={styles.kinds}>

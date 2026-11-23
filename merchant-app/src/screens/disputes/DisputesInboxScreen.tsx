@@ -23,7 +23,7 @@ function Row({ d, uid, onPress }: { d: Dispute; uid?: string; onPress: () => voi
         <View style={styles.rowMain}>
           <Text style={styles.rowTitle}>{t(`disputes.kind.${d.kind}`)}</Text>
           <Text style={styles.rowSub}>
-            {money(d.amountCents)} ·{' '}
+            {money(d.amountCents, d.currency)} ·{' '}
             {reply
               ? t('disputes.inbox.replyBy', { date: d.respondBy.toLocaleDateString() })
               : d.createdAt.toLocaleDateString()}

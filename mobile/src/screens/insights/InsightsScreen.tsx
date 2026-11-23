@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { useTransactions } from '../../hooks/useTransactions';
 import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
 import { Transaction } from '../../types';
+import { formatMajor, toCurrency } from '../../utils/money';
 
 // ─── Period ───────────────────────────────────────────────────
 
@@ -27,9 +28,16 @@ function cutoff(period: Period): Date {
   return d;
 }
 
+/**
+ * Completed dollar movements in the period. Shillings are left out: amounts
+ * arrive in whole units and never convert, so adding a 400,000 SLSH top-up
+ * to the dollars showed "$400,161.00 in" (as Home's spending card did).
+ */
 function filterPeriod(txs: Transaction[], period: Period): Transaction[] {
   const from = cutoff(period);
-  return txs.filter(tx => tx.status === 'completed' && new Date(tx.createdAt) >= from);
+  return txs.filter(
+    tx => tx.status === 'completed' && toCurrency(tx.currency) === 'USD' && new Date(tx.createdAt) >= from,
+  );
 }
 
 function computeSummary(txs: Transaction[]) {
@@ -123,7 +131,7 @@ function computeTopRecipients(txs: Transaction[]) {
   return Object.values(map).sort((a, b) => b.total - a.total).slice(0, 5);
 }
 
-const fmt = (n: number) => `$${Math.abs(n).toFixed(2)}`;
+const fmt = (n: number) => formatMajor(Math.abs(n), 'USD');
 
 function initials(name: string): string {
   return name
@@ -495,7 +503,8 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
   breakdownAmt: {
     ...typography.caption,
     color: colors.ui.text,
-    width: 48,
+    // 48 fitted "$9.50" but wrapped "$1,038.25" over two lines.
+    minWidth: 72,
     textAlign: 'right',
   },
   breakdownPct: {

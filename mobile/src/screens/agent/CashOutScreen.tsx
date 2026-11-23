@@ -387,16 +387,21 @@ export default function CashOutScreen() {
           </View>
         </View>
         <View style={styles.keypad}>
-          {KEYPAD.map((key) => (
-            <TouchableOpacity
-              key={key}
-              style={[styles.key, key === '⌫' && styles.keyDelete]}
-              onPress={() => appendDigit(key)}
-              activeOpacity={0.6}
-            >
-              <Text style={[styles.keyText, key === '⌫' && styles.keyDeleteText]}>{key}</Text>
-            </TouchableOpacity>
-          ))}
+          {KEYPAD.map((key) => {
+            // A PIN is digits only: the amount pad's "." did nothing here.
+            const hidden = key === '.';
+            return (
+              <TouchableOpacity
+                key={key}
+                style={[styles.key, key === '⌫' && styles.keyDelete, hidden && styles.keyHidden]}
+                onPress={() => appendDigit(key)}
+                disabled={hidden}
+                activeOpacity={0.6}
+              >
+                <Text style={[styles.keyText, key === '⌫' && styles.keyDeleteText]}>{key}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </View>
     );
@@ -554,7 +559,8 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
   otpBox: { width: '100%', backgroundColor: colors.ui.ink(0.05), borderWidth: 1, borderColor: colors.ui.ink(0.1), borderRadius: 20, padding: 24, alignItems: 'center', gap: 16 },
   otpLabel: { fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, color: colors.ui.ink(0.45) },
   otpDigits: { flexDirection: 'row', gap: 8 },
-  otpDigitBox: { width: 44, height: 54, borderRadius: 10, backgroundColor: 'rgba(111,155,255,0.12)', borderWidth: 1, borderColor: 'rgba(111,155,255,0.35)', alignItems: 'center', justifyContent: 'center' },
+  // Coral, like the top-up code: the blue here was the merchant app's accent.
+  otpDigitBox: { width: 44, height: 54, borderRadius: 10, backgroundColor: colors.ui.accentSoft, borderWidth: 1, borderColor: colors.ui.accentBorder, alignItems: 'center', justifyContent: 'center' },
   otpDigitText: { fontSize: 28, fontWeight: '800', color: colors.ui.accentText, letterSpacing: -0.5 },
   otpAmount: { fontSize: 14, color: colors.ui.ink(0.5) },
   timerRow: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, backgroundColor: 'rgba(52,199,123,0.1)', borderWidth: 1, borderColor: 'rgba(52,199,123,0.3)' },

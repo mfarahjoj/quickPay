@@ -173,7 +173,7 @@ export default function KYCScreen({ navigation }: Props) {
   return (
     <View style={styles.container}>
       <Header title={t('profile.kyc.title')} onBack={() => navigation.goBack()} />
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.statusCard}>
           <View style={[styles.statusDot, { backgroundColor: statusColors(colors)[kycStatus] }]} />
           <View style={styles.statusContent}>

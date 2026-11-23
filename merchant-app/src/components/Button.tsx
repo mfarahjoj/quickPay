@@ -73,7 +73,7 @@ export function Button({
     secondary: styles.secondaryText,
     outline: styles.secondaryText,
     ghost: styles.secondaryText,
-    gradient: styles.primaryText,
+    gradient: styles.gradientText,
     darkGhost: styles.darkGhostText,
   };
 
@@ -211,10 +211,16 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
   },
   gradient: {},
   gradientOuter: {
+    // `base` sets paddingHorizontal, which outranks a plain `padding: 0`, so
+    // it is zeroed by name: otherwise the gradient sits 28pt inside the
+    // button's width on each side.
     padding: 0,
+    paddingHorizontal: 0,
     backgroundColor: 'transparent',
-    overflow: 'hidden',
     ...shadows.primary,
+    // shadows.primary is the old blue brand; under coral it drew a blue halo.
+    // No overflow clipping here either, or iOS cuts the glow off square.
+    shadowColor: colors.action.primary,
   },
   gradientInner: {
     flex: 1,
@@ -222,9 +228,22 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
     width: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 28,
+    // No padding on the gradient itself: the native view draws inside it and
+    // then offsets its children by it again, which shrank the gradient and
+    // pushed the label right. The label carries the inset (gradientText).
     minHeight: 54,
     borderRadius: borderRadius.full,
+    overflow: 'hidden',
+  },
+  gradientText: {
+    fontSize: 17,
+    fontWeight: '600',
+    lineHeight: 24,
+    letterSpacing: -0.3,
+    color: colors.action.primaryText,
+    textAlign: 'center',
+    width: '100%',
+    paddingHorizontal: 28,
   },
   gradientDisabled: {
     opacity: 0.65,

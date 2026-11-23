@@ -189,6 +189,9 @@ export default function AgentLocatorScreen() {
         data={HARGEISA_AREAS}
         keyExtractor={(item) => item}
         showsHorizontalScrollIndicator={false}
+        // A horizontal list grows to fill the column like any ScrollView, and
+        // its chips stretched with it into half-screen-tall pills.
+        style={styles.areaListBox}
         contentContainerStyle={styles.areaList}
         renderItem={({ item }) => (
           <TouchableOpacity
@@ -305,9 +308,11 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.ui.ink(0.1),
   },
+  areaListBox: { flexGrow: 0 },
+  // Coral like the rest of Zapp Pay; the blue was the merchant app's accent.
   areaChipActive: {
-    backgroundColor: 'rgba(111,155,255,0.18)',
-    borderColor: 'rgba(111,155,255,0.5)',
+    backgroundColor: colors.ui.accentSoft,
+    borderColor: colors.ui.accentBorder,
   },
   areaChipText: {
     fontSize: 13,
@@ -337,7 +342,7 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(111,155,255,0.18)',
+    backgroundColor: colors.ui.accentSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -371,16 +376,16 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
   },
   cashInPill: { backgroundColor: 'rgba(52,199,123,0.15)', borderWidth: 1, borderColor: 'rgba(52,199,123,0.3)' },
   cashInPillText: { fontSize: 10, fontWeight: '600', color: colors.ui.incoming },
-  cashOutPill: { backgroundColor: 'rgba(111,155,255,0.15)', borderWidth: 1, borderColor: 'rgba(111,155,255,0.3)' },
+  cashOutPill: { backgroundColor: colors.ui.accentSoft, borderWidth: 1, borderColor: colors.ui.accentBorder },
   cashOutPillText: { fontSize: 10, fontWeight: '600', color: colors.ui.accentText },
 
   callBtn: {
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: 'rgba(111,155,255,0.15)',
+    backgroundColor: colors.ui.accentSoft,
     borderWidth: 1,
-    borderColor: 'rgba(111,155,255,0.4)',
+    borderColor: colors.ui.accentBorder,
   },
   callBtnText: { fontSize: 13, fontWeight: '600', color: colors.ui.accentText },
 

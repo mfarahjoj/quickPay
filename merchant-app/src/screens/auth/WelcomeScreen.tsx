@@ -14,6 +14,7 @@ import { SUPPORTED_LANGUAGES, LanguageOption } from '../../i18n/languages';
 import { applyLanguage } from '../../i18n';
 import type { PreferredLanguage } from '../../types';
 import { makeStyles } from '../../theme';
+import { BrandMarkIcon } from '../../components/icons/AuthIcons';
 
 interface Props {
   navigation: any;
@@ -150,9 +151,8 @@ export default function WelcomeScreen({ navigation }: Props) {
         <Animated.View
           style={[styles.brandRow, { opacity: logoOpacity, transform: [{ scale: logoScale }] }]}
         >
-          <View style={styles.iconMark}>
-            <Text style={styles.iconLetter}>Q</Text>
-          </View>
+          {/* The Zapp bolt, as on the lock screen: a "Q" tile was left from QuickPay. */}
+          <BrandMarkIcon size={52} />
           <View style={styles.brandText}>
             <Text style={styles.wordmark}>Zapp Pay</Text>
             <Text style={styles.tagline}>{t('auth.welcome.tagline')}</Text>
@@ -236,20 +236,6 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-  },
-  iconMark: {
-    width: 52,
-    height: 52,
-    borderRadius: 15,
-    backgroundColor: colors.ui.accent,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  iconLetter: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: -0.5,
   },
   brandText: {
     gap: 1,

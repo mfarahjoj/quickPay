@@ -84,7 +84,7 @@ export default function AboutScreen({ navigation }: Props) {
   return (
     <View style={styles.container}>
       <Header title={t('profile.about.title')} onBack={() => navigation.goBack()} />
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.logoCard}>
           <Text style={styles.appName}>{t('profile.about.appName')}</Text>
           <Text style={styles.version}>{t('common.version', { version: APP_VERSION })}</Text>

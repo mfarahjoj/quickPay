@@ -43,4 +43,12 @@ describe('lastSevenDaysSpend', () => {
     );
     expect(days.reduce((sum, d) => sum + d.value, 0)).toBe(0);
   });
+
+  it('counts dollars only, never shillings as dollars', () => {
+    const days = lastSevenDaysSpend(
+      [tx({ amount: 4.5 }), tx({ amount: 25000, currency: 'SLS' }), tx({ amount: 3000, currency: 'SLSH' })],
+      now,
+    );
+    expect(days.reduce((sum, d) => sum + d.value, 0)).toBe(4.5);
+  });
 });

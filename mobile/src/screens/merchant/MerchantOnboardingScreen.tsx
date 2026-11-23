@@ -91,7 +91,7 @@ export default function MerchantOnboardingScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <Text style={styles.title}>{t('merchant.onboarding.title')}</Text>
 
       {step === 'business' && (

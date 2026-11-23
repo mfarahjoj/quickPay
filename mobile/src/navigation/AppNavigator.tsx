@@ -229,6 +229,8 @@ function MainTabs() {
         getComponent={() => require('../screens/wallet/TransactionHistoryScreen').default}
         options={{
           title: t('nav.tab.history'),
+          // The screen has its own large title; the bar above it said it twice.
+          headerShown: false,
           tabBarIcon: ({ focused, color, size }) => <HistoryTabIcon focused={focused} color={color} size={size} />,
           tabBarAccessibilityLabel: t('nav.tab.historyAccessibility'),
         }}
@@ -259,6 +261,9 @@ function MainStackNavigator() {
         headerStyle: { backgroundColor: colors.ui.canvas },
         headerTitleStyle: { fontWeight: '700', color: colors.ui.text },
         headerTintColor: colors.ui.text,
+        // Otherwise iOS labels the back arrow with the previous route's name,
+        // and from a tab that is the internal "MainTabs" (Insights showed it).
+        headerBackTitleVisible: false,
         transitionSpec: {
           open:  { animation: 'spring', config: { ...Springs.transition, mass: 1, overshootClamping: false, restDisplacementThreshold: 0.001, restSpeedThreshold: 0.01 } },
           close: { animation: 'spring', config: { ...Springs.transition, mass: 1, overshootClamping: false, restDisplacementThreshold: 0.001, restSpeedThreshold: 0.01 } },

@@ -377,7 +377,7 @@ export default function BillDetailScreen() {
   return (
     <View style={styles.container}>
       {header}
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{bill.merchantName.charAt(0).toUpperCase()}</Text>
         </View>

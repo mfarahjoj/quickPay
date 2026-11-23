@@ -294,7 +294,7 @@ export default function PayrollScreen({ navigation }: Props) {
 
         {/* ── REVIEW STEP ─────────────────────────────── */}
         {step === 'review' && (
-          <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             <Text style={styles.stepTitle}>{t('payroll.reviewTitle')}</Text>
             {label ? <Text style={styles.labelBadge}>{label}</Text> : null}
             <Text style={styles.stepSubtitle}>
@@ -379,7 +379,7 @@ export default function PayrollScreen({ navigation }: Props) {
 
         {/* ── RESULT ──────────────────────────────────── */}
         {step === 'result' && summary && (
-          <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             {/* Summary banner */}
             <GlassCard style={[styles.resultBanner, summary.failedCount === 0 && styles.resultBannerSuccess]}>
               <Text style={styles.resultEmoji}>{summary.failedCount === 0 ? '✓' : '⚠'}</Text>
@@ -452,12 +452,14 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
     borderWidth: 1, borderColor: colors.ui.glassBorder,
     paddingHorizontal: 14, height: 48, justifyContent: 'center',
   },
-  input: { fontSize: 15, color: colors.ui.text, padding: 0 },
+  // Fills its 48pt box: sized to its own line, iOS cut the bottom off the
+  // text and placeholders ("+252 63 000 0000", "0.00").
+  input: { fontSize: 15, color: colors.ui.text, padding: 0, height: '100%' },
 
   empCard: { padding: 16, marginBottom: 12 },
   empCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   empIndex: { fontSize: 13, fontWeight: '700', color: colors.ui.textFaint },
-  removeBtn: { fontSize: 14, color: colors.ui.errorSoft, fontWeight: '600' },
+  removeBtn: { fontSize: 14, color: colors.ui.error, fontWeight: '600' }, // not errorSoft, a background tint
   empRow: { flexDirection: 'row' },
 
   addRow: {

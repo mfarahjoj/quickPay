@@ -99,7 +99,9 @@ export default function TransactionDetailScreen({ navigation, route }: Props) {
             <Text style={styles.detailKey}>
               {transaction.isIncoming ? t('wallet.detail.sender') : t('wallet.detail.recipient')}
             </Text>
-            <Text style={styles.detailValue}>{transaction.description}</Text>
+            {/* The other party, not the description: for a transfer with a
+                note that read "Recipient: Lunch". */}
+            <Text style={styles.detailValue}>{transaction.counterpartyName || transaction.description}</Text>
           </View>
           {transaction.kind ? (
             <View style={styles.detailRow}>

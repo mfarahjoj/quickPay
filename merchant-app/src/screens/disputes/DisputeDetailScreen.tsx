@@ -35,12 +35,12 @@ function nextStep(d: Dispute, mine: boolean, t: (k: string, o?: any) => string):
   if (d.status === 'under_review') return t('disputes.next.underReview', { date: d.resolveBy.toLocaleDateString() });
   if (d.status === 'awaiting_funds') {
     return mine
-      ? t('disputes.next.youOwe', { amount: money(d.owedCents ?? d.amountCents) })
-      : t('disputes.next.awaitingFunds', { amount: money(d.resolution?.amountCents ?? d.amountCents) });
+      ? t('disputes.next.youOwe', { amount: money(d.owedCents ?? d.amountCents, d.currency) })
+      : t('disputes.next.awaitingFunds', { amount: money(d.resolution?.amountCents ?? d.amountCents, d.currency) });
   }
   if (d.status === 'withdrawn') return t('disputes.next.withdrawn');
   return d.resolution?.outcome === 'upheld'
-    ? t('disputes.next.upheld', { amount: money(d.resolution.amountCents) })
+    ? t('disputes.next.upheld', { amount: money(d.resolution.amountCents, d.currency) })
     : t('disputes.next.rejected');
 }
 
@@ -97,7 +97,7 @@ export default function DisputeDetailScreen() {
     try {
       await functions().httpsCallable('refundPayment')({ transactionId: dispute.transactionId, pin: enteredPin });
       setPinStep(false);
-      Alert.alert(t('common.success'), t('disputes.detail.refunded', { amount: money(dispute.amountCents) }));
+      Alert.alert(t('common.success'), t('disputes.detail.refunded', { amount: money(dispute.amountCents, dispute.currency) }));
     } catch (e: any) {
       if (isWrongPin(e)) {
         setPinError(t('errors.wrongPin'));
@@ -121,7 +121,7 @@ export default function DisputeDetailScreen() {
     return (
       <DarkScreen edges={[]} contentStyle={styles.centered}>
         <Text style={styles.bigTitle}>{t('disputes.detail.refundPinTitle')}</Text>
-        <Text style={styles.sub}>{t('disputes.detail.refundPinSubtitle', { amount: money(dispute.amountCents) })}</Text>
+        <Text style={styles.sub}>{t('disputes.detail.refundPinSubtitle', { amount: money(dispute.amountCents, dispute.currency) })}</Text>
         <PinInput
           value={pin}
           onChange={(v) => {
@@ -149,7 +149,7 @@ export default function DisputeDetailScreen() {
             <Text style={styles.kind}>{t(`disputes.kind.${dispute.kind}`)}</Text>
             <DisputeStatusPill status={dispute.status} mine={mine} />
           </View>
-          <Text style={styles.amount}>{money(dispute.amountCents)}</Text>
+          <Text style={styles.amount}>{money(dispute.amountCents, dispute.currency)}</Text>
           <Text style={styles.next}>{nextStep(dispute, mine, t)}</Text>
           {dispute.status === 'resolved' && dispute.resolution?.reason ? (
             <Text style={styles.reason}>{dispute.resolution.reason}</Text>

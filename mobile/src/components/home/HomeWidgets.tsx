@@ -2,9 +2,9 @@ import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { makeStyles, useColors } from '../../theme';
-import { CURRENCY_SYMBOL } from '../../config/constants';
 import { GiftIcon } from '../icons/LineIcons';
 import { lastSevenDaysSpend } from '../../utils/spending';
+import { formatMajor } from '../../utils/money';
 import type { Transaction } from '../../types';
 
 const BAR_HEIGHT = 40;
@@ -26,7 +26,7 @@ export function HomeWidgets({ transactions, onSpending, onInvite }: Props) {
   const days = useMemo(() => lastSevenDaysSpend(transactions), [transactions]);
   const total = days.reduce((sum, day) => sum + day.value, 0);
   const most = Math.max(...days.map((day) => day.value));
-  const totalText = `${CURRENCY_SYMBOL}${total.toFixed(2)}`;
+  const totalText = formatMajor(total, 'USD');
 
   return (
     <View style={styles.row}>

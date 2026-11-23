@@ -130,7 +130,7 @@ export default function ApproveAgreementScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
       <View style={styles.avatar}>
         <Text style={styles.avatarText}>{agreement.merchantName.charAt(0).toUpperCase()}</Text>
       </View>

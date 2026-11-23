@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Easing,
   Linking,
@@ -19,6 +20,7 @@ import {
   requestCameraPermission,
   useQrScannerOutputs,
 } from '../hooks/useQrScannerOutputs';
+import { USING_EMULATORS } from '../services/emulator';
 
 const FRAME = 264;
 const RADIUS = 28;
@@ -277,12 +279,46 @@ export function QrScannerView({
           {children}
         </View>
       ) : null}
+
+      {USING_EMULATORS ? <EmulatorPayloadButton onScan={onScan} bottom={insets.bottom + 120} /> : null}
     </View>
+  );
+}
+
+/**
+ * Local QA only (docs/LOCAL_QA.md): a simulator has no camera, so a debug
+ * build on the emulators can type in what a code would have scanned as.
+ * Never rendered otherwise, so its English text never reaches a customer.
+ */
+function EmulatorPayloadButton({ onScan, bottom }: { onScan: (value: string) => void; bottom: number }) {
+  return (
+    <TouchableOpacity
+      style={[styles.qaButton, { bottom }]}
+      onPress={() =>
+        Alert.prompt('QA: QR payload', 'Paste what the code holds (scripts/qa/qr.mts prints some).', (value) => {
+          if (value?.trim()) onScan(value.trim());
+        })
+      }
+      accessibilityRole="button"
+    >
+      <Text style={styles.qaButtonText}>QA · Enter QR payload</Text>
+    </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#000000' },
+  qaButton: {
+    position: 'absolute',
+    alignSelf: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.5)',
+    borderStyle: 'dashed',
+  },
+  qaButtonText: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
   sweep: {
     position: 'absolute',
     top: 0,

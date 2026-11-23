@@ -42,10 +42,10 @@ function nextStep(d: Dispute, t: (k: string, o?: any) => string): string {
     case 'under_review':
       return t('disputes.next.underReview', { date: d.resolveBy.toLocaleDateString() });
     case 'awaiting_funds':
-      return t('disputes.next.awaitingFunds', { amount: money(d.resolution?.amountCents ?? d.amountCents) });
+      return t('disputes.next.awaitingFunds', { amount: money(d.resolution?.amountCents ?? d.amountCents, d.currency) });
     case 'resolved':
       return d.resolution?.outcome === 'upheld'
-        ? t('disputes.next.upheld', { amount: money(d.resolution.amountCents) })
+        ? t('disputes.next.upheld', { amount: money(d.resolution.amountCents, d.currency) })
         : t('disputes.next.rejected');
     case 'withdrawn':
       return t('disputes.next.withdrawn');
@@ -113,7 +113,7 @@ export default function DisputeDetailScreen({ navigation, route }: Props) {
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Header title={t('disputes.detail.title')} onBack={() => navigation.goBack()} />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {route.params.justOpened && <Text style={styles.sent}>{t('disputes.detail.sent')}</Text>}
 
         <Card style={styles.summary}>
@@ -121,7 +121,7 @@ export default function DisputeDetailScreen({ navigation, route }: Props) {
             <Text style={styles.kind}>{t(`disputes.kind.${dispute.kind}`)}</Text>
             <DisputeStatusPill status={dispute.status} />
           </View>
-          <Text style={styles.amount}>{money(dispute.amountCents)}</Text>
+          <Text style={styles.amount}>{money(dispute.amountCents, dispute.currency)}</Text>
           <Text style={styles.next}>{nextStep(dispute, t)}</Text>
           {dispute.resolution?.reason && dispute.status === 'resolved' && (
             <Text style={styles.reason}>{dispute.resolution.reason}</Text>

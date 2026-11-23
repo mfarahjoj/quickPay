@@ -67,7 +67,8 @@ export function StaticMerchantQR({ merchantName }: Props) {
   return (
     <View style={styles.container}>
       <View style={styles.qrWrapper}>
-        <QRCode value={qrData} size={200} backgroundColor={colors.background.primary} />
+        {/* Black on white in both themes: on the dark background the black code vanished. */}
+        <QRCode value={qrData} size={200} color="#000000" backgroundColor="#FFFFFF" />
       </View>
       <Text style={styles.merchantName}>{displayName}</Text>
       <View style={styles.offlineBadge}>

@@ -429,6 +429,7 @@ export default function ApprovePaymentScreen() {
   if (step === 'review') {
     return (
       <ScrollView
+        keyboardShouldPersistTaps="handled"
         style={styles.container}
         contentContainerStyle={styles.scrollContent}
       >

@@ -92,7 +92,8 @@ export default function CounterCodeScreen() {
                 value={sticker.qrData}
                 size={qrSize}
                 backgroundColor="#FFFFFF"
-                color={colors.ui.onSolid}
+                // Black on white in both themes (onSolid is white in light mode).
+                color="#000000"
                 getRef={(c) => {
                   qrRef.current = c;
                 }}

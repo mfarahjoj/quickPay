@@ -224,7 +224,7 @@ export default function SecurityScreen({ navigation }: Props) {
     <View style={styles.container}>
       <Header title={t('profile.security.title')} onBack={() => navigation.goBack()} />
 
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
+      <ScrollView style={styles.content} contentContainerStyle={styles.contentInner} keyboardShouldPersistTaps="handled">
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('profile.security.changePin')}</Text>
           <Text style={styles.sectionDesc}>

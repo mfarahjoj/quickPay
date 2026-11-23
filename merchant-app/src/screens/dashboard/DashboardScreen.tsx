@@ -176,9 +176,11 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
     setRefreshing(false);
   };
 
-  const businessName = profile?.businessName ?? '';
-  const firstName = businessName.split(' ')[0] || businessName;
-  const initial = (firstName || 'Q').charAt(0).toUpperCase();
+  // The shop's whole name: its first word ("Hargeisa", "The") isn't a name to
+  // greet. Until the profile loads, the role stands in; the old "Merchant"
+  // fallback was English in every language and the "Q" a QuickPay leftover.
+  const businessName = (profile?.businessName ?? '').trim();
+  const initial = businessName.charAt(0).toUpperCase();
 
   return (
     <View style={styles.safe}>
@@ -216,7 +218,10 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
         >
           {/* Pulling down to refresh shows more coral, not the grey page. */}
           <View style={styles.overscroll} />
-          <Wallpaper style={styles.wallpaper} />
+          {/* Keyed on the header's height: the native gradient kept the size
+              it first had, so when Payroll and Bills added a second row of
+              buttons it ended in a hard line behind them. */}
+          <Wallpaper key={Math.round(headerHeight)} style={styles.wallpaper} />
 
           <View style={styles.topBar}>
             <TouchableOpacity
@@ -232,8 +237,10 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
               <View style={styles.whoText}>
                 <Text style={styles.greeting} numberOfLines={1}>{timeGreeting(t)}</Text>
                 <Text style={styles.name} numberOfLines={1}>
-                  {firstName || 'Merchant'}
-                  {accountType ? <Text style={styles.role}>{`  ·  ${roleLabel(accountType, t)}`}</Text> : null}
+                  {businessName || (accountType ? roleLabel(accountType, t) : '')}
+                  {businessName && accountType ? (
+                    <Text style={styles.role}>{`  ·  ${roleLabel(accountType, t)}`}</Text>
+                  ) : null}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -590,7 +597,11 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderRadius: 16,
-    backgroundColor: colors.ui.warningSoft,
+    // Opaque, like the cards below it: the see-through amber sat half over the
+    // red header, and the amber text there couldn't be read.
+    backgroundColor: colors.ui.surface,
+    borderWidth: 1,
+    borderColor: colors.ui.warningSoft,
   },
   disputeBannerText: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.ui.warning },
   disputeBannerArrow: { fontSize: 20, color: colors.ui.warning, marginLeft: 8 },

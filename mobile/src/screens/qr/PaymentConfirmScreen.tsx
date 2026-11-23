@@ -248,6 +248,10 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
     ...typography.display,
     color: colors.ui.incoming,
     fontWeight: '700',
+    // adjustsFontSizeToFit needs a definite width to fit into. Sized to its
+    // own text inside a centred box, iOS shrank "$3.75" to a few pixels.
+    alignSelf: 'stretch',
+    textAlign: 'center',
   },
   referenceLabel: {
     ...typography.caption,

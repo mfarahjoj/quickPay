@@ -52,13 +52,13 @@ export function useNotifications() {
           setNotifications(items);
           setUnreadCount(items.filter((n) => !n.read).length);
           setError(null);
+          setLoading(false);
         },
         (err) => {
           setError(err.message);
+          setLoading(false);
         }
       );
-
-    setLoading(false);
 
     return () => unsubscribe();
   }, [user?.uid]);

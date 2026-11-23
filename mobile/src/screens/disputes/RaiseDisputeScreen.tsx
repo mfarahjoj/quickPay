@@ -106,7 +106,7 @@ export default function RaiseDisputeScreen({ navigation, route }: Props) {
     return (
       <>
         <Text style={styles.lead}>
-          {t('disputes.raise.lead', { amount: money(options.transactionAmountCents) })}
+          {t('disputes.raise.lead', { amount: money(options.transactionAmountCents, options.currency) })}
         </Text>
 
         <Text style={styles.sectionLabel}>{t('disputes.raise.whatHappened')}</Text>

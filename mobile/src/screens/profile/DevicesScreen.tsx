@@ -106,7 +106,7 @@ export default function DevicesScreen({ navigation }: any) {
   return (
     <View style={styles.container}>
       <Header title={t('devices.title')} onBack={() => navigation.goBack()} />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.intro}>{t('devices.intro')}</Text>
         {devices === null ? (
           <ActivityIndicator color={colors.ui.text} style={styles.spinner} />

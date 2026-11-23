@@ -45,7 +45,10 @@ const APPEARANCE_OPTIONS: { value: AppearancePreference; labelKey: string }[] = 
 ];
 
 const KYC_LABEL_KEYS: Record<KycStatus, string> = {
-  pending: 'kyc.status.pending',
+  // Every new account starts "pending", meaning nothing sent yet: "KYC:
+  // Pending" read as a review under way while Identity Verification said
+  // "Not Submitted". Same words as that screen now.
+  pending: 'kyc.status.notSubmitted',
   submitted: 'kyc.status.submitted',
   verified: 'kyc.status.verified',
   rejected: 'kyc.status.rejected',

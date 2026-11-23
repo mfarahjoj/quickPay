@@ -46,7 +46,11 @@ export default function SendScreen() {
   const [step, setStep] = useState<Step>('recipient');
   const [phone, setPhone] = useState('');
   const [recipient, setRecipient] = useState<Recipient | null>(null);
-  const [currency, setCurrency] = useState<FloatCurrency>('SLS');
+  // Starts in the currency the shop holds: always opening on shillings showed
+  // "Available: 0 SLSH" to a shop with only dollars. Their pick then sticks.
+  const [picked, setPicked] = useState<FloatCurrency | null>(null);
+  const currency: FloatCurrency =
+    picked ?? ((wallet?.balanceCents ?? 0) === 0 && (wallet?.slsBalance ?? 0) > 0 ? 'SLS' : 'USD');
   const [amount, setAmount] = useState('');
   const [pin, setPin] = useState('');
   const [pinError, setPinError] = useState<string | null>(null);
@@ -89,7 +93,7 @@ export default function SendScreen() {
 
   const pickCurrency = (next: FloatCurrency) => {
     if (next === currency) return;
-    setCurrency(next);
+    setPicked(next);
     setAmount('');
   };
 

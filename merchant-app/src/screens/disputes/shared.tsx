@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useColors, type Colors, makeStyles } from '../../theme';
 import type { DisputeStatus } from '../../services/dispute.service';
+import { formatAmount } from '../../utils/money';
 
 const tones = (colors: Colors): Record<DisputeStatus, { fg: string; bg: string }> => ({
   open: { fg: colors.ui.warning, bg: colors.ui.warningSoft },
@@ -26,7 +27,8 @@ export function DisputeStatusPill({ status, mine }: { status: DisputeStatus; min
   );
 }
 
-export const money = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+/** A disputed amount in its own currency: "$12.00" or "25,000 SLSH", never shillings read as cents. */
+export const money = (amount: number, currency: unknown = 'USD') => formatAmount(amount, currency);
 
 const useStyles = makeStyles((colors) => StyleSheet.create({
   pill: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999 },

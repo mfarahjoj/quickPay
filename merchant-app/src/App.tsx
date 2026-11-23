@@ -10,6 +10,7 @@ import { useUpdateGate } from './hooks/useUpdateGate';
 import { ToastProvider } from './components/auth';
 import { LanguageSync } from './i18n/useLanguageSync';
 import { messaging, auth } from './services/firebase.config';
+import { USING_EMULATORS } from './services/emulator';
 import { registerForPushNotifications } from './services/notification.service';
 import crashlytics from '@react-native-firebase/crashlytics';
 import { firebase } from '@react-native-firebase/app-check';
@@ -20,7 +21,12 @@ function AppContent() {
   const { t } = useTranslation();
 
   useEffect(() => {
-    crashlytics().setCrashlyticsCollectionEnabled(true);
+    // Local QA sessions (services/emulator.ts) stay out of production crash reports.
+    crashlytics().setCrashlyticsCollectionEnabled(!USING_EMULATORS);
+
+    // Against the emulators App Check stays off, so nothing asks production
+    // for a token; scripts/qa/appcheck-proxy.mjs supplies the one callables need.
+    if (USING_EMULATORS) return;
 
     try {
       const provider = firebase.appCheck().newReactNativeFirebaseAppCheckProvider();

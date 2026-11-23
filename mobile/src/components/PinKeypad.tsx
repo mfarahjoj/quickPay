@@ -170,7 +170,12 @@ export function PinKeypad({ value, onChange, onComplete, title, subtitle, error 
         </Animated.View>
       </View>
 
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {/* Laid over the gap above the keys rather than in the flow: in the flow
+          it pushed every key down, and the next press (which clears it)
+          pulled them back up, so a quick retry landed on the wrong digits. */}
+      <View style={styles.errorSlot} pointerEvents="none">
+        {error ? <Text style={styles.errorText} numberOfLines={2}>{error}</Text> : null}
+      </View>
 
       <View style={styles.grid}>
         {KEYS.map((key, i) => {
@@ -236,12 +241,19 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
     borderRadius: 7,
     backgroundColor: colors.ui.text,
   },
+  errorSlot: {
+    alignSelf: 'stretch',
+    height: 0,
+    zIndex: 1,
+  },
   errorText: {
     ...typography.caption,
     color: colors.ui.error,
-    marginTop: spacing.sm,
-    marginBottom: spacing.sm,
     textAlign: 'center',
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: spacing.xs,
   },
   grid: {
     flexDirection: 'row',

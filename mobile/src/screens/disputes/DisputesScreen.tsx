@@ -20,7 +20,7 @@ function Row({ dispute, onPress }: { dispute: Dispute; onPress: () => void }) {
       <View style={styles.rowMain}>
         <Text style={styles.rowTitle}>{t(`disputes.kind.${dispute.kind}`)}</Text>
         <Text style={styles.rowSub}>
-          {money(dispute.amountCents)} · {dispute.createdAt.toLocaleDateString()}
+          {money(dispute.amountCents, dispute.currency)} · {dispute.createdAt.toLocaleDateString()}
         </Text>
       </View>
       <DisputeStatusPill status={dispute.status} />

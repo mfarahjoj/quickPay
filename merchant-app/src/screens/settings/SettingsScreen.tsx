@@ -389,7 +389,7 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
   deleteText: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.ui.errorSoft,
+    color: colors.ui.error, // errorSoft is a 16% background tint: as text it all but vanished.
   },
   rowDetail: {
     flex: 1,

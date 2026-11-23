@@ -189,7 +189,7 @@ export default function RequestDirectPaymentScreen() {
     return (
       <View style={styles.container}>
         {header(() => { setError(''); setStep('details'); })}
-        <ScrollView contentContainerStyle={styles.scroll}>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <Text style={styles.title}>{t('bills.request.reviewTitle')}</Text>
           <View style={styles.card}>
             <Line label={t('bills.request.shop')} value={shop.name} />

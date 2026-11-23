@@ -9,7 +9,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import NetInfo from '@react-native-community/netinfo';
 import QRCode from 'react-native-qrcode-svg';
 import { firestore } from '../../services/firebase.config';
@@ -52,6 +52,8 @@ export default function GenerateQRScreen() {
   const { t } = useTranslation();
   const { height: screenHeight } = useWindowDimensions();
   const navigation = useNavigation<any>();
+  // Set by Charge when a customer it scanned has paid (ChargeScreen `finish`).
+  const saleDone: number | undefined = useRoute<any>().params?.saleDone;
 
   // Shillings or dollars: a sale is in one, never converted (SHILLINGS.md).
   const [currency, setCurrency] = useState<FloatCurrency>('USD');
@@ -228,6 +230,11 @@ export default function GenerateQRScreen() {
     // Typed by hand now, whatever it started as.
     setReferenceKind(null);
   };
+
+  useEffect(() => {
+    if (saleDone) handleNewSale();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saleDone]);
 
   const handleNewSale = () => {
     // Void an abandoned code so it can't be paid later off a stale screen.
@@ -454,7 +461,9 @@ export default function GenerateQRScreen() {
             value={qrData.qrData}
             size={TICKET_QR_SIZE}
             backgroundColor="#FFFFFF"
-            color={colors.ui.onSolid}
+            // Always black on white: onSolid is white in the light theme, which
+            // drew the code white on the white ticket and left nothing to scan.
+            color="#000000"
           />
           <Text style={styles.ticketHint}>{t('qr.display.payHint')}</Text>
         </View>

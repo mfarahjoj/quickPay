@@ -55,8 +55,10 @@ export interface Dispute {
   status: DisputeStatus;
   raisedBy: string;
   against: string | null;
-  /** Cents. */
+  /** In the dispute's currency: cents, or whole shillings. */
   amountCents: number;
+  /** "USD" or "SLS"; disputes written before it was read are dollars. */
+  currency: string;
   messages: DisputeMessage[];
   createdAt: Date;
   respondBy: Date;
@@ -82,6 +84,8 @@ export interface DisputeOptions {
   disputeWindowDays: number;
   hasCounterparty: boolean;
   transactionAmountCents: number;
+  /** Absent from servers before it was added; those amounts are dollars. */
+  currency?: string;
 }
 
 export const ACTIVE_STATUSES: DisputeStatus[] = ['open', 'under_review', 'awaiting_funds'];
@@ -100,6 +104,7 @@ function fromDoc(id: string, d: any): Dispute {
     raisedBy: d.raisedBy,
     against: d.against ?? null,
     amountCents: d.amountCents,
+    currency: d.currency ?? 'USD',
     messages: (d.messages ?? []).map((m: any) => ({ ...m, at: toDate(m.at) })),
     createdAt: toDate(d.createdAt),
     respondBy: toDate(d.respondBy),

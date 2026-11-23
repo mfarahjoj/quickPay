@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { Header } from '../../components/Header';
 import { Button } from '../../components/Button';
 import { functions } from '../../services/firebase.config';
+import { formatMajor } from '../../utils/money';
 import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
 
 interface Props {
@@ -99,7 +100,8 @@ export default function TransactionLimitsScreen({ navigation }: Props) {
     fetchLimits();
   }, []);
 
-  const fmt = (n: number) => `$${n.toFixed(2)}`;
+  // Limits are dollars in whole units; formatMajor adds the thousands separator ("$5,000.00").
+  const fmt = (n: number) => formatMajor(n, 'USD');
 
   return (
     <View style={styles.container}>

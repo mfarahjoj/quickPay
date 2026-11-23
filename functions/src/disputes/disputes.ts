@@ -387,7 +387,10 @@ interface DisputeOptions {
   disputeWindowDays: number;
   /** Whether someone will be asked to answer, or it goes straight to ops. */
   hasCounterparty: boolean;
+  /** In `currency`'s smallest unit: cents, or whole shillings. */
   transactionAmountCents: number;
+  /** So the apps show "25,000 SLSH", not shillings read as cents. */
+  currency: Currency;
 }
 
 /**
@@ -414,6 +417,8 @@ export const getDisputeOptions = https.onCall(
         disputeWindowDays,
         hasCounterparty: d.against !== null,
         transactionAmountCents: d.transactionAmountCents,
+        // transactionAmountCents is in this currency's smallest unit.
+        currency: d.currency,
       },
     };
   }
