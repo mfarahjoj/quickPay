@@ -4,8 +4,8 @@
  * Each request keeps its next moment in `deadlineAt`, so one query finds
  * every request with something due:
  *
- *   offered, ringing       offer timed out → next agent
- *   offered, ringing none  next agent (a dispatch that didn't finish)
+ *   offered, ringing       nobody accepted in time → no_agent (the customer is asked)
+ *   offered, ringing none  ring it now (a dispatch that didn't finish)
  *   accepted               customer didn't send in time → float back to the agent
  *   customer_sent          5 minutes left → remind the agent, once (D32)
  *                          agent didn't answer in time → disputed, float stays held
@@ -14,10 +14,10 @@
 
 import * as admin from "firebase-admin";
 import { onSchedule } from "firebase-functions/v2/scheduler";
-import { endOffer, offerNext } from "./dispatch";
+import { endRing, ringAgents } from "./dispatch";
 import { releaseZaadHold } from "./settle";
 import { notifyDisputed } from "./customer";
-import { withoutOpen } from "./core";
+import { ringingIds, withoutOpen } from "./core";
 import { notifyUser } from "../utils/notifications";
 import { pushAmount } from "../utils/money";
 import { ZAAD_AGENTS, ZAAD_AGENT_TOPUPS, ZaadAgentDoc, ZaadAgentTopup } from "./types";
@@ -76,11 +76,13 @@ export async function runZaadAgentSweep(nowMs = Date.now()): Promise<Record<stri
     try {
       switch (req.status) {
         case "offered":
-          if (req.offeredTo) {
-            if ((req.offerExpiresAt?.toMillis() ?? 0) > nowMs) break;
-            if (!(await endOffer(doc.id, req.offeredTo, "timed_out", nowMs))) break;
+          if (ringingIds(req).length > 0) {
+            // Rung on several agents with one deadline: nobody took it in time.
+            if (await endRing(doc.id, nowMs)) counts.offers++;
+            break;
           }
-          await offerNext(doc.id, nowMs);
+          // A request whose first ring never went out: ring it now.
+          await ringAgents(doc.id, nowMs);
           counts.offers++;
           break;
         case "accepted":

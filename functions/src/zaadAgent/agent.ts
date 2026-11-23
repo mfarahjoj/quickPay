@@ -17,8 +17,8 @@ import { formatAmount, pushAmount } from "../utils/money";
 import { dialCode } from "../mobileMoney/linking";
 import { LINKED_NUMBERS } from "../mobileMoney/receipts";
 import { ApiResponse, User } from "../types";
-import { displayMsisdn, holdEntry, holdEntryId, maskMsisdn, normaliseTxnId, openIds, withoutOpen } from "./core";
-import { endOffer, offerNext } from "./dispatch";
+import { displayMsisdn, holdEntry, holdEntryId, maskMsisdn, normaliseTxnId, openIds, withoutOpen, ringingIds } from "./core";
+import { leaveRing } from "./dispatch";
 import { creditZaadTopup } from "./settle";
 import {
   AgentAnswer,
@@ -135,6 +135,18 @@ export const agentSetZaadOnline = https.onCall(
   }
 );
 
+/** What the accepting agent is shown, from a request they already hold. */
+function acceptedFrom(id: string, req: ZaadAgentTopup): AcceptedTopup {
+  return {
+    requestId: id,
+    reference: req.reference ?? null,
+    amount: req.amount,
+    customerFirstName: req.customerFirstName,
+    allowedSenders: (req.allowedSenders ?? []).map(maskMsisdn),
+    sendBy: req.sendBy ? req.sendBy.toDate().toISOString() : new Date().toISOString(),
+  };
+}
+
 export interface AcceptedTopup {
   requestId: string;
   /** Zapp's reference the customer will quote (D31). */
@@ -158,14 +170,19 @@ export const agentAnswerZaadOffer = https.onCall(
     const db = admin.firestore();
 
     if (request.data?.accept !== true) {
-      if (await endOffer(id, uid, "declined")) await offerNext(id);
+      await leaveRing(id, uid);
       return { success: true, data: { declined: true } };
     }
 
     const rates = await getRates();
     const ref = db.collection(ZAAD_AGENT_TOPUPS).doc(id);
     const peek = (await ref.get()).data() as ZaadAgentTopup | undefined;
-    if (!peek || peek.offeredTo !== uid || peek.status !== "offered") {
+    // The same agent asking again (a double tap, or a retry after the first
+    // answer was lost): they already hold it, so say so instead of "ended".
+    if (peek && peek.status === "accepted" && peek.agentId === uid) {
+      return { success: true, data: acceptedFrom(id, peek) };
+    }
+    if (!peek || !ringingIds(peek).includes(uid) || peek.status !== "offered") {
       throw new https.HttpsError("failed-precondition", "This offer has ended", { reason: "offer_ended" });
     }
     // The numbers the customer may pay from (D5): their account's phone, and
@@ -184,15 +201,26 @@ export const agentAnswerZaadOffer = https.onCall(
 
     const nowMs = Date.now();
     let insufficient = false;
+    let alreadyHeld = false;
     let accepted: AcceptedTopup | null = null;
     let receive = "";
     await db.runTransaction(async (tx) => {
       const agentRef = db.collection(ZAAD_AGENTS).doc(uid);
       const [snap, agentSnap] = await Promise.all([tx.get(ref), tx.get(agentRef)]);
       const req = snap.data() as ZaadAgentTopup | undefined;
-      if (!req || req.status !== "offered" || req.offeredTo !== uid || (req.offerExpiresAt?.toMillis() ?? 0) < nowMs) {
+      // A transaction retried after its first run committed finds the request already theirs.
+      if (req && req.status === "accepted" && req.agentId === uid) {
+        accepted = acceptedFrom(id, req);
+        alreadyHeld = true;
+        return;
+      }
+      if (!req || req.status !== "offered" || !ringingIds(req).includes(uid) || (req.offerExpiresAt?.toMillis() ?? 0) < nowMs) {
         throw new https.HttpsError("failed-precondition", "This offer has ended", { reason: "offer_ended" });
       }
+      // The agents this was also ringing on lose it: read them now, free them below.
+      const others = ringingIds(req).filter((x) => x !== uid);
+      const otherRefs = others.map((x) => db.collection(ZAAD_AGENTS).doc(x));
+      const otherSnaps = await Promise.all(otherRefs.map((r) => tx.get(r)));
       const agent = agentSnap.data() as ZaadAgentDoc | undefined;
       if (!agent?.enabled || !agent.receiveMsisdn) {
         throw new https.HttpsError("failed-precondition", "Your Zaad number isn't set up", { reason: "not_set_up" });
@@ -209,9 +237,10 @@ export const agentAnswerZaadOffer = https.onCall(
       receive = agent.receiveMsisdn;
       tx.update(ref, {
         status: "accepted",
-        offers: req.offers.map((o, i) =>
-          i === req.offers.length - 1 ? { ...o, answer: "accepted", answeredAt: now } : o
+        offers: req.offers.map((o) =>
+          o.answer ? o : o.agentId === uid ? { ...o, answer: "accepted", answeredAt: now } : { ...o, answer: "taken", answeredAt: now }
         ),
+        offeredToIds: [],
         offeredTo: null,
         offerExpiresAt: null,
         agentId: uid,
@@ -226,6 +255,10 @@ export const agentAnswerZaadOffer = https.onCall(
         updatedAt: now,
       });
       tx.update(agentRef, { missedOffers: 0 });
+      otherSnaps.forEach((s, i) => {
+        const freed = withoutOpen(s.data() as ZaadAgentDoc | undefined, id);
+        if (freed) tx.update(otherRefs[i], freed);
+      });
       accepted = {
         requestId: id,
         reference: req.reference ?? null,
@@ -237,7 +270,7 @@ export const agentAnswerZaadOffer = https.onCall(
     });
 
     if (insufficient) {
-      if (await endOffer(id, uid, "declined")) await offerNext(id);
+      await leaveRing(id, uid);
       const float = await readFloatCents(uid);
       throw new https.HttpsError(
         "failed-precondition",
@@ -247,6 +280,7 @@ export const agentAnswerZaadOffer = https.onCall(
     }
     const done = accepted as AcceptedTopup | null;
     if (!done) throw new https.HttpsError("internal", "Could not accept");
+    if (alreadyHeld) return { success: true, data: done };
     notifyUser(
       peek.customerId,
       "zaad_agent_topup",

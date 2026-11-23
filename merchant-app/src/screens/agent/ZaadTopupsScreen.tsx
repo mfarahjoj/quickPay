@@ -19,7 +19,7 @@
  *   done      credited
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
@@ -27,6 +27,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { DarkScreen, GlassCard, PillButton, PinInput, ScreenHeader } from '../../components';
 import { SuccessCheckIcon } from '../../components/icons/AuthIcons';
 import { ZaadRequestList } from '../../components/ZaadRequestList';
+import { ZaadJobOffer } from '../../components/ZaadJobOffer';
 import { useZaadAgentRequests } from '../../hooks/useZaadAgentRequests';
 import { formatCents } from '../../utils/money';
 import { formatLocal } from '../../utils/zaad';
@@ -38,6 +39,7 @@ import {
   isWrongZaadPin,
   maskMsisdn,
   normaliseTxnId,
+  ringsOn,
   setZaadOnline,
   watchZaadAgent,
   watchZaadTopup,
@@ -83,6 +85,12 @@ export default function ZaadTopupsScreen() {
   const [pin, setPin] = useState('');
   const [zaadTxnText, setZaadTxnText] = useState('');
   const [done, setDone] = useState<{ amount: number; commission: number } | null>(null);
+  // An offer this agent was looking at that is no longer theirs to take.
+  const [endedOffer, setEndedOffer] = useState<{ amount: number } | null>(null);
+  const [accepting, setAccepting] = useState(false);
+  // The offer on screen, so that when it disappears (another agent took it: the
+  // request stops being readable to this agent) the agent is told why.
+  const lastOffer = useRef<{ amount: number } | null>(null);
 
   const refresh = useCallback(() => {
     getZaadStatus()
@@ -111,6 +119,19 @@ export default function ZaadTopupsScreen() {
     return watchZaadTopup(requestId, setReq);
   }, [requestId]);
 
+  // The offer on screen stops being readable once another agent accepts it.
+  useEffect(() => {
+    if (requestId && req === null && lastOffer.current) {
+      setEndedOffer({ amount: lastOffer.current.amount });
+      lastOffer.current = null;
+    }
+  }, [req, requestId]);
+
+  // Accepted: the request moves on from "offered" and the job card is done with.
+  useEffect(() => {
+    if (req?.status !== 'offered') setAccepting(false);
+  }, [req?.status]);
+
   const offerLeft = useCountdown(req?.status === 'offered' ? req.offerExpiresAt : null);
   const sendLeft = useCountdown(req?.status === 'accepted' ? req.sendBy : null);
   const confirmLeft = useCountdown(req?.status === 'customer_sent' ? req.confirmBy : null);
@@ -127,7 +148,8 @@ export default function ZaadTopupsScreen() {
       } else if (e?.details?.reason === 'insufficient_float') {
         setError(t('zaadTopups.errors.lowFloat', { float: formatCents(e.details.floatCents ?? 0) }));
       } else if (e?.details?.reason === 'offer_ended') {
-        setError(t('zaadTopups.errors.offerEnded'));
+        setEndedOffer({ amount: req?.amount ?? lastOffer.current?.amount ?? 0 });
+        lastOffer.current = null;
       } else if (e?.details?.reason === 'not_set_up') {
         setError(t('zaadTopups.notSetUp'));
       } else if (e?.details?.reason === 'txn_id_used') {
@@ -150,11 +172,19 @@ export default function ZaadTopupsScreen() {
       refresh();
     });
 
-  const answerOffer = (id: string, accept: boolean) =>
-    run(async () => {
-      await answerZaadOffer(id, accept);
+  const answerOffer = (id: string, accept: boolean) => {
+    setAccepting(accept);
+    return run(async () => {
+      try {
+        await answerZaadOffer(id, accept);
+      } catch (e) {
+        setAccepting(false);
+        throw e;
+      }
+      lastOffer.current = null;
       setRequestId(accept ? id : null);
     });
+  };
   const answer = (accept: boolean) => answerOffer(requestId!, accept);
 
   const decline = (kind: 'not_received' | 'different_amount') =>
@@ -189,6 +219,8 @@ export default function ZaadTopupsScreen() {
   };
 
   const leave = () => {
+    lastOffer.current = null;
+    setEndedOffer(null);
     setZaadTxnText('');
     setAskingPin(false);
     setPin('');
@@ -230,24 +262,46 @@ export default function ZaadTopupsScreen() {
     );
   }
 
-  const mine = req && (req.agentId === uid || req.offeredTo === uid) ? req : null;
+  const mine = req && (req.agentId === uid || ringsOn(req, uid)) ? req : null;
 
-  // A request ringing on this agent.
-  if (mine?.status === 'offered' && mine.offeredTo === uid) {
+  // Another agent took the offer, or it ran out, while this agent was looking.
+  if (endedOffer) {
     return (
       <DarkScreen edges={[]} scroll contentStyle={styles.content}>
         {header}
-        <View style={styles.body}>
-          {others}
-          <Text style={styles.label}>{t('zaadTopups.offer.label')}</Text>
-          <Text style={styles.bigAmountCentered}>{formatCents(mine.amount)}</Text>
-          <Reference value={mine.reference} />
-          <Text style={styles.sub}>{t('zaadTopups.offer.body', { name: mine.customerFirstName })}</Text>
-          <Text style={styles.countdown}>{clock(offerLeft)}</Text>
-          {errorLine}
-          <PillButton label={t('zaadTopups.offer.accept')} onPress={() => answer(true)} loading={busy} disabled={busy || offerLeft === 0} />
-          <PillButton label={t('zaadTopups.offer.decline')} variant="glass" onPress={() => answer(false)} disabled={busy} />
-        </View>
+        <ZaadJobOffer
+          amount={endedOffer.amount}
+          customerFirstName=""
+          secondsLeft={0}
+          phase="taken"
+          onAccept={() => undefined}
+          onDecline={() => undefined}
+          onClose={leave}
+        />
+      </DarkScreen>
+    );
+  }
+
+  // A request ringing on this agent: a job, first to accept gets it.
+  if (mine?.status === 'offered' && ringsOn(mine, uid)) {
+    lastOffer.current = { amount: mine.amount };
+    const windowMs = (mine.offerExpiresAt?.toMillis() ?? 0) - (mine.createdAt?.toMillis() ?? 0);
+    return (
+      <DarkScreen edges={[]} scroll contentStyle={styles.content}>
+        {header}
+        <ZaadJobOffer
+          amount={mine.amount}
+          customerFirstName={mine.customerFirstName}
+          commissionCents={mine.agentCommissionCents}
+          secondsLeft={offerLeft}
+          windowMs={windowMs > 0 ? windowMs : undefined}
+          phase={accepting ? 'checking' : offerLeft === 0 ? 'expired' : 'deciding'}
+          othersWaiting={othersWaiting}
+          error={error}
+          onAccept={() => answer(true)}
+          onDecline={() => answer(false)}
+          onClose={leave}
+        />
       </DarkScreen>
     );
   }

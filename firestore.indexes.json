@@ -50,6 +50,14 @@
       ]
     },
     {
+      "collectionGroup": "zaadAgentTopups",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "offeredToIds", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "transactions",
       "queryScope": "COLLECTION",
       "fields": [

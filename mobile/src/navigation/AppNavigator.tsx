@@ -73,7 +73,7 @@ type MainStackParamList = {
   ManualTopup: undefined;
   TopUpMethod: undefined;
   AgentTopup: undefined;
-  ZaadTopup: { mode?: 'link' } | undefined;
+  ZaadTopup: { mode?: 'link'; amountCents?: number } | undefined;
   ZaadAgentTopup: undefined;
   AgentLocator: undefined;
   CashOut: undefined;

@@ -6,12 +6,12 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { requireAuth } from "../utils/validation";
-import { getRates } from "../config/rates";
+import { computeCommission, getRates } from "../config/rates";
 import { notifyUser } from "../utils/notifications";
 import { pushAmount } from "../utils/money";
 import { ApiResponse } from "../types";
-import { firstName, normaliseTxnId, withoutOpen } from "./core";
-import { offerNext } from "./dispatch";
+import { firstName, normaliseTxnId, ringingIds, withoutOpen } from "./core";
+import { ringAgents } from "./dispatch";
 import { assertNoActiveZaad, assertZaadAgentOpen, assertZaadAmount, checkZaadCustomer } from "./limits";
 import { claimTopupReference, pickTopupReference } from "./reference";
 import { releaseZaadHold } from "./settle";
@@ -84,8 +84,10 @@ export const customerRequestZaadAgentTopup = https.onCall(
         updatedAt: now,
         deadlineAt: now,
         offers: [],
+        offeredToIds: [],
         offeredTo: null,
         offerExpiresAt: null,
+        agentCommissionCents: computeCommission(amount, rates.zaadAgentTopupCommissionRate),
         agentId: null,
         meeting: "remote",
       };
@@ -94,7 +96,7 @@ export const customerRequestZaadAgentTopup = https.onCall(
       tx.set(customerRef, { activeRequestId: ref.id }, { merge: true });
     });
 
-    await offerNext(ref.id, nowMs);
+    await ringAgents(ref.id, nowMs);
     const status = ((await ref.get()).data() as ZaadAgentTopup).status;
     return { success: true, data: { requestId: ref.id, status, reference } };
   }
@@ -119,12 +121,21 @@ export const customerCancelZaadTopup = https.onCall(
             reason: "moved",
           });
         }
-        const agentRef = fresh.offeredTo ? db.collection(ZAAD_AGENTS).doc(fresh.offeredTo) : null;
-        const agent = agentRef ? ((await tx.get(agentRef)).data() as ZaadAgentDoc | undefined) : undefined;
+        const agentRefs = ringingIds(fresh).map((x) => db.collection(ZAAD_AGENTS).doc(x));
+        const agentSnaps = await Promise.all(agentRefs.map((r) => tx.get(r)));
         const now = admin.firestore.Timestamp.now();
-        tx.update(ref, { status: "cancelled", offeredTo: null, offerExpiresAt: null, deadlineAt: null, updatedAt: now });
-        const freed = agentRef ? withoutOpen(agent, id) : null;
-        if (agentRef && freed) tx.update(agentRef, freed);
+        tx.update(ref, {
+          status: "cancelled",
+          offeredToIds: [],
+          offeredTo: null,
+          offerExpiresAt: null,
+          deadlineAt: null,
+          updatedAt: now,
+        });
+        agentSnaps.forEach((snap, i) => {
+          const freed = withoutOpen(snap.data() as ZaadAgentDoc | undefined, id);
+          if (freed) tx.update(agentRefs[i], freed);
+        });
       });
       return { success: true, data: { status: "cancelled" } };
     }

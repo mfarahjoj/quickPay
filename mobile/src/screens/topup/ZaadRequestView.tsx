@@ -129,6 +129,7 @@ export default function ZaadRequestView({ requestId, onStartOver }: { requestId:
   const sendLeft = useSecondsLeft(req?.status === 'accepted' ? req.sendBy : undefined);
   const confirmLeft = useSecondsLeft(req?.status === 'customer_sent' ? req.confirmBy : undefined);
   const disputeLeft = useSecondsLeft(req?.status === 'declined' ? req.disputeUntil : undefined);
+  const ringLeft = useSecondsLeft(req?.status === 'offered' ? (req.offerExpiresAt ?? undefined) : undefined);
 
   const run = async (fn: () => Promise<unknown>) => {
     if (busy) return;
@@ -154,6 +155,7 @@ export default function ZaadRequestView({ requestId, onStartOver }: { requestId:
       <View style={styles.body}>
         <Text style={styles.big}>{t('topup.zaadAgent.findingTitle', { amount })}</Text>
         <Waiting text={t('topup.zaadAgent.finding')} />
+        {ringLeft > 0 ? <Text style={styles.hint}>{t('topup.zaadAgent.findingLeft', { time: clock(ringLeft) })}</Text> : null}
         {errorLine}
         <TouchableOpacity onPress={() => run(() => cancelZaadAgentTopup(requestId))}>
           <Text style={styles.link}>{t('topup.zaadAgent.cancel')}</Text>
@@ -274,8 +276,58 @@ export default function ZaadRequestView({ requestId, onStartOver }: { requestId:
     );
   }
 
-  // no_agent, disputed, released, expired, cancelled
-  const again = req.status === 'no_agent' || req.status === 'cancelled' || req.status === 'expired';
+  if (req.status === 'disputed') {
+    // Why it is in review, what happens next, and why a new request can't
+    // start: the server allows one open Zaad top-up at a time, and a
+    // disputed one stays open until ops decide it.
+    const who = agent || t('topup.zaadAgent.disputed.theAgent');
+    const whyKey =
+      req.disputedBy === 'timeout'
+        ? 'topup.zaadAgent.disputed.why.timeout'
+        : req.agentAnswer === 'different_amount'
+          ? 'topup.zaadAgent.disputed.why.different'
+          : req.agentAnswer === 'not_received'
+            ? 'topup.zaadAgent.disputed.why.notReceived'
+            : 'topup.zaadAgent.disputed.why.customer';
+    return (
+      <View style={styles.body}>
+        <AgentHeader name={agent} amount={amount} />
+        <Reference value={req.reference} />
+        <Text style={styles.big}>{t('topup.zaadAgent.disputed.title', { amount })}</Text>
+        <Text style={styles.hint}>{t(whyKey, { agent: who, amount })}</Text>
+        {req.disputeReason ? (
+          <Text style={styles.hint}>{t('topup.zaadAgent.disputed.yourNote', { text: req.disputeReason })}</Text>
+        ) : null}
+        <Text style={styles.hint}>{t('topup.zaadAgent.disputed.next')}</Text>
+        <Text style={styles.hint}>{t('topup.zaadAgent.disputed.blocked')}</Text>
+        <Primary label={t('common.done')} onPress={() => navigation.goBack()} />
+      </View>
+    );
+  }
+
+  if (req.status === 'no_agent') {
+    // Nobody picked it up. Offer Zapp's own Zaad number: the customer pays it
+    // directly and the amount lands as soon as it arrives. Nothing was held.
+    return (
+      <View style={styles.body}>
+        <Text style={styles.big}>{t('topup.zaadAgent.noAgent.title')}</Text>
+        <Text style={styles.hint}>{t('topup.zaadAgent.noAgent.body', { amount })}</Text>
+        <Primary
+          label={t('topup.zaadAgent.noAgent.sendToZapp', { amount })}
+          onPress={() => navigation.replace('ZaadTopup', { amountCents: req.amount })}
+        />
+        <TouchableOpacity onPress={onStartOver}>
+          <Text style={styles.link}>{t('topup.zaadAgent.noAgent.tryAgents')}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Text style={styles.link}>{t('topup.zaadAgent.cancel')}</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // released, expired, cancelled
+  const again = req.status === 'cancelled' || req.status === 'expired';
   return (
     <View style={[styles.body, styles.center]}>
       <Text style={[styles.big, { textAlign: 'center' }]}>{t(`topup.zaadAgent.ended.${req.status}`, { amount })}</Text>

@@ -440,9 +440,9 @@ export const PUSH_TEMPLATES = {
 
   // Zaad top-ups through agents (zaadAgent/)
   "zaadAgent.offer": {
-    en: { title: "New Zaad top-up: {amount}", body: "A customer wants {amount}. Accept within {seconds} seconds in Zapp Pay Merchant." },
-    so: { title: "Ku darid Zaad cusub: {amount}", body: "Macmiil ayaa doonaya {amount}. Ku aqbal {seconds} ilbiriqsi gudahood Zapp Pay Merchant." },
-    ar: { title: "طلب شحن زاد جديد: {amount}", body: "عميل يريد شحن {amount}. اقبل خلال {seconds} ثانية في Zapp Pay Merchant." },
+    en: { title: "New top-up job: {amount}", body: "Earn {earn}. A customer needs {amount}. The first agent to accept gets it: open Zapp Pay Merchant within {seconds} seconds." },
+    so: { title: "Shaqo ku darid cusub: {amount}", body: "Hel {earn}. Macmiil ayaa u baahan {amount}. Wakiilka ugu horreeya ee aqbala ayaa helaya: fur Zapp Pay Merchant {seconds} ilbiriqsi gudahood." },
+    ar: { title: "طلب شحن جديد: {amount}", body: "اربح {earn}. عميل يحتاج {amount}. أول وكيل يقبل يحصل عليه: افتح Zapp Pay Merchant خلال {seconds} ثانية." },
   },
   "zaadAgent.confirm_reminder": {
     en: { title: "5 minutes left: {amount}", body: "{customer} says they sent {amount}. Check your Zaad and answer, or Zapp Pay will review it." },
@@ -470,9 +470,9 @@ export const PUSH_TEMPLATES = {
     ar: { title: "تحقق من زاد", body: "يقول {customer} إنه أرسل {amount}. تحقق من رصيد زاد ثم أكّد." },
   },
   "zaadAgent.no_agent": {
-    en: { title: "No agent is free", body: "No agent could take your {amount} top-up. Try again in a few minutes." },
-    so: { title: "Wakiil bannaan ma jiro", body: "Wakiil ma qaadan karin ku daridaada {amount}. Isku day mar kale dhowr daqiiqo kadib." },
-    ar: { title: "لا يوجد وكيل متاح", body: "لم يتمكن أي وكيل من قبول شحن {amount}. حاول مرة أخرى بعد دقائق." },
+    en: { title: "No agent has picked it up", body: "No agent took your {amount} top-up. Open Zapp Pay to send it to Zapp instead." },
+    so: { title: "Wakiil weli ma qaadan", body: "Wakiil ma qaadan ku daridaada {amount}. Fur Zapp Pay si aad ugu dirto Zapp." },
+    ar: { title: "لم يقبل أي وكيل بعد", body: "لم يقبل أي وكيل شحن {amount}. افتح Zapp Pay لإرساله إلى Zapp مباشرة." },
   },
   "zaadAgent.declined": {
     en: { title: "Payment not received", body: "{agent} didn't receive {amount}. If you sent it, open a dispute within {minutes} minutes." },
