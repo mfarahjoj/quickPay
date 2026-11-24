@@ -143,6 +143,27 @@ export { approvePaymentRequest } from "./customer-qr/approvePayment";
 export { rejectPaymentRequest } from "./customer-qr/rejectPayment";
 export { cancelPaymentRequest } from "./customer-qr/cancelPayment";
 
+// Bills: shops send bills, customers pay them or turn on auto-pay (bills/).
+export {
+  createBill,
+  cancelBill,
+  merchantListBills,
+  stopBillSeries,
+} from "./bills/merchant";
+export {
+  listMyBills,
+  payBill,
+  declineBill,
+  setBillAutopay,
+  disableBillAutopay,
+} from "./bills/customer";
+export {
+  requestDirectPayment,
+  cancelDirectPaymentRequest,
+  answerDirectPaymentRequest,
+} from "./bills/requests";
+export { billsHourly } from "./bills/schedule";
+
 // Merchant functions
 export { registerMerchant } from "./merchants/registerMerchant";
 export { getMerchantProfile } from "./merchants/getMerchantProfile";

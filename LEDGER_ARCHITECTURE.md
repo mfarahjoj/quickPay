@@ -145,6 +145,7 @@ Agent cash-in and cash-out, with guards and threat model: `CASH_IN_CASH_OUT.md`.
 | QR payment against balance (`processPayment`, `payMerchant`, `approvePayment`) | `user:{customer}` | `user:{merchant}` (net) + `platform:fees` (fee) |
 | Refund | `user:{merchant}` (net) + `platform:fees` (fee) | `user:{customer}` |
 | Online / API payment (`approveApiCharge`, type `online_payment`, entry `apicharge_{chargeId}`) | `user:{customer}` | `user:{merchant}` (net) + `platform:fees` (fee at `onlinePaymentFeeRate`) |
+| Bill payment (`payBill` with PIN, or auto-pay in `billsHourly`; type `bill_payment`, entry `bill_{billId}`) | `user:{customer}` | `user:{merchant}` (net) + `platform:fees` (fee at `paymentFeeRate`) |
 | API refund, full or partial (`POST /v1/charges/{id}/refunds`, entry `refund_apicharge_{chargeId}_{n}`) | `user:{merchant}` (share of net) + `platform:fees` (share of fee, rounded on the running total so the parts sum to the fee) | `user:{customer}` |
 | Cash-out hold (`customerCashOut`, entry `cashouthold_{id}`) | `user:{customer}` | `platform:cashout_hold` |
 | Cash-out settle (`agentConfirmCashOut`, entry `cashout_{id}`) | `platform:cashout_hold` | `user:{agent}` |

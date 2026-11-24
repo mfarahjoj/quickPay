@@ -37,6 +37,7 @@ const BY_ENTRY_PREFIX: Array<[string, TransactionKind]> = [
   ["refund_", "refund"],
   ["remit_", "remittance"],
   ["qrpay_", "merchant_payment"],
+  ["bill_", "merchant_payment"],
   ["p2p_", "p2p"],
 ];
 
