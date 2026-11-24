@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, type ApiAgreementRow, type ApiKeyRow, type ApiPartnerRow } from "../api";
+import { api, type ApiAgreementRow, type ApiKeyRow, type ApiPartnerRow, type LiveAccessView } from "../api";
 import { ReasonPrompt } from "./ReasonPrompt";
+
+const LIVE_ACCESS_LABEL: Record<LiveAccessView["status"], string> = {
+  none: "Not asked for",
+  pending: "Waiting in API access",
+  approved: "Approved",
+  declined: "Declined",
+  withdrawn: "Withdrawn",
+};
 
 /**
  * Merchant API keys (docs/MERCHANT_API.md). A key lets the merchant's own
@@ -14,6 +22,9 @@ export function ApiKeysPanel({ merchantId, disabled }: { merchantId: string; dis
   const [issuing, setIssuing] = useState(false);
   const [label, setLabel] = useState("");
   const [revoking, setRevoking] = useState<ApiKeyRow | null>(null);
+  const [liveAccess, setLiveAccess] = useState<LiveAccessView | null>(null);
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [withdrawNote, setWithdrawNote] = useState("");
   const [fresh, setFresh] = useState<{ label: string; apiKey: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [testMode, setTestMode] = useState(false);
@@ -29,8 +40,9 @@ export function ApiKeysPanel({ merchantId, disabled }: { merchantId: string; dis
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [k, p] = await Promise.all([api.listApiKeys(merchantId), api.getApiPartner(merchantId)]);
-      setKeys(k);
+      const [k, p] = await Promise.all([api.apiKeysAndAccess(merchantId), api.getApiPartner(merchantId)]);
+      setKeys(k.keys);
+      setLiveAccess(k.liveAccess);
       setPartner(p);
       setAgreements(p.agreementsEnabled ? await api.listAgreements(merchantId) : []);
     } catch (err) {
@@ -109,6 +121,43 @@ export function ApiKeysPanel({ merchantId, disabled }: { merchantId: string; dis
         For merchants taking Zapp Pay on their website or till. Customers still approve every
         payment in the app with their PIN.
       </p>
+
+      {liveAccess && (
+        <div className="stack" style={{ marginBottom: 8 }}>
+          <div className="row" style={{ gap: 8 }}>
+            <span className="muted">Live access</span>
+            <strong>
+              {LIVE_ACCESS_LABEL[liveAccess.status]}
+              {liveAccess.legacy ? " (held a live key before approvals)" : ""}
+            </strong>
+            {liveAccess.decidedAt && (
+              <span className="muted">· {new Date(liveAccess.decidedAt).toLocaleDateString()}</span>
+            )}
+            <div className="spacer" />
+            {liveAccess.status === "approved" && (
+              <button
+                className="ghost"
+                onClick={() => {
+                  setWithdrawNote("");
+                  setWithdrawing(true);
+                }}
+              >
+                Withdraw live access
+              </button>
+            )}
+          </div>
+          {liveAccess.purpose && (
+            <span className="muted" style={{ fontSize: 12 }}>
+              What it's for, in their words: “{liveAccess.purpose}”
+            </span>
+          )}
+          {liveAccess.note && (liveAccess.status === "declined" || liveAccess.status === "withdrawn") && (
+            <span className="muted" style={{ fontSize: 12 }}>
+              Told the shop: “{liveAccess.note}”
+            </span>
+          )}
+        </div>
+      )}
 
       {error && <div className="banner error">{error}</div>}
 
@@ -424,6 +473,36 @@ export function ApiKeysPanel({ merchantId, disabled }: { merchantId: string; dis
           onConfirm={revokeAgreement}
           onCancel={() => setRevokingAgreement(null)}
         />
+      )}
+
+      {withdrawing && (
+        <ReasonPrompt
+          title="Withdraw live API access"
+          description="Every live key this shop holds stops working at once, and the owner can't make new ones until they ask again and an admin approves. Test keys are untouched."
+          confirmLabel="Withdraw and revoke live keys"
+          danger
+          onConfirm={async (reason) => {
+            await api.withdrawLiveAccess(merchantId, reason, withdrawNote.trim());
+            setWithdrawing(false);
+            setWithdrawNote("");
+            setError(null);
+            await load();
+          }}
+          onCancel={() => {
+            setWithdrawing(false);
+            setWithdrawNote("");
+          }}
+        >
+          <label className="stack">
+            <span className="muted">Message to the shop (optional)</span>
+            <input
+              value={withdrawNote}
+              maxLength={300}
+              onChange={(e) => setWithdrawNote(e.target.value)}
+              placeholder="For example: one of your keys was shared; ask again when your developer is ready"
+            />
+          </label>
+        </ReasonPrompt>
       )}
 
       {revoking && (

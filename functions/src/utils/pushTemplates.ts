@@ -555,6 +555,23 @@ export const PUSH_TEMPLATES = {
     ar: { title: "انتهى وصول الموظف", body: "أزالك {shop} من موظفيه. لم يعد بإمكانك العمل لصالحه في Zapp Pay Merchant." },
   },
 
+  // Live API access (admin/liveAccess.ts): Zapp's decision on a shop's request.
+  "api.live_approved": {
+    en: { title: "Live API access approved", body: "You can now make live API keys. Find them in Settings, under API keys." },
+    so: { title: "Gelitaanka API-ga dhabta ah waa la oggolaaday", body: "Hadda waxaad samayn kartaa furayaasha API-ga dhabta ah. Ka hel Dejinta, qaybta Furayaasha API." },
+    ar: { title: "تمت الموافقة على الوصول الفعلي إلى API", body: "يمكنك الآن إنشاء مفاتيح API فعلية. تجدها في الإعدادات، ضمن مفاتيح API." },
+  },
+  "api.live_declined": {
+    en: { title: "Live API access not approved", body: "See why in Settings, under API keys. You can ask again." },
+    so: { title: "Gelitaanka API-ga dhabta ah lama oggolaan", body: "Sababta ka eeg Dejinta, qaybta Furayaasha API. Mar kale ayaad codsan kartaa." },
+    ar: { title: "لم تتم الموافقة على الوصول الفعلي إلى API", body: "اطّلع على السبب في الإعدادات، ضمن مفاتيح API. يمكنك الطلب مرة أخرى." },
+  },
+  "api.live_withdrawn": {
+    en: { title: "Live API access withdrawn", body: "Your live API keys no longer work. See Settings, under API keys." },
+    so: { title: "Gelitaanka API-ga dhabta ah waa laga noqday", body: "Furayaashaada API-ga dhabta ahi mar dambe ma shaqaynayaan. Eeg Dejinta, qaybta Furayaasha API." },
+    ar: { title: "تم سحب الوصول الفعلي إلى API", body: "لم تعد مفاتيح API الفعلية تعمل. راجع الإعدادات، ضمن مفاتيح API." },
+  },
+
   // Bills (bills/): a shop bills a customer; the customer pays or auto-pays.
   "bill.received": {
     en: { title: "New bill from {merchant}", body: "{amount} for {description}, due {due}." },

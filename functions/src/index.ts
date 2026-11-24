@@ -335,4 +335,10 @@ export {
 // Partners: merchants allowed to pay Zapp accounts by API (Ridy paying drivers).
 export { adminGetApiPartner, adminSetApiPartner } from "./admin/apiPartners";
 // Merchants' own keys (live and test), from the merchant app's Developers screen.
-export { listMyApiKeys, createMyApiKey, revokeMyApiKey } from "./merchants/apiKeys";
+// Live keys need Zapp's approval of the shop's live access first (api/liveAccess.ts).
+export { listMyApiKeys, createMyApiKey, revokeMyApiKey, requestLiveApiAccess } from "./merchants/apiKeys";
+export {
+  adminListLiveAccessRequests,
+  adminDecideLiveAccess,
+  adminWithdrawLiveAccess,
+} from "./admin/liveAccess";

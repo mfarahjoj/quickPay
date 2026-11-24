@@ -573,6 +573,8 @@ export interface Notification {
     | "store_link"
     /** Staff access: an invite, a role change or a removal (staff/manage.ts). */
     | "staff"
+    /** Live API access: approved, declined or withdrawn (admin/liveAccess.ts). */
+    | "api_access"
     /** Bills: one arrived, was paid, declined, or auto-pay couldn't pay it (bills/). */
     | "bill";
   title: string;

@@ -25,10 +25,20 @@ Authorization: Bearer zpk_live_…     live: real payments
 Authorization: Bearer zpk_test_…     test mode: nothing moves money (§7)
 ```
 
-Making a live key needs the merchant's PIN; a test key doesn't. Lost or leaked
-key → revoke it in the app (it stops working at once) and make a new one. You
-can hold up to five active keys of each kind (e.g. one per till) so you can
-rotate without downtime.
+Test keys are self-serve. **Live keys need Zapp's approval first**: on the Live
+tab the shop says what the keys are for and taps *Request live access*; an
+admin decides it in the console (**API access**, also counted on *To do*),
+usually after speaking to the shop, and the shop gets a push either way. Once
+approved, each live key needs the merchant's PIN. Ops can withdraw access from
+the account's API keys panel, which revokes every live key the shop holds at
+once. Shops that held a live key before approvals existed count as approved.
+Code: `functions/src/api/liveAccess.ts`, `merchants/apiKeys.ts`,
+`admin/liveAccess.ts`; the record is `api_live_access/{merchantId}`
+(server-only).
+
+Lost or leaked key → revoke it in the app (it stops working at once) and make a
+new one. You can hold up to five active keys of each kind (e.g. one per till)
+so you can rotate without downtime. Zapp never asks a shop for its key.
 
 **Rate limit:** 120 requests per minute per key (HTTP `429` beyond that).
 
