@@ -181,23 +181,6 @@ export function PeopleIcon({ size = 24, color: colorProp }: IconProps) {
   );
 }
 
-/** Angle brackets — API keys */
-export function CodeIcon({ size = 24, color: colorProp }: IconProps) {
-  const colors = useColors();
-  const color = colorProp ?? colors.primary;
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M8 8l-4 4 4 4M16 8l4 4-4 4M13.5 6l-3 12"
-        stroke={color}
-        strokeWidth={1.8}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </Svg>
-  );
-}
-
 /** Biometric setup — Face ID with scan lines and two-tone treatment */
 export function FaceIdIcon({ size = 48, color: colorProp }: IconProps) {
   const colors = useColors();

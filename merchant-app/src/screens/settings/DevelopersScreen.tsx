@@ -209,6 +209,7 @@ export default function DevelopersScreen() {
           </Text>
         </GlassCard>
         <Text style={styles.warning}>{t('developers.createdWarning')}</Text>
+        <Text style={styles.warning}>{t('developers.neverAsk')}</Text>
 
         <View style={styles.actions}>
           <PillButton label={t('developers.shareKey')} onPress={shareKey} />
@@ -355,6 +356,7 @@ export default function DevelopersScreen() {
         />
 
         <Text style={styles.hintText}>{t('developers.keepSafe')}</Text>
+        <Text style={styles.hintText}>{t('developers.neverAsk')}</Text>
         <Text style={styles.label}>{t('developers.baseUrlLabel')}</Text>
         <Text style={styles.baseUrl} selectable>
           {apiBaseUrl()}
