@@ -1,6 +1,39 @@
 {
   "indexes": [
     {
+      "collectionGroup": "portalSessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "merchantUid", "order": "ASCENDING" },
+        { "fieldPath": "actorUid", "order": "ASCENDING" },
+        { "fieldPath": "active", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "portalSessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "actorUid", "order": "ASCENDING" },
+        { "fieldPath": "active", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "merchantStaff",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "merchantUid", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "merchantStaff",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "staffUid", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "zaadAgentTopups",
       "queryScope": "COLLECTION",
       "fields": [

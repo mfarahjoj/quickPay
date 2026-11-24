@@ -159,6 +159,7 @@ export const approvePaymentRequest = https.onCall(
     let approvedCurrency: string;
     let approvedMerchantId: string;
     let approvedReference: string | undefined;
+    let approvedRaisedBy: string | undefined;
     let receiptNumber: string;
     let feeCents = 0;
     let netCents = 0;
@@ -220,6 +221,7 @@ export const approvePaymentRequest = https.onCall(
       }
       approvedMerchantId = paymentReq.merchantId;
       approvedReference = paymentReq.reference;
+      approvedRaisedBy = paymentReq.raisedBy;
       cashOut = paymentReq.purpose === "cash_out";
       // The round-trip check read the request outside this transaction. A
       // request never changes purpose, but don't post on a stale read if it did.
@@ -305,6 +307,7 @@ export const approvePaymentRequest = https.onCall(
         status: "completed",
         description: cashOut ? "Cash-out at an agent" : "QR Payment (Customer Token)",
         ...(approvedReference ? { reference: approvedReference } : {}),
+        ...(approvedRaisedBy ? { raisedBy: approvedRaisedBy } : {}),
         receiptNumber,
         journalEntryId: entryId,
         createdAt: now,

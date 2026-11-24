@@ -1,6 +1,6 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
-import { requireAuth } from "../utils/validation";
+import { requireMerchantActor } from "../staff/access";
 import {
   ApiResponse,
   MerchantPaymentRequest,
@@ -10,6 +10,8 @@ import { requestExpiryMillis } from "./requestExpiry";
 
 interface CancelPaymentInput {
   requestId: string;
+  /** A staff member cancelling their own charge for this shop (STAFF_ACCESS.md). */
+  merchantId?: string;
 }
 
 /**
@@ -30,8 +32,8 @@ export const cancelPaymentRequest = https.onCall(
   async (
     request: https.CallableRequest<CancelPaymentInput>
   ): Promise<ApiResponse<{ status: PaymentRequestStatus }>> => {
-    requireAuth(request);
-    const merchantId = request.auth!.uid;
+    const actor = await requireMerchantActor(request, request.data?.merchantId, "charge");
+    const merchantId = actor.merchantUid;
 
     const { requestId } = request.data ?? {};
     if (typeof requestId !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(requestId)) {
@@ -48,7 +50,8 @@ export const cancelPaymentRequest = https.onCall(
       }
 
       const paymentReq = snap.data() as MerchantPaymentRequest;
-      if (paymentReq.merchantId !== merchantId) {
+      // The shop may withdraw any of its charges; a staff member only their own.
+      if (paymentReq.merchantId !== merchantId || (actor.role !== "owner" && paymentReq.raisedBy !== actor.actorUid)) {
         throw new https.HttpsError(
           "permission-denied",
           "This request was raised by a different merchant"

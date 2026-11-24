@@ -32,7 +32,8 @@ use too.
 | `…/days/{YYYY-MM-DD}` | Per currency: sales and refunds (count, gross, fee, net), sales by hour (24 slots), sales by channel, agent cash-in/out and commission. Plus distinct customers: unique, new, returning |
 | `…/months/{YYYY-MM}` | Same shape, for long ranges (12 reads for a year) |
 | `…/customers/{customerUid}` | First and last seen, visits, visit days, spend and refunds per currency, usual gap between visit days (smoothed) |
-| `…/live/recent` | Last 20 sales and refunds, newest first, with a short name ("Amina H.") |
+| `…/live/recent` | Last 20 sales and refunds, newest first. No names: a staff manager without "Show customers" reads it (`STAFF_ACCESS.md`) |
+| `…/live/recentNames` | The feed's short names ("Amina H.") by txId, for items still in the feed. Readable only by viewers who may see customers (`canViewCustomers`) |
 | `…/applied/{txId}` | Idempotency marker. Kept for good: an expired marker would let a backfill count a row twice. Server-only |
 | `…/days/{d}/visitors/{customer}`, `…/months/{m}/visitors/{customer}` | First-visit markers, so unique customers are exact in any event order. Server-only |
 | `merchantStatsRuns/{day}` | Each night's run: rows scanned, rows caught up, shops checked, drift found. Server-only |

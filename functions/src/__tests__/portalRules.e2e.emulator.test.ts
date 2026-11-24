@@ -60,6 +60,7 @@ run("portal session rules", () => {
       }),
       db.doc(`merchantStats/${SHOP}/days/${DAY}`).set({ storeUid: SHOP }),
       db.doc(`merchantStats/${SHOP}/live/recent`).set({ items: [] }),
+      db.doc(`merchantStats/${SHOP}/live/recentNames`).set({ names: {} }),
       db.doc(`merchantStats/${SHOP}/customers/c1`).set({ customerUid: "c1" }),
       db.doc(`merchantStats/${SHOP}/applied/t1`).set({ type: "sale" }),
       db.doc(`merchantStats/${OTHER}/days/${DAY}`).set({ storeUid: OTHER }),
@@ -73,8 +74,11 @@ run("portal session rules", () => {
     const portal = await idToken(`portal_${SID}`, { portal: true, portalFor: SHOP, portalSid: SID });
     expect(await read(portal, `merchantStats/${SHOP}/days/${DAY}`)).toBe(200);
     expect(await read(portal, `merchantStats/${SHOP}/live/recent`)).toBe(200);
+    expect(await read(portal, `merchantStats/${SHOP}/live/recentNames`)).toBe(200);
     expect(await read(portal, `merchantStats/${SHOP}/customers/c1`)).toBe(200);
-    for (const path of [`users/${SHOP}`, `wallets/${SHOP}`, "transactions/t1", `portalSessions/${SID}`, `merchantStats/${SHOP}/applied/t1`, `merchantStats/${OTHER}/days/${DAY}`]) {
+    // Its own session, to leave the moment it ends; never another's.
+    expect(await read(portal, `portalSessions/${SID}`)).toBe(200);
+    for (const path of [`users/${SHOP}`, `wallets/${SHOP}`, "transactions/t1", "portalSessions/ps_other", `merchantStats/${SHOP}/applied/t1`, `merchantStats/${OTHER}/days/${DAY}`]) {
       expect([path, await read(portal, path)]).toEqual([path, 403]);
     }
     expect(await write(portal, `users/portal_${SID}/fcmTokens/t1`)).toBe(403);
@@ -100,5 +104,63 @@ run("portal session rules", () => {
     const portal = await idToken(`portal_${SID}`, { portal: true, portalFor: SHOP, portalSid: SID });
     await db.doc(`portalSessions/${SID}`).update({ active: false });
     expect(await read(portal, `merchantStats/${SHOP}/days/${DAY}`)).toBe(403);
+    // It can still see that its session ended, which is how an open tab signs out.
+    expect(await read(portal, `portalSessions/${SID}`)).toBe(200);
+  });
+
+  // Staff access (STAFF_ACCESS.md): a manager's session sees only the shop
+  // that granted it, and its customers only if the shop allowed it.
+  it("limits a staff manager's session to its shop, and customers to showCustomers", async () => {
+    const STAFF_SID = "ps_" + "e2e1".repeat(8);
+    const now = Date.now();
+    const session = (showCustomers: boolean) => ({
+      merchantUid: SHOP,
+      active: true,
+      browser: "test",
+      loginId: "pl_y",
+      createdAt: admin.firestore.Timestamp.fromMillis(now),
+      expiresAt: admin.firestore.Timestamp.fromMillis(now + 3600_000),
+      actorUid: "e2e-staff",
+      actorName: "Hodan",
+      role: "manager",
+      showCustomers,
+    });
+    await db.doc(`portalSessions/${STAFF_SID}`).set(session(false));
+    await db.doc(`storeLinks/${OTHER}`).set({ ownerUid: SHOP, storeUid: OTHER, status: "active" });
+    const staff = await idToken(`portal_${STAFF_SID}`, { portal: true, portalFor: SHOP, portalSid: STAFF_SID });
+
+    expect(await read(staff, `merchantStats/${SHOP}/days/${DAY}`)).toBe(200);
+    expect(await read(staff, `merchantStats/${SHOP}/live/recent`)).toBe(200);
+    expect(await read(staff, `merchantStats/${SHOP}/live/recentNames`)).toBe(403);
+    expect(await read(staff, `merchantStats/${SHOP}/customers/c1`)).toBe(403);
+    // The owner's linked store is not the staff member's to see.
+    expect(await read(staff, `merchantStats/${OTHER}/days/${DAY}`)).toBe(403);
+
+    await db.doc(`portalSessions/${STAFF_SID}`).set(session(true));
+    expect(await read(staff, `merchantStats/${SHOP}/customers/c1`)).toBe(200);
+    expect(await read(staff, `merchantStats/${SHOP}/live/recentNames`)).toBe(200);
+    await db.doc(`storeLinks/${OTHER}`).delete();
+  });
+
+  it("lets the shop and the staff member read their grant, and the staff member their own charges", async () => {
+    await Promise.all([
+      db.doc(`merchantStaff/${SHOP}_e2e-staff`).set({ merchantUid: SHOP, staffUid: "e2e-staff", role: "cashier", status: "active" }),
+      db.doc("merchantStaffAudit/a1").set({ merchantUid: SHOP, staffUid: "e2e-staff", action: "invited" }),
+      db.doc("paymentRequests/pr1").set({ merchantId: SHOP, customerId: "c1", raisedBy: "e2e-staff", status: "pending" }),
+      db.doc("paymentRequests/pr2").set({ merchantId: SHOP, customerId: "c1", status: "pending" }),
+    ]);
+    const shop = await idToken(SHOP, {});
+    const staff = await idToken("e2e-staff", {});
+    const stranger = await idToken("e2e-stranger", {});
+
+    expect(await read(shop, `merchantStaff/${SHOP}_e2e-staff`)).toBe(200);
+    expect(await read(staff, `merchantStaff/${SHOP}_e2e-staff`)).toBe(200);
+    expect(await read(stranger, `merchantStaff/${SHOP}_e2e-staff`)).toBe(403);
+    expect(await write(staff, `merchantStaff/${SHOP}_e2e-staff`)).toBe(403);
+    expect(await read(shop, "merchantStaffAudit/a1")).toBe(403);
+
+    expect(await read(staff, "paymentRequests/pr1")).toBe(200);
+    expect(await read(staff, "paymentRequests/pr2")).toBe(403);
+    expect(await read(stranger, "paymentRequests/pr1")).toBe(403);
   });
 });

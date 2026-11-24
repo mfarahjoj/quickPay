@@ -188,12 +188,34 @@ service cloud.firestore {
         && portalSession().expiresAt > request.time
         && portalSession().merchantUid == request.auth.token.get('portalFor', '')
         && (storeUid == request.auth.token.portalFor
-            || (get(/databases/$(database)/documents/storeLinks/$(storeUid)).data.ownerUid == request.auth.token.portalFor
+            || (portalSession().get('actorUid', null) == null
+                && get(/databases/$(database)/documents/storeLinks/$(storeUid)).data.ownerUid == request.auth.token.portalFor
                 && get(/databases/$(database)/documents/storeLinks/$(storeUid)).data.status == 'active'));
     }
     function canViewStore(storeUid) {
       return (isAuthenticated() && isOwner(storeUid)) || isPortalFor(storeUid);
     }
+    // A staff manager's sign-in (actorUid set, STAFF_ACCESS.md) sees only the
+    // shop that granted it, never its linked stores (above), and customer
+    // details only if the shop allowed it. Any change to the grant ends the
+    // session (staff/manage.ts), so the session's fields are current.
+    function canViewCustomers(storeUid) {
+      return (isAuthenticated() && isOwner(storeUid))
+        || (isPortalFor(storeUid)
+            && (portalSession().get('actorUid', null) == null || portalSession().get('showCustomers', false) == true));
+    }
+    // Staff access (STAFF_ACCESS.md). The shop sees its staff list and each
+    // staff member their own grants, to accept and to know where they work.
+    // Every change goes through staff/manage.ts; the audit log is server-only.
+    match /merchantStaff/{grantId} {
+      allow read: if isAuthenticated() &&
+                     (isOwner(resource.data.merchantUid) || isOwner(resource.data.staffUid));
+      allow write: if false;
+    }
+    match /merchantStaffAudit/{entryId} {
+      allow read, write: if false;
+    }
+
     match /merchantStats/{storeUid} {
       allow read: if canViewStore(storeUid);
       allow write: if false;
@@ -206,11 +228,14 @@ service cloud.firestore {
         allow write: if false;
       }
       match /customers/{customerUid} {
-        allow read: if canViewStore(storeUid);
+        allow read: if canViewCustomers(storeUid);
         allow write: if false;
       }
+      // The feed's customer names sit in their own doc, `recentNames`, so a
+      // manager without "Show customers" gets the feed but not who paid.
       match /live/{docId} {
-        allow read: if canViewStore(storeUid);
+        allow read: if (docId != 'recentNames' && canViewStore(storeUid))
+                    || (docId == 'recentNames' && canViewCustomers(storeUid));
         allow write: if false;
       }
     }
@@ -244,9 +269,12 @@ service cloud.firestore {
     
     // Payment requests - readable by merchant or customer involved
     match /paymentRequests/{requestId} {
+      // Also the staff member who raised it for the shop, so their charge
+      // screen can follow it (STAFF_ACCESS.md).
       allow read: if isAuthenticated() &&
                      (isOwner(resource.data.merchantId) ||
-                      isOwner(resource.data.customerId));
+                      isOwner(resource.data.customerId) ||
+                      isOwner(resource.data.get('raisedBy', '')));
       allow write: if false; // Only Cloud Functions can manage payment requests
     }
     
@@ -394,8 +422,15 @@ service cloud.firestore {
     match /portalLogins/{loginId} {
       allow read, write: if false;
     }
+    // A Zapp Business sign-in may watch its own session (never another's), so
+    // an open tab leaves the moment the session ends: signed out from the
+    // phone, or a staff grant changed (STAFF_ACCESS.md). Nothing secret is on it.
     match /portalSessions/{sessionId} {
-      allow read, write: if false;
+      allow read: if request.auth != null
+                  && request.auth.token.get('portal', false) == true
+                  && request.auth.token.get('portalSid', '') == sessionId
+                  && request.auth.uid == 'portal_' + sessionId;
+      allow write: if false;
     }
     match /storeLinks/{storeUid} {
       allow read, write: if false;

@@ -28,7 +28,7 @@ import { buildStatementCsv } from "../payouts/statement";
 import { Transaction } from "../types";
 import { kindOf } from "../utils/transactionKind";
 import { linksFor } from "./groups";
-import { requirePortalViewer } from "./viewer";
+import { customersDenied, requirePortalViewer } from "./viewer";
 
 const MAX_PERIOD_MS = 93 * 24 * 60 * 60 * 1000;
 const MAX_ROWS = 5000;
@@ -61,6 +61,7 @@ const storeArg = (request: https.CallableRequest, viewerUid: string): string => 
 
 export const portalGetStore = https.onCall({ enforceAppCheck: true }, async (request) => {
   const viewer = await requirePortalViewer(request);
+  const owner = viewer.role === "owner";
   const db = admin.firestore();
   const stores = await Promise.all(
     viewer.storeUids.map(async (storeUid) => {
@@ -80,7 +81,8 @@ export const portalGetStore = https.onCall({ enforceAppCheck: true }, async (req
         businessType: (p?.businessType as string) || null,
         accountType: (user.data()?.accountType as string) || null,
         autoPayout: p?.autoPayout?.enabled === true,
-        balances: { USD: (w?.balance as number) ?? 0, SLS: (w?.sls?.balance as number) ?? 0 },
+        // The balance is the shop's own business, never a staff member's (STAFF_ACCESS.md).
+        balances: owner ? { USD: (w?.balance as number) ?? 0, SLS: (w?.sls?.balance as number) ?? 0 } : null,
         displays: displays.docs
           .map((d) => d.data() as MerchantDisplay)
           .filter((d) => d.status === "active")
@@ -91,13 +93,18 @@ export const portalGetStore = https.onCall({ enforceAppCheck: true }, async (req
       };
     })
   );
-  const links = await linksFor(viewer.merchantUid);
+  const links = owner ? await linksFor(viewer.merchantUid) : null;
   return {
     success: true,
     data: {
       merchantUid: viewer.merchantUid,
       stores,
       links,
+      viewer: {
+        role: viewer.role,
+        canSeeCustomers: viewer.canSeeCustomers,
+        name: viewer.session.actorName ?? null,
+      },
       session: {
         sessionId: viewer.sessionId,
         browser: viewer.session.browser,
@@ -141,6 +148,7 @@ export const portalGetCustomers = https.onCall(
   { enforceAppCheck: true },
   async (request: https.CallableRequest<CustomersInput>) => {
     const viewer = await requirePortalViewer(request, request.data?.storeUid);
+    if (!viewer.canSeeCustomers) throw customersDenied();
     const storeUid = storeArg(request, viewer.merchantUid);
     const view: CustomerView = (["top", "recent", "new", "lapsed"] as const).includes(request.data?.view as CustomerView)
       ? (request.data!.view as CustomerView)
@@ -183,6 +191,7 @@ export const portalGetCustomer = https.onCall(
   { enforceAppCheck: true },
   async (request: https.CallableRequest<{ storeUid?: unknown; customerUid?: unknown }>) => {
     const viewer = await requirePortalViewer(request, request.data?.storeUid);
+    if (!viewer.canSeeCustomers) throw customersDenied();
     const storeUid = storeArg(request, viewer.merchantUid);
     const customerUid = request.data?.customerUid;
     if (typeof customerUid !== "string" || !customerUid || customerUid.includes("/")) {
@@ -242,10 +251,14 @@ export const portalListTransactions = https.onCall(
     const snap = await q.limit(limit).get();
 
     const rows = snap.docs.map((d) => ({ id: d.id, t: d.data() as Transaction }));
-    const names = await partyNames(
-      db,
-      rows.map(({ t }) => (t.fromUserId === storeUid ? t.toUserId : t.fromUserId)).filter((id) => id && id !== storeUid)
-    );
+    // Who paid is a customer detail: a manager without "Show customers" gets
+    // the money, not the names (STAFF_ACCESS.md).
+    const names = viewer.canSeeCustomers
+      ? await partyNames(
+          db,
+          rows.map(({ t }) => (t.fromUserId === storeUid ? t.toUserId : t.fromUserId)).filter((id) => id && id !== storeUid)
+        )
+      : new Map<string, string | null>();
     const transactions = rows.map(({ id, t }) => {
       const incoming = t.toUserId === storeUid && t.fromUserId !== storeUid;
       const other = t.fromUserId === storeUid ? t.toUserId : t.fromUserId;

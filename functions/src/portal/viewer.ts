@@ -12,6 +12,7 @@ import * as admin from "firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { https } from "firebase-functions/v2";
 import { isPortalToken } from "../utils/validation";
+import { requireStaffGrant } from "../staff/access";
 import { linkedStoreUids } from "./groups";
 import { PORTAL_SESSIONS, PortalSession, portalUid, SESSION_ID } from "./types";
 
@@ -25,6 +26,16 @@ export interface PortalViewer {
   /** Shops this session may view: its own, then the stores it has linked. */
   storeUids: string[];
   session: PortalSession;
+  /** "owner" for the shop's own sign-in; "manager" for a staff member's. */
+  role: "owner" | "manager";
+  /** The shop always; a staff manager only if the shop allowed it. */
+  canSeeCustomers: boolean;
+}
+
+export function customersDenied(): https.HttpsError {
+  return new https.HttpsError("permission-denied", "The shop hasn't given you access to customer details.", {
+    reason: "portal_customers_denied",
+  });
 }
 
 export function sessionEnded(): https.HttpsError {
@@ -53,8 +64,21 @@ export async function requirePortalViewer(request: https.CallableRequest, storeU
     throw sessionEnded();
   }
 
+  // A staff member's sign-in holds only while their grant does (STAFF_ACCESS.md),
+  // and covers only the shop that granted it: never the owner's linked stores.
+  const staff = typeof session.actorUid === "string";
+  let canSeeCustomers = true;
+  if (staff) {
+    try {
+      const grant = await requireStaffGrant(merchantUid, session.actorUid!, "portal");
+      canSeeCustomers = grant.showCustomers === true && session.showCustomers === true;
+    } catch {
+      throw sessionEnded();
+    }
+  }
+
   // Its own shop, and the stores it has linked (portal/groups.ts).
-  const storeUids = [merchantUid, ...(await linkedStoreUids(merchantUid))];
+  const storeUids = staff ? [merchantUid] : [merchantUid, ...(await linkedStoreUids(merchantUid))];
   if (storeUid !== undefined && (typeof storeUid !== "string" || !storeUids.includes(storeUid))) {
     throw new https.HttpsError("permission-denied", "This sign-in can't view that shop.", { reason: "portal_store_denied" });
   }
@@ -62,5 +86,5 @@ export async function requirePortalViewer(request: https.CallableRequest, storeU
   if (now - (session.lastSeenAt?.toMillis() ?? 0) >= SEEN_EVERY_MS) {
     ref.update({ lastSeenAt: Timestamp.fromMillis(now) }).catch(() => undefined);
   }
-  return { sessionId, merchantUid, storeUids, session };
+  return { sessionId, merchantUid, storeUids, session, role: staff ? "manager" : "owner", canSeeCustomers };
 }
