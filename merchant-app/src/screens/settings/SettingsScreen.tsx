@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, Linking } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, Linking, I18nManager } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -10,7 +10,9 @@ import { useCounterDisplayOn } from '../../hooks/useCounterDisplayOn';
 import { needsReply, useMyDisputes } from '../../services/dispute.service';
 import { formatLocal } from '../../utils/zaad';
 import { LanguageSelector, DarkScreen, ScreenHeader, GlassCard } from '../../components';
-import { makeStyles, useTheme, type AppearancePreference } from '../../theme';
+import { ChartIcon, CodeIcon, DisplayIcon, PeopleIcon } from '../../components/icons/AuthIcons';
+import { makeStyles, useColors, useTheme, type AppearancePreference } from '../../theme';
+import type { Tint } from '../../theme/colors';
 
 const APPEARANCE_OPTIONS: { value: AppearancePreference; labelKey: string }[] = [
   { value: 'system', labelKey: 'settings.appearanceAuto' },
@@ -47,8 +49,44 @@ function TappableRow({ label, value, onPress }: { label: string; value?: string;
   );
 }
 
+interface Tool {
+  key: string;
+  Icon: React.ComponentType<{ size?: number; color?: string }>;
+  tint: Tint;
+  title: string;
+  hint: string;
+  route: string;
+}
+
+/** A shop feature: tinted icon, name, and one line on what it does. */
+function ToolRow({ tool, onPress }: { tool: Tool; onPress: () => void }) {
+  const styles = useStyles();
+  const { Icon, tint } = tool;
+  return (
+    <TouchableOpacity
+      style={styles.toolRow}
+      onPress={onPress}
+      activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={`${tool.title}. ${tool.hint}`}
+    >
+      <View style={[styles.toolIcon, { backgroundColor: tint.fill }]}>
+        <Icon size={20} color={tint.mark} />
+      </View>
+      <View style={styles.toolText}>
+        <Text style={styles.toolTitle}>{tool.title}</Text>
+        <Text style={styles.toolHint} numberOfLines={2}>
+          {tool.hint}
+        </Text>
+      </View>
+      <Text style={styles.rowChevron}>›</Text>
+    </TouchableOpacity>
+  );
+}
+
 export default function SettingsScreen() {
   const styles = useStyles();
+  const colors = useColors();
   const { preference, setPreference } = useTheme();
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -63,6 +101,50 @@ export default function SettingsScreen() {
   // API keys are for accounts that take payments (isMerchantAccount on the server).
   const takesPayments =
     profile?.accountType === 'merchant' || profile?.accountType === 'agent_merchant';
+
+  // The shop's features, in one place. All of them are for accounts that take payments.
+  const tools: Tool[] = takesPayments
+    ? [
+        // A tablet on the counter that shows the shop's QR and each sale.
+        ...(counterDisplay.on
+          ? [{
+              key: 'counterDisplay',
+              Icon: DisplayIcon,
+              tint: colors.tints.blue,
+              title: t('counterDisplay.title'),
+              hint: t('settings.tools.counterDisplayHint'),
+              route: 'CounterDisplays',
+            }]
+          : []),
+        // The shop's live figures and insights on a computer (read-only).
+        {
+          key: 'zappBusiness',
+          Icon: ChartIcon,
+          tint: colors.tints.green,
+          title: t('portal.title'),
+          hint: t('settings.tools.zappBusinessHint'),
+          route: 'ZappBusiness',
+        },
+        // People who work for the shop on their own accounts (STAFF_ACCESS.md).
+        {
+          key: 'staff',
+          Icon: PeopleIcon,
+          tint: colors.tints.amber,
+          title: t('staff.title'),
+          hint: t('settings.tools.staffHint'),
+          route: 'Staff',
+        },
+        // Merchant API keys (docs/MERCHANT_API.md).
+        {
+          key: 'developers',
+          Icon: CodeIcon,
+          tint: colors.tints.coral,
+          title: t('developers.title'),
+          hint: t('settings.tools.apiKeysHint'),
+          route: 'Developers',
+        },
+      ]
+    : [];
 
   const handleLogout = () => {
     Alert.alert(t('settings.signOutConfirmTitle'), t('settings.signOutConfirmMessage'), [
@@ -93,6 +175,21 @@ export default function SettingsScreen() {
         </View>
       </GlassCard>
 
+      {/* Shop tools */}
+      {tools.length > 0 && (
+        <>
+          <Text style={styles.sectionLabel}>{t('settings.section.shopTools')}</Text>
+          <GlassCard style={styles.sectionCard}>
+            {tools.map((tool, i) => (
+              <React.Fragment key={tool.key}>
+                {i > 0 ? <View style={styles.divider} /> : null}
+                <ToolRow tool={tool} onPress={() => navigation.navigate(tool.route)} />
+              </React.Fragment>
+            ))}
+          </GlassCard>
+        </>
+      )}
+
       {/* Account */}
       <Text style={styles.sectionLabel}>{t('settings.section.account')}</Text>
       <GlassCard style={styles.sectionCard}>
@@ -112,33 +209,6 @@ export default function SettingsScreen() {
           value={profile?.zaad ? formatLocal(profile.zaad.msisdn) : undefined}
           onPress={() => navigation.navigate('ZaadAccount')}
         />
-        {/* A tablet on the counter that shows the shop's QR and each sale. */}
-        {takesPayments && counterDisplay.on ? (
-          <>
-            <View style={styles.divider} />
-            <TappableRow
-              label={t('settings.counterDisplay')}
-              onPress={() => navigation.navigate('CounterDisplays')}
-            />
-          </>
-        ) : null}
-        {/* The shop's live figures and insights on a computer (read-only). */}
-        {takesPayments ? (
-          <>
-            <View style={styles.divider} />
-            <TappableRow
-              label={t('settings.zappBusiness')}
-              onPress={() => navigation.navigate('ZappBusiness')}
-            />
-          </>
-        ) : null}
-        {/* People who work for the shop on their own accounts (STAFF_ACCESS.md). */}
-        {takesPayments ? (
-          <>
-            <View style={styles.divider} />
-            <TappableRow label={t('settings.staff')} onPress={() => navigation.navigate('Staff')} />
-          </>
-        ) : null}
       </GlassCard>
 
       {/* Security */}
@@ -196,19 +266,6 @@ export default function SettingsScreen() {
           onPress={() => navigation.navigate('DisputesInbox')}
         />
       </GlassCard>
-
-      {/* Developers */}
-      {takesPayments && (
-        <>
-          <Text style={styles.sectionLabel}>{t('settings.section.developers')}</Text>
-          <GlassCard style={[styles.sectionCard, { paddingHorizontal: 16 }]}>
-            <TappableRow
-              label={t('settings.apiKeys')}
-              onPress={() => navigation.navigate('Developers')}
-            />
-          </GlassCard>
-        </>
-      )}
 
       {/* Help */}
       <Text style={styles.sectionLabel}>{t('settings.section.help')}</Text>
@@ -300,10 +357,13 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
   sectionLabel: {
     fontSize: 12,
     fontWeight: '600',
-    letterSpacing: 0.6,
+    // Spacing breaks Arabic's joined letters.
+    letterSpacing: I18nManager.isRTL ? 0 : 0.6,
     textTransform: 'uppercase',
     color: colors.ui.ink(0.35),
-    marginLeft: 28,
+    // Both sides: in Arabic the margin flips to the right while the text
+    // stays on the left, which put the label against the screen's edge.
+    marginHorizontal: 28,
     marginBottom: 10,
   },
   sectionCard: {
@@ -390,6 +450,33 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: colors.ui.errorSoft,
+  },
+  toolRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    gap: 14,
+  },
+  toolIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  toolText: {
+    flex: 1,
+  },
+  toolTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.ui.text,
+    marginBottom: 2,
+  },
+  toolHint: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.ui.textFaint,
   },
   rowDetail: {
     flex: 1,
