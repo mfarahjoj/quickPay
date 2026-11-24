@@ -34,6 +34,7 @@ import {
 } from '../../components/icons/AuthIcons';
 import { type FloatCurrency } from '../../components/CurrencyToggle';
 import { ZaadHomeCard } from '../../components/ZaadHomeCard';
+import { ShopToolRow, useShopTools } from '../../components/ShopTools';
 import { Transaction } from '../../types';
 import { CURRENCY_SYMBOL } from '../../config/constants';
 import { makeStyles, useColors, useTheme, wallpaper } from '../../theme';
@@ -137,6 +138,8 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
   const { floatCents, floatSls } = useFloat(isAgentRole, wallet?.lastTransactionAt?.getTime());
   // Buying float with Zaad, once the collection number is live.
   const zaadFloat = useZaadFloatOn();
+  // Counter display, Zapp Business, staff: for accounts that take payments.
+  const tools = useShopTools(isMerchantRole);
 
   // One button per job. Receive also scans a customer's code; Cash in also
   // finds a customer by phone; Cash out also takes a cash-out code, for
@@ -338,6 +341,19 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
               </Text>
               <Text style={styles.disputeBannerArrow}>›</Text>
             </TouchableOpacity>
+          )}
+
+          {/* The shop's tools, one tap from Home */}
+          {tools.length > 0 && (
+            <View style={[styles.card, styles.toolsCard]}>
+              <Text style={styles.cardTitle}>{t('dashboard.shopTools')}</Text>
+              {tools.map((tool, i) => (
+                <React.Fragment key={tool.key}>
+                  {i > 0 ? <View style={styles.toolDivider} /> : null}
+                  <ShopToolRow tool={tool} onPress={() => navigation.navigate(tool.route)} />
+                </React.Fragment>
+              ))}
+            </View>
           )}
 
           {/* Recent transactions */}
@@ -552,6 +568,13 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
     fontWeight: '700',
     color: colors.ui.text,
     marginBottom: 4,
+  },
+  toolsCard: {
+    paddingBottom: 2,
+  },
+  toolDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.ui.divider,
   },
   loader: {
     paddingVertical: 28,

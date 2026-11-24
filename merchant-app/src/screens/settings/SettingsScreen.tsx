@@ -6,13 +6,10 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { signOut } from '../../services/auth.service';
 import { useMerchantProfile } from '../../hooks/useMerchantProfile';
 import { useAuth } from '../../hooks/useAuth';
-import { useCounterDisplayOn } from '../../hooks/useCounterDisplayOn';
 import { needsReply, useMyDisputes } from '../../services/dispute.service';
 import { formatLocal } from '../../utils/zaad';
 import { LanguageSelector, DarkScreen, ScreenHeader, GlassCard } from '../../components';
-import { ChartIcon, DisplayIcon, PeopleIcon } from '../../components/icons/AuthIcons';
-import { makeStyles, useColors, useTheme, type AppearancePreference } from '../../theme';
-import type { Tint } from '../../theme/colors';
+import { makeStyles, useTheme, type AppearancePreference } from '../../theme';
 
 const APPEARANCE_OPTIONS: { value: AppearancePreference; labelKey: string }[] = [
   { value: 'system', labelKey: 'settings.appearanceAuto' },
@@ -49,51 +46,14 @@ function TappableRow({ label, value, onPress }: { label: string; value?: string;
   );
 }
 
-interface Tool {
-  key: string;
-  Icon: React.ComponentType<{ size?: number; color?: string }>;
-  tint: Tint;
-  title: string;
-  hint: string;
-  route: string;
-}
-
-/** A shop feature: tinted icon, name, and one line on what it does. */
-function ToolRow({ tool, onPress }: { tool: Tool; onPress: () => void }) {
-  const styles = useStyles();
-  const { Icon, tint } = tool;
-  return (
-    <TouchableOpacity
-      style={styles.toolRow}
-      onPress={onPress}
-      activeOpacity={0.7}
-      accessibilityRole="button"
-      accessibilityLabel={`${tool.title}. ${tool.hint}`}
-    >
-      <View style={[styles.toolIcon, { backgroundColor: tint.fill }]}>
-        <Icon size={20} color={tint.mark} />
-      </View>
-      <View style={styles.toolText}>
-        <Text style={styles.toolTitle}>{tool.title}</Text>
-        <Text style={styles.toolHint} numberOfLines={2}>
-          {tool.hint}
-        </Text>
-      </View>
-      <Text style={styles.rowChevron}>›</Text>
-    </TouchableOpacity>
-  );
-}
-
 export default function SettingsScreen() {
   const styles = useStyles();
-  const colors = useColors();
   const { preference, setPreference } = useTheme();
   const { t } = useTranslation();
   const { user } = useAuth();
   const { profile } = useMerchantProfile();
   const navigation = useNavigation<StackNavigationProp<any>>();
   const { disputes } = useMyDisputes();
-  const counterDisplay = useCounterDisplayOn();
   const repliesDue = disputes.filter((d) => needsReply(d, user?.uid)).length;
 
   const isAgent =
@@ -101,43 +61,6 @@ export default function SettingsScreen() {
   // API keys are for accounts that take payments (isMerchantAccount on the server).
   const takesPayments =
     profile?.accountType === 'merchant' || profile?.accountType === 'agent_merchant';
-
-  // The shop's features, in one place. All of them are for accounts that take payments.
-  const tools: Tool[] = takesPayments
-    ? [
-        // A tablet on the counter that shows the shop's QR and each sale.
-        ...(counterDisplay.on
-          ? [{
-              key: 'counterDisplay',
-              Icon: DisplayIcon,
-              tint: colors.tints.blue,
-              title: t('counterDisplay.title'),
-              hint: t('settings.tools.counterDisplayHint'),
-              route: 'CounterDisplays',
-            }]
-          : []),
-        // The shop's live figures and insights on a computer (read-only).
-        {
-          key: 'zappBusiness',
-          Icon: ChartIcon,
-          tint: colors.tints.green,
-          title: t('portal.title'),
-          hint: t('settings.tools.zappBusinessHint'),
-          route: 'ZappBusiness',
-        },
-        // People who work for the shop on their own accounts (STAFF_ACCESS.md).
-        {
-          key: 'staff',
-          Icon: PeopleIcon,
-          tint: colors.tints.amber,
-          title: t('staff.title'),
-          hint: t('settings.tools.staffHint'),
-          route: 'Staff',
-        },
-        // API keys stay in Developers near the bottom, not here: most shops
-        // never need one, and a prominent row invites "Zapp support" scams.
-      ]
-    : [];
 
   const handleLogout = () => {
     Alert.alert(t('settings.signOutConfirmTitle'), t('settings.signOutConfirmMessage'), [
@@ -167,21 +90,6 @@ export default function SettingsScreen() {
           <Text style={styles.roleTagText}>{roleLabel(profile?.accountType, t)}</Text>
         </View>
       </GlassCard>
-
-      {/* Shop tools */}
-      {tools.length > 0 && (
-        <>
-          <Text style={styles.sectionLabel}>{t('settings.section.shopTools')}</Text>
-          <GlassCard style={styles.sectionCard}>
-            {tools.map((tool, i) => (
-              <React.Fragment key={tool.key}>
-                {i > 0 ? <View style={styles.divider} /> : null}
-                <ToolRow tool={tool} onPress={() => navigation.navigate(tool.route)} />
-              </React.Fragment>
-            ))}
-          </GlassCard>
-        </>
-      )}
 
       {/* Account */}
       <Text style={styles.sectionLabel}>{t('settings.section.account')}</Text>
@@ -456,33 +364,6 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: colors.ui.errorSoft,
-  },
-  toolRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    gap: 14,
-  },
-  toolIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  toolText: {
-    flex: 1,
-  },
-  toolTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.ui.text,
-    marginBottom: 2,
-  },
-  toolHint: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: colors.ui.textFaint,
   },
   rowDetail: {
     flex: 1,

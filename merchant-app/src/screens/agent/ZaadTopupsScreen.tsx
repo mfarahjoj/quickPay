@@ -267,7 +267,7 @@ export default function ZaadTopupsScreen() {
   // Another agent took the offer, or it ran out, while this agent was looking.
   if (endedOffer) {
     return (
-      <DarkScreen edges={[]} scroll contentStyle={styles.content}>
+      <DarkScreen scroll contentStyle={styles.content}>
         {header}
         <ZaadJobOffer
           amount={endedOffer.amount}
@@ -287,7 +287,7 @@ export default function ZaadTopupsScreen() {
     lastOffer.current = { amount: mine.amount };
     const windowMs = (mine.offerExpiresAt?.toMillis() ?? 0) - (mine.createdAt?.toMillis() ?? 0);
     return (
-      <DarkScreen edges={[]} scroll contentStyle={styles.content}>
+      <DarkScreen scroll contentStyle={styles.content}>
         {header}
         <ZaadJobOffer
           amount={mine.amount}
@@ -309,7 +309,7 @@ export default function ZaadTopupsScreen() {
   // Accepted: the customer is sending.
   if (mine?.status === 'accepted' && mine.agentId === uid) {
     return (
-      <DarkScreen edges={[]} scroll contentStyle={styles.content}>
+      <DarkScreen scroll contentStyle={styles.content}>
         {header}
         <View style={styles.body}>
           {others}
@@ -341,7 +341,7 @@ export default function ZaadTopupsScreen() {
   // The customer says it's sent: check your own Zaad.
   if (mine?.status === 'customer_sent' && mine.agentId === uid) {
     return (
-      <DarkScreen edges={[]} scroll keyboard contentStyle={styles.content}>
+      <DarkScreen scroll keyboard contentStyle={styles.content}>
         {header}
         <View style={styles.body}>
           {others}
@@ -400,7 +400,7 @@ export default function ZaadTopupsScreen() {
   const low = status.floatCents < status.floatLowCents;
   const online = agent?.online ?? status.online;
   return (
-    <DarkScreen edges={[]} scroll contentStyle={styles.content}>
+    <DarkScreen scroll contentStyle={styles.content}>
       {header}
       <View style={styles.body}>
         {!status.open ? (
