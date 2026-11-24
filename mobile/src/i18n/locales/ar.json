@@ -1489,5 +1489,17 @@
   "bills.request.sentTitle": "تم إرسال الطلب",
   "bills.request.sentBody": "سيوافق {{merchant}} عليه في تطبيق Zapp Pay الخاص به. سنخبرك عندما يوافق.",
   "bills.request.tooMany": "لديك طلبات كثيرة بانتظار الرد. انتظر الرد أو ألغِ أحدها.",
-  "bills.request.failed": "لم يُرسل الطلب. حاول مرة أخرى."
+  "bills.request.failed": "لم يُرسل الطلب. حاول مرة أخرى.",
+  "bills.setUp.title": "تم إعداد الدفع المباشر",
+  "bills.setUp.approved": "وافق {{merchant}} على دفعك المباشر.",
+  "bills.setUp.active": "نشط",
+  "bills.setUp.nextPayment": "الدفعة التالية",
+  "bills.setUp.howPaid": "الدفع",
+  "bills.setUp.paidByYou": "بواسطتك، فاتورة بفاتورة",
+  "bills.setUp.id": "رقم الدفع المباشر",
+  "bills.setUp.noteAutopay": "لا شيء عليك الآن. يدفع Zapp Pay إلى {{merchant}} في {{date}}، وتصلك رسالة قبل الدفع وبعده.",
+  "bills.setUp.noteManual": "يرسل لك {{merchant}} فاتورة لكل دفعة. ستجد الأولى في الفواتير، وتستحق في {{date}}.",
+  "bills.setUp.manage": "اعرضه في الفواتير",
+  "bills.setUp.notActive": "هذا الدفع المباشر لم يعد نشطًا.",
+  "bills.setUp.loadFailed": "تعذّر تحميل هذا الدفع المباشر."
 }
