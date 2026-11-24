@@ -26,7 +26,7 @@ describe('parsePortalLogin', () => {
 });
 
 describe('Zapp Business strings', () => {
-  const keys = Object.keys(en).filter((k) => k.startsWith('portal.') || k === 'settings.zappBusiness');
+  const keys = Object.keys(en).filter((k) => k.startsWith('portal.') || k === 'settings.tools.zappBusinessHint');
   const ph = (s: string) => (s.match(/\{\{\w+\}\}/g) ?? []).sort();
 
   it('ship in en, so and ar with the same placeholders', () => {
