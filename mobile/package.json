@@ -39,6 +39,7 @@
     "react-i18next": "^17.0.8",
     "react-native": "^0.86.0",
     "react-native-biometrics": "^3.0.1",
+    "react-native-contacts": "^8.0.10",
     "react-native-gesture-handler": "^2.14.1",
     "react-native-haptic-feedback": "2.3.3",
     "react-native-image-picker": "^7.2.3",

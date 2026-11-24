@@ -129,6 +129,8 @@ type MainStackParamList = {
   TransactionLimits: undefined;
   About: undefined;
   Invite: undefined;
+  /** The phone's contacts: to send someone money, or to invite them. */
+  ContactPicker: { purpose: 'send' | 'invite' };
   Insights: undefined;
 };
 
@@ -476,6 +478,11 @@ function MainStackNavigator() {
         name="Invite"
         getComponent={() => require('../screens/referral/InviteScreen').default}
         options={{ title: t('invite.title') }}
+      />
+      <MainStack.Screen
+        name="ContactPicker"
+        getComponent={() => require('../screens/contacts/ContactPickerScreen').default}
+        options={{ headerShown: false }}
       />
       <MainStack.Screen
         name="Insights"

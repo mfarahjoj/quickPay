@@ -66,6 +66,8 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSContactsUsageDescription</key>
+	<string>Pick someone from your contacts to send them money or invite them to Zapp Pay. Your contacts stay on your phone.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>We need camera access to scan QR codes for payments</string>
 	<key>NSFaceIDUsageDescription</key>

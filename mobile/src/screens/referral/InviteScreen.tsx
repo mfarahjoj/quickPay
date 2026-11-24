@@ -15,6 +15,7 @@ import { functions } from '../../services/firebase.config';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import { typography, spacing, borderRadius, makeStyles, useColors } from '../../theme';
 import { GiftIcon } from '../../components/icons/UIIcons';
+import { inviteMessage } from '../../utils/invite';
 
 interface Stats {
   code: string;
@@ -26,7 +27,7 @@ interface Props {
   navigation: any;
 }
 
-export default function InviteScreen({ navigation: _navigation }: Props) {
+export default function InviteScreen({ navigation }: Props) {
   const colors = useColors();
   const styles = useStyles();
   const { t } = useTranslation();
@@ -65,13 +66,8 @@ export default function InviteScreen({ navigation: _navigation }: Props) {
 
   const referralCode = stats?.code ?? profile?.referralCode ?? '';
 
-  const buildMessage = useCallback(() => {
-    const lang = profile?.preferredLanguage ?? 'en';
-    if (lang === 'so') {
-      return `💰 Waxaan isticmaalayaa Zapp Pay – hab ugu dhakhsaha badan ee lacagta lagu diro Hargeysa!\nKu biir adigoo isticmaalaya lambarkeyga *${referralCode}* midna waxaan heli doonnaa $1 bilaash ah 🎉\nSoo dajiso Zapp Pay oo geli lambarkeyga markaad is diiwaangaliso.`;
-    }
-    return `💰 I use Zapp Pay – the fastest way to send & receive money in Hargeisa!\nJoin with my code *${referralCode}* and we both get $1 free 🎉\nDownload Zapp Pay and enter my code when you sign up.`;
-  }, [referralCode, profile?.preferredLanguage]);
+  // In the app's language (en, so, ar), as Send money's invites are.
+  const buildMessage = useCallback(() => inviteMessage(t, referralCode), [t, referralCode]);
 
   const handleWhatsApp = () => {
     Linking.openURL(`https://wa.me/?text=${encodeURIComponent(buildMessage())}`).catch(() => {});
@@ -108,7 +104,17 @@ export default function InviteScreen({ navigation: _navigation }: Props) {
         </View>
       </TouchableOpacity>
 
-      {/* WhatsApp — primary CTA */}
+      {/* Pick people from the phone's contacts and invite each one directly */}
+      <TouchableOpacity
+        style={styles.contactsBtn}
+        onPress={() => navigation.navigate('ContactPicker', { purpose: 'invite' })}
+        activeOpacity={0.82}
+        accessibilityRole="button"
+      >
+        <Text style={styles.contactsBtnText}>{t('invite.fromContacts')}</Text>
+      </TouchableOpacity>
+
+      {/* WhatsApp — share with anyone */}
       <TouchableOpacity style={styles.whatsappBtn} onPress={handleWhatsApp} activeOpacity={0.82}>
         <Text style={styles.whatsappText}>{t('invite.whatsapp')}</Text>
       </TouchableOpacity>
@@ -211,6 +217,19 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
   copyPillText: {
     ...typography.captionBold,
     color: colors.ui.accentText,
+  },
+  contactsBtn: {
+    width: '100%',
+    backgroundColor: colors.ui.accent,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.lg,
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  contactsBtnText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
   },
   whatsappBtn: {
     width: '100%',

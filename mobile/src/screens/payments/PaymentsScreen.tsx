@@ -15,6 +15,7 @@ import {
   Alert,
   ActivityIndicator,
   AppState,
+  useWindowDimensions,
   type AppStateStatus,
 } from 'react-native';
 import Animated, {
@@ -48,6 +49,10 @@ import { useWallet } from '../../hooks/useWallet';
 import { useHomeCurrency } from '../../hooks/useHomeCurrency';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useAuth } from '../../hooks/useAuth';
+import { useUserProfile } from '../../hooks/useUserProfile';
+import { inviteMessage, offerInvite } from '../../utils/invite';
+import { formatLocal } from '../../services/mobileMoney.utils';
+import { PersonIcon } from '../../components/icons/LineIcons';
 import { useBiometricApproval } from '../../hooks/useBiometricApproval';
 import { isCompleteLocalNumber, personInitials, recentPeople } from '../../utils/recentPeople';
 import { pressAmountKey, type AmountKey } from '../../utils/amountKeypad';
@@ -82,7 +87,14 @@ type LookupResult =
   | { found: true; phoneNumber: string; displayName: string; isBusiness: boolean };
 
 interface Props {
-  route?: { params?: { mode?: PaymentTab; prefill?: PaymentLink } };
+  route?: {
+    params?: {
+      mode?: PaymentTab;
+      prefill?: PaymentLink;
+      /** From ContactPicker; `at` makes picking the same person twice run again. */
+      pickedContact?: { name: string; phone: string; at: number };
+    };
+  };
 }
 
 export default function PaymentsScreen({ route }: Props) {
@@ -118,6 +130,10 @@ export default function PaymentsScreen({ route }: Props) {
 
   // People already paid or paid by, for one-tap picks above the number field.
   const { user } = useAuth();
+  // For the referral code in an invite to someone not on Zapp Pay yet.
+  const { profile } = useUserProfile();
+  // On narrower phones the Contacts button is just its icon, so the number has room.
+  const contactsLabel = useWindowDimensions().width >= 410;
   const { transactions: history } = useTransactions(undefined, 30);
   const recents = useMemo(
     () => recentPeople(history, 8, user?.phoneNumber),
@@ -349,8 +365,11 @@ export default function PaymentsScreen({ route }: Props) {
 
   const fullPhone = phoneInput.startsWith('+') ? phoneInput : `${PHONE_PREFIX}${phoneInput}`;
 
-  /** `phoneOverride` lets a payment link look up before the input state has updated. */
-  const handleLookup = async (phoneOverride?: string) => {
+  /**
+   * `phoneOverride` lets a payment link or a picked contact look up before the
+   * input state has updated; `contact` names the person if they need inviting.
+   */
+  const handleLookup = async (phoneOverride?: string, contact?: { name: string }) => {
     const input = (phoneOverride ?? phoneInput).trim();
     if (!input) {
       Alert.alert(t('common.error'), t('payments.enterPhoneError'));
@@ -366,12 +385,21 @@ export default function PaymentsScreen({ route }: Props) {
       const data = result.data as { success: boolean; data?: LookupResult };
       const found = data.data;
       if (!data.success || !found || !found.found) {
-        Alert.alert(
-          t('common.notFound'),
-          found && !found.found && found.reason === 'self'
-            ? t('payments.cannotSendToSelf')
-            : t('payments.userNotFound')
-        );
+        if (found && !found.found && found.reason === 'not_found') {
+          // Not on Zapp Pay yet: invite them rather than stop at "not found".
+          offerInvite(
+            t,
+            { name: contact?.name ?? formatLocal(phoneNumber), phone: phoneNumber },
+            inviteMessage(t, profile?.referralCode)
+          );
+        } else {
+          Alert.alert(
+            t('common.notFound'),
+            found && !found.found && found.reason === 'self'
+              ? t('payments.cannotSendToSelf')
+              : t('payments.userNotFound')
+          );
+        }
         return;
       }
       // A shop is paid by its QR; sendP2P would refuse the transfer anyway.
@@ -414,6 +442,20 @@ export default function PaymentsScreen({ route }: Props) {
     void lookupRef.current(prefill.to);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill]);
+
+  // A contact picked from the phone's contacts: the lookup a typed number gets.
+  const picked = route?.params?.pickedContact;
+  useEffect(() => {
+    if (!picked?.phone) return;
+    setTab('send');
+    resetSend();
+    const local = picked.phone.startsWith(PHONE_PREFIX) ? picked.phone.slice(PHONE_PREFIX.length) : picked.phone;
+    // Looked up just below; the typed-number lookup mustn't run it again.
+    autoLookedUp.current = local;
+    setPhoneInput(local);
+    void lookupRef.current(picked.phone, { name: picked.name });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [picked?.at]);
 
   // The ninth digit of a local number looks the person up: no Continue tap.
   useEffect(() => {
@@ -606,6 +648,20 @@ export default function PaymentsScreen({ route }: Props) {
                       onSubmitEditing={() => handleLookup()}
                       accessibilityLabel={t('payments.phoneNumber')}
                     />
+                    <TouchableOpacity
+                      style={[styles.contactsPill, !contactsLabel && styles.contactsPillIcon]}
+                      onPress={() => {
+                        triggerHaptic('light');
+                        navigation.navigate('ContactPicker', { purpose: 'send' });
+                      }}
+                      disabled={lookingUp}
+                      activeOpacity={0.75}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('payments.fromContacts')}
+                    >
+                      <PersonIcon size={contactsLabel ? 16 : 18} color={colors.ui.accentText} strokeWidth={2} />
+                      {contactsLabel ? <Text style={styles.contactsPillText}>{t('payments.contacts')}</Text> : null}
+                    </TouchableOpacity>
                   </View>
                   <Button
                     title={lookingUp ? t('common.lookingUp') : t('common.continue')}
@@ -1182,6 +1238,26 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
     justifyContent: 'center',
   },
   prefixText: { fontSize: 16, fontWeight: '700', color: colors.ui.text },
+  contactsPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    height: 36,
+    paddingHorizontal: 10,
+    marginRight: 10,
+    borderRadius: 18,
+    backgroundColor: colors.ui.accentSoft,
+  },
+  contactsPillIcon: {
+    width: 36,
+    paddingHorizontal: 0,
+    justifyContent: 'center',
+  },
+  contactsPillText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.ui.accentText,
+  },
   phoneInput: {
     flex: 1,
     height: '100%',

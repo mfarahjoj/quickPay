@@ -3439,6 +3439,34 @@ PODS:
     - Yoga
   - react-native-biometrics (3.0.1):
     - React-Core
+  - react-native-contacts (8.0.10):
+    - boost
+    - DoubleConversion
+    - fast_float
+    - fmt
+    - glog
+    - hermes-engine
+    - RCT-Folly
+    - RCT-Folly/Fabric
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - SocketRocket
+    - Yoga
   - react-native-image-picker (7.2.3):
     - boost
     - DoubleConversion
@@ -4745,6 +4773,7 @@ DEPENDENCIES:
   - React-microtasksnativemodule (from `../node_modules/react-native/ReactCommon/react/nativemodule/microtasks`)
   - React-mutationobservernativemodule (from `../node_modules/react-native/ReactCommon/react/nativemodule/mutationobserver`)
   - react-native-biometrics (from `../node_modules/react-native-biometrics`)
+  - react-native-contacts (from `../node_modules/react-native-contacts`)
   - react-native-image-picker (from `../node_modules/react-native-image-picker`)
   - "react-native-netinfo (from `../node_modules/@react-native-community/netinfo`)"
   - react-native-safe-area-context (from `../node_modules/react-native-safe-area-context`)
@@ -4941,6 +4970,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon/react/nativemodule/mutationobserver"
   react-native-biometrics:
     :path: "../node_modules/react-native-biometrics"
+  react-native-contacts:
+    :path: "../node_modules/react-native-contacts"
   react-native-image-picker:
     :path: "../node_modules/react-native-image-picker"
   react-native-netinfo:
@@ -5139,6 +5170,7 @@ SPEC CHECKSUMS:
   React-microtasksnativemodule: e225db13806ee562325cff77c16a76849116ed16
   React-mutationobservernativemodule: a90b85dfb7230d6d8f5c16630da2b370a0735735
   react-native-biometrics: 43ed5b828646a7862dbc7945556446be00798e7d
+  react-native-contacts: f80240625ff135a1f395b30e51279a4a851c6218
   react-native-image-picker: a340c7cd3566cedd56aacd5e61b6b492e9fe2139
   react-native-netinfo: 9fad4eedfec9840a10e73ac4591ea1158523309b
   react-native-safe-area-context: 7794f18549493f369e4ca4b3cd66843bd050ac66
