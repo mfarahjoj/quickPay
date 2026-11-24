@@ -10,7 +10,7 @@ import { useCounterDisplayOn } from '../../hooks/useCounterDisplayOn';
 import { needsReply, useMyDisputes } from '../../services/dispute.service';
 import { formatLocal } from '../../utils/zaad';
 import { LanguageSelector, DarkScreen, ScreenHeader, GlassCard } from '../../components';
-import { ChartIcon, CodeIcon, DisplayIcon, PeopleIcon } from '../../components/icons/AuthIcons';
+import { ChartIcon, DisplayIcon, PeopleIcon } from '../../components/icons/AuthIcons';
 import { makeStyles, useColors, useTheme, type AppearancePreference } from '../../theme';
 import type { Tint } from '../../theme/colors';
 
@@ -134,15 +134,8 @@ export default function SettingsScreen() {
           hint: t('settings.tools.staffHint'),
           route: 'Staff',
         },
-        // Merchant API keys (docs/MERCHANT_API.md).
-        {
-          key: 'developers',
-          Icon: CodeIcon,
-          tint: colors.tints.coral,
-          title: t('developers.title'),
-          hint: t('settings.tools.apiKeysHint'),
-          route: 'Developers',
-        },
+        // API keys stay in Developers near the bottom, not here: most shops
+        // never need one, and a prominent row invites "Zapp support" scams.
       ]
     : [];
 
@@ -266,6 +259,19 @@ export default function SettingsScreen() {
           onPress={() => navigation.navigate('DisputesInbox')}
         />
       </GlassCard>
+
+      {/* Developers */}
+      {takesPayments && (
+        <>
+          <Text style={styles.sectionLabel}>{t('settings.section.developers')}</Text>
+          <GlassCard style={[styles.sectionCard, { paddingHorizontal: 16 }]}>
+            <TappableRow
+              label={t('settings.apiKeys')}
+              onPress={() => navigation.navigate('Developers')}
+            />
+          </GlassCard>
+        </>
+      )}
 
       {/* Help */}
       <Text style={styles.sectionLabel}>{t('settings.section.help')}</Text>
