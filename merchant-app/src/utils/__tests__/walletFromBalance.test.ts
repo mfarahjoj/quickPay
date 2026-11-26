@@ -22,6 +22,15 @@ describe('walletFromBalance', () => {
     expect(walletFromBalance(null, { ...base, lastTransactionAt: 'nope' } as any).lastTransactionAt).toBeNull();
   });
 
+  it("keeps the listener's time when an older server sends {} for it", () => {
+    const listenerTime = new Date('2026-11-23T20:00:00.000Z');
+    const prev = { ...base, lastTransactionAt: listenerTime } as any;
+    for (const unreadable of [{}, 'nope', null, undefined]) {
+      const w = walletFromBalance(prev, { ...base, lastTransactionAt: unreadable } as any);
+      expect(w.lastTransactionAt).toBe(listenerTime);
+    }
+  });
+
   it('keeps fields getBalance leaves out from the listener', () => {
     const prev = { ...base, slsTotalReceived: 5000, slsTotalSent: 100, lastTransactionAt: null } as any;
     const w = walletFromBalance(prev, { ...base, balance: 13, lastTransactionAt: null } as any);

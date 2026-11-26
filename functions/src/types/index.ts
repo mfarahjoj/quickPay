@@ -703,7 +703,8 @@ export interface GenerateQRResponse {
   qrCodeId: string;
   qrData: string;
   emvQrData: string;
-  expiresAt: Date;
+  /** ISO 8601. A Date would reach the app as {} (callables send JSON). */
+  expiresAt: string;
   /** Platform fee the merchant absorbs on this sale, in cents. */
   feeCents: number;
   /** What actually lands in the merchant wallet, in cents. */

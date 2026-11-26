@@ -13,7 +13,8 @@ interface BalanceResponse {
   currency: string;
   totalReceived: number;
   totalSent: number;
-  lastTransactionAt: Date | null;
+  /** ISO 8601. A Date would reach the app as {} (callables send JSON). */
+  lastTransactionAt: string | null;
   /** Agents only: float in agent:{uid}, apart from this wallet. */
   floatCents?: number;
   /** The shilling pocket, in whole shillings (0 if it never held any). */
@@ -59,7 +60,7 @@ export const getBalance = https.onCall(
           currency: wallet.currency,
           totalReceived: centsToDollars(wallet.totalReceived),
           totalSent: centsToDollars(wallet.totalSent),
-          lastTransactionAt: wallet.lastTransactionAt?.toDate() || null,
+          lastTransactionAt: wallet.lastTransactionAt?.toDate().toISOString() ?? null,
           ...(floatCents !== undefined ? { floatCents, floatSls } : {}),
           slsBalance: walletPocket(wallet, "SLS").balance,
         },
