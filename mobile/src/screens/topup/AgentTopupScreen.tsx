@@ -491,10 +491,22 @@ export default function AgentTopupScreen({ initialWay }: { initialWay?: 'remote'
         {backHeader(t('topup.agentFlow.title'))}
         <View style={styles.chooseBody}>
           <AgentHeader name={scannedByName} amount={amountLabel} />
-          <Text style={styles.handCash}>
-            {t('topup.agentFlow.handCash', { amount: amountLabel, agent: scannedByName })}
-          </Text>
-          <Text style={styles.chooseSub}>{t('topup.agentFlow.handCashHint', { agent: scannedByName })}</Text>
+          {currency === 'USD' ? (
+            // Dollars: the agent chooses cash or Zaad after the scan, so don't promise cash yet.
+            <>
+              <Text style={styles.handCash}>{t('topup.agentFlow.scannedTitle', { agent: scannedByName })}</Text>
+              <Text style={styles.chooseSub}>
+                {t('topup.agentFlow.scannedBodyUsd', { agent: scannedByName, amount: amountLabel })}
+              </Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.handCash}>
+                {t('topup.agentFlow.handCash', { amount: amountLabel, agent: scannedByName })}
+              </Text>
+              <Text style={styles.chooseSub}>{t('topup.agentFlow.handCashHint', { agent: scannedByName })}</Text>
+            </>
+          )}
           <View style={styles.waitingRow}>
             <ActivityIndicator size="small" color={colors.ui.ink(0.5)} />
             <Text style={styles.waitingText}>{t('topup.agentFlow.waitingConfirm', { agent: scannedByName })}</Text>
@@ -536,7 +548,7 @@ export default function AgentTopupScreen({ initialWay }: { initialWay?: 'remote'
               ))}
             </View>
             <Text style={styles.codeAmount}>
-              {t('topup.agent.payAgent', { amount: amountLabel })}
+              {t(currency === 'USD' ? 'topup.agent.payAgentUsd' : 'topup.agent.payAgent', { amount: amountLabel })}
             </Text>
           </View>
 
@@ -600,7 +612,7 @@ export default function AgentTopupScreen({ initialWay }: { initialWay?: 'remote'
           </Text>
           {currency === 'SLS' && <Text style={styles.amountSuffix}>SLSH</Text>}
         </View>
-        <Text style={styles.amountHint}>{t('topup.agent.amountHint')}</Text>
+        <Text style={styles.amountHint}>{t(currency === 'USD' ? 'topup.agent.amountHintUsd' : 'topup.agent.amountHint')}</Text>
       </View>
 
       <View style={styles.keypad}>

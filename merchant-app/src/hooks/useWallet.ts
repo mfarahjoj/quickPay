@@ -3,17 +3,7 @@ import { firestore, functions } from '../services/firebase.config';
 import { Wallet } from '../types';
 import { useAuth } from './useAuth';
 import { logger } from '../utils/logger';
-
-/**
- * getBalance sends lastTransactionAt as an ISO string; older servers sent a
- * Date, which a callable delivers as {}. Anything unreadable is null, never
- * an object that throws on getTime().
- */
-function readDate(value: unknown): Date | null {
-  if (typeof value !== 'string') return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
+import { BalanceResponse, walletFromBalance } from '../utils/walletFromBalance';
 
 export function useWallet() {
   const { user } = useAuth();
@@ -70,18 +60,9 @@ export function useWallet() {
       const getBalanceFunction = functions().httpsCallable('getBalance');
       const result = await getBalanceFunction();
 
-      const data = result.data as {
-        success: boolean;
-        data: Omit<Wallet, 'lastTransactionAt'> & { lastTransactionAt?: unknown };
-      };
+      const data = result.data as { success: boolean; data: BalanceResponse };
       if (data.success) {
-        const fresh = data.data;
-        // The wallet listener already holds the real time; keep it if this
-        // response's can't be read.
-        setWallet((prev) => ({
-          ...fresh,
-          lastTransactionAt: readDate(fresh.lastTransactionAt) ?? prev?.lastTransactionAt ?? null,
-        }));
+        setWallet((prev) => walletFromBalance(prev, data.data));
         setError(null);
       }
     } catch (err: any) {

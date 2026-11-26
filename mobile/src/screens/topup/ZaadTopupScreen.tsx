@@ -40,8 +40,8 @@ import { Currency, formatMoney } from '../../utils/money';
  *   send     → dial the prefilled Zaad code; turns green when the top-up's
  *              transaction appears
  *
- * Android opens the dialer with the code typed in. iOS doesn't let apps dial
- * codes with * or #, so there the code is shown to copy.
+ * The code opens the phone's dialer with the code typed in (see DialPanel);
+ * on iPhone, where that may be refused, it can be copied instead.
  */
 type Step = 'link' | 'activate' | 'amount' | 'send' | 'done' | 'error';
 
@@ -62,9 +62,13 @@ export default function ZaadTopupScreen() {
 
   const [step, setStep] = useState<Step | null>(null);
   const [numberText, setNumberText] = useState('');
-  const [amountText, setAmountText] = useState('');
+  // An agent top-up nobody took: its amount, in dollars, comes with us here.
+  const prefillCents: number | undefined = route.params?.amountCents;
+  const [amountText, setAmountText] = useState(() =>
+    prefillCents ? (prefillCents % 100 === 0 ? String(prefillCents / 100) : (prefillCents / 100).toFixed(2)) : '',
+  );
   // Shillings first: the main currency. Dollars are a tap away.
-  const [currency, setCurrency] = useState<Currency>('SLS');
+  const [currency, setCurrency] = useState<Currency>(prefillCents ? 'USD' : 'SLS');
   const [creditedCurrency, setCreditedCurrency] = useState<string>('USD');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -320,25 +324,28 @@ export function DialPanel({ code }: { code: string | null }) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   if (!code) return <Text style={styles.hint}>{t('topup.zaad.noCode')}</Text>;
-  const dial = canDialUssd(Platform.OS);
+  // Android opens the dialer with the code typed in. iPhone is asked to as
+  // well (the # is escaped), but may refuse codes with * or #: so there the
+  // copy button stays beside it.
+  const copyToo = !canDialUssd(Platform.OS);
   return (
     <View style={styles.dialBox}>
       <Text style={styles.code} selectable>{code}</Text>
-      {dial ? (
-        <Primary label={t('topup.zaad.dial')} onPress={() => Linking.openURL(ussdUrl(code)).catch(() => undefined)} />
-      ) : (
+      <Primary label={t('topup.zaad.dial')} onPress={() => Linking.openURL(ussdUrl(code)).catch(() => undefined)} />
+      {copyToo ? (
         <>
-          <Primary
-            label={copied ? t('topup.zaad.copied') : t('topup.zaad.copyCode')}
+          <TouchableOpacity
             onPress={() => {
               Clipboard.setString(code);
               setCopied(true);
               triggerHaptic('light');
             }}
-          />
+          >
+            <Text style={styles.link}>{copied ? t('topup.zaad.copied') : t('topup.zaad.copyCode')}</Text>
+          </TouchableOpacity>
           <Text style={styles.hint}>{t('topup.zaad.iosHint')}</Text>
         </>
-      )}
+      ) : null}
     </View>
   );
 }

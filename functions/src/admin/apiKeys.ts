@@ -32,6 +32,7 @@ import {
 } from "../api/keys";
 import { API_KEYS_COLLECTION, ApiKeyScope, MerchantApiKey } from "../api/types";
 import { getPartner } from "../api/partners";
+import { LiveAccessView, liveAccessOf } from "../api/liveAccess";
 
 export type { ApiKeyRow };
 
@@ -39,14 +40,15 @@ export const adminListApiKeys = https.onCall(
   { enforceAppCheck: true },
   async (
     request: https.CallableRequest<{ merchantId: string }>
-  ): Promise<ApiResponse<{ keys: ApiKeyRow[] }>> => {
+  ): Promise<ApiResponse<{ keys: ApiKeyRow[]; liveAccess: LiveAccessView }>> => {
     requireAdmin(request, ["ops", "super"]);
     const merchantId = request.data?.merchantId;
     if (typeof merchantId !== "string" || !merchantId) {
       throw new https.HttpsError("invalid-argument", "merchantId is required");
     }
 
-    return { success: true, data: { keys: await listKeysFor(merchantId) } };
+    const [keys, liveAccess] = await Promise.all([listKeysFor(merchantId), liveAccessOf(merchantId)]);
+    return { success: true, data: { keys, liveAccess } };
   }
 );
 

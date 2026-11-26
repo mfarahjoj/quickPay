@@ -11,6 +11,12 @@ import { assertNameChangeAllowed } from "../utils/nameLock";
 import { readAuth, writeAuth, isStoredPinHash } from "./pinStore";
 import { recordReferral } from "../referral/referralBonus";
 import { ensureRoleRequest } from "../merchants/requestRole";
+import { noteSignupSource } from "../api/agreements";
+
+/** Which partner brought a new account, if any. Never fails sign-up. */
+function noteSource(userId: string, phone: string | undefined): Promise<void> {
+  return noteSignupSource(userId, phone).catch((err) => console.error("Noting the sign-up source failed (non-fatal):", err));
+}
 
 interface SetupPinRequest {
   /** Required when the user does not yet have a PIN on their profile */
@@ -81,7 +87,10 @@ export const setupPin = https.onCall(
           // A PIN but no account behind it: setup was cut short. Finish it.
           ...(isNewAccount ? newAccountFields() : {}),
         });
-        if (isNewAccount) await ensureWallet(db, userId);
+        if (isNewAccount) {
+          await ensureWallet(db, userId);
+          await noteSource(userId, request.auth!.token.phone_number);
+        }
 
         const pendingRole = isPrivilegedRole(accountType)
           ? await ensureRoleRequest(db, userId, accountType, {
@@ -133,7 +142,10 @@ export const setupPin = https.onCall(
         { merge: true }
       );
 
-      if (isNewAccount) await ensureWallet(db, userId);
+      if (isNewAccount) {
+        await ensureWallet(db, userId);
+        await noteSource(userId, request.auth!.token.phone_number);
+      }
 
       const pendingRole = isPrivilegedRole(accountType)
         ? await ensureRoleRequest(db, userId, accountType, {

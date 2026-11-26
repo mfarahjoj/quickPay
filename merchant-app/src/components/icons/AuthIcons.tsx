@@ -156,6 +156,31 @@ export function ChartIcon({ size = 40, color: colorProp }: IconProps) {
   );
 }
 
+/** Screen on a stand — the counter display */
+export function DisplayIcon({ size = 24, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.primary;
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Rect x="3" y="4" width="18" height="12" rx="2" stroke={color} strokeWidth={1.8} />
+      <Path d="M12 16v4M8 20h8" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+/** Two people — staff */
+export function PeopleIcon({ size = 24, color: colorProp }: IconProps) {
+  const colors = useColors();
+  const color = colorProp ?? colors.primary;
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx="9" cy="8" r="3.2" stroke={color} strokeWidth={1.8} />
+      <Path d="M3.5 19c.6-3 2.8-4.8 5.5-4.8s4.9 1.8 5.5 4.8" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
+      <Path d="M15.5 5.2a3 3 0 010 5.6M17.5 14.6c1.5.6 2.6 2.1 3 4.4" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
 /** Biometric setup — Face ID with scan lines and two-tone treatment */
 export function FaceIdIcon({ size = 48, color: colorProp }: IconProps) {
   const colors = useColors();

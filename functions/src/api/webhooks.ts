@@ -1,12 +1,13 @@
 /**
  * Webhooks: tell a merchant's server when a charge settles, lapses, is
- * cancelled or is refunded.
+ * cancelled or is refunded, and when an agreement is approved, revoked, or
+ * its customer first adds money to Zapp.
  *
- *   api_charges write ──trigger──▶ api_events/{evt} ──▶ webhook_deliveries/{evt}__{endpoint}
- *                                                           │ send now; on failure
- *                                                           ▼ retryWebhookDeliveries (every 5 min)
+ *   api_charges write    ──trigger──▶ api_events/{evt} ──▶ webhook_deliveries/{evt}__{endpoint}
+ *   api_agreements write ──trigger──▶      〃                   │ send now; on failure
+ *                                                               ▼ retryWebhookDeliveries (every 5 min)
  *
- * Event and delivery IDs are derived from the charge and the transition, so
+ * Event and delivery IDs are derived from the object and the transition, so
  * a trigger that fires twice (Firestore triggers are at-least-once) finds its
  * own work already done instead of sending twice.
  *
@@ -27,8 +28,10 @@ import { ENCRYPTION_KEY, PIN_PEPPER } from "../config/secrets";
 import { decrypt, encrypt } from "../utils/encryption";
 import { badRequest, conflict, notFound } from "./http";
 import { serializeCharge } from "./charges";
+import { serializeAgreement } from "./agreements";
 import {
   API_EVENTS_COLLECTION,
+  ApiAgreement,
   ApiCharge,
   ApiEvent,
   WEBHOOK_DELIVERIES_COLLECTION,
@@ -245,32 +248,89 @@ export function eventsForChange(
   return events;
 }
 
+/**
+ * Which events a change to an agreement doc raises. Pure, for testing.
+ *
+ * `agreement.topped_up` fires once, when Zapp first records that the
+ * customer added money — at approval if they already had, or later.
+ */
+export function agreementEventsForChange(
+  agreementId: string,
+  before: ApiAgreement | undefined,
+  after: ApiAgreement | undefined
+): PendingEvent[] {
+  if (!after) return [];
+  const events: PendingEvent[] = [];
+  if (before?.status !== after.status && (after.status === "active" || after.status === "revoked")) {
+    const type = after.status === "active" ? "agreement.approved" : "agreement.revoked";
+    events.push({ eventId: `evt_${agreementId}_${after.status}`, type });
+  }
+  if (after.customerToppedUpAt && !before?.customerToppedUpAt) {
+    events.push({ eventId: `evt_${agreementId}_topped_up`, type: "agreement.topped_up" });
+  }
+  return events;
+}
+
 /** Exported for tests; the trigger below is the only caller. */
 export async function recordEvent(
   chargeId: string,
   charge: ApiCharge,
   pending: PendingEvent
 ): Promise<string[]> {
-  const db = admin.firestore();
   const now = admin.firestore.Timestamp.now();
-  const livemode = isLiveObject(charge);
+  return recordObjectEvent(
+    charge.merchantId,
+    isLiveObject(charge),
+    { chargeId },
+    serializeCharge(chargeId, charge, now.toMillis()),
+    pending,
+    now
+  );
+}
+
+/** Exported for tests; the agreement trigger below is the only caller. */
+export async function recordAgreementEvent(
+  agreementId: string,
+  agreement: ApiAgreement,
+  pending: PendingEvent
+): Promise<string[]> {
+  const now = admin.firestore.Timestamp.now();
+  return recordObjectEvent(
+    agreement.merchantId,
+    agreement.livemode,
+    { agreementId },
+    serializeAgreement(agreementId, agreement, now.toMillis()),
+    pending,
+    now
+  );
+}
+
+async function recordObjectEvent(
+  merchantId: string,
+  livemode: boolean,
+  about: Pick<ApiEvent, "chargeId" | "agreementId">,
+  object: Record<string, unknown>,
+  pending: PendingEvent,
+  now: FirebaseFirestore.Timestamp
+): Promise<string[]> {
+  const db = admin.firestore();
   const payload = JSON.stringify({
     id: pending.eventId,
     object: "event",
     type: pending.type,
     created: now.toDate().toISOString(),
     livemode,
-    data: { object: serializeCharge(chargeId, charge, now.toMillis()) },
+    data: { object },
   });
   const event: ApiEvent = {
     type: pending.type,
-    merchantId: charge.merchantId,
-    chargeId,
+    merchantId,
+    ...about,
     payload,
     createdAt: now,
   };
 
-  const endpoints = await enabledEndpoints(charge.merchantId, livemode);
+  const endpoints = await enabledEndpoints(merchantId, livemode);
 
   const deliveryIds: string[] = [];
   await db.runTransaction(async (tx) => {
@@ -282,7 +342,7 @@ export async function recordEvent(
       const delivery: WebhookDelivery = {
         eventId: pending.eventId,
         endpointId: endpoint.id,
-        merchantId: charge.merchantId,
+        merchantId,
         status: "pending",
         attempts: 0,
         nextAttemptAt: now,
@@ -401,6 +461,22 @@ export const onApiChargeWritten = onDocumentWritten(
 
     for (const p of pending) {
       const deliveryIds = await recordEvent(chargeId, after, p);
+      await Promise.all(deliveryIds.map((id) => attemptDelivery(id)));
+    }
+  }
+);
+
+export const onApiAgreementWritten = onDocumentWritten(
+  { document: `api_agreements/{agreementId}`, secrets: [ENCRYPTION_KEY, PIN_PEPPER] },
+  async (event) => {
+    const agreementId = event.params.agreementId;
+    const before = event.data?.before.data() as ApiAgreement | undefined;
+    const after = event.data?.after.data() as ApiAgreement | undefined;
+    const pending = agreementEventsForChange(agreementId, before, after);
+    if (pending.length === 0 || !after) return;
+
+    for (const p of pending) {
+      const deliveryIds = await recordAgreementEvent(agreementId, after, p);
       await Promise.all(deliveryIds.map((id) => attemptDelivery(id)));
     }
   }

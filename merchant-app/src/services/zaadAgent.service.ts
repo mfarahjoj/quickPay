@@ -30,7 +30,11 @@ export interface ZaadTopupDoc {
   status: ZaadTopupStatus;
   /** "in_person": the agent scanned the customer and chose Zaad. Missing: remote. */
   meeting?: 'in_person' | 'remote';
+  /** Every agent this is ringing on now; the first to accept wins. Missing on older requests: read offeredTo. */
+  offeredToIds?: string[];
   offeredTo: string | null;
+  /** What the agent earns if this completes, in cents. */
+  agentCommissionCents?: number;
   offerExpiresAt: { toMillis(): number } | null;
   agentId: string | null;
   agentReceiveMsisdn?: string;
@@ -153,11 +157,11 @@ export function watchMyZaadTopups(uid: string, onChange: (list: ZaadTopupRow[]) 
     );
 }
 
-/** Offers ringing on this agent now, each with its own timer (D32). */
+/** Offers ringing on this agent now, each with its own timer (D32). Each rings on several agents at once. */
 export function watchMyZaadOffers(uid: string, onChange: (list: ZaadTopupRow[]) => void): () => void {
   return firestore()
     .collection('zaadAgentTopups')
-    .where('offeredTo', '==', uid)
+    .where('offeredToIds', 'array-contains', uid)
     .where('status', '==', 'offered')
     .onSnapshot(
       (snap) =>
@@ -177,3 +181,7 @@ export function maskMsisdn(msisdn: string): string {
 export function isWrongZaadPin(error: any): boolean {
   return error?.code === 'functions/permission-denied' && /wrong pin|invalid pin/i.test(error?.message ?? '');
 }
+
+/** Whether this request is ringing on [uid] now. */
+export const ringsOn = (req: Pick<ZaadTopupDoc, 'offeredToIds' | 'offeredTo'>, uid: string): boolean =>
+  (req.offeredToIds ?? (req.offeredTo ? [req.offeredTo] : [])).includes(uid);

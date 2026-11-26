@@ -1,10 +1,12 @@
 import React, { useState, useCallback, useRef } from 'react';
+import { StyleSheet, Text, TextInput } from 'react-native';
 import { triggerHaptic } from '../../services/haptics.service';
 import { useTranslation } from 'react-i18next';
-import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
+import { useNavigation, useFocusEffect, useRoute, useIsFocused } from '@react-navigation/native';
 import { scanCustomerToken } from '../../services/scan.service';
 import { formatAmount } from '../../utils/money';
 import { CodeSheet, QrScannerView, ScannerButton } from '../../components/QrScannerView';
+import { useScannerInput, normaliseScannedCode } from '../../hooks/useScannerInput';
 
 /**
  * Scans the customer's Zapp QR. From Receive it charges them; as Give cash
@@ -69,6 +71,26 @@ export default function ScanCustomerScreen() {
     [loading, navigation, t, purpose, amountCents, currency, reference]
   );
 
+  // A paired Bluetooth/USB handheld scanner types the code into a hidden
+  // field. It listens only while the camera does and the paste sheet is shut.
+  const isFocused = useIsFocused();
+  const scanner = useScannerInput({
+    enabled: isFocused && isScanning && !pasting && !loading && !scanError,
+    onScan: (code) => {
+      if (!isProcessing.current) handleScan(code);
+    },
+  });
+
+  // A scanner typing into the paste sheet ends with Enter: submit it.
+  const handlePasteChange = (text: string) => {
+    if (/[\r\n]$/.test(text) && text.trim()) {
+      setPasting(false);
+      handleScan(normaliseScannedCode(text));
+      return;
+    }
+    setManualInput(text);
+  };
+
   return (
     <>
       <QrScannerView
@@ -86,8 +108,14 @@ export default function ScanCustomerScreen() {
         scanning={isScanning && !pasting}
         busy={loading ? t('scan.verifying') : null}
         error={scanError}
-        onDismissError={() => setScanError(null)}
+        onDismissError={() => {
+          setScanError(null);
+          scanner.focus();
+        }}
       >
+        {!scanError && !loading ? (
+          <Text style={styles.scannerHint}>{t('scan.scannerHint')}</Text>
+        ) : null}
         {/* Customer apps that can't approve at the counter show a cash-out code. */}
         {purpose === 'cash_out' ? (
           <ScannerButton label={t('scan.cashOut.haveCode')} onPress={() => navigation.replace('ConfirmCashOut')} />
@@ -98,7 +126,7 @@ export default function ScanCustomerScreen() {
         visible={pasting}
         title={t('scan.pasteCode')}
         value={manualInput}
-        onChangeText={setManualInput}
+        onChangeText={handlePasteChange}
         placeholder={t('scan.pastePlaceholder')}
         submitLabel={t('scan.verifyCustomer')}
         onSubmit={() => {
@@ -108,6 +136,18 @@ export default function ScanCustomerScreen() {
         onClose={() => setPasting(false)}
         submitDisabled={!manualInput.trim()}
       />
+      {/* Catches a paired Bluetooth/USB scanner; never visible, no keyboard. */}
+      <TextInput style={styles.scannerInput} {...scanner.inputProps} />
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  scannerHint: {
+    textAlign: 'center',
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.55)',
+    marginBottom: 8,
+  },
+  scannerInput: { position: 'absolute', width: 1, height: 1, opacity: 0, left: -10, top: -10 },
+});

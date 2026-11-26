@@ -15,6 +15,7 @@ import { typography, spacing, borderRadius, makeStyles, useColors } from '../../
 import { CURRENCY_SYMBOL, PHONE_PREFIX } from '../../config/constants';
 import { useAuth } from '../../hooks/useAuth';
 import { triggerHaptic } from '../../services/haptics.service';
+import { appendAmountKey } from '../../utils/amountInput';
 import { functions } from '../../services/firebase.config';
 
 type Step = 'phone' | 'amount' | 'review' | 'success';
@@ -37,9 +38,8 @@ export default function SendRemittanceScreen() {
   const fullPhone = phoneInput.startsWith('+') ? phoneInput : `${PHONE_PREFIX}${phoneInput}`;
 
   const appendDigit = (digit: string) => {
-    if (digit === '.' && amountText.includes('.')) return;
     triggerHaptic('light');
-    setAmountText((prev) => `${prev}${digit}`);
+    setAmountText((prev) => appendAmountKey(prev, digit));
   };
 
   const backspace = () => {

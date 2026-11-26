@@ -16,6 +16,7 @@ const CARDS: Record<QueueKey, { title: string; icon: IconName; empty: string }> 
   agentzaad: { title: "Agent Zaad top-ups", icon: "send", empty: "No agent top-up needs a decision" },
   roles: { title: "Role applications", icon: "briefcase", empty: "No application waiting" },
   kyc: { title: "Identity checks", icon: "idcard", empty: "No ID waiting for review" },
+  apiaccess: { title: "Live API access", icon: "lock", empty: "No shop is waiting for live API access" },
 };
 
 export interface ShortcutLink {

@@ -4,7 +4,7 @@ import { endSessions } from "./sessions";
 import { assertStrongPin } from "../utils/weakPin";
 import * as bcrypt from "bcrypt";
 import { hashPin } from "../utils/encryption";
-import { readAuth, writeAuth } from "./pinStore";
+import { liveStaffGrant, readAuth, writeAuth } from "./pinStore";
 import { requireAuth, validatePin } from "../utils/validation";
 import { notifyUser } from "../utils/notifications";
 import { getRates } from "../config/rates";
@@ -62,10 +62,15 @@ const normaliseId = (value: string) => value.replace(/[^A-Za-z0-9]/g, "").toUppe
  * - On a phone this account has used for at least a week, the SMS code is
  *   enough. On any other phone the caller must also give the last four
  *   characters of their admin-verified ID; without verified KYC, the reset
- *   has to go through an agent or support.
+ *   has to go through Zapp Pay support (adminAllowPinReset).
  * - After any reset, outgoing money pauses (see utils/resetCooldown.ts),
  *   other trusted devices are dropped, and the owner is told.
  * - At most one reset a day and three in thirty days.
+ *
+ * Staff can open one reset for a customer whose ID they have checked in person
+ * (adminAllowPinReset). That grant stands in for the trusted phone, the ID
+ * answer and the reset limit, and is used up by the reset. The pause, the
+ * dropped devices and the notification still apply.
  */
 export const resetPin = https.onCall(
   { enforceAppCheck: true },
@@ -111,11 +116,12 @@ export const resetPin = https.onCall(
     const nowMs = Date.now();
 
     const auth = await readAuth(userId, undefined, user);
-    assertResetLimit(auth.pinResetHistory ?? [], nowMs);
+    const staffGrant = liveStaffGrant(auth, nowMs);
+    if (!staffGrant) assertResetLimit(auth.pinResetHistory ?? [], nowMs);
 
     const knownDeviceId = await knownDevice(db, userId, deviceId, deviceSecret, nowMs);
 
-    if (!knownDeviceId) {
+    if (!knownDeviceId && !staffGrant) {
       await checkIdAnswer(userRef, userId, user, idLast4, nowMs);
     }
 
@@ -128,7 +134,20 @@ export const resetPin = https.onCall(
     await db.runTransaction(async (tx) => {
       const fresh = await readAuth(userId, tx);
       const freshHistory: admin.firestore.Timestamp[] = fresh.pinResetHistory ?? [];
-      assertResetLimit(freshHistory, nowMs);
+      if (staffGrant) {
+        // The grant is good for one reset: a second reset racing this one
+        // finds it gone and is refused.
+        const stillLive = liveStaffGrant(fresh, nowMs);
+        if (!stillLive || stillLive.auditId !== staffGrant.auditId) {
+          throw new https.HttpsError(
+            "failed-precondition",
+            "This staff reset has already been used. Ask staff to open a new one.",
+            { reason: "reset_grant_used" }
+          );
+        }
+      } else {
+        assertResetLimit(freshHistory, nowMs);
+      }
       writeAuth(
         tx,
         userId,
@@ -142,6 +161,7 @@ export const resetPin = https.onCall(
           pinResetHistory: [...freshHistory, now].slice(-HISTORY_KEPT),
           resetIdFailedAttempts: 0,
           resetIdLockedUntil: null,
+          staffResetGrant: null,
         },
         { hasPin: true }
       );
@@ -170,7 +190,9 @@ export const resetPin = https.onCall(
     ).catch((err) => console.error("Failed to notify PIN reset:", err));
 
     console.log(
-      `PIN reset for user ${userId} (${knownDeviceId ? "known device" : "verified ID"})`
+      `PIN reset for user ${userId} (${
+        staffGrant ? `staff grant ${staffGrant.auditId}` : knownDeviceId ? "known device" : "verified ID"
+      })`
     );
     return {
       success: true,
@@ -190,7 +212,7 @@ function assertResetLimit(history: admin.firestore.Timestamp[], nowMs: number): 
   if (within(DAY_MS) >= MAX_RESETS_PER_DAY || within(30 * DAY_MS) >= MAX_RESETS_PER_30_DAYS) {
     throw new https.HttpsError(
       "resource-exhausted",
-      "Too many PIN resets. Contact support.",
+      "Too many PIN resets. Visit Zapp Pay support with your ID.",
       { reason: "reset_limit" }
     );
   }
@@ -249,7 +271,7 @@ export async function checkIdAnswer(
   if (stored.length < 4) {
     throw new https.HttpsError(
       "failed-precondition",
-      "Reset your PIN with an agent or support, and bring your ID.",
+      "Reset your PIN with Zapp Pay support, and bring your ID.",
       { reason: "reset_needs_agent" }
     );
   }
@@ -274,7 +296,7 @@ export async function checkIdAnswer(
     if (lockedUntil && lockedUntil.toMillis() > nowMs) {
       throw new https.HttpsError(
         "resource-exhausted",
-        "Too many wrong answers. Try again later or visit an agent.",
+        "Too many wrong answers. Try again later or visit Zapp Pay support.",
         { reason: "reset_id_locked", until: lockedUntil.toDate().toISOString() }
       );
     }
@@ -293,7 +315,7 @@ export async function checkIdAnswer(
     const locked = attempts >= MAX_ID_ATTEMPTS;
     throw new https.HttpsError(
       locked ? "resource-exhausted" : "permission-denied",
-      locked ? "Too many wrong answers. Try again later or visit an agent." : "That doesn't match your ID.",
+      locked ? "Too many wrong answers. Try again later or visit Zapp Pay support." : "That doesn't match your ID.",
       locked
         ? { reason: "reset_id_locked" }
         : { reason: "reset_id_wrong", attemptsLeft: MAX_ID_ATTEMPTS - attempts }

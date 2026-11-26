@@ -124,6 +124,8 @@ export interface UserDetail {
   /** Locked after too many wrong PINs; a reset or Clear lockouts opens it. */
   pinHardLocked?: boolean;
   pinFailedAttempts?: number;
+  /** When an open staff PIN reset expires (ISO), if one is open. */
+  pinResetGrantUntil?: string | null;
   wallet: { balance?: number; currency?: string; frozen?: boolean; sls?: { balance?: number } } | null;
   kyc: Record<string, unknown> | null;
   trustedDeviceCount: number;
@@ -142,6 +144,28 @@ export interface ApiKeyRow {
   scopes?: string[];
   lastUsedAt?: string;
   revokedAt?: string;
+}
+
+/** A shop's live API access (functions/src/api/liveAccess.ts). Dates are ISO strings. */
+export interface LiveAccessView {
+  status: "none" | "pending" | "approved" | "declined" | "withdrawn";
+  purpose: string | null;
+  /** Shown to the shop with a decline or a withdrawal. */
+  note: string | null;
+  requestedAt: string | null;
+  decidedAt: string | null;
+  /** Approved because it held a live key before approvals existed. */
+  legacy: boolean;
+}
+
+/** A shop waiting for live API access, as the API access desk lists it. */
+export interface LiveAccessRequestRow extends LiveAccessView {
+  merchantId: string;
+  businessName: string | null;
+  phoneNumber: string | null;
+  accountType: string | null;
+  accountStatus: string | null;
+  activeTestKeys: number;
 }
 
 /** A merchant's partner settings: may it pay Zapp accounts by API, and its caps and fee. */
@@ -660,6 +684,12 @@ export const api = {
       reason,
     }),
 
+  allowPinReset: (userId: string, reason: string) =>
+    call<{ userId: string; reason: string; idChecked: true }, { auditId: string; expiresAt: string }>(
+      "adminAllowPinReset",
+      { userId, reason, idChecked: true }
+    ),
+
   revokeDevices: (userId: string, reason: string) =>
     call<{ userId: string; reason: string }, { revoked: number }>(
       "adminRevokeUserDevices",
@@ -670,6 +700,28 @@ export const api = {
     call<{ merchantId: string }, { keys: ApiKeyRow[] }>("adminListApiKeys", {
       merchantId,
     }).then((body) => body.keys),
+
+  /** The keys and the shop's live access, in one call. `liveAccess` is null from a server without it. */
+  apiKeysAndAccess: (merchantId: string) =>
+    call<{ merchantId: string }, { keys: ApiKeyRow[]; liveAccess?: LiveAccessView }>("adminListApiKeys", {
+      merchantId,
+    }).then((body) => ({ keys: body.keys, liveAccess: body.liveAccess ?? null })),
+
+  listLiveAccessRequests: () =>
+    call<void, { requests: LiveAccessRequestRow[] }>("adminListLiveAccessRequests").then((body) => body.requests),
+
+  decideLiveAccess: (merchantId: string, decision: "approve" | "decline", reason: string, note?: string) =>
+    call<{ merchantId: string; decision: "approve" | "decline"; reason: string; note?: string }, LiveAccessView>(
+      "adminDecideLiveAccess",
+      { merchantId, decision, reason, ...(note ? { note } : {}) }
+    ),
+
+  /** Ends the shop's live access and revokes its live keys at once. */
+  withdrawLiveAccess: (merchantId: string, reason: string, note?: string) =>
+    call<{ merchantId: string; reason: string; note?: string }, LiveAccessView & { revokedKeys: number }>(
+      "adminWithdrawLiveAccess",
+      { merchantId, reason, ...(note ? { note } : {}) }
+    ),
 
   /** Returns the full key exactly once; it cannot be fetched again. */
   issueApiKey: (

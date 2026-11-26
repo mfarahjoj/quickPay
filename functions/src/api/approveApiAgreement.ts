@@ -1,6 +1,7 @@
 /**
  * Customer side of an agreement (agreements.ts): look it up, approve it with
- * the PIN, list the ones in force, switch one off.
+ * the PIN, list the ones in force, switch one off — and, at sign-up, find the
+ * ones a partner left for this number before the person had Zapp.
  *
  * Approving is the only step that needs the PIN. It binds the phone key the
  * partner sent to this customer, with the partner's caps as they are now, so
@@ -22,7 +23,8 @@ import {
   effectiveAgreementStatus,
   revokeAgreementById,
 } from "./agreements";
-import { API_AGREEMENTS_COLLECTION, ApiAgreement, ApiAgreementStatus } from "./types";
+import { firstCashInAt } from "./agreementFunding";
+import { API_AGREEMENTS_COLLECTION, ApiAgreement, ApiAgreementRole, ApiAgreementStatus } from "./types";
 
 function requireAgreementId(id: unknown): string {
   if (typeof id !== "string" || !AGREEMENT_ID_PATTERN.test(id)) {
@@ -51,6 +53,8 @@ interface AgreementView {
   agreementId: string;
   merchantName: string;
   status: ApiAgreementStatus;
+  /** customer: the customer pays the partner; worker: the partner pays them. The approve screen's words follow it. */
+  role: ApiAgreementRole;
   deviceLabel: string | null;
   /** US cents. While pending, the caps approving now would give. */
   maxChargeUsdCents: number;
@@ -64,6 +68,7 @@ function view(id: string, a: ApiAgreement, caps: { maxChargeUsdCents: number; da
     agreementId: id,
     merchantName: a.merchantName,
     status: effectiveAgreementStatus(a),
+    role: a.role ?? "customer",
     deviceLabel: a.deviceLabel ?? null,
     maxChargeUsdCents: a.maxChargeUsdCents ?? caps.maxChargeUsdCents,
     dailyUsdCents: a.dailyUsdCents ?? caps.dailyUsdCents,
@@ -82,7 +87,8 @@ export const getApiAgreement = https.onCall(
     const snap = await admin.firestore().collection(API_AGREEMENTS_COLLECTION).doc(id).get();
     if (!snap.exists) throw new https.HttpsError("not-found", "Request not found");
     const a = snap.data() as ApiAgreement;
-    assertForCustomer(a, uid, await phoneOf(uid));
+    // Mid-sign-up there is no profile yet; the sign-in's verified number stands in.
+    assertForCustomer(a, uid, (await phoneOf(uid)) ?? (request.auth!.token.phone_number as string | undefined));
     const partner = await getPartner(a.merchantId);
     return { success: true, data: view(id, a, partner ? agreementCapsOf(partner) : { maxChargeUsdCents: 0, dailyUsdCents: 0 }) };
   }
@@ -110,9 +116,15 @@ export const approveApiAgreement = https.onCall(
     if (!(await verifyUserPin(uid, pin))) throw new https.HttpsError("permission-denied", "Invalid PIN");
     await requireActiveAccount(uid);
     const phone = await phoneOf(uid);
+    // Stamps a top-up from before the stamp existed, so the read below sees it.
+    const toppedUpBefore = await firstCashInAt(uid).catch((err) => {
+      console.error(`firstCashInAt(${uid}) failed:`, err);
+      return null;
+    });
 
     const db = admin.firestore();
     const ref = db.collection(API_AGREEMENTS_COLLECTION).doc(id);
+    const userRef = db.collection("users").doc(uid);
     type Outcome = { approved: AgreementView } | { lapsed: true };
     const outcome = await db.runTransaction(async (tx): Promise<Outcome> => {
       const snap = await tx.get(ref);
@@ -138,7 +150,10 @@ export const approveApiAgreement = https.onCall(
       if (caps.maxChargeUsdCents !== expectedMaxChargeUsdCents || caps.dailyUsdCents !== expectedDailyUsdCents) {
         throw new https.HttpsError("failed-precondition", "The limits changed. Open the request again.");
       }
-      // One agreement per customer, partner and mode: a new link replaces the old.
+      // One agreement per customer, partner, mode and role: a new link
+      // replaces the old one of its kind, so a Ridy driver who also rides
+      // keeps both.
+      const role = a.role ?? "customer";
       const others = await tx.get(
         db
           .collection(API_AGREEMENTS_COLLECTION)
@@ -147,10 +162,20 @@ export const approveApiAgreement = https.onCall(
           .where("livemode", "==", a.livemode)
           .where("status", "==", "active")
       );
+      // Read in the transaction: a first top-up landing meanwhile either
+      // shows here or finds this agreement active (agreementFunding.ts).
+      const toppedUpAt = ((await tx.get(userRef)).data()?.firstCashInAt as FirebaseFirestore.Timestamp | undefined) ?? toppedUpBefore;
       for (const d of others.docs) {
-        if (d.id !== id) tx.update(d.ref, { status: "revoked", revokedAt: now, revokedBy: "replaced" });
+        if (d.id === id || ((d.data() as ApiAgreement).role ?? "customer") !== role) continue;
+        tx.update(d.ref, { status: "revoked", revokedAt: now, revokedBy: "replaced" });
       }
-      const update = { status: "active" as const, customerId: uid, approvedAt: now, ...caps };
+      const update = {
+        status: "active" as const,
+        customerId: uid,
+        approvedAt: now,
+        ...caps,
+        ...(toppedUpAt ? { customerToppedUpAt: toppedUpAt } : {}),
+      };
       tx.update(ref, update);
       return { approved: view(id, { ...a, ...update }, caps) };
     });
@@ -158,6 +183,78 @@ export const approveApiAgreement = https.onCall(
     if ("lapsed" in outcome) throw new https.HttpsError("failed-precondition", "This request has expired. Start again in the app.");
     console.log(JSON.stringify({ agreementApproved: id, customerId: uid }));
     return { success: true, data: outcome.approved };
+  }
+);
+
+interface PendingAgreementView extends AgreementView {
+  /** Left for this number before it had a Zapp account. */
+  signup: boolean;
+}
+
+interface PendingAgreements {
+  agreements: PendingAgreementView[];
+  /**
+   * What sign-up may fill in, from the newest sign-up agreement: the name the
+   * partner has for this person, and their number as their Zaad when it is a
+   * Telesom (063) number. Suggestions only: the person checks and can change both.
+   */
+  prefill: { fullName: string | null; zaadNumber: string | null };
+}
+
+/** At most this many pending agreements are offered at once. */
+const MAX_PENDING = 5;
+
+/** +252 63… is Telesom, whose mobile money is Zaad. Pure. */
+export function zaadSuggestion(phone: string | undefined): string | null {
+  return phone && /^\+25263[0-9]{7}$/.test(phone) ? phone : null;
+}
+
+/**
+ * Pending agreements addressed to the caller's number, newest first: right
+ * after sign-up, the requests a partner (Ridy) left before the person had
+ * Zapp, so they can approve them without going back to the partner's app.
+ * Works mid-sign-up, before the PIN, from the verified number on the
+ * sign-in itself.
+ */
+export const getMyPendingAgreements = https.onCall(
+  { enforceAppCheck: true },
+  async (request: https.CallableRequest<unknown>): Promise<ApiResponse<PendingAgreements>> => {
+    requireAuth(request);
+    const uid = request.auth!.uid;
+    const tokenPhone = request.auth!.token.phone_number as string | undefined;
+    const phone = tokenPhone || (await phoneOf(uid));
+    if (!phone) return { success: true, data: { agreements: [], prefill: { fullName: null, zaadNumber: null } } };
+    const snap = await admin
+      .firestore()
+      .collection(API_AGREEMENTS_COLLECTION)
+      .where("customerPhone", "==", phone)
+      .where("livemode", "==", true)
+      .where("status", "==", "pending")
+      .get();
+    const now = Date.now();
+    const open = snap.docs
+      .map((d) => ({ id: d.id, a: d.data() as ApiAgreement }))
+      .filter(({ a }) => !agreementLapsed(a, now) && a.merchantId !== uid)
+      .sort((x, y) => y.a.createdAt.toMillis() - x.a.createdAt.toMillis())
+      .slice(0, MAX_PENDING);
+    const caps = new Map<string, { maxChargeUsdCents: number; dailyUsdCents: number }>();
+    for (const { a } of open) {
+      if (caps.has(a.merchantId)) continue;
+      const partner = await getPartner(a.merchantId);
+      caps.set(a.merchantId, partner?.agreementsEnabled ? agreementCapsOf(partner) : { maxChargeUsdCents: 0, dailyUsdCents: 0 });
+    }
+    const agreements = open.map(({ id, a }) => ({ ...view(id, a, caps.get(a.merchantId)!), signup: a.signup === true }));
+    const newestSignup = open.find(({ a }) => a.signup === true)?.a;
+    return {
+      success: true,
+      data: {
+        agreements,
+        prefill: {
+          fullName: newestSignup?.customerName ?? null,
+          zaadNumber: newestSignup ? zaadSuggestion(phone) : null,
+        },
+      },
+    };
   }
 );
 
