@@ -15,7 +15,7 @@ export function LanguageSync() {
       const language: PreferredLanguage = profileLanguage ?? storedLanguage;
 
       if (!cancelled) {
-        await applyLanguage(language);
+        await applyLanguage(language, { persist: Boolean(profileLanguage) });
       }
     }
 

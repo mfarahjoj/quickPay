@@ -9,7 +9,7 @@ import { api, formatFloat, type FloatCurrency, type LedgerHealth } from "./api";
  * itself uses, so a number here always matches what the desk shows.
  */
 
-export type QueueKey = "roles" | "kyc" | "float" | "payouts" | "disputes" | "zaad" | "agentzaad";
+export type QueueKey = "roles" | "kyc" | "apiaccess" | "float" | "payouts" | "disputes" | "zaad" | "agentzaad";
 
 export interface QueueState {
   /** Null when the list could not be read: never shown as "nothing to do". */
@@ -88,6 +88,19 @@ function loaders(adminUid: string, now: number): Record<QueueKey, Loader> {
         detail: names.length ? names.join(", ") + (rows.length > names.length ? "…" : "") : undefined,
       };
     },
+    apiaccess: async () => {
+      const rows = await api.listLiveAccessRequests();
+      const at = oldest(rows.map((r) => (r.requestedAt ? Date.parse(r.requestedAt) : null)));
+      const names = rows.map((r) => r.businessName).filter(Boolean).slice(0, 2) as string[];
+      return {
+        count: rows.length,
+        oldestAt: at,
+        detail: join(
+          names.length > 0 && names.join(", ") + (rows.length > names.length ? "…" : ""),
+          at != null && `oldest ${ago(at, now)}`
+        ),
+      };
+    },
     kyc: async () => {
       const rows = await api.listKycQueue("submitted");
       const at = oldest(rows.map((r) => tsMs(r.submittedAt)));
@@ -156,7 +169,7 @@ function loaders(adminUid: string, now: number): Record<QueueKey, Loader> {
 export function queuesFor(canReviewRoles: boolean, canRunFloatDesk: boolean): QueueKey[] {
   // Money owed to people first, then applications: the sidebar's order.
   const keys: QueueKey[] = [];
-  if (canRunFloatDesk) keys.push("disputes", "payouts", "float", "zaad", "agentzaad");
+  if (canRunFloatDesk) keys.push("disputes", "payouts", "float", "zaad", "agentzaad", "apiaccess");
   if (canReviewRoles) keys.push("roles", "kyc");
   return keys;
 }

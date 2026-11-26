@@ -1,6 +1,6 @@
 # Staff access: owner-granted roles for the merchant app and Zapp Business
 
-*Drafted 2026-11-21. Status: the first slice (grants, cashier counter charges, manager sign-in to Zapp Business, owner Staff screen and staff mode) is merged (PR #41) and live in prod since 2026-11-21. Manager refunds are built on branch `feat/manager-refunds`, not deployed. Not yet built: a cashier incoming-payments feed, and Tables (`TABLE_CONNECT.md`).*
+*Drafted 2026-11-21. Status: first slice shipped 2026-11-21 (PR #41: grants, cashier counter charges, manager sign-in to Zapp Business, owner Staff screen and staff mode; merchant app 1.0.1 (41)). Manager refunds deployed 2026-11-21 (PR #42), merchant app build pending. The guard against a manager refunding their own payment (2026-11-26) is merged but not deployed: `refundPayment` and `staffListPayments` need redeploying. Not yet built: a cashier incoming-payments feed, and Tables (`TABLE_CONNECT.md`).*
 
 ## Why
 

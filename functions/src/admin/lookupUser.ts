@@ -12,7 +12,8 @@
 
 import * as admin from "firebase-admin";
 import { endSessions } from "../auth/sessions";
-import { AUTH_FIELDS, readAuth, writeAuth, isStoredPinHash } from "../auth/pinStore";
+import { AUTH_FIELDS, readAuth, writeAuth, isStoredPinHash, liveStaffGrant } from "../auth/pinStore";
+import { notifyUser } from "../utils/notifications";
 import { https } from "firebase-functions/v2";
 import { ApiResponse } from "../types";
 import { requireAdmin, requireRecentAdminAuth, requireReason } from "./guard";
@@ -197,6 +198,8 @@ async function pinStateOf(userId: string, userData: FirebaseFirestore.DocumentDa
     hasPin: isStoredPinHash(auth.pinHash),
     pinHardLocked: auth.pinHardLocked === true,
     pinFailedAttempts: auth.pinFailedAttempts ?? 0,
+    /** ISO time an open staff PIN reset expires, if one is open. */
+    pinResetGrantUntil: liveStaffGrant(auth, Date.now())?.expiresAt.toDate().toISOString() ?? null,
   };
 }
 
@@ -261,6 +264,114 @@ export const adminClearLockouts = https.onCall(
     });
 
     return { success: true, message: "Lockouts cleared", data: { auditId } };
+  }
+);
+
+/** How long a staff-opened PIN reset stays usable. */
+export const STAFF_RESET_GRANT_MINUTES = 30;
+
+interface AllowPinResetRequest extends SupportActionRequest {
+  /** The staff member confirms they checked the person's ID face to face. */
+  idChecked: boolean;
+}
+
+/**
+ * Open one PIN reset for a customer who forgot their PIN, after staff have
+ * checked their ID in person.
+ *
+ * Staff never see or set the PIN. The grant only lets the customer's own
+ * "Forgot PIN?" go through on their phone (SMS code, then a new PIN) without
+ * the trusted-phone or ID-answer step and past the reset limit. It lasts
+ * STAFF_RESET_GRANT_MINUTES and is used up by the reset. Everything else a
+ * reset does still happens: sending pauses, other phones are signed out, and
+ * the customer is told.
+ */
+export const adminAllowPinReset = https.onCall(
+  { enforceAppCheck: true },
+  async (
+    request: https.CallableRequest<AllowPinResetRequest>
+  ): Promise<ApiResponse<{ auditId: string; expiresAt: string }>> => {
+    const actor = requireAdmin(request, "ops");
+    requireRecentAdminAuth(request);
+
+    const { userId, idChecked } = request.data ?? {};
+    const reason = requireReason(request.data?.reason);
+
+    if (typeof userId !== "string" || !userId.trim()) {
+      throw new https.HttpsError("invalid-argument", "userId is required");
+    }
+    if (idChecked !== true) {
+      throw new https.HttpsError(
+        "failed-precondition",
+        "Check the person's ID in person before opening a PIN reset."
+      );
+    }
+
+    const db = admin.firestore();
+    const userRef = db.collection("users").doc(userId);
+    const now = admin.firestore.Timestamp.now();
+    const expiresAt = admin.firestore.Timestamp.fromMillis(
+      now.toMillis() + STAFF_RESET_GRANT_MINUTES * 60 * 1000
+    );
+
+    const auditId = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(userRef);
+      if (!snap.exists) {
+        throw new https.HttpsError("not-found", "User not found");
+      }
+      const userData = snap.data()!;
+      if (resolveAccountStatus(userData) === "closed") {
+        throw new https.HttpsError("failed-precondition", "This account is closed.");
+      }
+      const auth = await readAuth(userId, tx, userData);
+      if (!isStoredPinHash(auth.pinHash)) {
+        throw new https.HttpsError(
+          "failed-precondition",
+          "This account has no PIN yet. The customer sets one when they sign in."
+        );
+      }
+
+      const id = stageAuditEntry(tx, {
+        actor,
+        action: "user.allowPinReset",
+        target: { type: "user", id: userId },
+        reason,
+        before: {
+          pinHardLocked: auth.pinHardLocked === true,
+          pinFailedAttempts: auth.pinFailedAttempts ?? 0,
+          resetIdLockedUntil: auth.resetIdLockedUntil ?? null,
+        },
+        after: { staffResetGrantUntil: expiresAt.toDate().toISOString(), idChecked: true },
+      });
+      // Clears the ID-answer lock too: staff have just answered that question.
+      writeAuth(tx, userId, {
+        ...auth,
+        resetIdFailedAttempts: 0,
+        resetIdLockedUntil: null,
+        staffResetGrant: {
+          grantedBy: actor.uid,
+          grantedByEmail: actor.email,
+          grantedAt: now,
+          expiresAt,
+          auditId: id,
+        },
+      });
+      return id;
+    });
+
+    // The owner hears about it, in case this wasn't them at the counter.
+    notifyUser(
+      userId,
+      "pin_reset",
+      { key: "security.staff_pin_reset", params: { minutes: String(STAFF_RESET_GRANT_MINUTES) } },
+      { type: "pin_reset" }
+    ).catch((err) => console.error("Failed to notify staff PIN reset:", err));
+
+    return {
+      success: true,
+      message: "PIN reset opened",
+      data: { auditId, expiresAt: expiresAt.toDate().toISOString() },
+    };
   }
 );
 

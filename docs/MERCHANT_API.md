@@ -25,10 +25,20 @@ Authorization: Bearer zpk_live_…     live: real payments
 Authorization: Bearer zpk_test_…     test mode: nothing moves money (§7)
 ```
 
-Making a live key needs the merchant's PIN; a test key doesn't. Lost or leaked
-key → revoke it in the app (it stops working at once) and make a new one. You
-can hold up to five active keys of each kind (e.g. one per till) so you can
-rotate without downtime.
+Test keys are self-serve. **Live keys need Zapp's approval first**: on the Live
+tab the shop says what the keys are for and taps *Request live access*; an
+admin decides it in the console (**API access**, also counted on *To do*),
+usually after speaking to the shop, and the shop gets a push either way. Once
+approved, each live key needs the merchant's PIN. Ops can withdraw access from
+the account's API keys panel, which revokes every live key the shop holds at
+once. Shops that held a live key before approvals existed count as approved.
+Code: `functions/src/api/liveAccess.ts`, `merchants/apiKeys.ts`,
+`admin/liveAccess.ts`; the record is `api_live_access/{merchantId}`
+(server-only).
+
+Lost or leaked key → revoke it in the app (it stops working at once) and make a
+new one. You can hold up to five active keys of each kind (e.g. one per till)
+so you can rotate without downtime. Zapp never asks a shop for its key.
 
 **Rate limit:** 120 requests per minute per key (HTTP `429` beyond that).
 
@@ -227,8 +237,12 @@ POST /v1/agreements      Idempotency-Key required
 { "customer_phone": "+252634111222",
   "device_public_key": "<base64 SPKI DER, EC P-256>",
   "device_label": "iPhone 15",          optional, shown to the customer
-  "reference": "Ridy rides" }           optional
+  "reference": "Ridy rides",            optional
+  "role": "customer",                   optional: customer (default) | worker
+  "signup": true,                       optional, see "Not in Zapp yet" below
+  "customer_name": "Hodan Ali" }        optional, with signup
 → 201 { "id": "agr_…", "object": "agreement", "status": "pending",
+        "role": "customer", "signup": false, "customer_topped_up": false,
         "deep_link": "zapppay://agreement/agr_…", "expires_at": "…", … }
 ```
 
@@ -239,13 +253,32 @@ after 15 minutes. Then:
 ```
 GET  /v1/agreements/{id}          status: pending | active | revoked | expired
                                   max_charge, daily_limit: US cents, once active
+                                  customer_topped_up: true once they have added money to Zapp
 POST /v1/agreements/{id}/revoke   end it (also possible from the customer's app and the console)
 ```
 
 The limits are the partner's at the moment the customer approves, copied onto
 the agreement: raising them later does not raise an existing agreement's.
 Approving a new agreement replaces the customer's earlier one with the same
-partner.
+partner **and role**.
+
+**Roles.** `customer` (the default) is someone who pays you, such as a rider.
+`worker` is someone you pay and who may owe you, such as a driver; Zapp's
+approve screen words the request for them. A person may have one active
+agreement of each role with you, so a driver who also rides keeps both.
+
+**Not in Zapp yet.** Send `"signup": true` and the name you have for the
+person. If the number has no Zapp account, the agreement waits **30 days**
+instead of 15 minutes and comes back with `"signup": true`. Open `deep_link`
+if Zapp Pay is installed, or send the person to the store: either way, when
+they sign up with that number Zapp fills in the name (and, for a 063 number,
+their Zaad), and offers your request right after they choose their PIN.
+Nothing is created until they do. For a number already in Zapp, `signup` is
+ignored (15 minutes, `"signup": false`) and the name is not kept.
+
+**Topped up.** `customer_topped_up` turns true, for good, once the customer
+has added money to Zapp at least once (agent cash, mobile money, a
+remittance). You learn only that, never the balance or the amount.
 
 **Each payment.** Create the charge with the agreement:
 
@@ -301,7 +334,12 @@ Creating an endpoint returns its signing `secret` (`whsec_…`) **once**. Up to
 five endpoints; public `https` URLs only.
 
 **Events:** `charge.succeeded`, `charge.expired`, `charge.canceled`,
-`charge.refunded` (one per refund).
+`charge.refunded` (one per refund); for partners with agreements,
+`agreement.approved`, `agreement.revoked` (including when a newer one of the
+same role replaces it) and `agreement.topped_up` (once, when
+`customer_topped_up` turns true; it can arrive with `agreement.approved`). An
+agreement event's `data.object` is the agreement as `GET` returns it. Ignore
+types you don't handle, with a `2xx`.
 
 Endpoints belong to the mode of the key that registered them: a test key's
 endpoints receive only test events, a live key's only live ones. Every event
@@ -403,9 +441,16 @@ outcome returns it unchanged; a different outcome is `409 charge_not_pending`.
 `agreementSignature.ts`, `settleCharge.ts`). Collections `api_agreements` and
 `api_agreements/{id}/days/{YYYY-MM-DD}`, server-only. Functions: `api`,
 `getApiAgreement`, `approveApiAgreement`, `listMyAgreements`,
-`revokeMyAgreement`, `adminListAgreements`, `adminRevokeAgreement`, and
-`approveApiCharge` (its payment step moved to `settleCharge.ts`). Deploy the
-three `api_agreements` indexes first and wait for them to build. A confirmed
+`revokeMyAgreement`, `getMyPendingAgreements`, `adminListAgreements`,
+`adminRevokeAgreement`, `onApiAgreementWritten`, `agreementFundingOnTransaction`
+and `approveApiCharge` (its payment step moved to `settleCharge.ts`). Deploy the
+four `api_agreements` indexes and the `transactions` (toUserId, type, status,
+createdAt) index first and wait for them to build. Sign-up agreements
+(`signup: true`, `customerName`) are matched to a new account by its verified
+number; `setupPin` records `users.signupSource`. A customer's first completed
+`topup` transaction stamps `users.firstCashInAt` and `customerToppedUpAt` on
+their active agreements (`agreementFunding.ts`); accounts that topped up
+earlier are stamped from their history at their next approval. A confirmed
 charge posts the same `apicharge_{id}` entry as a PIN approval; its
 transaction row carries `approvedVia: "partner_device"` and `apiAgreementId`.
 

@@ -8,8 +8,9 @@
  *
  * - Test keys (`zpk_test_`) never move money; making one needs no PIN, so a
  *   developer can start building the moment the merchant opens the screen.
- * - Live keys can refund from the wallet, so making one needs the merchant's
- *   PIN, exactly like a payout.
+ * - Live keys can refund from the wallet, so making one needs Zapp's approval
+ *   of the shop's live access first (api/liveAccess.ts, asked for here with
+ *   requestLiveApiAccess) and then the merchant's PIN, exactly like a payout.
  * - Revoking only ever takes power away; it needs nothing beyond sign-in, so a
  *   merchant who suspects a leak can kill a key instantly.
  *
@@ -34,6 +35,16 @@ import {
   toApiKeyRow,
 } from "../api/keys";
 import { API_KEYS_COLLECTION, MerchantApiKey } from "../api/types";
+import {
+  LiveAccessDoc,
+  LiveAccessView,
+  PURPOSE_MAX,
+  PURPOSE_MIN,
+  cleanText,
+  liveAccessOf,
+  liveAccessRef,
+  toLiveAccessView,
+} from "../api/liveAccess";
 
 function requireMerchant(user: FirebaseFirestore.DocumentData): void {
   if (!isMerchantAccount(user as User)) {
@@ -41,14 +52,72 @@ function requireMerchant(user: FirebaseFirestore.DocumentData): void {
   }
 }
 
+const liveAccessRequired = (status: string) =>
+  new https.HttpsError(
+    "failed-precondition",
+    "Live keys need Zapp's approval first. Ask for live access on the API keys screen.",
+    { reason: "live_access_required", status }
+  );
+
 export const listMyApiKeys = https.onCall(
   { enforceAppCheck: true },
-  async (request: https.CallableRequest<void>): Promise<ApiResponse<{ keys: ApiKeyRow[] }>> => {
+  async (
+    request: https.CallableRequest<void>
+  ): Promise<ApiResponse<{ keys: ApiKeyRow[]; liveAccess: LiveAccessView }>> => {
     requireAuth(request);
     const merchantId = request.auth!.uid;
     const snap = await admin.firestore().collection("users").doc(merchantId).get();
     requireMerchant(snap.data() ?? {});
-    return { success: true, data: { keys: await listKeysFor(merchantId) } };
+    const [keys, liveAccess] = await Promise.all([listKeysFor(merchantId), liveAccessOf(merchantId)]);
+    return { success: true, data: { keys, liveAccess } };
+  }
+);
+
+/**
+ * Ask Zapp for live access, saying what the keys are for. Asking again while
+ * waiting updates the words but keeps the shop's place in the queue; asking
+ * after a decline or a withdrawal starts a new request.
+ */
+export const requestLiveApiAccess = https.onCall(
+  { enforceAppCheck: true },
+  async (request: https.CallableRequest<{ purpose: string }>): Promise<ApiResponse<LiveAccessView>> => {
+    requireAuth(request);
+    const merchantId = request.auth!.uid;
+    const purpose = cleanText(request.data?.purpose);
+    if (purpose.length < PURPOSE_MIN || purpose.length > PURPOSE_MAX) {
+      throw new https.HttpsError(
+        "invalid-argument",
+        `Say in ${PURPOSE_MIN}-${PURPOSE_MAX} characters what you'll use live keys for`,
+        { reason: "purpose_length", min: PURPOSE_MIN, max: PURPOSE_MAX }
+      );
+    }
+    const merchant = await requireActiveAccount(merchantId);
+    requireMerchant(merchant);
+
+    const current = await liveAccessOf(merchantId);
+    if (current.status === "approved") return { success: true, data: current };
+
+    const db = admin.firestore();
+    const ref = liveAccessRef(merchantId);
+    const view = await db.runTransaction(async (tx) => {
+      const doc = (await tx.get(ref)).data() as LiveAccessDoc | undefined;
+      if (doc?.status === "approved") return toLiveAccessView(doc);
+      const now = admin.firestore.Timestamp.now();
+      const next: LiveAccessDoc = {
+        merchantId,
+        status: "pending",
+        purpose,
+        requestedAt: doc?.status === "pending" ? doc.requestedAt : now,
+        decidedAt: null,
+        decidedBy: null,
+        note: null,
+      };
+      tx.set(ref, next);
+      return toLiveAccessView(next);
+    });
+
+    console.log(`Merchant ${merchantId} asked for live API access`);
+    return { success: true, data: view };
   }
 );
 
@@ -85,6 +154,12 @@ export const createMyApiKey = https.onCall(
     const merchant = await requireActiveAccount(merchantId);
     requireMerchant(merchant);
 
+    // Before the PIN, so a shop without access doesn't spend PIN attempts.
+    const liveAccess = mode === "live" ? await liveAccessOf(merchantId) : null;
+    if (liveAccess && liveAccess.status !== "approved") {
+      throw liveAccessRequired(liveAccess.status);
+    }
+
     if (mode === "live") {
       const pinValid = await verifyUserPin(merchantId, pin as string);
       if (!pinValid) {
@@ -106,7 +181,18 @@ export const createMyApiKey = https.onCall(
       createdBy: merchantId,
       createdVia: "merchant_app",
     });
-    await admin.firestore().collection(API_KEYS_COLLECTION).doc(keyId).create(record);
+    const db = admin.firestore();
+    await db.runTransaction(async (tx) => {
+      if (liveAccess) {
+        // Read again beside the write: a withdrawal landing now must win. A
+        // legacy shop has no doc until ops withdraw it (which writes one).
+        const doc = (await tx.get(liveAccessRef(merchantId))).data() as LiveAccessDoc | undefined;
+        if (doc ? doc.status !== "approved" : !liveAccess.legacy) {
+          throw liveAccessRequired(doc?.status ?? "none");
+        }
+      }
+      tx.create(db.collection(API_KEYS_COLLECTION).doc(keyId), record);
+    });
 
     console.log(`Merchant ${merchantId} created a ${mode} API key ${record.hint}`);
     return { success: true, data: { ...toApiKeyRow(keyId, record), apiKey } };

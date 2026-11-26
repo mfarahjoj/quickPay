@@ -195,7 +195,7 @@ describe("PIN reset safety", () => {
       // Registering a device needs no PIN, so a SIM-swapper's phone can be
       // "trusted" within minutes; it can't be a week old.
       useDb({ ...user(), ...device("dev-old", DAY) });
-      await expect(call(onKnownPhone)).rejects.toThrow(/agent or support/);
+      await expect(call(onKnownPhone)).rejects.toThrow(/with Zapp Pay support/);
     });
 
     it("won't take an ID nobody has reviewed", async () => {
@@ -205,7 +205,7 @@ describe("PIN reset safety", () => {
         ...user({ kycStatus: "submitted" }),
         [`users/${UID}/kyc/latest`]: { idNumber: "ATTACKER1234", status: "submitted" },
       });
-      await expect(call({ idLast4: "1234" })).rejects.toThrow(/agent or support/);
+      await expect(call({ idLast4: "1234" })).rejects.toThrow(/with Zapp Pay support/);
     });
 
     it("asks for the ID when it wasn't given", async () => {
@@ -281,6 +281,49 @@ describe("PIN reset safety", () => {
       ...device("dev-old", 30 * DAY),
     });
     await expect(call(onKnownPhone)).rejects.toThrow(/Too many PIN resets/);
+  });
+
+  describe("with a reset opened by staff", () => {
+    const grant = (minutesLeft: number, auditId = "audit-1") => ({
+      [`users/${UID}/private/auth`]: {
+        pinHash: "old-hash",
+        staffResetGrant: {
+          grantedBy: "staff-1",
+          grantedByEmail: "ops@example.com",
+          grantedAt: ago(60 * 1000),
+          expiresAt: Timestamp.fromMillis(Date.now() + minutesLeft * 60 * 1000),
+          auditId,
+        },
+      },
+    });
+
+    it("resets on a new phone with no verified ID, and uses the grant up", async () => {
+      const db = useDb({ ...user(), ...grant(20) });
+      const result = await call();
+      expect(result.success).toBe(true);
+      const auth = db.store.get(`users/${UID}/private/auth`);
+      expect(auth.pinHash).toBe("new-hash");
+      expect(auth.staffResetGrant).toBeNull();
+      // The safety pause still applies.
+      expect(new Date(result.data.cooldownUntil).getTime()).toBeGreaterThan(Date.now());
+      await expect(call()).rejects.toThrow(/with Zapp Pay support|Too many PIN resets/);
+    });
+
+    it("lets a reset through past the daily limit", async () => {
+      useDb({ ...user({ pinResetHistory: [ago(60 * 60 * 1000)] }), ...grant(20) });
+      await expect(call()).resolves.toMatchObject({ success: true });
+    });
+
+    it("does nothing once expired", async () => {
+      useDb({ ...user(), ...grant(-1) });
+      await expect(call()).rejects.toThrow(/with Zapp Pay support/);
+    });
+
+    it("lets only one of two racing resets use it", async () => {
+      useDb({ ...user(), ...grant(20) });
+      const settled = await Promise.allSettled([call(), call()]);
+      expect(settled.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    });
   });
 
   it("still requires a phone sign-in, not a PIN-login token", async () => {

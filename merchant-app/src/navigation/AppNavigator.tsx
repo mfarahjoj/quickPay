@@ -36,8 +36,8 @@ export const navigationRef = createNavigationContainerRef<MerchantStackParamList
 
 // For ZaadOfferWatcher, which sits beside the navigator rather than in it.
 const zaadScreenShowing = () => navigationRef.isReady() && navigationRef.getCurrentRoute()?.name === 'ZaadTopups';
-const openZaadScreen = () => {
-  if (navigationRef.isReady()) navigationRef.navigate('ZaadTopups' as never);
+const openZaadScreen = (requestId: string) => {
+  if (navigationRef.isReady()) (navigationRef.navigate as (name: string, params: object) => void)('ZaadTopups', { requestId });
 };
 
 /**
@@ -51,6 +51,20 @@ export function openZaadRequest(requestId: string): void {
     const ready = navigationRef.isReady() && navigationRef.getRootState()?.routes?.[0]?.name === 'Main';
     if (ready) {
       (navigationRef.navigate as (name: string, params: object) => void)('ZaadTopups', { requestId });
+    } else if (Date.now() - started < 120_000) {
+      setTimeout(tryOpen, 500);
+    }
+  };
+  tryOpen();
+}
+
+/** A bill push (paid, declined, repeating bill stopped) opens Bills, once signed in. */
+export function openBills(): void {
+  const started = Date.now();
+  const tryOpen = () => {
+    const ready = navigationRef.isReady() && navigationRef.getRootState()?.routes?.[0]?.name === 'Main';
+    if (ready) {
+      (navigationRef.navigate as (name: string) => void)('Bills');
     } else if (Date.now() - started < 120_000) {
       setTimeout(tryOpen, 500);
     }
@@ -92,6 +106,9 @@ type MerchantStackParamList = {
   ConfirmTopup: undefined;
   AgentProfileEdit: undefined;
   Payroll: undefined;
+  // Bills the shop sends customers (functions/src/bills/).
+  Bills: undefined;
+  SendBill: undefined;
   Payout: undefined;
   Developers: undefined;
   DeleteAccount: undefined;
@@ -367,6 +384,16 @@ function MainStackNavigator() {
       <MainStack.Screen
         name="Payroll"
         getComponent={() => require('../screens/payroll/PayrollScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="Bills"
+        getComponent={() => require('../screens/bills/BillsScreen').default}
+        options={{ headerShown: false }}
+      />
+      <MainStack.Screen
+        name="SendBill"
+        getComponent={() => require('../screens/bills/SendBillScreen').default}
         options={{ headerShown: false }}
       />
       <MainStack.Screen

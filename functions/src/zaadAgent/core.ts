@@ -12,7 +12,7 @@ import {
   ZAAD_AGENT_HOLD,
   ZAAD_REVERSAL_LOSSES,
 } from "../ledger/accounts";
-import { ReleaseReason, ZaadAgentDoc } from "./types";
+import { ReleaseReason, ZaadAgentDoc, ZaadAgentTopup } from "./types";
 
 /** An agent whose app hasn't checked in for this long is treated as offline. */
 export const HEARTBEAT_STALE_MS = 3 * 60 * 1000;
@@ -138,6 +138,12 @@ export function reversalEntry(
 }
 
 // ----------------------------------------------------------------- matching
+
+/** The agents a request is ringing on now, from either shape of the doc. */
+export function ringingIds(req: Pick<ZaadAgentTopup, "offeredToIds" | "offeredTo"> | undefined): string[] {
+  if (!req) return [];
+  return req.offeredToIds ?? (req.offeredTo ? [req.offeredTo] : []);
+}
 
 export interface Candidate {
   id: string;

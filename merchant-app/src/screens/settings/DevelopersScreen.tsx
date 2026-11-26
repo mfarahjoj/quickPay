@@ -16,10 +16,15 @@ import { SuccessCheckIcon } from '../../components/icons/AuthIcons';
 import {
   ApiKeyMode,
   ApiKeyRow,
+  LIVE_PURPOSE_MAX,
+  LIVE_PURPOSE_MIN,
+  LiveAccess,
   MAX_ACTIVE_KEYS_PER_MODE,
   apiBaseUrl,
   createMyApiKey,
+  isLiveAccessRequired,
   listMyApiKeys,
+  requestLiveApiAccess,
   revokeMyApiKey,
 } from '../../services/apiKeys.service';
 import { useExitGuard } from '../../hooks/useExitGuard';
@@ -38,8 +43,9 @@ function shortDate(iso: string): string {
  * Developers: the merchant's own Merchant API keys.
  *
  * Replaces asking Zapp ops for a key. Test keys are free to make and never
- * move money, so a developer can start building at once; a live key needs the
- * PIN. A new key is shown once, here, and never again — the server keeps only
+ * move money, so a developer can start building at once. Live keys need Zapp's
+ * approval of the shop's live access first (asked for here, decided in the
+ * console), then the PIN for each. A new key is shown once, here, and never again — the server keeps only
  * its hash — so leaving that step asks first.
  */
 export default function DevelopersScreen() {
@@ -59,10 +65,16 @@ export default function DevelopersScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [revoking, setRevoking] = useState<string | null>(null);
   const [created, setCreated] = useState<(ApiKeyRow & { apiKey: string }) | null>(null);
+  const [liveAccess, setLiveAccess] = useState<LiveAccess | null>(null);
+  const [purpose, setPurpose] = useState('');
+  const [requesting, setRequesting] = useState(false);
+  const [accessError, setAccessError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      setKeys(await listMyApiKeys());
+      const mine = await listMyApiKeys();
+      setKeys(mine.keys);
+      setLiveAccess(mine.liveAccess);
       setLoadFailed(false);
     } catch {
       setLoadFailed(true);
@@ -78,6 +90,22 @@ export default function DevelopersScreen() {
     [keys, mode],
   );
   const atLimit = active.length >= MAX_ACTIVE_KEYS_PER_MODE;
+  // Live keys wait for Zapp's approval; test keys never do.
+  const needsAccess = mode === 'live' && liveAccess !== null && liveAccess.status !== 'approved';
+
+  const askForAccess = async () => {
+    if (requesting) return;
+    setRequesting(true);
+    setAccessError(null);
+    try {
+      setLiveAccess(await requestLiveApiAccess(purpose.trim()));
+      setPurpose('');
+    } catch (e: any) {
+      setAccessError(t(callableErrorKey(e)));
+    } finally {
+      setRequesting(false);
+    }
+  };
 
   const backToList = () => {
     setPin('');
@@ -114,7 +142,11 @@ export default function DevelopersScreen() {
       setLabel('');
       setStep('created');
     } catch (e: any) {
-      if (isWrongPin(e)) {
+      if (isLiveAccessRequired(e)) {
+        // Withdrawn (or never given) while the form was open: show where things stand.
+        setStep('list');
+        load();
+      } else if (isWrongPin(e)) {
         setPinError(t('errors.wrongPin'));
       } else {
         setError(
@@ -209,6 +241,7 @@ export default function DevelopersScreen() {
           </Text>
         </GlassCard>
         <Text style={styles.warning}>{t('developers.createdWarning')}</Text>
+        <Text style={styles.warning}>{t('developers.neverAsk')}</Text>
 
         <View style={styles.actions}>
           <PillButton label={t('developers.shareKey')} onPress={shareKey} />
@@ -294,67 +327,116 @@ export default function DevelopersScreen() {
         </View>
         <Text style={styles.explainer}>{t(`developers.explainer.${mode}`)}</Text>
 
-        <Text style={styles.label}>{t(`developers.keysLabel.${mode}`)}</Text>
-        {loadFailed ? (
-          <GlassCard style={styles.emptyCard}>
-            <Text style={styles.error}>{t('developers.loadFailed')}</Text>
-            <TouchableOpacity onPress={load} style={styles.retry}>
-              <Text style={styles.retryText}>{t('common.tryAgain')}</Text>
-            </TouchableOpacity>
-          </GlassCard>
-        ) : keys === null ? (
-          <ActivityIndicator color={colors.ui.text} style={styles.spinner} />
-        ) : active.length === 0 ? (
-          <GlassCard style={styles.emptyCard}>
-            <Text style={styles.emptyText}>{t(`developers.empty.${mode}`)}</Text>
-          </GlassCard>
-        ) : (
-          active.map((key) => (
-            <GlassCard key={key.keyId} style={styles.keyCard}>
-              <View style={styles.keyTop}>
-                <Text style={styles.keyLabel} numberOfLines={1}>
-                  {key.label}
-                </Text>
-                <TouchableOpacity
-                  onPress={() => confirmRevoke(key)}
-                  disabled={revoking === key.keyId}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  {revoking === key.keyId ? (
-                    <ActivityIndicator color={colors.ui.error} size="small" />
-                  ) : (
-                    <Text style={styles.revokeText}>{t('developers.revoke')}</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.hint}>{key.hint}</Text>
-              <Text style={styles.meta}>
-                {t('developers.created', { date: shortDate(key.createdAt) })}
-                {' · '}
-                {key.lastUsedAt
-                  ? t('developers.lastUsed', { date: shortDate(key.lastUsedAt) })
-                  : t('developers.neverUsed')}
+        {needsAccess && liveAccess ? (
+          liveAccess.status === 'pending' ? (
+            <GlassCard style={styles.accessCard}>
+              <Text style={styles.accessTitle}>{t('developers.access.pendingTitle')}</Text>
+              <Text style={styles.accessBody}>
+                {t('developers.access.pendingBody', {
+                  date: liveAccess.requestedAt ? shortDate(liveAccess.requestedAt) : '',
+                })}
               </Text>
+              {liveAccess.purpose ? <Text style={styles.accessQuote}>“{liveAccess.purpose}”</Text> : null}
             </GlassCard>
-          ))
+          ) : (
+            <>
+              <GlassCard style={styles.accessCard}>
+                <Text style={styles.accessTitle}>{t(`developers.access.title.${liveAccess.status}`)}</Text>
+                {liveAccess.note ? (
+                  <Text style={styles.accessQuote}>{t('developers.access.note', { note: liveAccess.note })}</Text>
+                ) : null}
+                <Text style={styles.accessBody}>{t(`developers.access.body.${liveAccess.status}`)}</Text>
+              </GlassCard>
+              <Text style={styles.label}>{t('developers.access.purposeLabel')}</Text>
+              <GlassCard style={styles.card}>
+                <TextInput
+                  style={[styles.input, styles.purposeInput]}
+                  value={purpose}
+                  onChangeText={setPurpose}
+                  placeholder={t('developers.access.purposePlaceholder')}
+                  placeholderTextColor={colors.ui.ink(0.25)}
+                  maxLength={LIVE_PURPOSE_MAX}
+                  multiline
+                  textAlignVertical="top"
+                />
+              </GlassCard>
+              {accessError ? <Text style={styles.error}>{accessError}</Text> : null}
+              <PillButton
+                style={styles.createButton}
+                label={t('developers.access.request')}
+                loading={requesting}
+                disabled={purpose.trim().length < LIVE_PURPOSE_MIN}
+                onPress={askForAccess}
+              />
+            </>
+          )
+        ) : (
+          <>
+          <Text style={styles.label}>{t(`developers.keysLabel.${mode}`)}</Text>
+          {loadFailed ? (
+            <GlassCard style={styles.emptyCard}>
+              <Text style={styles.error}>{t('developers.loadFailed')}</Text>
+              <TouchableOpacity onPress={load} style={styles.retry}>
+                <Text style={styles.retryText}>{t('common.tryAgain')}</Text>
+              </TouchableOpacity>
+            </GlassCard>
+          ) : keys === null ? (
+            <ActivityIndicator color={colors.ui.text} style={styles.spinner} />
+          ) : active.length === 0 ? (
+            <GlassCard style={styles.emptyCard}>
+              <Text style={styles.emptyText}>{t(`developers.empty.${mode}`)}</Text>
+            </GlassCard>
+          ) : (
+            active.map((key) => (
+              <GlassCard key={key.keyId} style={styles.keyCard}>
+                <View style={styles.keyTop}>
+                  <Text style={styles.keyLabel} numberOfLines={1}>
+                    {key.label}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => confirmRevoke(key)}
+                    disabled={revoking === key.keyId}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    {revoking === key.keyId ? (
+                      <ActivityIndicator color={colors.ui.error} size="small" />
+                    ) : (
+                      <Text style={styles.revokeText}>{t('developers.revoke')}</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.hint}>{key.hint}</Text>
+                <Text style={styles.meta}>
+                  {t('developers.created', { date: shortDate(key.createdAt) })}
+                  {' · '}
+                  {key.lastUsedAt
+                    ? t('developers.lastUsed', { date: shortDate(key.lastUsedAt) })
+                    : t('developers.neverUsed')}
+                </Text>
+              </GlassCard>
+            ))
+          )}
+
+          {atLimit ? (
+            <Text style={styles.hintText}>{t('developers.limitReached', { count: MAX_ACTIVE_KEYS_PER_MODE })}</Text>
+          ) : null}
+
+          <PillButton
+            style={styles.createButton}
+            label={t(`developers.createKey.${mode}`)}
+            disabled={atLimit || keys === null}
+            onPress={() => {
+              setError(null);
+              setLabel('');
+              setStep('label');
+            }}
+          />
+
+          </>
         )}
 
-        {atLimit ? (
-          <Text style={styles.hintText}>{t('developers.limitReached', { count: MAX_ACTIVE_KEYS_PER_MODE })}</Text>
-        ) : null}
-
-        <PillButton
-          style={styles.createButton}
-          label={t(`developers.createKey.${mode}`)}
-          disabled={atLimit || keys === null}
-          onPress={() => {
-            setError(null);
-            setLabel('');
-            setStep('label');
-          }}
-        />
-
         <Text style={styles.hintText}>{t('developers.keepSafe')}</Text>
+        <Text style={styles.hintText}>{t('developers.neverAsk')}</Text>
         <Text style={styles.label}>{t('developers.baseUrlLabel')}</Text>
         <Text style={styles.baseUrl} selectable>
           {apiBaseUrl()}
@@ -413,6 +495,11 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
   hint: { fontSize: 13, color: colors.ui.ink(0.7), fontFamily: 'Menlo', writingDirection: 'ltr' },
   meta: { fontSize: 12, color: colors.ui.textFaint },
   createButton: { marginTop: 16 },
+  accessCard: { padding: 18, marginTop: 20, gap: 8 },
+  accessTitle: { fontSize: 16, fontWeight: '700', color: colors.ui.text },
+  accessBody: { fontSize: 14, color: colors.ui.textDim, lineHeight: 20 },
+  accessQuote: { fontSize: 14, color: colors.ui.ink(0.75), lineHeight: 20, fontStyle: 'italic' },
+  purposeInput: { minHeight: 96 },
   hintText: { fontSize: 12, color: colors.ui.textFaint, marginTop: 12, lineHeight: 17 },
   baseUrl: { fontSize: 13, color: colors.ui.ink(0.7), fontFamily: 'Menlo', writingDirection: 'ltr' },
   card: { padding: 0, marginTop: 8 },

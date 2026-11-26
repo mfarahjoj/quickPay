@@ -201,6 +201,20 @@ export const PUSH_TEMPLATES = {
       body: "إذا لم تقم بذلك، تواصل مع الدعم الآن. إرسال الأموال متوقف حتى {until}.",
     },
   },
+  "security.staff_pin_reset": {
+    en: {
+      title: "PIN reset opened by Zapp Pay staff",
+      body: "You can reset your PIN in the app for the next {minutes} minutes. If you didn't ask for this, contact support now.",
+    },
+    so: {
+      title: "Shaqaalaha Zapp Pay ayaa kuu furay dib-u-dejinta PIN-ka",
+      body: "App-ka waxaad ku dib u dejin kartaa PIN-kaaga {minutes} daqiiqo ee soo socda. Haddii aadan codsan, hadda la xiriir taageerada.",
+    },
+    ar: {
+      title: "فتح فريق Zapp Pay إعادة تعيين رمز PIN",
+      body: "يمكنك إعادة تعيين رمز PIN في التطبيق خلال الـ {minutes} دقيقة القادمة. إذا لم تطلب ذلك، تواصل مع الدعم الآن.",
+    },
+  },
   "security.phone_changed": {
     en: {
       title: "Your Zapp Pay number was changed",
@@ -426,9 +440,9 @@ export const PUSH_TEMPLATES = {
 
   // Zaad top-ups through agents (zaadAgent/)
   "zaadAgent.offer": {
-    en: { title: "New Zaad top-up: {amount}", body: "A customer wants {amount}. Accept within {seconds} seconds in Zapp Pay Merchant." },
-    so: { title: "Ku darid Zaad cusub: {amount}", body: "Macmiil ayaa doonaya {amount}. Ku aqbal {seconds} ilbiriqsi gudahood Zapp Pay Merchant." },
-    ar: { title: "طلب شحن زاد جديد: {amount}", body: "عميل يريد شحن {amount}. اقبل خلال {seconds} ثانية في Zapp Pay Merchant." },
+    en: { title: "New top-up job: {amount}", body: "Earn {earn}. A customer needs {amount}. The first agent to accept gets it: open Zapp Pay Merchant within {seconds} seconds." },
+    so: { title: "Shaqo ku darid cusub: {amount}", body: "Hel {earn}. Macmiil ayaa u baahan {amount}. Wakiilka ugu horreeya ee aqbala ayaa helaya: fur Zapp Pay Merchant {seconds} ilbiriqsi gudahood." },
+    ar: { title: "طلب شحن جديد: {amount}", body: "اربح {earn}. عميل يحتاج {amount}. أول وكيل يقبل يحصل عليه: افتح Zapp Pay Merchant خلال {seconds} ثانية." },
   },
   "zaadAgent.confirm_reminder": {
     en: { title: "5 minutes left: {amount}", body: "{customer} says they sent {amount}. Check your Zaad and answer, or Zapp Pay will review it." },
@@ -456,9 +470,9 @@ export const PUSH_TEMPLATES = {
     ar: { title: "تحقق من زاد", body: "يقول {customer} إنه أرسل {amount}. تحقق من رصيد زاد ثم أكّد." },
   },
   "zaadAgent.no_agent": {
-    en: { title: "No agent is free", body: "No agent could take your {amount} top-up. Try again in a few minutes." },
-    so: { title: "Wakiil bannaan ma jiro", body: "Wakiil ma qaadan karin ku daridaada {amount}. Isku day mar kale dhowr daqiiqo kadib." },
-    ar: { title: "لا يوجد وكيل متاح", body: "لم يتمكن أي وكيل من قبول شحن {amount}. حاول مرة أخرى بعد دقائق." },
+    en: { title: "No agent has picked it up", body: "No agent took your {amount} top-up. Open Zapp Pay to send it to Zapp instead." },
+    so: { title: "Wakiil weli ma qaadan", body: "Wakiil ma qaadan ku daridaada {amount}. Fur Zapp Pay si aad ugu dirto Zapp." },
+    ar: { title: "لم يقبل أي وكيل بعد", body: "لم يقبل أي وكيل شحن {amount}. افتح Zapp Pay لإرساله إلى Zapp مباشرة." },
   },
   "zaadAgent.declined": {
     en: { title: "Payment not received", body: "{agent} didn't receive {amount}. If you sent it, open a dispute within {minutes} minutes." },
@@ -539,6 +553,80 @@ export const PUSH_TEMPLATES = {
     en: { title: "Staff access ended", body: "{shop} removed you from their staff. You can no longer work for them in Zapp Pay Merchant." },
     so: { title: "Gelitaankii shaqaalaha waa dhammaaday", body: "{shop} ayaa kaa saaray shaqaalahooda. Mar dambe uma shaqayn kartid Zapp Pay Merchant." },
     ar: { title: "انتهى وصول الموظف", body: "أزالك {shop} من موظفيه. لم يعد بإمكانك العمل لصالحه في Zapp Pay Merchant." },
+  },
+
+  // Live API access (admin/liveAccess.ts): Zapp's decision on a shop's request.
+  "api.live_approved": {
+    en: { title: "Live API access approved", body: "You can now make live API keys. Find them in Settings, under API keys." },
+    so: { title: "Gelitaanka API-ga dhabta ah waa la oggolaaday", body: "Hadda waxaad samayn kartaa furayaasha API-ga dhabta ah. Ka hel Dejinta, qaybta Furayaasha API." },
+    ar: { title: "تمت الموافقة على الوصول الفعلي إلى API", body: "يمكنك الآن إنشاء مفاتيح API فعلية. تجدها في الإعدادات، ضمن مفاتيح API." },
+  },
+  "api.live_declined": {
+    en: { title: "Live API access not approved", body: "See why in Settings, under API keys. You can ask again." },
+    so: { title: "Gelitaanka API-ga dhabta ah lama oggolaan", body: "Sababta ka eeg Dejinta, qaybta Furayaasha API. Mar kale ayaad codsan kartaa." },
+    ar: { title: "لم تتم الموافقة على الوصول الفعلي إلى API", body: "اطّلع على السبب في الإعدادات، ضمن مفاتيح API. يمكنك الطلب مرة أخرى." },
+  },
+  "api.live_withdrawn": {
+    en: { title: "Live API access withdrawn", body: "Your live API keys no longer work. See Settings, under API keys." },
+    so: { title: "Gelitaanka API-ga dhabta ah waa laga noqday", body: "Furayaashaada API-ga dhabta ahi mar dambe ma shaqaynayaan. Eeg Dejinta, qaybta Furayaasha API." },
+    ar: { title: "تم سحب الوصول الفعلي إلى API", body: "لم تعد مفاتيح API الفعلية تعمل. راجع الإعدادات، ضمن مفاتيح API." },
+  },
+
+  // Bills (bills/): a shop bills a customer; the customer pays or auto-pays.
+  "bill.received": {
+    en: { title: "New bill from {merchant}", body: "{amount} for {description}, due {due}." },
+    so: { title: "Biil cusub oo ka yimid {merchant}", body: "{amount} oo ah {description}, waxaa la bixinayaa {due}." },
+    ar: { title: "فاتورة جديدة من {merchant}", body: "{amount} مقابل {description}، تستحق في {due}." },
+  },
+  "bill.received_autopay": {
+    en: { title: "New bill from {merchant}", body: "{amount} for {description}. Auto-pay will pay it on {due}." },
+    so: { title: "Biil cusub oo ka yimid {merchant}", body: "{amount} oo ah {description}. Bixinta tooska ah ayaa bixin doonta {due}." },
+    ar: { title: "فاتورة جديدة من {merchant}", body: "{amount} مقابل {description}. سيدفعها الدفع التلقائي في {due}." },
+  },
+  "bill.over_autopay_limit": {
+    en: { title: "New bill from {merchant}", body: "{amount} is more than your auto-pay limit, so pay it yourself by {due}." },
+    so: { title: "Biil cusub oo ka yimid {merchant}", body: "{amount} wuu ka badan yahay xadka bixinta tooska ah, ee adigu bixi ka hor {due}." },
+    ar: { title: "فاتورة جديدة من {merchant}", body: "{amount} أكثر من حد الدفع التلقائي، فادفعها بنفسك قبل {due}." },
+  },
+  "bill.autopaid": {
+    en: { title: "Bill paid automatically", body: "You paid {merchant} {amount} for {description}." },
+    so: { title: "Biilka si toos ah ayaa loo bixiyay", body: "Waxaad {merchant} u bixisay {amount} oo ah {description}." },
+    ar: { title: "تم دفع الفاتورة تلقائيًا", body: "دفعت إلى {merchant} مبلغ {amount} مقابل {description}." },
+  },
+  "bill.autopay_failed": {
+    en: { title: "Auto-pay couldn't pay a bill", body: "Your {amount} bill from {merchant} is still due. Open Bills to pay it." },
+    so: { title: "Bixinta tooska ah ma bixin karin biil", body: "Biilkaaga {amount} ee {merchant} weli waa lagu leeyahay. Fur Biilasha si aad u bixiso." },
+    ar: { title: "تعذّر الدفع التلقائي لفاتورة", body: "فاتورتك بقيمة {amount} من {merchant} ما زالت مستحقة. افتح الفواتير لدفعها." },
+  },
+  "bill.paid": {
+    en: { title: "Bill paid", body: "{customer} paid {amount} for {description}." },
+    so: { title: "Biilka waa la bixiyay", body: "{customer} ayaa bixiyay {amount} oo ah {description}." },
+    ar: { title: "تم دفع الفاتورة", body: "دفع {customer} مبلغ {amount} مقابل {description}." },
+  },
+  "bill.declined": {
+    en: { title: "Bill declined", body: "{customer} declined your bill for {amount}." },
+    so: { title: "Biilka waa la diiday", body: "{customer} ayaa diiday biilkaaga {amount}." },
+    ar: { title: "تم رفض الفاتورة", body: "رفض {customer} فاتورتك بقيمة {amount}." },
+  },
+  "bill.series_stopped": {
+    en: { title: "Repeat bill stopped", body: "{customer} stopped your repeating bill for {description}." },
+    so: { title: "Biilka soo noqnoqda waa la joojiyay", body: "{customer} ayaa joojiyay biilkaaga soo noqnoqda ee {description}." },
+    ar: { title: "تم إيقاف الفاتورة المتكررة", body: "أوقف {customer} فاتورتك المتكررة مقابل {description}." },
+  },
+  "bill.request_received": {
+    en: { title: "Direct payment request", body: "{customer} wants to pay you {amount} {interval} for {description}. Approve it in Bills." },
+    so: { title: "Codsi lacag-bixin toos ah", body: "{customer} wuxuu rabaa inuu kuu bixiyo {amount} {interval} oo ah {description}. Ku oggolow Biilasha." },
+    ar: { title: "طلب دفع مباشر", body: "يريد {customer} أن يدفع لك {amount} {interval} مقابل {description}. وافق عليه في الفواتير." },
+  },
+  "bill.request_approved": {
+    en: { title: "Direct payment approved", body: "{merchant} approved it. Your first payment of {amount} is due {due}." },
+    so: { title: "Lacag-bixinta tooska ah waa la oggolaaday", body: "{merchant} wuu oggolaaday. Lacag-bixintaada ugu horreysa ee {amount} waxaa la bixinayaa {due}." },
+    ar: { title: "تمت الموافقة على الدفع المباشر", body: "وافق {merchant}. دفعتك الأولى بقيمة {amount} تستحق في {due}." },
+  },
+  "bill.request_declined": {
+    en: { title: "Direct payment declined", body: "{merchant} declined your request for {description}." },
+    so: { title: "Lacag-bixinta tooska ah waa la diiday", body: "{merchant} ayaa diiday codsigaaga {description}." },
+    ar: { title: "تم رفض الدفع المباشر", body: "رفض {merchant} طلبك مقابل {description}." },
   },
   "staff.refunded": {
     en: { title: "Refund by {name}", body: "{name} refunded {amount} to a customer from your shop's balance." },

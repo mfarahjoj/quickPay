@@ -98,6 +98,8 @@ export interface JournalRefs {
   adjustmentId?: string;
   /** Dispute whose resolution posted this entry. */
   disputeId?: string;
+  /** Bill (`bills`) behind a bill_payment entry. */
+  billId?: string;
   /** Zapp receipt number of the payment or refund this entry settles. */
   receiptNumber?: string;
   /** Staff member who acted for the shop (STAFF_ACCESS.md); they are postedBy too. */

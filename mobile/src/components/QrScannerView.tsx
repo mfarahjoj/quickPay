@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  AppState,
   Easing,
   Linking,
   StyleSheet,
@@ -140,6 +141,18 @@ export function QrScannerView({
       .then(setPermission)
       .catch(() => setPermission(false));
   }, []);
+
+  // Coming back from Settings with the camera allowed opens the scanner.
+  useEffect(() => {
+    if (!CAMERA_NATIVE_AVAILABLE || permission !== false) return;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') return;
+      requestCameraPermission()
+        .then(setPermission)
+        .catch(() => setPermission(false));
+    });
+    return () => sub.remove();
+  }, [permission]);
 
   // The window sits a little above the middle, leaving room below for the
   // status and the other ways in.

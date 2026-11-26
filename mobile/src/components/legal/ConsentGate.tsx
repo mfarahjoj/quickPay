@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from '../SafeAreaView';
 import { useTranslation } from 'react-i18next';
 import firestore from '@react-native-firebase/firestore';
 import { functions } from '../../services/firebase.config';
 import { LEGAL_VERSIONS, PRIVACY_URL, TERMS_URL } from '../../utils/legal';
+import { openInAppBrowser } from './InAppBrowser';
 import { logger } from '../../utils/logger';
 import { makeStyles } from '../../theme';
 
@@ -63,10 +64,10 @@ export function ConsentGate({ uid, children }: { uid: string; children: React.Re
       <View style={styles.body}>
         <Text style={styles.title}>{t(updated ? 'consent.updatedTitle' : 'consent.title')}</Text>
         <Text style={styles.text}>{t(updated ? 'consent.updatedBody' : 'consent.body')}</Text>
-        <TouchableOpacity onPress={() => Linking.openURL(TERMS_URL).catch(() => {})}>
+        <TouchableOpacity onPress={() => openInAppBrowser(TERMS_URL)}>
           <Text style={styles.link}>{t('consent.readTerms')}</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => Linking.openURL(PRIVACY_URL).catch(() => {})}>
+        <TouchableOpacity onPress={() => openInAppBrowser(PRIVACY_URL)}>
           <Text style={styles.link}>{t('consent.readPrivacy')}</Text>
         </TouchableOpacity>
         {error ? <Text style={styles.error}>{error}</Text> : null}
