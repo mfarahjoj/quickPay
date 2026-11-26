@@ -1225,6 +1225,7 @@
   "staffRefund.refundTitle": "استرداد الدفعة",
   "staffRefund.overCap": "هذا يتجاوز حدك البالغ {{amount}} للاسترداد الواحد. اطلب من المالك استرداده.",
   "staffRefund.overDay": "تبقّى لك اليوم {{amount}} من الاسترداد. اطلب من المالك ما يزيد على ذلك.",
+  "staffRefund.ownPayment": "لا يمكنك استرداد دفعتك الخاصة. اطلب من المالك استردادها.",
   "staffRefund.doneTitle": "تم الاسترداد",
   "staffRefund.pinSubtitle": "أدخل رقمك السري الخاص لاسترداد {{amount}} من رصيد المتجر",
   "staffRefund.limitsLine": "حدودك: {{each}} للاسترداد الواحد، ومتبقٍ اليوم {{left}}.",

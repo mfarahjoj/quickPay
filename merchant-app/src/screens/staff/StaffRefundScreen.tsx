@@ -83,6 +83,8 @@ export default function StaffRefundScreen() {
           ? t('staffRefund.overCap', { amount: formatCents(d.capCents ?? limits.capCents) })
           : reason === 'staff_refund_day_cap'
             ? t('staffRefund.overDay', { amount: formatCents(Math.max((d.dayCapCents ?? 0) - (d.usedCents ?? 0), 0)) })
+            : reason === 'staff_refund_own_payment'
+            ? t('staffRefund.ownPayment')
             : reason === 'staff_access_denied'
               ? t('staffRefund.noAccess')
               : reason === 'not_refundable'

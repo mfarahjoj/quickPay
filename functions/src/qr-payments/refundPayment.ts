@@ -106,6 +106,15 @@ export const refundPayment = https.onCall(
           "Only the merchant who received this payment can refund it"
         );
       }
+      // Staff never move money into their own wallet (STAFF_ACCESS.md): a
+      // manager's own purchase is the owner's to refund, never theirs.
+      if (staff && original.fromUserId === staff.uid) {
+        throw new https.HttpsError(
+          "permission-denied",
+          "You can't refund your own payment. Ask the shop's owner.",
+          { reason: "staff_refund_own_payment" }
+        );
+      }
       if (original.status !== "completed") {
         throw new https.HttpsError(
           "failed-precondition",

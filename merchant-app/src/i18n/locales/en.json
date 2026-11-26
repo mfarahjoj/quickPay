@@ -1225,6 +1225,7 @@
   "staffRefund.refundTitle": "Refund payment",
   "staffRefund.overCap": "That's over your limit of {{amount}} a refund. Ask the owner to refund it.",
   "staffRefund.overDay": "You have {{amount}} of refunds left today. Ask the owner for anything more.",
+  "staffRefund.ownPayment": "You can't refund your own payment. Ask the owner to refund it.",
   "staffRefund.doneTitle": "Refunded",
   "staffRefund.pinSubtitle": "Enter your own PIN to refund {{amount}} from the shop's balance",
   "staffRefund.limitsLine": "Your limits: {{each}} a refund, {{left}} left today.",

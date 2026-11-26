@@ -1225,6 +1225,7 @@
   "staffRefund.refundTitle": "Celi lacag-bixinta",
   "staffRefund.overCap": "Taasi waxay ka badan tahay xadkaaga {{amount}} hal celin. Weydii milkiilaha inuu celiyo.",
   "staffRefund.overDay": "Maanta waxaa kuu haray {{amount}} oo lacag celin ah. Wixii ka badan weydii milkiilaha.",
+  "staffRefund.ownPayment": "Ma celin kartid lacag-bixintaada. Weydii milkiilaha inuu celiyo.",
   "staffRefund.doneTitle": "Waa la celiyay",
   "staffRefund.pinSubtitle": "Geli PIN-kaaga si aad {{amount}} uga celiso haraaga dukaanka",
   "staffRefund.limitsLine": "Xadkaaga: {{each}} hal celin, {{left}} ayaa maanta haray.",

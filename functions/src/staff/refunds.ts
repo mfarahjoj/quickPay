@@ -121,8 +121,9 @@ export const staffListPayments = https.onCall(
       .map((d) => ({ id: d.id, t: d.data() as Transaction }))
       .filter(({ t }) => {
         const paidAt = (t.completedAt ?? t.createdAt)?.toMillis?.() ?? 0;
-        // Online (API) payments are refunded by the system that took them.
-        return t.type === "payment" && !t.apiChargeId && paidAt >= since;
+        // Online (API) payments are refunded by the system that took them, and
+        // a manager's own payments are the owner's to refund (refundPayment).
+        return t.type === "payment" && !t.apiChargeId && t.fromUserId !== actor.actorUid && paidAt >= since;
       })
       .slice(0, LIST_LIMIT);
 

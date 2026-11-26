@@ -167,6 +167,28 @@ describe("manager refunds", () => {
     expect(refunds()).toHaveLength(0);
   });
 
+  it("never lets a manager refund their own payment into their own wallet; the owner still can", async () => {
+    seed(grant(HODAN, "manager", CAPS), {
+      "transactions/tx-1": payment(1_000, "USD", { fromUserId: HODAN, participants: [HODAN, SHOP] }),
+    });
+    for (const attempt of [{}, { amountCents: 400, idempotencyKey: "part-0001-abcdefgh" }]) {
+      await expect(call(HODAN, attempt)).rejects.toMatchObject({
+        code: "permission-denied",
+        details: { reason: "staff_refund_own_payment" },
+      });
+    }
+    // Refused before the PIN is even asked about, and nothing moved or was counted.
+    expect(mockedPin).not.toHaveBeenCalled();
+    expect(refunds()).toHaveLength(0);
+    expect(db.get(`wallets/${SHOP}`)!.balance).toBe(50_000);
+    expect(db.get(`wallets/${HODAN}`)!.balance).toBe(700);
+    expect(today()).toBeUndefined();
+    expect(notifyUser).not.toHaveBeenCalled();
+
+    await refund({ data: { transactionId: "tx-1", pin: "135790" }, auth: { uid: SHOP } });
+    expect(db.get(`wallets/${HODAN}`)!.balance).toBe(1_700);
+  });
+
   it("holds a refund over the per-refund cap, but a part within it goes through", async () => {
     seed(grant(HODAN, "manager", { refundCapCents: 500, refundDayCapCents: 10_000 }));
     await expect(call(HODAN)).rejects.toMatchObject({ details: { reason: "staff_refund_over_cap", capCents: 500 } });
@@ -242,6 +264,8 @@ describe("manager refunds", () => {
         }),
         "transactions/tx-api": payment(700, "USD", { apiChargeId: "ch_x" }),
         "transactions/tx-other": payment(800, "USD", { toUserId: OTHER_SHOP }),
+        // The manager's own purchase: the owner's to refund, so not on their list.
+        "transactions/tx-mine": payment(900, "USD", { fromUserId: HODAN, participants: [HODAN, SHOP] }),
         [`staffRefundDays/${SHOP}_${HODAN}_${localParts(Date.now()).day}`]: { usedCents: 300, count: 1 },
       });
       const res = await list({ data: { merchantId: SHOP }, auth: { uid: HODAN } });
