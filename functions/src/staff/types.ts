@@ -30,12 +30,17 @@ export type StaffCapability =
   /** Counter charge: scan a customer's code and raise a payment request. */
   | "charge"
   /** Sign a computer in to Zapp Business (portal/) with a read-only view. */
-  | "portal";
+  | "portal"
+  /**
+   * Refund the shop's counter payments with their own PIN, within the caps
+   * the owner set on the grant. Off until the owner sets both caps.
+   */
+  | "refund";
 
 const CAPABILITIES: Record<StaffRole, readonly StaffCapability[]> = {
   waiter: ["tables"],
   cashier: ["tables", "charge"],
-  manager: ["tables", "charge", "portal"],
+  manager: ["tables", "charge", "portal", "refund"],
 };
 
 export function roleCan(role: StaffRole, capability: StaffCapability): boolean {
@@ -56,6 +61,13 @@ export interface StaffGrant {
   status: StaffStatus;
   /** Manager only: may see customer names and history on Zapp Business. */
   showCustomers: boolean;
+  /**
+   * Manager only: the most one refund may give back, and the most their
+   * refunds may give back in a Hargeisa day, in US cents (shillings count at
+   * `slsPerUsd`). Refunds are off unless both are set above zero.
+   */
+  refundCapCents?: number;
+  refundDayCapCents?: number;
   /** Shown to the staff member ("Hodan's Café"), fixed when invited. */
   shopName: string;
   /** Shown to the shop: the staff member's name and number. */
@@ -65,6 +77,29 @@ export interface StaffGrant {
   updatedAt: Timestamp;
   acceptedAt?: Timestamp;
   endedAt?: Timestamp;
+}
+
+/** Highest caps an owner may set: $1,000 a refund, $5,000 a day. */
+export const MAX_REFUND_CAP_CENTS = 100_000;
+export const MAX_REFUND_DAY_CAP_CENTS = 500_000;
+
+/** Whether this grant may refund at all: a manager with both caps set. */
+export function refundsEnabled(g: Pick<StaffGrant, "role" | "refundCapCents" | "refundDayCapCents">): boolean {
+  return g.role === "manager" && (g.refundCapCents ?? 0) > 0 && (g.refundDayCapCents ?? 0) > 0;
+}
+
+/** `staffRefundDays/{grantId}_{YYYY-MM-DD}`: a manager's refunds that day. Server-only. */
+export const STAFF_REFUND_DAYS = "staffRefundDays";
+
+export interface StaffRefundDay {
+  merchantUid: string;
+  staffUid: string;
+  /** Hargeisa day, "2026-11-21". */
+  day: string;
+  /** Sum of that day's refunds in US cents (shillings at `slsPerUsd`). */
+  usedCents: number;
+  count: number;
+  updatedAt: Timestamp;
 }
 
 export type StaffAuditAction = "invited" | "accepted" | "declined" | "changed" | "removed" | "left";
@@ -79,5 +114,7 @@ export interface StaffAuditEntry {
   role: StaffRole;
   showCustomers: boolean;
   previousRole?: StaffRole;
+  refundCapCents?: number;
+  refundDayCapCents?: number;
   at: Timestamp;
 }

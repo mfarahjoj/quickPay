@@ -628,6 +628,11 @@ export const PUSH_TEMPLATES = {
     so: { title: "Lacag-bixinta tooska ah waa la diiday", body: "{merchant} ayaa diiday codsigaaga {description}." },
     ar: { title: "تم رفض الدفع المباشر", body: "رفض {merchant} طلبك مقابل {description}." },
   },
+  "staff.refunded": {
+    en: { title: "Refund by {name}", body: "{name} refunded {amount} to a customer from your shop's balance." },
+    so: { title: "Lacag celin uu sameeyay {name}", body: "{name} ayaa {amount} ugu celiyay macmiil haraaga dukaankaaga." },
+    ar: { title: "استرداد بواسطة {name}", body: "أعاد {name} مبلغ {amount} إلى عميل من رصيد متجرك." },
+  },
 } as const satisfies Record<string, Translations>;
 
 export type PushTemplateKey = keyof typeof PUSH_TEMPLATES;

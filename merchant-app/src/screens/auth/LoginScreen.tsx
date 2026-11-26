@@ -462,7 +462,7 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
   sheetTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: colors.ui.onSolid,
+    color: colors.ui.text,
     textAlign: 'center',
     marginBottom: 16,
   },
@@ -486,7 +486,7 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
   countryRowName: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.ui.onSolid,
+    color: colors.ui.text,
   },
   countryRowCode: {
     fontSize: 13,

@@ -230,6 +230,7 @@ export { portalInviteStore, portalRespondLink, portalUnlinkStore } from "./porta
 
 // Staff access: owner-granted roles for a shop (STAFF_ACCESS.md).
 export { staffInvite, staffRespond, staffLeave, staffUpdate, staffRemove } from "./staff/manage";
+export { staffListPayments } from "./staff/refunds";
 
 // Admin console (see ADMIN_CONSOLE_PLAN.md). Every callable here is gated by
 // custom claims in admin/guard.ts and writes to the admin_audit log.

@@ -216,6 +216,10 @@ service cloud.firestore {
     match /merchantStaffAudit/{entryId} {
       allow read, write: if false;
     }
+    // A manager's refunds per Hargeisa day, against their cap. Server-only.
+    match /staffRefundDays/{dayId} {
+      allow read, write: if false;
+    }
 
     match /merchantStats/{storeUid} {
       allow read: if canViewStore(storeUid);

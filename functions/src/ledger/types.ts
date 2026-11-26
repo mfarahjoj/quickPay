@@ -102,6 +102,13 @@ export interface JournalRefs {
   billId?: string;
   /** Zapp receipt number of the payment or refund this entry settles. */
   receiptNumber?: string;
+  /** Staff member who acted for the shop (STAFF_ACCESS.md); they are postedBy too. */
+  actorUid?: string;
+  /**
+   * The app attempt (idempotency key) that posted a whole refund, whose entry
+   * id is per payment; lets that attempt's retry be answered, not refused.
+   */
+  attemptKey?: string;
 }
 
 export interface JournalEntryInput {

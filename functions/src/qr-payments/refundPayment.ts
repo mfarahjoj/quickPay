@@ -1,7 +1,6 @@
 import * as admin from "firebase-admin";
 import { https } from "firebase-functions/v2";
 import { assertResetCooldownAllows } from "../utils/resetCooldown";
-import { requireAuth } from "../utils/validation";
 import { requireActiveAccount } from "../utils/accountStatus";
 import { verifyUserPin } from "../auth/validatePin";
 import { notifyUser } from "../utils/notifications";
@@ -18,6 +17,9 @@ import { isValidIdempotencyKey } from "../utils/idempotency";
 import { DISPUTES_COLLECTION, DisputeDoc } from "../disputes/types";
 import { stageResolvedByRefund } from "../disputes/resolve";
 import { parseCurrency, pushAmount } from "../utils/money";
+import { requireMerchantActor } from "../staff/access";
+import { assertWithinCaps, capCents, refundDayRef, stageRefundDay } from "../staff/refunds";
+import { StaffRefundDay } from "../staff/types";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -26,8 +28,16 @@ interface RefundRequest {
   pin: string;
   /** Partial refund (plan 3.3); omit to refund everything left. */
   amountCents?: number;
-  /** Required with a partial refund; resend the same one on retry. */
+  /**
+   * One per attempt, resent on retry so the retry gets the first answer.
+   * Required with a partial refund; recommended with a whole one.
+   */
   idempotencyKey?: string;
+  /**
+   * A staff manager refunding for this shop (STAFF_ACCESS.md), with their own
+   * PIN and within the caps the shop set. Omitted by the shop itself.
+   */
+  merchantId?: string;
 }
 
 interface RefundResponse {
@@ -43,17 +53,22 @@ interface RefundResponse {
 }
 
 /**
- * Callable function for a merchant to fully refund a payment they received.
- * Reverses the merchant's net, the platform's fee, and returns the gross to
- * the customer, then records a refund transaction.
+ * Callable function for a merchant to refund a payment they received, in full
+ * or in part. Reverses the merchant's net, the platform's fee, and returns the
+ * gross to the customer, then records a refund transaction.
+ *
+ * A staff manager may call it for the shop (`merchantId`) with their own PIN.
+ * The money still comes from the shop's wallet; the manager is recorded on the
+ * entry and the row, and the refund must fit the caps on their grant.
  */
 export const refundPayment = https.onCall(
   { enforceAppCheck: true },
   async (
     request: https.CallableRequest<RefundRequest>
   ): Promise<ApiResponse<RefundResponse>> => {
-    requireAuth(request);
-    const merchantId = request.auth!.uid;
+    const actor = await requireMerchantActor(request, request.data?.merchantId, "refund");
+    const merchantId = actor.merchantUid;
+    const staff = actor.role !== "owner" ? { uid: actor.actorUid, grant: actor.grant! } : null;
 
     const { transactionId, pin, amountCents } = request.data;
     const partKey = request.data.idempotencyKey;
@@ -91,13 +106,24 @@ export const refundPayment = https.onCall(
           "Only the merchant who received this payment can refund it"
         );
       }
+      // Staff never move money into their own wallet (STAFF_ACCESS.md): a
+      // manager's own purchase is the owner's to refund, never theirs.
+      if (staff && original.fromUserId === staff.uid) {
+        throw new https.HttpsError(
+          "permission-denied",
+          "You can't refund your own payment. Ask the shop's owner.",
+          { reason: "staff_refund_own_payment" }
+        );
+      }
       if (original.status !== "completed") {
         throw new https.HttpsError(
           "failed-precondition",
           "Only completed payments can be refunded"
         );
       }
-      if (original.refundedAt) {
+      // A retry may find its own first attempt finished the payment; the
+      // refund core answers that one with what the attempt did.
+      if (original.refundedAt && !partKey) {
         throw new https.HttpsError(
           "failed-precondition",
           "This payment has already been refunded"
@@ -125,7 +151,7 @@ export const refundPayment = https.onCall(
         );
       }
 
-      const { refundWindowDays } = await getRates();
+      const { refundWindowDays, slsPerUsd } = await getRates();
       const paidAt = (original.completedAt ?? original.createdAt)?.toMillis?.();
       if (!paidAt || Date.now() - paidAt > refundWindowDays * DAY_MS) {
         throw new https.HttpsError(
@@ -135,13 +161,17 @@ export const refundPayment = https.onCall(
         );
       }
 
-      const pinValid = await verifyUserPin(merchantId, pin);
+      // Whoever is refunding confirms with their own PIN: a manager never
+      // knows or uses the shop's.
+      const pinValid = await verifyUserPin(staff?.uid ?? merchantId, pin);
       if (!pinValid) {
         throw new https.HttpsError("permission-denied", "Invalid PIN");
       }
 
-      // Outgoing money waits out the pause after a PIN reset.
+      // Outgoing money waits out the pause after a PIN reset: the shop's, and
+      // a manager's own (a stolen phone with a reset PIN can't refund either).
       await assertResetCooldownAllows(merchantId, "other", 0);
+      if (staff) await assertResetCooldownAllows(staff.uid, "other", 0);
 
       await requireActiveAccount(merchantId);
 
@@ -149,14 +179,26 @@ export const refundPayment = https.onCall(
         ? db.collection(DISPUTES_COLLECTION).doc(original.disputeId)
         : null;
 
+      const day = staff ? refundDayRef(merchantId, staff.uid, Date.now()) : null;
+
       const outcome = await db.runTransaction(async (tx) => {
-        // Reads first: the dispute, then the original under lock and the ledger.
+        // Reads first: the manager's day total, the dispute, then the original
+        // under lock and the ledger.
+        const daySnap = day ? await tx.get(day.ref) : null;
         const disputeSnap = disputeRef ? await tx.get(disputeRef) : null;
         const refund = await prepareRefund(tx, transactionId, {
-          postedBy: merchantId,
+          postedBy: staff?.uid ?? merchantId,
+          ...(staff ? { actorUid: staff.uid } : {}),
           ...(amountCents !== undefined ? { amountCents } : {}),
           ...(partKey ? { partKey } : {}),
         });
+        // A manager's refund must fit their caps; a replay was counted the first time.
+        if (staff && day && !refund.alreadyPosted) {
+          const cents = capCents(refund.gross, refund.currency, slsPerUsd);
+          const prev = daySnap?.data() as StaffRefundDay | undefined;
+          assertWithinCaps(staff.grant, cents, prev?.usedCents ?? 0);
+          stageRefundDay(tx, day.ref, prev, { merchantUid: merchantId, staffUid: staff.uid, day: day.day, cents });
+        }
         refund.write(tx);
         // Refunding the whole payment answers an open dispute on it; a
         // partial refund leaves the dispute for the customer to accept.
@@ -188,6 +230,17 @@ export const refundPayment = https.onCall(
         { key: "refund.received", params: { amount: pushAmount(gross, currency) } },
         { type: "refund_issued", amount: gross.toString(), currency, merchantId }
       ).catch((err) => console.error("Failed to notify customer:", err));
+
+      // The shop hears about every refund a manager gives from its wallet.
+      if (!alreadyPosted && staff) notifyUser(
+        merchantId,
+        "staff",
+        {
+          key: "staff.refunded",
+          params: { name: staff.grant.staffName || "Your manager", amount: pushAmount(gross, currency) },
+        },
+        { type: "staff_refund", amount: gross.toString(), currency, refundTransactionId }
+      ).catch((err) => console.error("Failed to tell the shop about a staff refund:", err));
 
       return {
         success: true,

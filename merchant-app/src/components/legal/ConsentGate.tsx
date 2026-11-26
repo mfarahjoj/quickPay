@@ -61,26 +61,31 @@ export function ConsentGate({ uid, children }: { uid: string; children: React.Re
   const updated = !!consent?.termsVersion;
   return (
     <SafeAreaView style={styles.screen}>
-      <View style={styles.body}>
-        <Text style={styles.title}>{t(updated ? 'consent.updatedTitle' : 'consent.title')}</Text>
-        <Text style={styles.text}>{t(updated ? 'consent.updatedBody' : 'consent.body')}</Text>
-        <TouchableOpacity onPress={() => Linking.openURL(TERMS_URL).catch(() => {})}>
-          <Text style={styles.link}>{t('consent.readTerms')}</Text>
+      {/* iOS's SafeAreaView replaces any padding it's given with the insets,
+          so the margins live on a view inside it. */}
+      <View style={styles.inner}>
+        <View style={styles.body}>
+          <Text style={styles.title}>{t(updated ? 'consent.updatedTitle' : 'consent.title')}</Text>
+          <Text style={styles.text}>{t(updated ? 'consent.updatedBody' : 'consent.body')}</Text>
+          <TouchableOpacity onPress={() => Linking.openURL(TERMS_URL).catch(() => {})}>
+            <Text style={styles.link}>{t('consent.readTerms')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => Linking.openURL(PRIVACY_URL).catch(() => {})}>
+            <Text style={styles.link}>{t('consent.readPrivacy')}</Text>
+          </TouchableOpacity>
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+        </View>
+        <TouchableOpacity style={styles.button} onPress={accept} disabled={saving} accessibilityRole="button">
+          {saving ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.buttonText}>{t('consent.accept')}</Text>}
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => Linking.openURL(PRIVACY_URL).catch(() => {})}>
-          <Text style={styles.link}>{t('consent.readPrivacy')}</Text>
-        </TouchableOpacity>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
       </View>
-      <TouchableOpacity style={styles.button} onPress={accept} disabled={saving} accessibilityRole="button">
-        {saving ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.buttonText}>{t('consent.accept')}</Text>}
-      </TouchableOpacity>
     </SafeAreaView>
   );
 }
 
 const useStyles = makeStyles((colors) => StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.ui.canvas, paddingHorizontal: 24, paddingBottom: 24 },
+  screen: { flex: 1, backgroundColor: colors.ui.canvas },
+  inner: { flex: 1, paddingHorizontal: 24, paddingBottom: 24 },
   body: { flex: 1, justifyContent: 'center' },
   title: { fontSize: 26, fontWeight: '800', color: colors.ui.text, letterSpacing: -0.5, marginBottom: 12 },
   text: { fontSize: 16, lineHeight: 23, color: colors.ui.ink(0.7), marginBottom: 24 },

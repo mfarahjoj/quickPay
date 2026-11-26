@@ -29,6 +29,8 @@ import { requireAuth } from "../utils/validation";
 import {
   grantId,
   isStaffRole,
+  MAX_REFUND_CAP_CENTS,
+  MAX_REFUND_DAY_CAP_CENTS,
   MAX_STAFF_PER_SHOP,
   MERCHANT_STAFF,
   MERCHANT_STAFF_AUDIT,
@@ -70,7 +72,7 @@ async function requirePin(uid: string, pin: unknown): Promise<void> {
 
 function audit(
   tx: FirebaseFirestore.Transaction,
-  grant: Pick<StaffGrant, "merchantUid" | "staffUid" | "role" | "showCustomers">,
+  grant: Pick<StaffGrant, "merchantUid" | "staffUid" | "role" | "showCustomers" | "refundCapCents" | "refundDayCapCents">,
   byUid: string,
   action: StaffAuditAction,
   previousRole?: StaffRole
@@ -84,8 +86,30 @@ function audit(
     role: grant.role,
     showCustomers: grant.showCustomers,
     ...(previousRole ? { previousRole } : {}),
+    ...(grant.refundCapCents ? { refundCapCents: grant.refundCapCents } : {}),
+    ...(grant.refundDayCapCents ? { refundDayCapCents: grant.refundDayCapCents } : {}),
     at: Timestamp.now(),
   });
+}
+
+/**
+ * Manager refund caps from the owner's request. Both zero (or omitted) turns
+ * refunds off; otherwise both must be whole cents above zero, within the
+ * highest caps, with the day cap at least one refund.
+ */
+function refundCaps(perRefund: unknown, perDay: unknown): Pick<StaffGrant, "refundCapCents" | "refundDayCapCents"> {
+  const each = perRefund === undefined || perRefund === null ? 0 : perRefund;
+  const day = perDay === undefined || perDay === null ? 0 : perDay;
+  if (each === 0 && day === 0) return {};
+  const ok = (v: unknown, max: number): v is number => Number.isInteger(v) && (v as number) > 0 && (v as number) <= max;
+  if (!ok(each, MAX_REFUND_CAP_CENTS) || !ok(day, MAX_REFUND_DAY_CAP_CENTS) || day < each) {
+    throw new https.HttpsError(
+      "invalid-argument",
+      "Set a refund limit and a daily limit at least as large, or turn refunds off.",
+      { reason: "staff_bad_refund_caps", maxCents: MAX_REFUND_CAP_CENTS, maxDayCents: MAX_REFUND_DAY_CAP_CENTS }
+    );
+  }
+  return { refundCapCents: each, refundDayCapCents: day };
 }
 
 function push(uid: string, message: PushMessage) {
@@ -100,6 +124,8 @@ function grantOut(id: string, g: StaffGrant) {
     role: g.role,
     status: g.status,
     showCustomers: g.showCustomers,
+    refundCapCents: g.refundCapCents ?? 0,
+    refundDayCapCents: g.refundDayCapCents ?? 0,
     shopName: g.shopName,
     staffName: g.staffName,
     staffPhone: g.staffPhone,
@@ -241,12 +267,21 @@ export const staffLeave = https.onCall(
 
 export const staffUpdate = https.onCall(
   { enforceAppCheck: true },
-  async (request: https.CallableRequest<{ staffUid?: unknown; role?: unknown; showCustomers?: unknown; pin?: unknown }>) => {
+  async (request: https.CallableRequest<{
+    staffUid?: unknown;
+    role?: unknown;
+    showCustomers?: unknown;
+    /** Manager refund caps in US cents; both above zero turns refunds on, 0 or omitted turns them off. */
+    refundCapCents?: unknown;
+    refundDayCapCents?: unknown;
+    pin?: unknown;
+  }>) => {
     const shop = await requireShopOwner(request);
     const staffUid = validUid(request.data?.staffUid, "staffUid");
     const role = request.data?.role;
     if (!isStaffRole(role)) throw new https.HttpsError("invalid-argument", "role must be waiter, cashier or manager");
     const showCustomers = role === "manager" && request.data?.showCustomers === true;
+    const caps = role === "manager" ? refundCaps(request.data?.refundCapCents, request.data?.refundDayCapCents) : {};
     await requirePin(shop.uid, request.data?.pin);
 
     const db = admin.firestore();
@@ -257,16 +292,18 @@ export const staffUpdate = https.onCall(
       if (!snap.exists || !g || (g.status !== "active" && g.status !== "invited")) {
         throw new https.HttpsError("not-found", "They aren't on your staff list.", { reason: "staff_not_found" });
       }
-      const next: StaffGrant = { ...g, role, showCustomers, updatedAt: Timestamp.now() };
+      const { refundCapCents: _cap, refundDayCapCents: _day, ...rest } = g;
+      const next: StaffGrant = { ...rest, role, showCustomers, ...caps, updatedAt: Timestamp.now() };
       tx.set(ref, next);
       audit(tx, next, shop.uid, "changed", g.role);
-      return next;
+      return { next, sessionChanged: g.role !== role || g.showCustomers !== showCustomers };
     });
 
-    // A Zapp Business session carries the role it was signed in with, so any
-    // change signs that person's computers out; they sign in again under the new one.
-    await endStaffPortalSessions(shop.uid, staffUid, "revoked");
-    return { success: true, data: grantOut(ref.id, grant) };
+    // A Zapp Business session carries the role it was signed in with, so a
+    // change of role or of "Show customers" signs that person's computers out;
+    // they sign in again under the new one. Refund caps aren't on the session.
+    if (grant.sessionChanged) await endStaffPortalSessions(shop.uid, staffUid, "revoked");
+    return { success: true, data: grantOut(ref.id, grant.next) };
   }
 );
 

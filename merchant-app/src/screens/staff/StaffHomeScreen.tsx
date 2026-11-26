@@ -8,6 +8,7 @@ import {
   leaveShop,
   respondToInvite,
   roleCanCharge,
+  roleCanRefund,
   roleCanUsePortal,
   setActingFor,
   watchMyGrants,
@@ -20,8 +21,8 @@ import { makeStyles, useColors } from '../../theme';
 /**
  * Staff mode home (STAFF_ACCESS.md). A person a shop added as staff works for
  * it here on their own account: invitations to accept, the shop they're
- * working for, and only what their role allows. The shop's balance, payouts,
- * refunds and settings are never here.
+ * working for, and only what their role allows. The shop's balance, payouts
+ * and settings are never here; refunds only for a manager the shop allows.
  */
 export default function StaffHomeScreen() {
   const colors = useColors();
@@ -162,6 +163,16 @@ export default function StaffHomeScreen() {
                   label={t('staff.home.portal')}
                   variant="glass"
                   onPress={() => navigation.navigate('PortalSignIn')}
+                />
+              </>
+            ) : null}
+            {roleCanRefund(current.role) ? (
+              <>
+                <View style={styles.gap} />
+                <PillButton
+                  label={t('staff.home.refunds')}
+                  variant="glass"
+                  onPress={() => navigation.navigate('StaffPayments')}
                 />
               </>
             ) : null}
