@@ -10,6 +10,7 @@ import { UpdateRequired } from './components/UpdateRequired';
 import { useUpdateGate } from './hooks/useUpdateGate';
 import { ToastProvider } from './components/auth';
 import { LanguageSync } from './i18n/useLanguageSync';
+import { InAppBrowserHost } from './components/legal/InAppBrowser';
 import { messaging, auth } from './services/firebase.config';
 import { registerForPushNotifications } from './services/notification.service';
 import crashlytics from '@react-native-firebase/crashlytics';
@@ -230,6 +231,7 @@ function AppContent() {
           ) : (
             <AppNavigator />
           )}
+          <InAppBrowserHost />
         </ToastProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

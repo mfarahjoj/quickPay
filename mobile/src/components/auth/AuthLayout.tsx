@@ -23,6 +23,11 @@ interface AuthLayoutProps {
   footer?: React.ReactNode;
   topRight?: React.ReactNode;
   variant?: 'light' | 'dark' | 'white';
+  /**
+   * Decoration drawn behind everything, outside the scroll view, so it can
+   * reach under the status bar instead of being clipped at the safe area.
+   */
+  backdrop?: React.ReactNode;
 }
 
 export function AuthLayout({
@@ -34,6 +39,7 @@ export function AuthLayout({
   footer,
   topRight,
   variant = 'light',
+  backdrop,
 }: AuthLayoutProps) {
   const { scheme, colors } = useTheme();
   const styles = useStyles();
@@ -67,6 +73,7 @@ export function AuthLayout({
       style={[styles.safe, dark && styles.safeDark, white && styles.safeWhite]}
       edges={['top', 'bottom']}
     >
+      {backdrop}
       {/* The default variant follows the theme's canvas: light clock and
           battery on dark, dark on light. */}
       <StatusBar

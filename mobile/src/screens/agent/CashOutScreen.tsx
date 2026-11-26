@@ -20,7 +20,8 @@ import Animated, {
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { cooldownMessage } from '../../utils/cooldownMessage';
-import { functions } from '../../services/firebase.config';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { auth, functions } from '../../services/firebase.config';
 import { triggerHaptic } from '../../services/haptics.service';
 import { makeStyles, useColors } from '../../theme';
 import { Springs } from '../../constants/springs';
@@ -34,6 +35,23 @@ import { AnimatedXMark } from '../../components/icons/StatusIcons';
 type Step = 'amount' | 'pin' | 'processing' | 'success' | 'error';
 
 const KEYPAD = ['1','2','3','4','5','6','7','8','9','.','0','⌫'];
+// A PIN has no decimal point; the blank keeps the grid aligned.
+const PIN_KEYPAD = ['1','2','3','4','5','6','7','8','9','','0','⌫'];
+
+// The code is shown once by the server. Keep it on this phone until it expires
+// so leaving the screen never strands money in the hold with no code to show.
+interface SavedCashOut {
+  cashOutId: string;
+  otpCode: string;
+  amountText: string;
+  /** Codes saved before shilling cash-outs carry no currency: those were dollars. */
+  currency?: Currency;
+  expiresAt: string;
+}
+const savedKey = () => `@zapp/pendingCashOut/${auth().currentUser?.uid ?? 'anon'}`;
+const saveCashOut = (c: SavedCashOut) =>
+  AsyncStorage.setItem(savedKey(), JSON.stringify(c)).catch(() => {});
+const clearSavedCashOut = () => AsyncStorage.removeItem(savedKey()).catch(() => {});
 
 // The agent scans this. It names the one request the code belongs to, so a
 // guessed code can never be tried against anyone else's cash-out.
@@ -87,6 +105,28 @@ export default function CashOutScreen() {
       .httpsCallable('getPricing')()
       .then((r) => setFeeRate((r.data as any)?.data?.cashOutFeeRate ?? 0))
       .catch(() => setFeeRate(0));
+  }, []);
+
+  // Reopen a code this phone already holds, if it hasn't expired.
+  useEffect(() => {
+    AsyncStorage.getItem(savedKey())
+      .then((raw) => {
+        if (!raw) return;
+        const saved = JSON.parse(raw) as SavedCashOut;
+        const exp = new Date(saved.expiresAt);
+        if (exp.getTime() <= Date.now()) { void clearSavedCashOut(); return; }
+        setPickedCurrency(saved.currency ?? 'USD');
+        setAmountText(saved.amountText);
+        setOtpCode(saved.otpCode);
+        setCashOutId(saved.cashOutId);
+        setExpiresAt(exp);
+        setTimeLeft(Math.floor((exp.getTime() - Date.now()) / 1000));
+        setStep('success');
+        otpOpacity.value = 1;
+        otpScale.value = 1;
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Amount pulse
@@ -179,20 +219,29 @@ export default function CashOutScreen() {
       const result = await fn({ amount, pin: credential, currency });
       const data = (result.data as any)?.data;
       if (!data?.otpCode || !data?.expiresAt) {
-        throw new Error((result.data as any)?.error || 'Cash-out failed');
+        throw new Error((result.data as any)?.error || t('cashout.failedTitle'));
       }
       setOtpCode(data.otpCode);
       setCashOutId(data.cashOutId ?? '');
+      if (data.cashOutId) {
+        void saveCashOut({
+          cashOutId: data.cashOutId,
+          otpCode: data.otpCode,
+          amountText,
+          currency,
+          expiresAt: data.expiresAt,
+        });
+      }
       setExpiresAt(new Date(data.expiresAt));
       setTimeLeft(Math.floor((new Date(data.expiresAt).getTime() - Date.now()) / 1000));
       setStep('success');
       otpOpacity.value = withDelay(200, withTiming(1, { duration: 400 }));
       otpScale.value = withDelay(200, withSpring(1, Springs.celebration));
     } catch (e: any) {
-      setErrorMsg(cooldownMessage(e, t) ?? (e.message || t('common.error')));
+      setErrorMsg(cooldownMessage(e, t) ?? (e.message || t('cashout.genericError')));
       setStep('error');
     }
-  }, [amount, currency, otpOpacity, otpScale, t]);
+  }, [amount, amountText, currency, otpOpacity, otpScale, t]);
 
   const handleContinue = async () => {
     if (amount <= 0) return;
@@ -217,10 +266,15 @@ export default function CashOutScreen() {
     setCancelling(true);
     try {
       await functions().httpsCallable('cancelCashOut')({ cashOutId });
+      void clearSavedCashOut();
       triggerHaptic('success');
       Alert.alert(t('cashout.cancelledTitle'), t('cashout.cancelledBody'));
       navigation.goBack();
     } catch (e: any) {
+      // Already paid out or gone: this saved code is no longer live.
+      if (e?.code === 'functions/failed-precondition' || e?.code === 'functions/not-found') {
+        void clearSavedCashOut();
+      }
       Alert.alert(t('cashout.cancelFailed'), e?.message || '');
     } finally {
       setCancelling(false);
@@ -305,6 +359,7 @@ export default function CashOutScreen() {
           </View>
 
           <Text style={styles.heldNote}>{t('cashout.heldNote')}</Text>
+          {!expired ? <Text style={styles.heldNote}>{t('cashout.reopenNote')}</Text> : null}
 
           {!expired && cashOutId ? (
             <TouchableOpacity
@@ -332,17 +387,17 @@ export default function CashOutScreen() {
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
             <Text style={styles.backArrow}>‹</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Cash Out</Text>
+          <Text style={styles.headerTitle}>{t('cashout.title')}</Text>
         </View>
         <View style={styles.resultCenter}>
           <AnimatedXMark size={56} />
-          <Text style={styles.errorTitle}>Cash-out failed</Text>
+          <Text style={styles.errorTitle}>{t('cashout.failedTitle')}</Text>
           <Text style={styles.errorSub}>{errorMsg}</Text>
           <TouchableOpacity
             style={styles.retryBtn}
-            onPress={() => { setStep('amount'); setPin(''); setAmountText(''); setErrorMsg(''); }}
+            onPress={() => { setStep('amount'); setPin(''); setErrorMsg(''); }}
           >
-            <Text style={styles.retryText}>Try Again</Text>
+            <Text style={styles.retryText}>{t('cashout.tryAgain')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -354,7 +409,7 @@ export default function CashOutScreen() {
     return (
       <View style={[styles.container, styles.resultCenter]}>
         <ActivityIndicator size="large" color={colors.ui.accentText} />
-        <Text style={styles.processingText}>Generating your code…</Text>
+        <Text style={styles.processingText}>{t('cashout.generating')}</Text>
       </View>
     );
   }
@@ -367,10 +422,10 @@ export default function CashOutScreen() {
           <TouchableOpacity onPress={() => setStep('amount')} style={styles.backBtn}>
             <Text style={styles.backArrow}>‹</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Confirm with PIN</Text>
+          <Text style={styles.headerTitle}>{t('cashout.confirmPin')}</Text>
         </View>
         <View style={styles.pinSection}>
-          <Text style={styles.pinAmountLabel}>Withdrawing</Text>
+          <Text style={styles.pinAmountLabel}>{t('cashout.withdrawing')}</Text>
           <Text style={styles.pinAmount} numberOfLines={1}>{amountLabel}</Text>
           <Text style={styles.feeLine}>
             {feeRate > 0
@@ -387,11 +442,12 @@ export default function CashOutScreen() {
           </View>
         </View>
         <View style={styles.keypad}>
-          {KEYPAD.map((key) => (
+          {PIN_KEYPAD.map((key, i) => (
             <TouchableOpacity
-              key={key}
-              style={[styles.key, key === '⌫' && styles.keyDelete]}
+              key={key || `blank-${i}`}
+              style={[styles.key, key === '⌫' && styles.keyDelete, !key && styles.keyBlank]}
               onPress={() => appendDigit(key)}
+              disabled={!key}
               activeOpacity={0.6}
             >
               <Text style={[styles.keyText, key === '⌫' && styles.keyDeleteText]}>{key}</Text>
@@ -410,8 +466,8 @@ export default function CashOutScreen() {
           <Text style={styles.backArrow}>‹</Text>
         </TouchableOpacity>
         <View>
-          <Text style={styles.headerTitle}>Cash Out</Text>
-          <Text style={styles.headerSub}>Withdraw cash via an agent</Text>
+          <Text style={styles.headerTitle}>{t('cashout.title')}</Text>
+          <Text style={styles.headerSub}>{t('cashout.subtitle')}</Text>
         </View>
       </View>
 
@@ -431,7 +487,7 @@ export default function CashOutScreen() {
             </TouchableOpacity>
           ))}
         </View>
-        <Text style={styles.amountLabel}>Amount to withdraw</Text>
+        <Text style={styles.amountLabel}>{t('cashout.amountLabel')}</Text>
         <Animated.View style={[styles.amountRow, amountStyle]}>
           {currency === 'USD' && <Text style={styles.amountCurrency}>$</Text>}
           <Text
@@ -535,6 +591,7 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
 
   // Keypad
   keypad: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 24, gap: 12, justifyContent: 'center', paddingBottom: 24 },
+  keyBlank: { backgroundColor: 'transparent' },
   key: { width: 88, height: 56, borderRadius: 14, backgroundColor: colors.ui.ink(0.07), alignItems: 'center', justifyContent: 'center' },
   keyDelete: { backgroundColor: 'transparent' },
   keyText: { fontSize: 22, fontWeight: '600', color: colors.ui.text },

@@ -37,11 +37,17 @@ export interface ZaadAgentTopupDoc {
   agentName?: string;
   agentReceiveMsisdn?: string;
   dialCode?: string | null;
+  /** While the request rings on agents: when it stops, if none has accepted. */
+  offerExpiresAt?: Stamp | null;
   sendBy?: Stamp;
   customerZaadTxnId?: string;
   confirmBy?: Stamp;
   agentAnswer?: 'received' | 'not_received' | 'different_amount';
   disputeUntil?: Stamp;
+  /** "customer": you disputed an agent's "not received"; "timeout": the agent didn't answer in time. */
+  disputedBy?: 'customer' | 'timeout';
+  /** What the customer typed when they disputed. */
+  disputeReason?: string;
   resolution?: { outcome: 'customer' | 'agent' };
 }
 

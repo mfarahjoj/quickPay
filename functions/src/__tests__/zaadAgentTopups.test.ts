@@ -302,7 +302,7 @@ describe("Zaad top-ups through agents: the flow", () => {
       expect(mockedNotify).toHaveBeenCalledWith(
         HODAN,
         "zaad_agent_topup",
-        { key: "zaadAgent.offer", params: { amount: expect.any(String), seconds: "45" } },
+        { key: "zaadAgent.offer", params: { amount: expect.any(String), earn: expect.any(String), seconds: "60" } },
         expect.objectContaining({ type: "zaad_agent_offer", requestId: a.requestId, expiresAt: expect.any(String) })
       );
 
@@ -400,7 +400,7 @@ describe("Zaad top-ups through agents: the flow", () => {
       const block = rules.slice(rules.indexOf("match /zaadAgentTopups/{requestId}"));
       const body = block.slice(0, block.indexOf("allow write") + "allow write: if false;".length).replace(/\s+/g, " ");
       expect(body).toContain(
-        "allow read: if isAuthenticated() && (isOwner(resource.data.customerId) || isOwner(resource.data.agentId) || isOwner(resource.data.offeredTo));"
+        "allow read: if isAuthenticated() && (isOwner(resource.data.customerId) || isOwner(resource.data.agentId) || isOwner(resource.data.offeredTo) || request.auth.uid in resource.data.offeredToIds);"
       );
       expect(body).toContain("allow write: if false;");
       const indexes = JSON.parse(fs.readFileSync(path.join(__dirname, "../../../firestore.indexes.json"), "utf8"));
@@ -529,32 +529,109 @@ describe("Zaad top-ups through agents: the flow", () => {
     expect(mockedNotify).toHaveBeenCalledWith(AMINA, "zaad_agent_topup", expect.objectContaining({ key: "zaadAgent.no_agent" }), expect.anything());
   });
 
-  it("a decline passes the request to the next agent", async () => {
-    const db = seed({ farah: true });
-    const { data } = await fns.customerRequestZaadAgentTopup(as(AMINA, { amount: 1000 }));
-    // Hodan waited longer since his last offer, so he's first.
-    expect(req(db, data.requestId).offeredTo).toBe(HODAN);
-    await fns.agentAnswerZaadOffer(as(HODAN, { requestId: data.requestId, accept: false }));
-    expect(req(db, data.requestId).offeredTo).toBe(FARAH);
-    expect(db.get(`zaad_agents/${HODAN}`)!.openRequestId).toBeNull();
-    // Hodan can no longer accept it.
-    await expect(fns.agentAnswerZaadOffer(as(HODAN, { requestId: data.requestId, accept: true }))).rejects.toMatchObject({
-      details: { reason: "offer_ended" },
+  describe("a job: rung on every free agent at once, first to accept wins", () => {
+    const pushes = (key: string, to?: string) =>
+      mockedNotify.mock.calls.filter(([uid, , msg]) => (msg as any).key === key && (!to || uid === to)).length;
+
+    it("rings every available agent at once, with one shared deadline and what they'd earn", async () => {
+      const db = seed({ farah: true });
+      const { data } = await fns.customerRequestZaadAgentTopup(as(AMINA, { amount: 1000 }));
+      const r = req(db, data.requestId);
+      expect(r.status).toBe("offered");
+      expect([...r.offeredToIds].sort()).toEqual([FARAH, HODAN].sort());
+      expect(r.offeredTo).toBe(HODAN); // longest-waiting first, for older merchant builds
+      expect(r.offers).toHaveLength(2);
+      expect(r.offers[0].expiresAt.toMillis()).toBe(r.offers[1].expiresAt.toMillis());
+      expect(r.offerExpiresAt.toMillis() - r.createdAt.toMillis()).toBe(60_000);
+      expect(r.agentCommissionCents).toBeGreaterThanOrEqual(0);
+      expect(pushes("zaadAgent.offer", HODAN)).toBe(1);
+      expect(pushes("zaadAgent.offer", FARAH)).toBe(1);
+      expect(db.get(`zaad_agents/${HODAN}`)!.openRequestIds).toEqual([data.requestId]);
+      expect(db.get(`zaad_agents/${FARAH}`)!.openRequestIds).toEqual([data.requestId]);
     });
-  });
 
-  it("an unanswered offer moves on, and two in a row take the agent offline", async () => {
-    const db = seed({ farah: true });
-    const { data } = await fns.customerRequestZaadAgentTopup(as(AMINA, { amount: 1000 }));
-    await runZaadAgentSweep(Date.now() + 60_000);
-    expect(req(db, data.requestId).offeredTo).toBe(FARAH);
-    expect(db.get(`zaad_agents/${HODAN}`)!.missedOffers).toBe(1);
-    expect(db.get(`zaad_agents/${HODAN}`)!.online).toBe(true);
+    it("rings only as many agents as the console says", async () => {
+      const db = seed({ farah: true, rates: { zaadAgentOffersPerRequest: 1 } });
+      const { data } = await fns.customerRequestZaadAgentTopup(as(AMINA, { amount: 1000 }));
+      expect(req(db, data.requestId).offeredToIds).toEqual([HODAN]);
+      expect(db.get(`zaad_agents/${FARAH}`)!.openRequestIds).toBeUndefined();
+    });
 
-    await db.doc(`zaad_agents/${HODAN}`).update({ missedOffers: 1 });
-    await db.doc(`zaad_agents/${FARAH}`).update({ missedOffers: 1 });
-    await runZaadAgentSweep(Date.now() + 120_000);
-    expect(db.get(`zaad_agents/${FARAH}`)!.online).toBe(false);
+    it("the first to accept wins: float held once, the other agent is freed and can't accept", async () => {
+      const db = seed({ farah: true });
+      const { data } = await fns.customerRequestZaadAgentTopup(as(AMINA, { amount: 1000 }));
+      await fns.agentAnswerZaadOffer(as(FARAH, { requestId: data.requestId, accept: true }));
+      const r = req(db, data.requestId);
+      expect(r).toMatchObject({ status: "accepted", agentId: FARAH, offeredToIds: [], offeredTo: null });
+      expect(r.offers.map((o: any) => [o.agentId, o.answer]).sort()).toEqual([[FARAH, "accepted"], [HODAN, "taken"]].sort());
+      expect(balance(db, `agent:${FARAH}`)).toBe(FLOAT - 1000);
+      expect(balance(db, `agent:${HODAN}`)).toBe(FLOAT);
+      expect(db.get(`zaad_agents/${HODAN}`)!.openRequestIds).toEqual([]);
+      expect(db.get(`zaad_agents/${FARAH}`)!.openRequestIds).toEqual([data.requestId]);
+      await expect(fns.agentAnswerZaadOffer(as(HODAN, { requestId: data.requestId, accept: true }))).rejects.toMatchObject({
+        details: { reason: "offer_ended" },
+      });
+      // The winner asking again (a double tap or a retry) gets the same answer, and the float is held once.
+      const again = await fns.agentAnswerZaadOffer(as(FARAH, { requestId: data.requestId, accept: true }));
+      expect(again.data).toMatchObject({ requestId: data.requestId, amount: 1000 });
+      expect(balance(db, `agent:${FARAH}`)).toBe(FLOAT - 1000);
+      expect(pushes("zaadAgent.accepted", AMINA)).toBe(1);
+    });
+
+    it("a decline leaves the others ringing; the last decline tells the customer at once", async () => {
+      const db = seed({ farah: true });
+      const { data } = await fns.customerRequestZaadAgentTopup(as(AMINA, { amount: 1000 }));
+      await fns.agentAnswerZaadOffer(as(HODAN, { requestId: data.requestId, accept: false }));
+      expect(req(db, data.requestId)).toMatchObject({ status: "offered", offeredToIds: [FARAH] });
+      expect(db.get(`zaad_agents/${HODAN}`)!.openRequestId).toBeNull();
+      expect(pushes("zaadAgent.no_agent")).toBe(0);
+      // Hodan can no longer accept it.
+      await expect(fns.agentAnswerZaadOffer(as(HODAN, { requestId: data.requestId, accept: true }))).rejects.toMatchObject({
+        details: { reason: "offer_ended" },
+      });
+      await fns.agentAnswerZaadOffer(as(FARAH, { requestId: data.requestId, accept: false }));
+      expect(req(db, data.requestId)).toMatchObject({ status: "no_agent", offeredToIds: [], offeredTo: null });
+      expect(pushes("zaadAgent.no_agent", AMINA)).toBe(1);
+    });
+
+    it("nobody accepts in time: it ends no_agent, every ringing agent is freed and counted, two in a row take an agent offline", async () => {
+      const db = seed({ farah: true });
+      const { data } = await fns.customerRequestZaadAgentTopup(as(AMINA, { amount: 1000 }));
+      // Before the deadline the sweep leaves it alone.
+      await runZaadAgentSweep(Date.now() + 30_000);
+      expect(req(db, data.requestId).status).toBe("offered");
+
+      await runZaadAgentSweep(Date.now() + 61_000);
+      expect(req(db, data.requestId)).toMatchObject({ status: "no_agent", offeredToIds: [], offeredTo: null, deadlineAt: null });
+      expect(db.get(`zaad_agents/${HODAN}`)).toMatchObject({ missedOffers: 1, online: true, openRequestIds: [] });
+      expect(db.get(`zaad_agents/${FARAH}`)).toMatchObject({ missedOffers: 1, online: true, openRequestIds: [] });
+      expect(req(db, data.requestId).offers.every((o: any) => o.answer === "timed_out")).toBe(true);
+      expect(pushes("zaadAgent.no_agent", AMINA)).toBe(1);
+
+      // The customer may ask again (no_agent isn't open); a second miss takes both offline.
+      const again = (await fns.customerRequestZaadAgentTopup(as(AMINA, { amount: 1000 }))).data;
+      expect(again.status).toBe("offered");
+      await runZaadAgentSweep(Date.now() + 122_000);
+      expect(db.get(`zaad_agents/${HODAN}`)!.online).toBe(false);
+      expect(db.get(`zaad_agents/${FARAH}`)!.online).toBe(false);
+    });
+
+    it("the customer cancelling frees every agent it was ringing on", async () => {
+      const db = seed({ farah: true });
+      const { data } = await fns.customerRequestZaadAgentTopup(as(AMINA, { amount: 1000 }));
+      await fns.customerCancelZaadTopup(as(AMINA, { requestId: data.requestId }));
+      expect(req(db, data.requestId)).toMatchObject({ status: "cancelled", offeredToIds: [] });
+      expect(db.get(`zaad_agents/${HODAN}`)!.openRequestIds).toEqual([]);
+      expect(db.get(`zaad_agents/${FARAH}`)!.openRequestIds).toEqual([]);
+    });
+
+    it("still reads a request written with one offeredTo", async () => {
+      const db = seed();
+      const { data } = await fns.customerRequestZaadAgentTopup(as(AMINA, { amount: 1000 }));
+      await db.doc(`zaadAgentTopups/${data.requestId}`).update({ offeredToIds: undefined, offeredTo: HODAN });
+      await fns.agentAnswerZaadOffer(as(HODAN, { requestId: data.requestId, accept: true }));
+      expect(req(db, data.requestId).status).toBe("accepted");
+    });
   });
 
   it("returns the float when the customer doesn't send in time", async () => {

@@ -48,6 +48,29 @@ export interface AuthSecrets {
   pinResetHistory?: FirebaseFirestore.Timestamp[];
   resetIdFailedAttempts?: number;
   resetIdLockedUntil?: FirebaseFirestore.Timestamp | null;
+  /**
+   * Set by staff after checking the person's ID face to face
+   * (adminAllowPinReset). Lets one PIN reset through without the trusted-phone
+   * or ID-answer step, until it expires or is used.
+   */
+  staffResetGrant?: StaffResetGrant | null;
+}
+
+export interface StaffResetGrant {
+  grantedBy: string;
+  grantedByEmail: string;
+  grantedAt: FirebaseFirestore.Timestamp;
+  expiresAt: FirebaseFirestore.Timestamp;
+  auditId: string;
+}
+
+/** A grant that has not expired. */
+export function liveStaffGrant(
+  auth: AuthSecrets,
+  nowMs: number
+): StaffResetGrant | null {
+  const g = auth.staffResetGrant;
+  return g && g.expiresAt && g.expiresAt.toMillis() > nowMs ? g : null;
 }
 
 export function authRef(uid: string): FirebaseFirestore.DocumentReference {

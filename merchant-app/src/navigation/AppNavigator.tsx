@@ -36,8 +36,8 @@ export const navigationRef = createNavigationContainerRef<MerchantStackParamList
 
 // For ZaadOfferWatcher, which sits beside the navigator rather than in it.
 const zaadScreenShowing = () => navigationRef.isReady() && navigationRef.getCurrentRoute()?.name === 'ZaadTopups';
-const openZaadScreen = () => {
-  if (navigationRef.isReady()) navigationRef.navigate('ZaadTopups' as never);
+const openZaadScreen = (requestId: string) => {
+  if (navigationRef.isReady()) (navigationRef.navigate as (name: string, params: object) => void)('ZaadTopups', { requestId });
 };
 
 /**

@@ -63,7 +63,7 @@ export interface ZaadOffer {
   agentId: string;
   offeredAt: Timestamp;
   expiresAt: Timestamp;
-  answer?: "accepted" | "declined" | "timed_out";
+  answer?: "accepted" | "declined" | "timed_out" | "taken";
   answeredAt?: Timestamp;
 }
 
@@ -107,8 +107,16 @@ export interface ZaadAgentTopup {
   deadlineAt: Timestamp | null;
 
   offers: ZaadOffer[];
-  /** The agent whose phone is ringing now. */
+  /**
+   * Every agent whose phone is ringing now (the request rings on several at
+   * once; the first to accept wins). Missing on requests made before that:
+   * read [offeredTo].
+   */
+  offeredToIds?: string[];
+  /** The first of [offeredToIds], kept for older merchant builds. */
   offeredTo: string | null;
+  /** What the agent earns if this completes, in US cents, from the rate when it was asked. */
+  agentCommissionCents?: number;
   offerExpiresAt: Timestamp | null;
 
   /** Set when an agent accepts. */

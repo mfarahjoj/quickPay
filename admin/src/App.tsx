@@ -18,6 +18,7 @@ import { KycQueue } from "./components/KycQueue";
 import { PayoutDesk } from "./components/PayoutDesk";
 import { ZaadDesk } from "./components/ZaadDesk";
 import { AgentZaadDesk } from "./components/AgentZaadDesk";
+import { ApiAccessDesk } from "./components/ApiAccessDesk";
 import { LedgerBanner } from "./components/LedgerBanner";
 import { LedgerDesk } from "./components/LedgerDesk";
 import { DisputeDesk } from "./components/DisputeDesk";
@@ -29,7 +30,7 @@ import { Icon, type IconName } from "./components/Icon";
 import { Avatar, BrandMark, EmptyState, Loading } from "./components/ui";
 import { ledgerNeedsAttention, queuesFor, useWork, waitingTotal, type QueueKey } from "./work";
 
-type Tab = "todo" | "users" | "topups" | "roles" | "kyc" | "float" | "payouts" | "zaad" | "agentzaad" | "disputes" | "ledger" | "pricing";
+type Tab = "todo" | "users" | "topups" | "roles" | "kyc" | "apiaccess" | "float" | "payouts" | "zaad" | "agentzaad" | "disputes" | "ledger" | "pricing";
 
 /**
  * The sidebar, in sections. "To do" comes first and the console opens on it.
@@ -38,7 +39,7 @@ type Tab = "todo" | "users" | "topups" | "roles" | "kyc" | "float" | "payouts" |
  */
 const SECTIONS: { title?: string; tabs: Tab[] }[] = [
   { tabs: ["todo", "users"] },
-  { title: "Queues", tabs: ["disputes", "payouts", "float", "zaad", "agentzaad", "roles", "kyc"] },
+  { title: "Queues", tabs: ["disputes", "payouts", "float", "zaad", "agentzaad", "roles", "kyc", "apiaccess"] },
   { title: "Money", tabs: ["topups", "ledger"] },
   { title: "Settings", tabs: ["pricing"] },
 ];
@@ -79,6 +80,13 @@ const TABS: Record<
     short: "KYC",
     icon: "idcard",
     subtitle: "Identity documents waiting for verification, oldest first.",
+  },
+  apiaccess: {
+    label: "API access",
+    short: "API",
+    icon: "lock",
+    subtitle:
+      "Shops asking to make live API keys. Speak to the shop before approving: who is building the integration, and that Zapp never asks for a key.",
   },
   float: {
     label: "Float desk",
@@ -437,6 +445,8 @@ export default function App() {
             {tab === "roles" && canReviewRoles && <RoleQueue />}
 
             {tab === "kyc" && canReviewRoles && <KycQueue />}
+
+            {tab === "apiaccess" && canRunFloatDesk && <ApiAccessDesk />}
 
             {tab === "float" && canRunFloatDesk && <FloatDesk adminUid={user.uid} isSuper={claims.adminRoles.includes("super")} />}
 

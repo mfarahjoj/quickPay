@@ -88,11 +88,12 @@ export default function EditProfileScreen({ navigation }: Props) {
         return;
       }
 
+      let directionChanged = false;
       if (language !== profile?.preferredLanguage) {
-        await applyLanguage(language);
+        directionChanged = await applyLanguage(language);
       }
 
-      Alert.alert(t('common.success'), t('profile.edit.updateSuccess'), [
+      Alert.alert(t('common.success'), directionChanged ? t('language.reopenForLayout') : t('profile.edit.updateSuccess'), [
         { text: t('common.ok'), onPress: () => navigation.goBack() },
       ]);
     } catch (err: any) {

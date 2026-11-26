@@ -153,13 +153,19 @@ export type WebhookEventType =
   | "charge.succeeded"
   | "charge.expired"
   | "charge.canceled"
-  | "charge.refunded";
+  | "charge.refunded"
+  | "agreement.approved"
+  | "agreement.revoked"
+  | "agreement.topped_up";
 
 export const WEBHOOK_EVENT_TYPES: readonly WebhookEventType[] = [
   "charge.succeeded",
   "charge.expired",
   "charge.canceled",
   "charge.refunded",
+  "agreement.approved",
+  "agreement.revoked",
+  "agreement.topped_up",
 ];
 
 export interface WebhookEndpoint {
@@ -177,7 +183,9 @@ export interface WebhookEndpoint {
 export interface ApiEvent {
   type: WebhookEventType;
   merchantId: string;
-  chargeId: string;
+  /** The object the event is about: a charge, or for `agreement.*` an agreement. */
+  chargeId?: string;
+  agreementId?: string;
   /**
    * The exact JSON body every delivery sends. Stored rather than rebuilt so a
    * retry three hours later signs and sends the same bytes the first attempt did.
@@ -280,6 +288,14 @@ export interface ApiTransfer {
 export type ApiAgreementStatus = "pending" | "active" | "revoked" | "expired";
 
 /**
+ * Who the customer is to the partner. A `customer` pays the partner (a Ridy
+ * rider); a `worker` is paid by the partner and may owe it (a Ridy driver).
+ * A person may have one agreement of each with the same partner.
+ */
+export type ApiAgreementRole = "customer" | "worker";
+export const API_AGREEMENT_ROLES: readonly ApiAgreementRole[] = ["customer", "worker"];
+
+/**
  * A customer's standing permission for one partner to charge their wallet,
  * each payment approved on the customer's phone by a hardware key the
  * partner's app holds (agreements.ts). The customer grants it once, in Zapp,
@@ -304,6 +320,18 @@ export interface ApiAgreement {
   maxChargeUsdCents?: number;
   dailyUsdCents?: number;
   reference?: string;
+  /** Absent on agreements made before roles: a customer. */
+  role?: ApiAgreementRole;
+  /**
+   * Made for a number with no Zapp account yet (`signup: true` on create): it
+   * waits SIGNUP_AGREEMENT_TTL_MS instead of minutes, and Zapp offers it to
+   * whoever signs up with that number (getMyPendingAgreements).
+   */
+  signup?: boolean;
+  /** The name the partner has for the customer, filled in at sign-up. Display only; never trusted. */
+  customerName?: string;
+  /** When the customer first added money to Zapp (users.firstCashInAt). The partner sees only whether. */
+  customerToppedUpAt?: FirebaseFirestore.Timestamp;
   createdAt: FirebaseFirestore.Timestamp;
   /** Until when a pending agreement may be approved. */
   expiresAt: FirebaseFirestore.Timestamp;

@@ -571,10 +571,12 @@ export interface Notification {
     | "insight_alert"
     /** Zapp Business: a request to link stores, or its acceptance (portal/groups.ts). */
     | "store_link"
-    /** Bills: one arrived, was paid, declined, or auto-pay couldn't pay it (bills/). */
-    | "bill"
     /** Staff access: an invite, a role change or a removal (staff/manage.ts). */
-    | "staff";
+    | "staff"
+    /** Live API access: approved, declined or withdrawn (admin/liveAccess.ts). */
+    | "api_access"
+    /** Bills: one arrived, was paid, declined, or auto-pay couldn't pay it (bills/). */
+    | "bill";
   title: string;
   body: string;
   data?: Record<string, string>;

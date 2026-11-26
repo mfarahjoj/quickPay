@@ -54,6 +54,16 @@ describe("merchant self-serve API keys", () => {
       [`users/${OTHER_MERCHANT}`]: { accountType: "agent_merchant", accountStatus: "active" },
       [`users/${CUSTOMER}`]: { accountType: "customer", accountStatus: "active" },
       [`users/${AGENT}`]: { accountType: "topup_agent", accountStatus: "active" },
+      // Live keys need Zapp's approval first (liveAccess.test.ts covers asking for it).
+      [`api_live_access/${MERCHANT}`]: {
+        merchantId: MERCHANT,
+        status: "approved",
+        purpose: "Payments on our website's checkout",
+        requestedAt: admin.firestore.Timestamp.fromMillis(Date.now() - 86_400_000),
+        decidedAt: admin.firestore.Timestamp.fromMillis(Date.now() - 3_600_000),
+        decidedBy: "admin-1",
+        note: null,
+      },
     });
     restore = useFakeFirestore(db);
   });

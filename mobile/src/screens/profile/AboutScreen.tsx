@@ -8,6 +8,8 @@ import {
   Alert,
   Linking,
 } from 'react-native';
+import { openInAppBrowser } from '../../components/legal/InAppBrowser';
+import { TERMS_URL, PRIVACY_URL } from '../../utils/legal';
 import { useTranslation } from 'react-i18next';
 import { Header } from '../../components/Header';
 import { Button } from '../../components/Button';
@@ -76,6 +78,11 @@ export default function AboutScreen({ navigation }: Props) {
   };
 
   const openLink = (url: string) => {
+    // Our own pages open in the in-app sheet; email links go to the mail app.
+    if (url.startsWith('https://zapppay.web.app/')) {
+      openInAppBrowser(url);
+      return;
+    }
     Linking.openURL(url).catch(() =>
       Alert.alert(t('common.error'), t('profile.about.cannotOpenLink'))
     );
@@ -94,7 +101,7 @@ export default function AboutScreen({ navigation }: Props) {
         <View style={styles.menu}>
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => openLink('https://zapppay.web.app/terms')}
+            onPress={() => openLink(TERMS_URL)}
           >
             <Text style={styles.menuText}>{t('profile.about.termsOfService')}</Text>
             <Text style={styles.menuArrow}>›</Text>
@@ -102,7 +109,7 @@ export default function AboutScreen({ navigation }: Props) {
 
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => openLink('https://zapppay.web.app/privacy')}
+            onPress={() => openLink(PRIVACY_URL)}
           >
             <Text style={styles.menuText}>{t('profile.about.privacyPolicy')}</Text>
             <Text style={styles.menuArrow}>›</Text>

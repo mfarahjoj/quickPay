@@ -1,0 +1,40 @@
+TITLE
+Zapp Pay Merchant
+
+SHORT DESCRIPTION
+Accept QR payments, see your sales and pay out your earnings with Zapp Pay.
+
+FULL DESCRIPTION
+Zapp Pay Merchant is the app for shops, businesses and agents who take payments with Zapp Pay.
+
+ACCEPT PAYMENTS
+• Show your QR code and let customers scan it to pay
+• Enter an amount to create a payment request
+• Use a counter code when a customer cannot scan
+• See each payment arrive the moment it is made
+
+KNOW YOUR BUSINESS
+• Your balance and today's sales on one screen
+• A full history of payments, refunds and payouts
+• Statements you can share
+
+PAY OUT YOUR EARNINGS
+• Send your balance to your Zaad or eDahab number
+• Pay several people at once with payroll
+
+RUN IT WITH YOUR TEAM
+• Give staff their own access as cashier, waiter or manager
+• Staff accept payments without seeing your whole business
+
+FOR AGENTS
+• Top up customers and cash them out
+• Track your float and your commission
+
+SAFE BY DESIGN
+• Every payment is protected by your PIN
+• Sign in with your phone number and a one-time code
+• Available in English, Somali and Arabic
+
+Sign in with your phone number. New businesses and agents apply inside the app and are approved by the Zapp Pay team.
+
+Need help? Visit https://zapppay.web.app/support

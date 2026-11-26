@@ -24,7 +24,10 @@ import { enforceTransactionLimits } from "../utils/limits";
 import { handleApiRequest } from "../api/app";
 import { generateApiKey, hashApiKey, apiKeyHint } from "../api/keys";
 import { chargeConfirmationPayload, isP256PublicKey, signatureValid } from "../api/agreementSignature";
-import { eventsForChange } from "../api/webhooks";
+import { eventsForChange, agreementEventsForChange } from "../api/webhooks";
+import { noteSignupSource } from "../api/agreements";
+import { recordCashIn, toppedUpCustomer } from "../api/agreementFunding";
+import { zaadSuggestion } from "../api/approveApiAgreement";
 import { validatePartnerInput } from "../admin/apiPartners";
 
 const mockedPin = verifyUserPin as jest.MockedFunction<typeof verifyUserPin>;
@@ -92,6 +95,7 @@ describe("payment agreements", () => {
   let getCall: any;
   let listCall: any;
   let revokeCall: any;
+  let pendingCall: any;
 
   beforeAll(async () => {
     if (!admin.apps.length) admin.initializeApp();
@@ -100,6 +104,7 @@ describe("payment agreements", () => {
     getCall = fft.wrap(mod.getApiAgreement);
     listCall = fft.wrap(mod.listMyAgreements);
     revokeCall = fft.wrap(mod.revokeMyAgreement);
+    pendingCall = fft.wrap(mod.getMyPendingAgreements);
   });
   afterAll(() => fft.cleanup());
 
@@ -506,6 +511,148 @@ describe("payment agreements", () => {
       expect(db.get(`wallets/${RIDER}`)!.sls.balance).toBe(500_000);
       // A live key can't use the helper.
       expect((await request("POST", `/v1/test_helpers/agreements/${created.json.id}/approve`)).statusCode).toBe(400);
+    });
+  });
+
+  describe("signing up from a partner's app", () => {
+    const NEW = "new-1";
+    const NEW_PHONE = "+252634555666";
+    const DAY = 24 * 3600 * 1000;
+    const signupAgreement = (pub: string, body: Record<string, unknown> = {}, idem = "signup-new-1-idem") =>
+      createAgreement(pub, { customer_phone: NEW_PHONE, signup: true, customer_name: "  Hodan   Ali ", role: "worker", ...body }, idem);
+    /** What setupPin leaves behind: a profile with the number, and a wallet. */
+    const finishSignup = () => {
+      db.store.set(`users/${NEW}`, { accountType: "customer", fullName: "Hodan Ali", phoneNumber: NEW_PHONE, accountStatus: "active" });
+      db.store.set(`wallets/${NEW}`, wallet(0));
+    };
+
+    it("waits 30 days for a number with no Zapp account, and keeps the name for sign-up", async () => {
+      const res = await signupAgreement(phoneKey().pub);
+      expect(res.statusCode).toBe(201);
+      expect(res.json).toMatchObject({ status: "pending", role: "worker", signup: true, customer_topped_up: false });
+      expect(Date.parse(res.json.expires_at) - Date.now()).toBeGreaterThan(29 * DAY);
+      expect(db.get(`api_agreements/${res.json.id}`)).toMatchObject({ signup: true, customerName: "Hodan Ali", role: "worker" });
+      expect(JSON.stringify(res.json)).not.toContain("Hodan");
+    });
+
+    it("is an ordinary 15-minute request for someone already in Zapp", async () => {
+      const res = await createAgreement(phoneKey().pub, { signup: true, customer_name: "Amina" }, "signup-rider-idem");
+      expect(res.json).toMatchObject({ signup: false, role: "customer" });
+      expect(Date.parse(res.json.expires_at) - Date.now()).toBeLessThanOrEqual(15 * 60 * 1000);
+      expect(db.get(`api_agreements/${res.json.id}`)).not.toHaveProperty("customerName");
+      // Got the code and stopped before the PIN: still signing up.
+      db.store.set(`users/${NEW}`, { phoneNumber: NEW_PHONE });
+      expect((await signupAgreement(phoneKey().pub)).json.signup).toBe(true);
+    });
+
+    it("refuses a role or signup it doesn't know", async () => {
+      const pub = phoneKey().pub;
+      expect((await createAgreement(pub, { role: "boss" }, "bad-role-idem-key")).json.error).toMatchObject({ code: "parameter_invalid", param: "role" });
+      expect((await createAgreement(pub, { signup: "yes" }, "bad-signup-idem-k")).json.error).toMatchObject({ code: "parameter_invalid", param: "signup" });
+    });
+
+    it("offers it, with the name and Zaad to fill in, to whoever signs in with that number", async () => {
+      const res = await signupAgreement(phoneKey().pub);
+      // Mid-sign-up: no profile yet, only the verified number on the sign-in.
+      const auth = { uid: NEW, token: { phone_number: NEW_PHONE } };
+      const out = await pendingCall({ data: {}, auth });
+      expect(out.data.prefill).toEqual({ fullName: "Hodan Ali", zaadNumber: NEW_PHONE });
+      expect(out.data.agreements).toHaveLength(1);
+      expect(out.data.agreements[0]).toMatchObject({
+        agreementId: res.json.id, merchantName: "Ridy", role: "worker", signup: true, status: "pending", maxChargeUsdCents: 2_000,
+      });
+      expect((await getCall({ data: { agreementId: res.json.id }, auth })).data).toMatchObject({ role: "worker" });
+
+      // Not to another number, and not once it has lapsed.
+      expect((await pendingCall({ data: {}, auth: { uid: STRANGER, token: { phone_number: STRANGER_PHONE } } })).data.agreements).toHaveLength(0);
+      db.store.set(`api_agreements/${res.json.id}`, { ...db.get(`api_agreements/${res.json.id}`)!, expiresAt: Timestamp.fromMillis(Date.now() - 1) });
+      expect((await pendingCall({ data: {}, auth })).data).toEqual({ agreements: [], prefill: { fullName: null, zaadNumber: null } });
+    });
+
+    it("suggests the number as Zaad only for Telesom numbers", () => {
+      expect(zaadSuggestion("+252634555666")).toBe("+252634555666");
+      expect(zaadSuggestion("+252654555666")).toBeNull();
+      expect(zaadSuggestion("+447700900123")).toBeNull();
+      expect(zaadSuggestion(undefined)).toBeNull();
+    });
+
+    it("is approved after sign-up like any other, and notes who brought the person", async () => {
+      const res = await signupAgreement(phoneKey().pub);
+      finishSignup();
+      await noteSignupSource(NEW, NEW_PHONE);
+      expect(db.get(`users/${NEW}`)!.signupSource).toMatchObject({ merchantId: RIDY, merchantName: "Ridy", agreementId: res.json.id });
+      await approve(res.json.id, NEW);
+      expect(db.get(`api_agreements/${res.json.id}`)).toMatchObject({ status: "active", customerId: NEW });
+    });
+  });
+
+  describe("a rider who also drives", () => {
+    it("keeps one link of each kind, and a new one replaces only its own kind", async () => {
+      const rider = await linked();
+      const driver = await createAgreement(phoneKey().pub, { role: "worker" }, "link-driver-1");
+      await approve(driver.json.id);
+      expect(db.get(`api_agreements/${rider.agreementId}`)!.status).toBe("active");
+      expect(db.get(`api_agreements/${driver.json.id}`)).toMatchObject({ status: "active", role: "worker" });
+
+      const driverAgain = await createAgreement(phoneKey().pub, { role: "worker" }, "link-driver-2");
+      await approve(driverAgain.json.id);
+      expect(db.get(`api_agreements/${driver.json.id}`)).toMatchObject({ status: "revoked", revokedBy: "replaced" });
+      expect(db.get(`api_agreements/${rider.agreementId}`)!.status).toBe("active");
+      const roles = (await listCall({ data: {}, auth: { uid: RIDER } })).data.map((v: any) => v.role).sort();
+      expect(roles).toEqual(["customer", "worker"]);
+    });
+  });
+
+  describe("whether the customer has topped up", () => {
+    const at = Timestamp.fromMillis(Date.parse("2026-11-01T10:00:00Z"));
+
+    it("is false until the first top-up, then true for good", async () => {
+      const { agreementId } = await linked();
+      expect((await request("GET", `/v1/agreements/${agreementId}`)).json.customer_topped_up).toBe(false);
+
+      await recordCashIn(RIDER, at);
+      expect(db.get(`users/${RIDER}`)!.firstCashInAt.toMillis()).toBe(at.toMillis());
+      expect(db.get(`api_agreements/${agreementId}`)!.customerToppedUpAt.toMillis()).toBe(at.toMillis());
+      expect((await request("GET", `/v1/agreements/${agreementId}`)).json.customer_topped_up).toBe(true);
+
+      // A later top-up changes nothing.
+      await recordCashIn(RIDER, Timestamp.now());
+      expect(db.get(`users/${RIDER}`)!.firstCashInAt.toMillis()).toBe(at.toMillis());
+    });
+
+    it("is copied at approval, also for a top-up made before Zapp kept track", async () => {
+      db.store.set("transactions/tx-old", {
+        type: "topup", kind: "cash_in", status: "completed", toUserId: RIDER, fromUserId: "agent-1",
+        participants: ["agent-1", RIDER], amount: 500, currency: "USD", createdAt: at, completedAt: at,
+      });
+      const { agreementId } = await linked();
+      expect(db.get(`api_agreements/${agreementId}`)!.customerToppedUpAt.toMillis()).toBe(at.toMillis());
+      expect(db.get(`users/${RIDER}`)!.firstCashInAt.toMillis()).toBe(at.toMillis());
+    });
+
+    it("counts a top-up once it completes, and nothing else", () => {
+      const topup = { type: "topup", status: "completed", toUserId: RIDER };
+      expect(toppedUpCustomer(undefined, topup)).toBe(RIDER);
+      expect(toppedUpCustomer({ ...topup, status: "pending" }, topup)).toBe(RIDER);
+      expect(toppedUpCustomer(topup, { ...topup, description: "edited" } as any)).toBeNull();
+      expect(toppedUpCustomer(undefined, { ...topup, status: "pending" })).toBeNull();
+      expect(toppedUpCustomer(undefined, { ...topup, type: "agent_topup" })).toBeNull();
+      expect(toppedUpCustomer(undefined, { ...topup, type: "payment" })).toBeNull();
+      expect(toppedUpCustomer(topup, undefined)).toBeNull();
+    });
+
+    it("tells the partner when an agreement is approved, revoked, or first topped up", () => {
+      const pending = { status: "pending" } as any;
+      const active = { status: "active" } as any;
+      expect(agreementEventsForChange("agr_1", undefined, pending)).toEqual([]);
+      expect(agreementEventsForChange("agr_1", pending, active)).toEqual([{ eventId: "evt_agr_1_active", type: "agreement.approved" }]);
+      expect(agreementEventsForChange("agr_1", pending, { ...active, customerToppedUpAt: at }).map((e) => e.type))
+        .toEqual(["agreement.approved", "agreement.topped_up"]);
+      expect(agreementEventsForChange("agr_1", active, { ...active, customerToppedUpAt: at }))
+        .toEqual([{ eventId: "evt_agr_1_topped_up", type: "agreement.topped_up" }]);
+      expect(agreementEventsForChange("agr_1", { ...active, customerToppedUpAt: at }, { status: "revoked", customerToppedUpAt: at } as any))
+        .toEqual([{ eventId: "evt_agr_1_revoked", type: "agreement.revoked" }]);
+      expect(agreementEventsForChange("agr_1", pending, { status: "expired" } as any)).toEqual([]);
     });
   });
 

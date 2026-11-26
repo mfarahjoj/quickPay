@@ -211,7 +211,7 @@ export default function BuyFloatZaadScreen() {
   if ((step === 'activate' || step === 'send') && pending) {
     const activating = step === 'activate';
     return (
-      <DarkScreen edges={[]} scroll contentStyle={styles.content}>
+      <DarkScreen scroll contentStyle={styles.content}>
         {header}
         <View style={styles.body}>
           <Text style={styles.sub}>
@@ -251,7 +251,7 @@ export default function BuyFloatZaadScreen() {
       setError('');
     };
     return (
-      <DarkScreen edges={[]} scroll keyboard contentStyle={styles.content}>
+      <DarkScreen scroll keyboard contentStyle={styles.content}>
         {header}
         <View style={styles.body}>
           <CurrencyToggle value={currency} onChange={pickCurrency} disabled={busy} />
@@ -284,7 +284,7 @@ export default function BuyFloatZaadScreen() {
 
   // link
   return (
-    <DarkScreen edges={[]} scroll keyboard contentStyle={styles.content}>
+    <DarkScreen scroll keyboard contentStyle={styles.content}>
       {header}
       <View style={styles.body}>
         <Text style={styles.sub}>{t('buyFloat.linkHint')}</Text>

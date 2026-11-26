@@ -23,6 +23,7 @@ import { hasDeviceCredential } from '../services/device.service';
 import { labelTrustedDevice, registerTrustedDevice, signOut } from '../services/auth.service';
 import { View, StyleSheet, ActivityIndicator, Linking, BackHandler, Platform } from 'react-native';
 import { parsePaymentLink, type PaymentLink } from '../services/paymentLink.service';
+import { takeOffer } from '../services/partnerSignup';
 import { makeStyles, useColors, useTheme } from '../theme';
 import OnboardingScreen from '../screens/onboarding/OnboardingScreen';
 import { Springs } from '../constants/springs';
@@ -73,7 +74,7 @@ type MainStackParamList = {
   ManualTopup: undefined;
   TopUpMethod: undefined;
   AgentTopup: undefined;
-  ZaadTopup: { mode?: 'link' } | undefined;
+  ZaadTopup: { mode?: 'link'; amountCents?: number } | undefined;
   ZaadAgentTopup: undefined;
   AgentLocator: undefined;
   CashOut: undefined;
@@ -219,6 +220,7 @@ function MainTabs() {
         getComponent={() => require('../screens/payments/PaymentsScreen').default}
         options={{
           title: t('nav.tab.payments'),
+          headerShown: false,
           tabBarIcon: ({ focused, color, size }) => <PayTabIcon focused={focused} color={color} size={size} />,
           tabBarAccessibilityLabel: t('nav.tab.paymentsAccessibility'),
         }}
@@ -555,6 +557,18 @@ export default function AppNavigator() {
     setPendingLink(null);
   }, [pendingLink, user, navReadyTick]);
 
+  // Joined from a partner's app (Ridy): its request to link, left before they
+  // had Zapp, opens once the app is up — after the PIN, terms and Zaad, since
+  // the navigation container only mounts behind those gates.
+  useEffect(() => {
+    if (!user || !navigationRef.isReady()) return;
+    takeOffer(user.uid)
+      .then((agreementId) => {
+        if (agreementId && navigationRef.isReady()) navigationRef.navigate('ApproveAgreement', { agreementId });
+      })
+      .catch(() => undefined);
+  }, [user, navReadyTick]);
+
   // The welcome screen is the logged-out home, not a one-time tour: this is
   // session state, so signing out lands you back on it with both entry points
   // available. Null means "hasn't chosen yet".
@@ -638,7 +652,11 @@ export default function AppNavigator() {
     (!user && authIntent === 'login' && deviceTrusted === null) ||
     (user != null &&
       (deletionDueAt === undefined ||
-        pinSetupDone === null ||
+        // A locked app shows the lock screen without waiting on the server's
+        // answer for pinSetupDone (a Firestore read, slow on a weak connection
+        // and the reason launch sat on a spinner). It's settled by the time the
+        // person has unlocked, and nothing above the lock depends on it.
+        (pinSetupDone === null && locked !== true) ||
         biometricSetupDone === null ||
         pinVerified === null ||
         locked === null));

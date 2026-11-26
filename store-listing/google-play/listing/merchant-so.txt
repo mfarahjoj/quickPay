@@ -1,0 +1,40 @@
+TITLE
+Zapp Pay Merchant
+
+SHORT DESCRIPTION
+Ku aqbal lacag bixinta QR, daawo iibkaaga oo ka bixi dakhliga Zapp Pay.
+
+FULL DESCRIPTION
+Zapp Pay Merchant waa app-ka dukaamada, ganacsiyada iyo wakiilada ku qaata lacagaha Zapp Pay.
+
+KU AQBAL LACAGAHA
+• Muuji koodhkaaga QR si macaamiisha ugu bixiyaan iyagoo iskaanaynaya
+• Geli lacag si aad u sameyso codsi lacag bixin
+• Isticmaal koodhka kaaliyaha marka macmiilku aanu iskaan gareyn karin
+• Arag lacag bixin kasta isla markii la bixiyo
+
+U FAHAN GANACSIGAAGA
+• Haraagaaga iyo iibka maanta hal shaashad
+• Taariikh buuxda oo lacag bixinno, dib-celin iyo ka-bixin ah
+• Warbixinno aad wadaagi karto
+
+KA BIXI DAKHLIGAAGA
+• U dir haraagaaga lambarkaaga Zaad ama eDahab
+• Si isku mar ah u bixi dad badan adigoo isticmaalaya mushaharka
+
+SHAQAALEHAAGA KU GAAR
+• Shaqaalaha sii marin u gaar ah: sarrifle, waiter ama maamule
+• Shaqaaluhu waxay aqbali karaan lacag iyagoon arkin ganacsigaaga oo dhan
+
+WAKIILADA
+• Macaamiisha ku shubo oo u bixi lacag caddaan ah
+• La soco float-kaaga iyo komishankaaga
+
+AMAAN LAGA BILAABAY
+• Lacag bixin kasta waxaa ilaaliya PIN-kaaga
+• Ku gal lambarkaaga taleefanka iyo koodh hal mar la isticmaalo
+• Waxaa ku jira Ingiriis, Soomaali iyo Carabi
+
+Ku gal lambarkaaga taleefanka. Ganacsiyada iyo wakiilada cusub waxay ka codsadaan app-ka gudihiisa, kooxda Zapp Pay ayaa ansixisa.
+
+Caawimaad ma u baahan tahay? Booqo https://zapppay.web.app/support
